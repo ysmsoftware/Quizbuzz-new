@@ -1,0 +1,190 @@
+[
+  {
+    "id": "q-001",
+    "contestId": "contest-003",
+    "questionNumber": 1,
+    "type": "mcq",
+    "text": "Which planet in our solar system has the most moons?",
+    "options": [
+      { "id": "opt-001a", "text": "Jupiter" },
+      { "id": "opt-001b", "text": "Saturn" },
+      { "id": "opt-001c", "text": "Uranus" },
+      { "id": "opt-001d", "text": "Neptune" }
+    ],
+    "correctOptionIds": ["opt-001b"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "Saturn has 146 known moons as of 2023, surpassing Jupiter's 95 moons.",
+    "difficulty": "medium",
+    "tags": ["astronomy", "planets", "solar system"]
+  },
+  {
+    "id": "q-002",
+    "contestId": "contest-003",
+    "questionNumber": 2,
+    "type": "mcq",
+    "text": "In which year was the United Nations founded?",
+    "options": [
+      { "id": "opt-002a", "text": "1942" },
+      { "id": "opt-002b", "text": "1945" },
+      { "id": "opt-002c", "text": "1948" },
+      { "id": "opt-002d", "text": "1950" }
+    ],
+    "correctOptionIds": ["opt-002b"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "The United Nations was founded on October 24, 1945, after World War II ended.",
+    "difficulty": "easy",
+    "tags": ["history", "international organizations"]
+  },
+  {
+    "id": "q-003",
+    "contestId": "contest-003",
+    "questionNumber": 3,
+    "type": "mcq",
+    "text": "What is the capital city of Australia?",
+    "options": [
+      { "id": "opt-003a", "text": "Sydney" },
+      { "id": "opt-003b", "text": "Melbourne" },
+      { "id": "opt-003c", "text": "Canberra" },
+      { "id": "opt-003d", "text": "Perth" }
+    ],
+    "correctOptionIds": ["opt-003c"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "Canberra is the capital city of Australia, chosen as a compromise between Sydney and Melbourne.",
+    "difficulty": "easy",
+    "tags": ["geography", "capitals"]
+  },
+  {
+    "id": "q-004",
+    "contestId": "contest-003",
+    "questionNumber": 4,
+    "type": "mcq",
+    "text": "Who wrote the novel '1984'?",
+    "options": [
+      { "id": "opt-004a", "text": "Aldous Huxley" },
+      { "id": "opt-004b", "text": "George Orwell" },
+      { "id": "opt-004c", "text": "Ray Bradbury" },
+      { "id": "opt-004d", "text": "H.G. Wells" }
+    ],
+    "correctOptionIds": ["opt-004b"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "George Orwell wrote '1984', a dystopian novel published in 1949.",
+    "difficulty": "easy",
+    "tags": ["literature", "authors"]
+  },
+  {
+    "id": "q-005",
+    "contestId": "contest-003",
+    "questionNumber": 5,
+    "type": "mcq",
+    "text": "Which element has the chemical symbol 'Au'?",
+    "options": [
+      { "id": "opt-005a", "text": "Silver" },
+      { "id": "opt-005b", "text": "Aluminum" },
+      { "id": "opt-005c", "text": "Gold" },
+      { "id": "opt-005d", "text": "Argon" }
+    ],
+    "correctOptionIds": ["opt-005c"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "Au comes from the Latin word 'aurum' meaning gold.",
+    "difficulty": "easy",
+    "tags": ["chemistry", "elements"]
+  },
+  {
+    "id": "q-006",
+    "contestId": "contest-003",
+    "questionNumber": 6,
+    "type": "trueFalse",
+    "text": "The Great Wall of China is visible from space with the naked eye.",
+    "options": [
+      { "id": "opt-006a", "text": "True" },
+      { "id": "opt-006b", "text": "False" }
+    ],
+    "correctOptionIds": ["opt-006b"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "This is a common misconception. The Great Wall is not visible from space without aid.",
+    "difficulty": "medium",
+    "tags": ["myths", "geography"]
+  },
+  {
+    "id": "q-007",
+    "contestId": "contest-003",
+    "questionNumber": 7,
+    "type": "mcq",
+    "text": "Which country has won the most FIFA World Cup titles?",
+    "options": [
+      { "id": "opt-007a", "text": "Germany" },
+      { "id": "opt-007b", "text": "Argentina" },
+      { "id": "opt-007c", "text": "Brazil" },
+      { "id": "opt-007d", "text": "Italy" }
+    ],
+    "correctOptionIds": ["opt-007c"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "Brazil has won 5 FIFA World Cup titles (1958, 1962, 1970, 1994, 2002).",
+    "difficulty": "easy",
+    "tags": ["sports", "football"]
+  },
+  {
+    "id": "q-008",
+    "contestId": "contest-003",
+    "questionNumber": 8,
+    "type": "msq",
+    "text": "Which of the following are Nobel Prize categories? (Select all that apply)",
+    "options": [
+      { "id": "opt-008a", "text": "Physics" },
+      { "id": "opt-008b", "text": "Mathematics" },
+      { "id": "opt-008c", "text": "Literature" },
+      { "id": "opt-008d", "text": "Economics" }
+    ],
+    "correctOptionIds": ["opt-008a", "opt-008c", "opt-008d"],
+    "marks": 4,
+    "negativeMarks": 1,
+    "explanation": "There is no Nobel Prize for Mathematics. The Fields Medal is the equivalent honor in mathematics.",
+    "difficulty": "medium",
+    "tags": ["awards", "general knowledge"]
+  },
+  {
+    "id": "q-009",
+    "contestId": "contest-003",
+    "questionNumber": 9,
+    "type": "mcq",
+    "text": "What is the largest organ in the human body?",
+    "options": [
+      { "id": "opt-009a", "text": "Liver" },
+      { "id": "opt-009b", "text": "Brain" },
+      { "id": "opt-009c", "text": "Skin" },
+      { "id": "opt-009d", "text": "Heart" }
+    ],
+    "correctOptionIds": ["opt-009c"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "The skin is the largest organ, covering about 20 square feet in adults.",
+    "difficulty": "easy",
+    "tags": ["biology", "human body"]
+  },
+  {
+    "id": "q-010",
+    "contestId": "contest-003",
+    "questionNumber": 10,
+    "type": "mcq",
+    "text": "Which ocean is the deepest?",
+    "options": [
+      { "id": "opt-010a", "text": "Atlantic Ocean" },
+      { "id": "opt-010b", "text": "Indian Ocean" },
+      { "id": "opt-010c", "text": "Pacific Ocean" },
+      { "id": "opt-010d", "text": "Arctic Ocean" }
+    ],
+    "correctOptionIds": ["opt-010c"],
+    "marks": 2,
+    "negativeMarks": 1,
+    "explanation": "The Pacific Ocean contains the Mariana Trench, the deepest point on Earth at about 36,000 feet.",
+    "difficulty": "easy",
+    "tags": ["geography", "oceans"]
+  }
+]
