@@ -1,0 +1,59 @@
+[
+  {
+    "id": "reg-001",
+    "contestId": "contest-003",
+    "participantId": "part-001",
+    "status": "confirmed",
+    "registeredAt": "2024-03-01T10:30:00Z",
+    "paymentId": "pay-001",
+    "paymentStatus": "completed",
+    "participantDetails": {
+      "fullName": "Alex Johnson",
+      "email": "alex.johnson@email.com",
+      "phone": "+1-555-0101",
+      "dateOfBirth": "1998-05-15",
+      "institution": "State University",
+      "city": "New York",
+      "state": "NY",
+      "country": "United States"
+    }
+  },
+  {
+    "id": "reg-002",
+    "contestId": "contest-003",
+    "participantId": "part-002",
+    "status": "confirmed",
+    "registeredAt": "2024-03-02T14:20:00Z",
+    "paymentId": "pay-002",
+    "paymentStatus": "completed",
+    "participantDetails": {
+      "fullName": "Priya Sharma",
+      "email": "priya.sharma@email.com",
+      "phone": "+91-9876543210",
+      "dateOfBirth": "2000-08-22",
+      "institution": "IIT Delhi",
+      "city": "New Delhi",
+      "state": "Delhi",
+      "country": "India"
+    }
+  },
+  {
+    "id": "reg-003",
+    "contestId": "contest-001",
+    "participantId": "part-003",
+    "status": "confirmed",
+    "registeredAt": "2024-02-15T09:00:00Z",
+    "paymentId": "pay-003",
+    "paymentStatus": "completed",
+    "participantDetails": {
+      "fullName": "Michael Chen",
+      "email": "michael.chen@email.com",
+      "phone": "+86-13912345678",
+      "dateOfBirth": "1999-12-03",
+      "institution": "Peking University",
+      "city": "Beijing",
+      "state": "Beijing",
+      "country": "China"
+    }
+  }
+]

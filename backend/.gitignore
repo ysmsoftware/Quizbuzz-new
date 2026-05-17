@@ -1,0 +1,11 @@
+node_modules/
+logs/
+
+.env
+.env.local
+.env.production
+
+
+dist/
+
+.agent/

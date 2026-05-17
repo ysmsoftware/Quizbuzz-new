@@ -1,0 +1,779 @@
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ENUMS
+
+enum OrgMemberRole {
+  OWNER         // Full control: billing, delete org, manage admins
+  ADMIN         // Create/manage contests, view analytics
+  VIEWER        // Read-only access to analytics and participants
+}
+
+enum ContestStatus {
+  DRAFT         // Being configured, not visible publicly
+  PUBLISHED     // Visible, registration open
+  REGISTRATION_CLOSED // Past deadline, awaiting start
+  LIVE          // Quiz is actively running
+  EVALUATION    // Submissions being evaluated by workers
+  RESULTS_OUT   // Leaderboard published
+  COMPLETED     // Certificates issued, archived
+  CANCELLED     // Cancelled by admin
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ParticipantStatus {
+  REGISTERED    // Paid, confirmed
+  CHECKED_IN    // Entered OTP/ID at quiz join time
+  IN_WAITING    // In waiting room
+  IN_QUIZ       // Actively answering questions
+  SUBMITTED     // Submitted answers
+  DISQUALIFIED  // Proctoring threshold exceeded
+  ABSENT        // Never joined
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING       // Order created, awaiting payment
+  SUCCESS
+  FAILED        // Payment failed or expired
+  CANCELLED
+  REFUNDED      // Admin issued refund
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  MANUAL        // Admin manually confirmed offline payment
+  FREE          // Zero-fee contest
+}
+
+enum SubmissionStatus {
+  PENDING       // Auto-saved progress, not yet submitted
+  SUBMITTED     // Final submission received
+  EVALUATED     // Scored by worker
+  INVALIDATED   // Disqualified post-evaluation
+}
+
+enum CertificateStatus {
+  PENDING       // Not yet generated
+  QUEUED
+  GENERATING    // Worker picked up job
+  GENERATED     // PDF ready, URL stored
+  FAILED        // Generation failed
+  DELIVERED     // Notification sent to participant
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum MessageStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum MessageTemplate {
+  // Existing Aisensy campaign templates
+  OTP_VERIFICATION_CODE
+  BIRTHDAY_WISHES_YSM
+  FEEDBACK_COLLECTION_MESSAGE
+  CERTIFICATE_ISSUED
+  REGISTRATION_SUCCESSFUL
+  WORKSHOP_REMINDER_MESSAGE
+  PAYMENT_CONFIRMATION_MESSAGE
+  // Admin / system templates (email-only)
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  ORG_INVITE
+  // Contest lifecycle
+  DISQUALIFICATION_NOTICE
+  RESULTS_PUBLISHED
+  CUSTOM
+}
+
+enum ViolationType {
+  FACE_NOT_DETECTED
+  MULTIPLE_FACES
+  TAB_SWITCH
+  FULLSCREEN_EXIT
+  AUDIO_ANOMALY
+  POOR_LIGHTING
+  GAZE_AWAY
+  WINDOW_BLUR
+  SCREEN_RESIZE
+  SNAPSHOT_START
+  SNAPSHOT_MID_POINT
+  SNAPSHOT_RANDOM
+  SNAPSHOT_PRE_SUBMIT
+}
+
+enum JobStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+  FAILED
+  DELAYED
+}
+
+// ORGANIZATION & MEMBERS  (multi-tenant root)
+
+model Organization {
+  id          String    @id @default(ulid())
+  name        String
+  slug        String    @unique           // used in URLs: quizbuzz.com/org/my-company
+  logoUrl     String?
+  website     String?
+  isActive    Boolean   @default(true)
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  members     OrgMember[]
+  contests    Contest[]
+  contacts    Contact[]
+  prizes      Prize[]
+  questionOptions QuestionOption[]
+  contestQuestions ContestQuestion[]
+  participants Participant[]
+  payments    Payment[]
+  quizSessions QuizSession[]
+  submissions Submission[]
+  answers     Answer[]
+  leaderboard LeaderboardEntry[]
+  certificates Certificate[]
+  proctoringEvents ProctoringEvent[]
+  proctoringScores ProctoringScore[]
+  messageLogs MessageLog[]
+  scheduledJobs ScheduledJob[]
+  analyticsSnapshots ContestAnalyticsSnapshot[]
+
+  @@index([slug])
+  @@index([isActive, isDeleted])
+  @@map("organizations")
+}
+
+model OrgMember {
+  id             String        @id @default(ulid())
+  organizationId String
+  adminId        String
+  role           OrgMemberRole @default(ADMIN)
+  invitedAt      DateTime      @default(now())
+  acceptedAt     DateTime?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  admin          Admin         @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, adminId])             // one membership per admin per org
+  @@index([organizationId])
+  @@index([adminId])
+  @@map("org_members")
+}
+
+// ADMIN  (platform users who create/manage contests)
+
+model Admin {
+  id                String      @id @default(ulid())
+  email             String      @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  avatarUrl         String?
+  isActive          Boolean     @default(true)
+  isDeleted         Boolean     @default(false)
+  emailVerified     Boolean     @default(false)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  memberships       OrgMember[]
+  refreshTokens     AdminRefreshToken[]
+  contestsCreated   Contest[]   @relation("ContestCreatedBy")
+
+  @@index([email])
+  @@index([isActive, isDeleted])
+  @@map("admins")
+}
+
+model AdminRefreshToken {
+  id          String    @id @default(ulid())
+  adminId     String
+  tokenHash   String    @unique           // store hash of the token, not plaintext
+  deviceInfo  String?
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  admin       Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("admin_refresh_tokens")
+}
+
+// CONTEST
+
+model Contest {
+  id                    String          @id @default(ulid())
+  organizationId        String
+  createdById           String
+  title                 String
+  slug                  String          @unique   // immutable after publish
+  description           String?
+  details               String?         // rich text / markdown
+  topics                String[]        // e.g. ["DSA", "System Design"]
+  rules                 String[]        // array of rule strings
+  paymentEnabled        Boolean         @default(false)
+  paymentConfig         PaymentConfig?
+  duration              Int             // quiz duration in minutes
+  cutoffScore           Int?            // minimum score to pass (percentage)
+  maxParticipants       Int?            // null = unlimited
+  registrationDeadline  DateTime        // when registration closes
+  startTime             DateTime        // when the quiz goes LIVE
+  endTime               DateTime        // startTime + duration (computed, stored for queries)
+  status                ContestStatus   @default(DRAFT)
+  joinCode              String?         // OTP/ID users enter to verify at join
+  allowResuming         Boolean         @default(true)
+  shuffleQuestions      Boolean         @default(true)
+  shuffleOptions        Boolean         @default(false)
+  showResultsAfter      Int             @default(24)  // hours after end before results published
+  isDeleted             Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  // Relations
+  organization          Organization    @relation(fields: [organizationId], references: [id])
+  createdBy             Admin           @relation("ContestCreatedBy", fields: [createdById], references: [id])
+  prizes                Prize[]
+  questions             ContestQuestion[]
+  participants          Participant[]
+  submissions           Submission[]
+  leaderboard           LeaderboardEntry[]
+  certificates          Certificate[]
+  messageLog            MessageLog[]
+  scheduledJobs         ScheduledJob[]
+  payments              Payment[]
+
+  @@index([organizationId, status])
+  @@index([slug])
+  @@index([startTime, status])
+  @@index([registrationDeadline])
+  @@index([isDeleted, status])
+  @@map("contests")
+}
+
+
+model PaymentConfig {
+  id            String      @id @default(uuid())
+  contestId     String      @unique
+  amount        Int         // Store in smallest currency unit (paise for INR)
+  currency      String      @default("INR")
+  description   String?     @db.Text
+
+    contest     Contest     @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  
+}
+
+model Prize {
+  id              String    @id @default(ulid())
+  organizationId  String
+  contestId       String
+  rankFrom        Int       // e.g. 1
+  rankTo          Int       // e.g. 3  (rankFrom=1, rankTo=3 = "1st to 3rd place")
+  amount          Decimal   @db.Decimal(10, 2)
+  currency        String    @default("INR")
+  label           String?   // e.g. "Gold", "Silver", "Participation"
+  benefits        String[]  // e.g. ["Certificate", "Internship opportunity"]
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  
+
+  @@index([organizationId])
+  @@index([contestId])
+  @@map("prizes")
+}
+
+// QUESTION BANK
+
+
+model Question {
+  id                  String              @id @default(ulid())
+  organizationId      String              // questions belong to an org's bank
+  questionText        String
+  difficulty          QuestionDifficulty
+  hint                String?
+  explanation         String?             // shown after contest ends
+  tags                String[]            // topics / concepts
+  isDeleted           Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  // Relations
+  options             QuestionOption[]
+  contestQuestions    ContestQuestion[]
+  answers             Answer[]
+
+  @@index([organizationId, difficulty])
+  @@index([organizationId, isDeleted])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id              String    @id @default(ulid())
+  organizationId  String
+  questionId      String
+  text            String
+  position        Int       // 0, 1, 2, 3 (or 4) — display order
+  isCorrect       Boolean   @default(false)
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  question        Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([questionId])
+  @@map("question_options")
+}
+
+// Join table: Contest ↔ Question (many-to-many)
+// Stores the order and which questions are assigned to each contest
+model ContestQuestion {
+  id              String    @id @default(ulid())
+  organizationId  String
+  contestId       String
+  questionId      String
+  position        Int       // display order within this contest
+  marks           Int       @default(1)   // marks for correct answer
+  negativeMark    Decimal   @default(0) @db.Decimal(4, 2) // negative marks for wrong
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  question        Question     @relation(fields: [questionId], references: [id])
+
+  @@unique([contestId, questionId])
+  @@unique([contestId, position])
+  @@index([organizationId])
+  @@index([contestId])
+  @@index([questionId])
+  @@map("contest_questions")
+}
+
+// CONTACT  (deduplicated user identity)
+// One Contact can participate in many contests — no duplicate rows per contest
+
+model Contact {
+  id                String        @id @default(ulid())
+  organizationId    String
+  email             String
+  phone             String?       // E.164 format: +919876543210
+  firstName         String
+  lastName          String?
+  college           String?
+  department        String?
+  city              String?
+  state             String?
+  isDeleted         Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  participants  Participant[] // one contact → many contest participations
+  payments      Payment[]
+
+  organization  Organization    @relation(fields: [organizationId], references: [id])
+  
+  @@unique([organizationId, email])
+  @@unique([organizationId, phone])
+  @@index([email])
+  @@index([phone])
+  @@map("contacts")
+}
+
+// PARTICIPANT  (Contact x Contest join — a registration)
+
+model Participant {
+  id              String            @id @default(ulid())
+  organizationId  String
+  contactId       String
+  contestId       String
+  registrationRef String            @unique   // human-readable: QB-2024-00001
+  status          ParticipantStatus @default(REGISTERED)
+  joinedAt        DateTime?         // when they entered the quiz room
+  checkedInAt     DateTime?         // when they verified with joinCode
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact         Contact           @relation(fields: [contactId], references: [id])
+  contest         Contest           @relation(fields: [contestId], references: [id])
+  payment         Payment?          // one-to-one (one payment per registration)
+  submission      Submission?       // one-to-one
+  leaderboard     LeaderboardEntry?
+  certificate     Certificate?
+  sessions        QuizSession[]
+  proctoring      ProctoringEvent[]
+  messages        MessageLog[]
+
+  @@unique([contactId, contestId])        // one registration per contact per contest
+  @@index([organizationId])
+  @@index([contestId, status])
+  @@index([contactId])
+  @@index([registrationRef])
+  @@map("participants")
+}
+
+// PAYMENT
+
+model Payment {
+  id                String          @id @default(ulid())
+  organizationId    String
+  contestId         String          // denormalized for fast queries
+  participantId     String          @unique   // one payment per participant
+  contactId         String
+  amount            Int             // in paise 
+  currency          String          @default("INR")
+  status            PaymentStatus   @default(PENDING)
+  provider          PaymentProvider @default(RAZORPAY)
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  razorpayStatus    String?
+  paidAt            DateTime?
+  metadata          Json?           // store raw provider response for audit/debug
+  attempts          Int             @default(1)
+  failureReason     String?
+  webhookConfirmed  Boolean       @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  isDeleted         Boolean         @default(false)
+
+  // Relations
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest          @relation(fields: [contestId], references: [id])
+  participant     Participant     @relation(fields: [participantId], references: [id])
+  contact         Contact         @relation(fields: [contactId], references: [id])
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([organizationId, contactId])
+  @@index([participantId])
+  @@index([contestId, status])
+  @@index([contestId, createdAt])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentId])
+  @@index([status, createdAt])
+}
+
+// QUIZ SESSION  (device-level session tracking during live quiz)
+
+model QuizSession {
+  id                String    @id @default(ulid())
+  organizationId    String
+  participantId     String
+  socketId          String?                     // current socket connection
+  deviceFingerprint String?                   // browser fingerprint
+  ipAddress         String?
+  userAgent         String?
+  isActive          Boolean   @default(true)
+  startedAt         DateTime  @default(now())
+  lastHeartbeatAt   DateTime  @default(now())
+  endedAt           DateTime?
+  currentQuestion   Int       @default(0)       // last known question index (0-based)
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant       Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([participantId, isActive])
+  @@index([socketId])
+  @@map("quiz_sessions")
+}
+
+// SUBMISSION  (final answer record — persisted from Redis at submit time)
+
+model Submission {
+  id              String            @id @default(ulid())
+  organizationId  String
+  participantId   String            @unique   // one submission per participant
+  contestId       String            // denormalized
+  status          SubmissionStatus  @default(PENDING)
+  submittedAt     DateTime?
+  evaluatedAt     DateTime?
+
+  // Scoring (filled by evaluation worker)
+  totalQuestions  Int?
+  attempted       Int?
+  correct         Int?
+  wrong           Int?
+  skipped         Int?
+  score           Decimal?          @db.Decimal(8, 2)
+  percentage      Decimal?          @db.Decimal(5, 2)
+  timeTakenSecs   Int?              // seconds from first question to submit
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant     Participant       @relation(fields: [participantId], references: [id])
+  contest         Contest           @relation(fields: [contestId], references: [id])
+  answers         Answer[]
+
+  @@index([organizationId])
+  @@index([contestId, status])
+  @@index([contestId, score])             // for leaderboard queries
+  @@index([participantId])
+  @@map("submissions")
+}
+
+// Individual answer record — one row per question per submission
+model Answer {
+  id                  String    @id @default(ulid())
+  organizationId      String
+  submissionId        String
+  questionId          String
+  selectedOptionId    String?   // null = skipped
+  isCorrect           Boolean?  // null until evaluated
+  marksAwarded        Decimal?  @db.Decimal(4, 2)
+  answeredAt          DateTime?
+
+  // Relations
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  submission          Submission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question            Question     @relation(fields: [questionId], references: [id])
+
+  @@unique([submissionId, questionId])    // one answer per question per submission
+  @@index([organizationId])
+  @@index([submissionId])
+  @@index([questionId])
+  @@map("answers")
+}
+
+// LEADERBOARD
+
+model LeaderboardEntry {
+  id              String    @id @default(ulid())
+  organizationId  String
+  contestId       String
+  participantId   String    @unique   // one entry per participant
+  rank            Int
+  score           Decimal   @db.Decimal(8, 2)
+  percentage      Decimal   @db.Decimal(5, 2)
+  timeTakenSecs   Int
+  prizeId         String?             // resolved prize bracket (nullable — not everyone wins)
+  isPublished     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest      @relation(fields: [contestId], references: [id])
+  participant     Participant  @relation(fields: [participantId], references: [id])
+
+  @@unique([contestId, rank])
+  @@index([organizationId])
+  @@index([contestId, rank])
+  @@index([contestId, score])
+  @@index([contestId, isPublished])
+  @@map("leaderboard_entries")
+}
+
+// CERTIFICATE
+
+model Certificate {
+  id              String            @id @default(ulid())
+  organizationId  String
+  contestId       String
+  participantId   String            @unique
+  status          CertificateStatus @default(PENDING)
+  fileUrl         String?           // S3/R2 URL after generation
+  fileKey         String?           // S3 key for deletion/re-generation
+  generatedAt     DateTime?
+  deliveredAt     DateTime?
+  metadata        Json?             // template parameters, rank, score, etc.
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relations
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest           @relation(fields: [contestId], references: [id])
+  participant     Participant       @relation(fields: [participantId], references: [id])
+
+  @@index([organizationId])
+  @@index([contestId, status])
+  @@map("certificates")
+}
+
+// PROCTORING
+
+model ProctoringEvent {
+  id              String        @id @default(ulid())
+  organizationId  String
+  participantId   String
+  contestId       String        // denormalized for fast queries
+  type            ViolationType
+  severity        Int           @default(1)   // 1=low, 2=medium, 3=high
+  metadata        Json?         // e.g. { confidence: 0.92, faceCount: 2 }
+  occurredAt      DateTime      @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?       // adminId who reviewed
+  dismissed       Boolean       @default(false)
+
+  // Relations
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant     Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([participantId])
+  @@index([contestId, type])
+  @@index([contestId, occurredAt])
+  @@map("proctoring_events")
+}
+
+// Aggregated proctoring score per participant (updated in real-time by worker)
+model ProctoringScore {
+  id                  String    @id @default(ulid())
+  organizationId      String
+  participantId       String
+  contestId           String
+  totalViolations     Int       @default(0)
+  highSeverityCount   Int       @default(0)
+  violationScore      Decimal   @default(0) @db.Decimal(6, 2)
+  trustScore          Decimal   @default(100) @db.Decimal(5, 2)
+  isFlagged           Boolean   @default(false)
+  flaggedAt           DateTime?
+  adminNotes          String?
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, contestId])
+  @@index([organizationId])
+  @@index([contestId, isFlagged])
+  @@map("proctoring_scores")
+}
+
+// MESSAGING
+
+model MessageLog {
+  id              String          @id @default(ulid())
+  organizationId  String
+  participantId   String?         // null for bulk/broadcast
+  contestId       String?
+  channel         MessageChannel
+  template        String
+  params          Json?
+  status          MessageStatus   @default(QUEUED)
+  recipient       String          // phone number or email address
+  subject         String?         // email subject
+  body            String?         // rendered message body (for audit)
+  metadata        Json?           // template parameters, etc.
+  providerMsgId   String?         // Aisensy/SMTP message ID
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  failureReason   String?
+  retryCount      Int             @default(0)
+  attemptCount   Int                @default(1)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant     Participant?    @relation(fields: [participantId], references: [id])
+  contest         Contest?        @relation(fields: [contestId], references: [id])
+
+  @@index([organizationId])
+  @@index([participantId])
+  @@index([contestId, template])
+  @@index([status, createdAt])
+  @@map("message_logs")
+}
+
+// SCHEDULED JOBS  (audit trail for BullMQ jobs)
+// BullMQ is the source of truth for job execution, but this table
+// gives us a queryable audit trail and state for the admin UI.
+
+model ScheduledJob {
+  id              String    @id @default(ulid())
+  organizationId  String
+  contestId       String?
+  bullJobId       String?   @unique   // BullMQ job ID
+  queue           String    // e.g. "contest-evaluation", "certificate-generation"
+  name            String    // e.g. "quiz:start", "reminder:24h"
+  payload         Json
+  status          JobStatus @default(WAITING)
+  scheduledFor    DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  error           String?
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest?     @relation(fields: [contestId], references: [id])
+
+  @@index([organizationId])
+  @@index([contestId])
+  @@index([queue, status])
+  @@index([scheduledFor, status])
+  @@map("scheduled_jobs")
+}
+
+// ANALYTICS SNAPSHOTS  (pre-aggregated, refreshed by worker every 15 min)
+
+model ContestAnalyticsSnapshot {
+  id                    String    @id @default(ulid())
+  organizationId        String
+  contestId             String    @unique
+  totalRegistrations    Int       @default(0)
+  totalRevenue          Decimal   @default(0) @db.Decimal(12, 2)
+  totalParticipated     Int       @default(0)    // actually joined quiz
+  totalSubmitted        Int       @default(0)
+  avgScore              Decimal?  @db.Decimal(5, 2)
+  highestScore          Decimal?  @db.Decimal(5, 2)
+  lowestScore           Decimal?  @db.Decimal(5, 2)
+  medianScore           Decimal?  @db.Decimal(5, 2)
+  avgTimeTakenSecs      Int?
+  activeNow             Int       @default(0)    // updated from Redis heartbeat
+  snapshotAt            DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([contestId])
+  @@map("contest_analytics_snapshots")
+}

@@ -1,0 +1,506 @@
+
+> my-project@0.1.0 build
+> next build
+
+▲ Next.js 16.2.4 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 19 errors:
+./app/admin/contests/page.tsx:148:1
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+  [90m146 |[0m       </[33mWidgetErrorBoundary[0m>
+  [90m147 |[0m   );
+[31m[1m>[0m [90m148 |[0m }
+  [90m    |[0m [31m[1m^[0m
+  [90m149 |[0m
+
+Parsing ecmascript source code failed
+
+
+./app/quiz/[slug]/play/page.tsx:28:1
+Module not found: Can't resolve '@/lib/hooks/useAnswerHandler'
+  [90m26 |[0m [36mimport[0m { useAuthStore } [36mfrom[0m [32m"@/lib/stores/auth-store"[0m;
+  [90m27 |[0m [36mimport[0m { useQuizSocket } [36mfrom[0m [32m"@/lib/hooks/useQuizSocket"[0m;
+[31m[1m>[0m [90m28 |[0m [36mimport[0m { useAnswerHandler } [36mfrom[0m [32m"@/lib/hooks/useAnswerHandler"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m29 |[0m [36mimport[0m { useQuizTimer } [36mfrom[0m [32m"@/lib/hooks/useQuizTimer"[0m;
+  [90m30 |[0m [36mimport[0m { [33mWidgetErrorBoundary[0m } [36mfrom[0m [32m"@/components/shared/WidgetErrorBoundary"[0m;
+  [90m31 |[0m
+
+Import map: aliased to relative './lib/hooks/useAnswerHandler' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/quiz/[slug]/play/page.tsx [Client Component Browser]
+    ./app/quiz/[slug]/play/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/quiz/[slug]/play/page.tsx [Client Component SSR]
+    ./app/quiz/[slug]/play/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/dashboard/certificates/page.tsx:7:1
+Module not found: Can't resolve '@/lib/hooks/useCertificates'
+  [90m 5 |[0m [36mimport[0m { [33mCard[0m, [33mCardContent[0m, [33mCardDescription[0m, [33mCardHeader[0m, [33mCardTitle[0m } [36mfrom[0m [32m'@/components/ui...[0m
+  [90m 6 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m'@/components/ui/button'[0m;
+[31m[1m>[0m [90m 7 |[0m [36mimport[0m { useCertificates } [36mfrom[0m [32m'@/lib/hooks/useCertificates'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m 8 |[0m [36mimport[0m { toast } [36mfrom[0m [32m'sonner'[0m;
+  [90m 9 |[0m
+  [90m10 |[0m [36mconst[0m [33mPARTICIPANT_ID[0m = [32m'QZCP12345ABC'[0m;
+
+Import map: aliased to relative './lib/hooks/useCertificates' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/certificates/page.tsx [Client Component Browser]
+    ./app/dashboard/certificates/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/certificates/page.tsx [Client Component SSR]
+    ./app/dashboard/certificates/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/contests/[id]/messages/page.tsx:13:1
+Module not found: Can't resolve '@/lib/hooks/useMessageSending'
+  [90m11 |[0m [36mimport[0m { [33mAlert[0m, [33mAlertDescription[0m } [36mfrom[0m [32m'@/components/ui/alert'[0m;
+  [90m12 |[0m [36mimport[0m { useMessageTemplates } [36mfrom[0m [32m'@/lib/hooks/useMessageTemplates'[0m;
+[31m[1m>[0m [90m13 |[0m [36mimport[0m { useMessageSending } [36mfrom[0m [32m'@/lib/hooks/useMessageSending'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m14 |[0m [36mimport[0m { useSentMessages } [36mfrom[0m [32m'@/lib/hooks/useSentMessages'[0m;
+  [90m15 |[0m [36mimport[0m { useScheduledMessages } [36mfrom[0m [32m'@/lib/hooks/useScheduledMessages'[0m;
+  [90m16 |[0m [36mimport[0m { useRecipientFilter } [36mfrom[0m [32m'@/lib/hooks/useRecipientFilter'[0m;
+
+Import map: aliased to relative './lib/hooks/useMessageSending' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/contests/[id]/messages/page.tsx:12:1
+Module not found: Can't resolve '@/lib/hooks/useMessageTemplates'
+  [90m10 |[0m [36mimport[0m { [33mTabs[0m, [33mTabsContent[0m, [33mTabsList[0m, [33mTabsTrigger[0m } [36mfrom[0m [32m'@/components/ui/tabs'[0m;
+  [90m11 |[0m [36mimport[0m { [33mAlert[0m, [33mAlertDescription[0m } [36mfrom[0m [32m'@/components/ui/alert'[0m;
+[31m[1m>[0m [90m12 |[0m [36mimport[0m { useMessageTemplates } [36mfrom[0m [32m'@/lib/hooks/useMessageTemplates'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m13 |[0m [36mimport[0m { useMessageSending } [36mfrom[0m [32m'@/lib/hooks/useMessageSending'[0m;
+  [90m14 |[0m [36mimport[0m { useSentMessages } [36mfrom[0m [32m'@/lib/hooks/useSentMessages'[0m;
+  [90m15 |[0m [36mimport[0m { useScheduledMessages } [36mfrom[0m [32m'@/lib/hooks/useScheduledMessages'[0m;
+
+Import map: aliased to relative './lib/hooks/useMessageTemplates' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/messages/templates/page.tsx:10:1
+Module not found: Can't resolve '@/lib/hooks/useMessageTemplates'
+  [90m 8 |[0m [36mimport[0m { [33mCard[0m, [33mCardContent[0m, [33mCardDescription[0m, [33mCardHeader[0m, [33mCardTitle[0m } [36mfrom[0m [32m'@/components/ui...[0m
+  [90m 9 |[0m [36mimport[0m { [33mInput[0m } [36mfrom[0m [32m'@/components/ui/input'[0m;
+[31m[1m>[0m [90m10 |[0m [36mimport[0m { useMessageTemplates } [36mfrom[0m [32m'@/lib/hooks/useMessageTemplates'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m11 |[0m [36mimport[0m { [33mTemplateBuilder[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateBuilder'[0m;
+  [90m12 |[0m [36mimport[0m { [33mTemplateCard[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateCard'[0m;
+  [90m13 |[0m
+
+Import map: aliased to relative './lib/hooks/useMessageTemplates' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/messages/templates/page.tsx [Client Component Browser]
+    ./app/admin/messages/templates/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/messages/templates/page.tsx [Client Component SSR]
+    ./app/admin/messages/templates/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/analytics/page.tsx:9:1
+Module not found: Can't resolve '@/lib/hooks/useOrgAnalytics'
+  [90m 7 |[0m [36mimport[0m { [33mCard[0m, [33mCardContent[0m, [33mCardDescription[0m, [33mCardHeader[0m, [33mCardTitle[0m } [36mfrom[0m [32m'@/components/ui...[0m
+  [90m 8 |[0m [36mimport[0m { [33mChartContainer[0m, [33mChartTooltip[0m, [33mChartTooltipContent[0m, [33mChartLegend[0m, [33mChartLegendConten.[0m..
+[31m[1m>[0m [90m 9 |[0m [36mimport[0m { useOrgAnalytics } [36mfrom[0m [32m'@/lib/hooks/useOrgAnalytics'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m10 |[0m
+  [90m11 |[0m [36mconst[0m [33mCOLORS[0m = [[32m'#3b82f6'[0m, [32m'#10b981'[0m, [32m'#f59e0b'[0m, [32m'#ef4444'[0m];
+  [90m12 |[0m
+
+Import map: aliased to relative './lib/hooks/useOrgAnalytics' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/analytics/page.tsx [Client Component Browser]
+    ./app/admin/analytics/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/analytics/page.tsx [Client Component SSR]
+    ./app/admin/analytics/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/dashboard/contests/page.tsx:15:1
+Module not found: Can't resolve '@/lib/hooks/useParticipantDashboard'
+  [90m13 |[0m   [33mSelectValue[0m,
+  [90m14 |[0m } [36mfrom[0m [32m'@/components/ui/select'[0m;
+[31m[1m>[0m [90m15 |[0m [36mimport[0m { useParticipantDashboard } [36mfrom[0m [32m'@/lib/hooks/useParticipantDashboard'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m16 |[0m
+  [90m17 |[0m [36mconst[0m [33mPARTICIPANT_ID[0m = [32m'QZCP12345ABC'[0m;
+  [90m18 |[0m
+
+Import map: aliased to relative './lib/hooks/useParticipantDashboard' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/contests/page.tsx [Client Component Browser]
+    ./app/dashboard/contests/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/contests/page.tsx [Client Component SSR]
+    ./app/dashboard/contests/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/dashboard/profile/page.tsx:11:1
+Module not found: Can't resolve '@/lib/hooks/useParticipantProfile'
+  [90m 9 |[0m [36mimport[0m { [33mCard[0m, [33mCardContent[0m, [33mCardDescription[0m, [33mCardHeader[0m, [33mCardTitle[0m } [36mfrom[0m [32m'@/components/ui...[0m
+  [90m10 |[0m [36mimport[0m { [33mTextarea[0m } [36mfrom[0m [32m'@/components/ui/textarea'[0m;
+[31m[1m>[0m [90m11 |[0m [36mimport[0m { useParticipantProfile } [36mfrom[0m [32m'@/lib/hooks/useParticipantProfile'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m12 |[0m [36mimport[0m { [33mFileUpload[0m } [36mfrom[0m [32m'@/components/features/shared/FileUpload'[0m;
+  [90m13 |[0m
+  [90m14 |[0m [36mconst[0m [33mPARTICIPANT_ID[0m = [32m'QZCP12345ABC'[0m;
+
+Import map: aliased to relative './lib/hooks/useParticipantProfile' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/profile/page.tsx [Client Component Browser]
+    ./app/dashboard/profile/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/profile/page.tsx [Client Component SSR]
+    ./app/dashboard/profile/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/quiz/[slug]/play/page.tsx:29:1
+Module not found: Can't resolve '@/lib/hooks/useQuizTimer'
+  [90m27 |[0m [36mimport[0m { useQuizSocket } [36mfrom[0m [32m"@/lib/hooks/useQuizSocket"[0m;
+  [90m28 |[0m [36mimport[0m { useAnswerHandler } [36mfrom[0m [32m"@/lib/hooks/useAnswerHandler"[0m;
+[31m[1m>[0m [90m29 |[0m [36mimport[0m { useQuizTimer } [36mfrom[0m [32m"@/lib/hooks/useQuizTimer"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m30 |[0m [36mimport[0m { [33mWidgetErrorBoundary[0m } [36mfrom[0m [32m"@/components/shared/WidgetErrorBoundary"[0m;
+  [90m31 |[0m
+  [90m32 |[0m [90m// Components[0m
+
+Import map: aliased to relative './lib/hooks/useQuizTimer' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/quiz/[slug]/play/page.tsx [Client Component Browser]
+    ./app/quiz/[slug]/play/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/quiz/[slug]/play/page.tsx [Client Component SSR]
+    ./app/quiz/[slug]/play/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/contests/[id]/messages/page.tsx:16:1
+Module not found: Can't resolve '@/lib/hooks/useRecipientFilter'
+  [90m14 |[0m [36mimport[0m { useSentMessages } [36mfrom[0m [32m'@/lib/hooks/useSentMessages'[0m;
+  [90m15 |[0m [36mimport[0m { useScheduledMessages } [36mfrom[0m [32m'@/lib/hooks/useScheduledMessages'[0m;
+[31m[1m>[0m [90m16 |[0m [36mimport[0m { useRecipientFilter } [36mfrom[0m [32m'@/lib/hooks/useRecipientFilter'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m17 |[0m [36mimport[0m { [33mTemplateBuilder[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateBuilder'[0m;
+  [90m18 |[0m [36mimport[0m { [33mTemplateCard[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateCard'[0m;
+  [90m19 |[0m [36mimport[0m { [33mRecipientSelector[0m } [36mfrom[0m [32m'@/components/features/messaging/RecipientSelector'[0m;
+
+Import map: aliased to relative './lib/hooks/useRecipientFilter' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/dashboard/results/page.tsx:8:1
+Module not found: Can't resolve '@/lib/hooks/useResults'
+  [90m 6 |[0m [36mimport[0m { [33mButton[0m } [36mfrom[0m [32m'@/components/ui/button'[0m;
+  [90m 7 |[0m [36mimport[0m { [33mBadge[0m } [36mfrom[0m [32m'@/components/ui/badge'[0m;
+[31m[1m>[0m [90m 8 |[0m [36mimport[0m { useResults } [36mfrom[0m [32m'@/lib/hooks/useResults'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m 9 |[0m
+  [90m10 |[0m [36mconst[0m [33mPARTICIPANT_ID[0m = [32m'QZCP12345ABC'[0m;
+  [90m11 |[0m
+
+Import map: aliased to relative './lib/hooks/useResults' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/results/page.tsx [Client Component Browser]
+    ./app/dashboard/results/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/results/page.tsx [Client Component SSR]
+    ./app/dashboard/results/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/results/[contestId]/page.tsx:29:1
+Module not found: Can't resolve '@/lib/hooks/useResults'
+  [90m27 |[0m [36mimport[0m { [33mFooter[0m } [36mfrom[0m [32m"@/components/layout/footer"[0m;
+  [90m28 |[0m [36mimport[0m { toast } [36mfrom[0m [32m"sonner"[0m;
+[31m[1m>[0m [90m29 |[0m [36mimport[0m { useResults } [36mfrom[0m [32m"@/lib/hooks/useResults"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m30 |[0m [36mimport[0m [36mtype[0m { [33mContest[0m, [33mQuizResult[0m, [33mLeaderboardEntry[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+  [90m31 |[0m
+  [90m32 |[0m [36mexport[0m [36mdefault[0m [36mfunction[0m [33mResultsPage[0m() {
+
+Import map: aliased to relative './lib/hooks/useResults' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/results/[contestId]/page.tsx [Client Component Browser]
+    ./app/results/[contestId]/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/results/[contestId]/page.tsx [Client Component SSR]
+    ./app/results/[contestId]/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/contests/[id]/messages/page.tsx:15:1
+Module not found: Can't resolve '@/lib/hooks/useScheduledMessages'
+  [90m13 |[0m [36mimport[0m { useMessageSending } [36mfrom[0m [32m'@/lib/hooks/useMessageSending'[0m;
+  [90m14 |[0m [36mimport[0m { useSentMessages } [36mfrom[0m [32m'@/lib/hooks/useSentMessages'[0m;
+[31m[1m>[0m [90m15 |[0m [36mimport[0m { useScheduledMessages } [36mfrom[0m [32m'@/lib/hooks/useScheduledMessages'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m16 |[0m [36mimport[0m { useRecipientFilter } [36mfrom[0m [32m'@/lib/hooks/useRecipientFilter'[0m;
+  [90m17 |[0m [36mimport[0m { [33mTemplateBuilder[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateBuilder'[0m;
+  [90m18 |[0m [36mimport[0m { [33mTemplateCard[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateCard'[0m;
+
+Import map: aliased to relative './lib/hooks/useScheduledMessages' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/admin/contests/[id]/messages/page.tsx:14:1
+Module not found: Can't resolve '@/lib/hooks/useSentMessages'
+  [90m12 |[0m [36mimport[0m { useMessageTemplates } [36mfrom[0m [32m'@/lib/hooks/useMessageTemplates'[0m;
+  [90m13 |[0m [36mimport[0m { useMessageSending } [36mfrom[0m [32m'@/lib/hooks/useMessageSending'[0m;
+[31m[1m>[0m [90m14 |[0m [36mimport[0m { useSentMessages } [36mfrom[0m [32m'@/lib/hooks/useSentMessages'[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m15 |[0m [36mimport[0m { useScheduledMessages } [36mfrom[0m [32m'@/lib/hooks/useScheduledMessages'[0m;
+  [90m16 |[0m [36mimport[0m { useRecipientFilter } [36mfrom[0m [32m'@/lib/hooks/useRecipientFilter'[0m;
+  [90m17 |[0m [36mimport[0m { [33mTemplateBuilder[0m } [36mfrom[0m [32m'@/components/features/messaging/TemplateBuilder'[0m;
+
+Import map: aliased to relative './lib/hooks/useSentMessages' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/admin/contests/[id]/messages/page.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/messages/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/quiz/[slug]/waiting/page.tsx:20:1
+Module not found: Can't resolve '@/lib/hooks/useWaitingRoomSocket'
+  [90m18 |[0m ...[36mrt[0m { contestService } [36mfrom[0m [32m"@/lib/services/contest-service"[0m;
+  [90m19 |[0m ...[36mrt[0m { useAuthStore } [36mfrom[0m [32m"@/lib/stores/auth-store"[0m;
+[31m[1m>[0m [90m20 |[0m ...[36mrt[0m { useWaitingRoomSocket, [36mtype[0m [33mBroadcastMessage[0m } [36mfrom[0m [32m"@/lib/hooks/useWaitingRoomSock...[0m
+  [90m   |[0m    [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m21 |[0m ...[36mrt[0m { [33mWSConnectionStatus[0m } [36mfrom[0m [32m"@/components/features/quiz/WSConnectionStatus"[0m;
+  [90m22 |[0m ...[36mrt[0m { [33mWidgetErrorBoundary[0m } [36mfrom[0m [32m"@/components/shared/WidgetErrorBoundary"[0m;
+  [90m23 |[0m ...[36mrt[0m [36mtype[0m { [33mContest[0m } [36mfrom[0m [32m"@/lib/types"[0m;
+
+Import map: aliased to relative './lib/hooks/useWaitingRoomSocket' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/quiz/[slug]/waiting/page.tsx [Client Component Browser]
+    ./app/quiz/[slug]/waiting/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/quiz/[slug]/waiting/page.tsx [Client Component SSR]
+    ./app/quiz/[slug]/waiting/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./components/providers/query-provider.tsx:4:1
+Module not found: Can't resolve '@tanstack/react-query-devtools'
+  [90m2 |[0m
+  [90m3 |[0m [36mimport[0m { [33mQueryClient[0m, [33mQueryClientProvider[0m } [36mfrom[0m [32m'@tanstack/react-query'[0m;
+[31m[1m>[0m [90m4 |[0m [36mimport[0m { [33mReactQueryDevtools[0m } [36mfrom[0m [32m'@tanstack/react-query-devtools'[0m;
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m5 |[0m [36mimport[0m { useState } [36mfrom[0m [32m'react'[0m;
+  [90m6 |[0m
+  [90m7 |[0m [36mexport[0m [36mfunction[0m [33mQueryProvider[0m({ children }: { children: [33mReact[0m.[33mReactNode[0m }) {
+
+
+
+Import trace:
+  Server Component:
+    ./components/providers/query-provider.tsx
+    ./app/layout.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./lib/hooks/useAnalytics.ts:2:1
+Export analyticsApi doesn't exist in target module
+  [90m1 |[0m [36mimport[0m { useQuery } [36mfrom[0m [32m'@tanstack/react-query'[0m;
+[31m[1m>[0m [90m2 |[0m [36mimport[0m { analyticsApi } [36mfrom[0m [32m'@/lib/api/analytics.api'[0m;
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m3 |[0m
+  [90m4 |[0m [36mexport[0m [36mfunction[0m useContestAnalytics(contestId: string) {
+  [90m5 |[0m   [36mconst[0m { data: snapshot, isLoading: isSnapshotLoading } = useQuery({
+
+The export analyticsApi was not found in module [project]/lib/api/analytics.api.ts [app-client] (ecmascript).
+Did you mean to import getLiveAnalytics?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./lib/hooks/useAnalytics.ts [Client Component Browser]
+    ./app/admin/contests/[id]/index.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/layout.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./lib/hooks/useAnalytics.ts [Client Component SSR]
+    ./app/admin/contests/[id]/index.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/layout.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/layout.tsx [Server Component]
+
+
+./lib/hooks/useAnalytics.ts:2:1
+Export analyticsApi doesn't exist in target module
+  [90m1 |[0m [36mimport[0m { useQuery } [36mfrom[0m [32m'@tanstack/react-query'[0m;
+[31m[1m>[0m [90m2 |[0m [36mimport[0m { analyticsApi } [36mfrom[0m [32m'@/lib/api/analytics.api'[0m;
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m3 |[0m
+  [90m4 |[0m [36mexport[0m [36mfunction[0m useContestAnalytics(contestId: string) {
+  [90m5 |[0m   [36mconst[0m { data: snapshot, isLoading: isSnapshotLoading } = useQuery({
+
+The export analyticsApi was not found in module [project]/lib/api/analytics.api.ts [app-ssr] (ecmascript).
+Did you mean to import getLiveAnalytics?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import traces:
+  Client Component Browser:
+    ./lib/hooks/useAnalytics.ts [Client Component Browser]
+    ./app/admin/contests/[id]/index.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/layout.tsx [Client Component Browser]
+    ./app/admin/contests/[id]/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./lib/hooks/useAnalytics.ts [Client Component SSR]
+    ./app/admin/contests/[id]/index.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/layout.tsx [Client Component SSR]
+    ./app/admin/contests/[id]/layout.tsx [Server Component]
+
+
+    at <unknown> (./app/admin/contests/page.tsx:148:1)
+    at <unknown> (./app/quiz/[slug]/play/page.tsx:28:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/dashboard/certificates/page.tsx:7:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/contests/[id]/messages/page.tsx:13:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/contests/[id]/messages/page.tsx:12:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/messages/templates/page.tsx:10:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/analytics/page.tsx:9:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/dashboard/contests/page.tsx:15:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/dashboard/profile/page.tsx:11:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/quiz/[slug]/play/page.tsx:29:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/contests/[id]/messages/page.tsx:16:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/dashboard/results/page.tsx:8:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/results/[contestId]/page.tsx:29:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/contests/[id]/messages/page.tsx:15:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/admin/contests/[id]/messages/page.tsx:14:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./app/quiz/[slug]/waiting/page.tsx:20:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./components/providers/query-provider.tsx:4:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at <unknown> (./lib/hooks/useAnalytics.ts:2:1)
+    at <unknown> (./lib/hooks/useAnalytics.ts:2:1)
