@@ -1,6 +1,7 @@
 'use client';
 
-import { useMutation, useState } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 
 import * as registrationApi from '../api/registration.api';
 

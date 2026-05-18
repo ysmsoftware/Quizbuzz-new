@@ -62,7 +62,7 @@ export function useOrganization(orgId: string) {
    * Change member role mutation
    */
   const changeMemberRoleMutation = useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
+    mutationFn: ({ memberId, role }: { memberId: string; role: import('../types').TeamRole }) =>
       orgApi.changeMemberRole(orgId, memberId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.org.members(orgId) });

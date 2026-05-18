@@ -3,14 +3,20 @@
 import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+export interface BroadcastMessage {
+  type: 'info' | 'warning' | 'urgent';
+  text: string;
+}
+
 /**
  * Specialized hook for the waiting room state.
  * Connects to the waiting room namespace/room to receive start updates.
  */
-export function useWaitingRoomSocket(contestId: string) {
+export function useWaitingRoomSocket(contestId: string, participantId?: string, sessionToken?: string) {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'starting' | 'error'>('connecting');
   const [timeToStart, setTimeToStart] = useState<number | null>(null);
   const [participantCount, setParticipantCount] = useState<number>(0);
+  const [broadcastMessage, setBroadcastMessage] = useState<BroadcastMessage | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -21,7 +27,7 @@ export function useWaitingRoomSocket(contestId: string) {
     
     const socket = io(`${wsUrl}/waiting-room`, {
       path: '/socket.io',
-      query: { contestId },
+      query: { contestId, participantId, token: sessionToken },
       transports: ['websocket'],
       reconnectionAttempts: 3,
     });
@@ -42,6 +48,10 @@ export function useWaitingRoomSocket(contestId: string) {
       setStatus('starting');
     });
 
+    socket.on('room:broadcast', (msg: BroadcastMessage) => {
+      setBroadcastMessage(msg);
+    });
+
     socket.on('connect_error', (err) => {
       console.error('Waiting room connection error:', err);
       setStatus('error');
@@ -52,12 +62,18 @@ export function useWaitingRoomSocket(contestId: string) {
     return () => {
       socket.disconnect();
     };
-  }, [contestId]);
+  }, [contestId, participantId, sessionToken]);
+
+  const clearBroadcast = () => setBroadcastMessage(null);
 
   return {
-    status,
+    wsStatus: status,
     timeToStart,
     participantCount,
+    broadcastMessage,
+    clearBroadcast,
+    showStartingOverlay: status === 'starting',
+    contestStartTime: timeToStart ? new Date(timeToStart) : null,
     socket: socketRef.current
   };
 }

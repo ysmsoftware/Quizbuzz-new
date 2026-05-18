@@ -53,8 +53,8 @@ class AnalyticsService {
     return MockDB.contests.map(c => ({
       id: c.id,
       title: c.title,
-      registrations: c._counts?.registered || 0,
-      participationRate: c._counts?.registered ? (c._counts.confirmed / c._counts.registered) : 0,
+      registrations: c._count?.participants || 0,
+      participationRate: c._count?.participants ? ((c._count?.submissions || 0) / c._count.participants) : 0,
     }));
   }
 

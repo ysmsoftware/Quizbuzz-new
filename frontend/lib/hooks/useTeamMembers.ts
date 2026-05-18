@@ -26,7 +26,7 @@ export function useTeamMembers(orgId: string) {
   const activeMembers = members.filter((m: any) => m.acceptedAt !== null);
   const pendingInvitations = members.filter((m: any) => m.acceptedAt === null);
 
-  const inviteMember = async (email: string, role: string) => {
+  const inviteMember = async (email: string, role: TeamRole) => {
     return inviteMemberMutation.mutateAsync({ email, role });
   };
 
@@ -34,7 +34,7 @@ export function useTeamMembers(orgId: string) {
     return removeMemberMutation.mutateAsync(memberId);
   };
 
-  const updateMemberRole = async (memberId: string, role: string) => {
+  const updateMemberRole = async (memberId: string, role: TeamRole) => {
     return changeMemberRoleMutation.mutateAsync({ memberId, role });
   };
 

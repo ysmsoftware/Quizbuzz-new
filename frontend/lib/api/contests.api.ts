@@ -7,6 +7,7 @@
 
 import { del, get, patch, post } from './apiClient';
 import type { ApiResponse } from './apiClient';
+import type { Contest, Registration } from '../types';
 
 /**
  * GET /contests
@@ -16,7 +17,7 @@ export async function listContests(params?: {
   page?: number;
   limit?: number;
   search?: string;
-}): Promise<ApiResponse> {
+}): Promise<ApiResponse<{ data: Contest[]; pagination?: any }>> {
   const query = new URLSearchParams();
   if (params?.status) query.append('status', params.status);
   if (params?.page) query.append('page', String(params.page));
@@ -24,7 +25,7 @@ export async function listContests(params?: {
   if (params?.search) query.append('search', params.search);
 
   const path = `/contests${query.toString() ? '?' + query.toString() : ''}`;
-  return get(path);
+  return get<{ data: Contest[]; pagination?: any }>(path);
 }
 
 /**
@@ -37,8 +38,8 @@ export async function createContest(body: any): Promise<ApiResponse> {
 /**
  * GET /contests/:contestId
  */
-export async function getContest(contestId: string): Promise<ApiResponse> {
-  return get(`/contests/${contestId}`);
+export async function getContest(contestId: string): Promise<ApiResponse<Contest>> {
+  return get<Contest>(`/contests/${contestId}`);
 }
 
 /**
@@ -73,7 +74,7 @@ export async function listParticipants(
     status?: string;
     search?: string;
   }
-): Promise<ApiResponse> {
+): Promise<ApiResponse<{ data: Registration[]; pagination?: any }>> {
   const query = new URLSearchParams();
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
@@ -83,7 +84,7 @@ export async function listParticipants(
   const path = `/contests/${contestId}/participants${
     query.toString() ? '?' + query.toString() : ''
   }`;
-  return get(path);
+  return get<{ data: Registration[]; pagination?: any }>(path);
 }
 
 /**
