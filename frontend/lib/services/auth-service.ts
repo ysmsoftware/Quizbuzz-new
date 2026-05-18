@@ -36,7 +36,7 @@ class AuthService {
         if (!deviceId) {
             deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             if (typeof window !== 'undefined') {
-                localStorage.setItem('quizcraft_device_id', deviceId);
+                localStorage.setItem('quizbuzz_device_id', deviceId);
             }
         }
         return deviceId;
