@@ -50,11 +50,11 @@ export function useRegistrations(
     mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
       // Assuming individual disqualification for now
       Promise.all(ids.map(id => contestsApi.disqualifyParticipant(contestId, id, reason))),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.contests.participants(contestId, params),
       });
-      toast.success(`Revoked ${ids.length > 1 ? 'registrations' : 'registration'}`);
+      toast.success(`Revoked ${variables.ids.length > 1 ? 'registrations' : 'registration'}`);
     },
   });
 

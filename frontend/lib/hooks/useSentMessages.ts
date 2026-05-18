@@ -10,7 +10,7 @@ export function useSentMessages(contestId: string) {
   });
 
   return {
-    messages: query.data?.data ?? ([] as SentMessage[]),
+    messages: query.data ?? ([] as SentMessage[]),
     loading: query.isLoading,
   };
 }

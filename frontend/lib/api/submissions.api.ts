@@ -19,8 +19,8 @@ export async function listSubmissions(
     page?: number;
     limit?: number;
   }
-): Promise<ApiResponse> {
-  return get(`/submissions/contests/${contestId}`, params);
+): Promise<ApiResponse<{ data: any[]; pagination: any; summary?: any }>> {
+  return get<{ data: any[]; pagination: any; summary?: any }>(`/submissions/contests/${contestId}`, params);
 }
 
 /**

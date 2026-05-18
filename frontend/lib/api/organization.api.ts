@@ -7,6 +7,7 @@
 
 import { del, get, patch, post } from './apiClient';
 import type { ApiResponse } from './apiClient';
+import type { TeamRole } from '../types';
 
 /**
  * GET /org/:orgId
@@ -32,8 +33,8 @@ export async function updateOrg(
 /**
  * GET /org/:orgId/members
  */
-export async function getOrgMembers(orgId: string): Promise<ApiResponse> {
-  return get(`/org/${orgId}/members`);
+export async function getOrgMembers(orgId: string): Promise<ApiResponse<any[]>> {
+  return get<any[]>(`/org/${orgId}/members`);
 }
 
 /**
@@ -43,7 +44,7 @@ export async function inviteMember(
   orgId: string,
   body: {
     email: string;
-    role: 'OWNER' | 'ADMIN' | 'VIEWER';
+    role: TeamRole;
   }
 ): Promise<ApiResponse> {
   return post(`/org/${orgId}/members/invite`, body);
@@ -55,7 +56,7 @@ export async function inviteMember(
 export async function changeMemberRole(
   orgId: string,
   memberId: string,
-  role: string
+  role: TeamRole
 ): Promise<ApiResponse> {
   return patch(`/org/${orgId}/members/${memberId}/role`, { role });
 }

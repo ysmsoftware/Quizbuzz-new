@@ -19,7 +19,7 @@ export function useScheduledMessages(contestId: string) {
   });
 
   return {
-    messages: query.data?.data ?? ([] as MessageDraft[]),
+    messages: query.data ?? ([] as MessageDraft[]),
     loading: query.isLoading,
     cancelScheduled: cancelMutation.mutateAsync,
   };
