@@ -128,6 +128,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ENV_PRODUCTION
           script: |
             set -e
 
@@ -136,11 +137,15 @@ jobs:
             # ── Pull latest docker-compose file ──
             git pull origin main
 
+            # ── Write env file from GitHub Secret ──
+            echo "$ENV_PRODUCTION" > ./backend/.env.production
+            cp ./backend/.env.production ./.env.production
+
             # ── Pull pre-built images ────────────
-            docker compose -f docker-compose.prod.yml pull backend frontend
+            docker compose -f docker-compose.prod.yml --env-file .env.production pull backend frontend
 
             # ── Zero-downtime rolling restart ────
-            docker compose -f docker-compose.prod.yml up -d \
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d \
               --no-build \
               --remove-orphans
 
@@ -148,3 +153,5 @@ jobs:
             docker image prune -f
 
             echo "Deploy complete — $(date)"
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
