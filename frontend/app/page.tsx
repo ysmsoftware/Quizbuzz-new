@@ -158,7 +158,7 @@ export default function HomePage() {
                 <section className="py-20">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                         <div className="mx-auto max-w-2xl text-center mb-16">
-                            <h2 className="text-3xl font-bold tracking-tight">Why Choose QuizBuzz Pro?</h2>
+                            <h2 className="text-3xl font-bold tracking-tight">Why Choose QuizBuzz?</h2>
                             <p className="mt-4 text-muted-foreground">
                                 A complete platform designed for fair, engaging, and rewarding quiz experiences
                             </p>
@@ -221,7 +221,7 @@ export default function HomePage() {
                                     Create and Manage Contests with Ease
                                 </h2>
                                 <p className="mt-4 text-muted-foreground">
-                                    QuizBuzz Pro provides powerful tools for organizations to create,
+                                    QuizBuzz provides powerful tools for organizations to create,
                                     manage, and analyze quizzes and contests at scale.
                                 </p>
                                 <ul className="mt-8 space-y-4">
