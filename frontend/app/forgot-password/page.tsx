@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { forgotPassword } from '@/lib/api/auth.api';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -34,15 +35,15 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await forgotPassword(email);
+
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Failed to send reset link');
+      }
 
       setSubmitted(true);
-
-      setTimeout(() => {
-        router.push(`/reset-password?email=${encodeURIComponent(email)}`);
-      }, 3000);
-    } catch (err) {
-      setError('Failed to send reset link. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset link. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -68,13 +69,16 @@ export default function ForgotPasswordPage() {
                 </p>
               </div>
 
-              <p className="text-sm text-muted-foreground">Redirecting to reset page...</p>
+              <p className="text-sm text-muted-foreground mt-4">
+                Please click the link in the email to set a new password. If you don&apos;t see it, check your spam folder.
+              </p>
 
               <Button
-                onClick={() => router.push(`/reset-password?email=${encodeURIComponent(email)}`)}
-                className="w-full"
+                variant="outline"
+                onClick={() => router.push('/login')}
+                className="w-full mt-6"
               >
-                Go to Reset Password
+                Back to Login
               </Button>
             </CardContent>
           </Card>
