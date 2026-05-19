@@ -160,7 +160,7 @@ async function generatePdf(html: string): Promise<Buffer> {
     const page = await b.newPage();
 
     try {
-        await page.setContent(html, { waitUntil: "networkidle0" });
+        await page.setContent(html, { waitUntil: "load" });
 
         const pdf = await page.pdf({
             format:          "A4",
