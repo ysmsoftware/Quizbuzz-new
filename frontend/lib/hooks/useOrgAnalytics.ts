@@ -14,6 +14,10 @@ export function useOrgAnalytics(
     enabled: !!orgId,
   });
 
+  const exportCSV = () => {
+    console.log('Exporting CSV...');
+  };
+
   return {
     analytics: data ?? {
       dailyMetrics: [],
@@ -29,5 +33,6 @@ export function useOrgAnalytics(
       topContests: [],
     },
     loading: isLoading,
+    exportCSV,
   };
 }

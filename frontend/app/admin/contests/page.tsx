@@ -27,7 +27,7 @@ import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { contestService } from '@/lib/services/contest-service';
 
 export default function ContestsPage() {
-  const { contests, isLoading } = useContests();
+  const { contests = [], isLoading } = useContests();
 
   if (isLoading) {
     return (

@@ -370,4 +370,30 @@ export class QuestionRepository {
         `;
         return rows.map((r) => r.tag);
     }
+
+    async findCandidatesForAutoGenerate(
+        organizationId: string,
+        contestId: string,
+        tags: string[],
+        difficulty: QuestionDifficulty
+    ) {
+        return prisma.question.findMany({
+            where: {
+                organizationId,
+                isDeleted: false,
+                difficulty,
+                contestQuestions: {
+                    none: { contestId }
+                },
+                ...(tags.length > 0 ? {
+                    tags: {
+                        hasSome: tags
+                    }
+                } : {})
+            },
+            select: {
+                id: true
+            }
+        });
+    }
 }

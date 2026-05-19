@@ -27,7 +27,7 @@ export async function listFlaggedParticipants(
     limit?: number;
   }
 ): Promise<ApiResponse<{ data: any[]; pagination?: any }>> {
-  return get<{ data: any[]; pagination?: any }>(`/proctoring/${contestId}/flagged`, params);
+  return get<{ data: any[]; pagination?: any }>(`/proctoring/${contestId}/flagged`, { params });
 }
 
 /**
@@ -43,6 +43,7 @@ export async function listProctoringEvents(
     dismissed?: boolean;
     page?: number;
     limit?: number;
+  }
 ): Promise<ApiResponse> {
   return get(`/proctoring/${contestId}/events`, { params });
 }

@@ -7,7 +7,7 @@
 
 import { del, get, patch, post } from './apiClient';
 import type { ApiResponse } from './apiClient';
-import type { Contest, Registration } from '../types';
+import type { Contest, Registration, ServerContest } from '../types';
 
 /**
  * GET /contests
@@ -38,8 +38,8 @@ export async function createContest(body: any): Promise<ApiResponse> {
 /**
  * GET /contests/:contestId
  */
-export async function getContest(contestId: string): Promise<ApiResponse<Contest>> {
-  return get<Contest>(`/contests/${contestId}`);
+export async function getContest(contestId: string): Promise<ApiResponse<ServerContest>> {
+  return get<ServerContest>(`/contests/${contestId}`);
 }
 
 /**

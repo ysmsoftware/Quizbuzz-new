@@ -17,9 +17,12 @@ import { useParticipantDashboard } from '@/lib/hooks/useParticipantDashboard';
 const PARTICIPANT_ID = 'QZCP12345ABC';
 
 export default function ContestsPage() {
-  const { upcomingContests, activeContests, pastContests, registrations, loading } =
+  const { upcomingContests, activeContests, pastContests, loading } =
     useParticipantDashboard(PARTICIPANT_ID);
   const [filter, setFilter] = useState('all');
+
+  // registrations is currently a mock set, in a future phase it will fetch from a real user-registrations endpoint
+  const registrations = new Set<string>();
 
   let contests = [];
   if (filter === 'active') contests = activeContests;
@@ -30,8 +33,8 @@ export default function ContestsPage() {
   const getContestStatus = (contest: any) => {
     const isRegistered = registrations.has(contest.id);
     const now = new Date();
-    const startTime = new Date(contest.contestStartTime);
-    const endTime = new Date(contest.contestEndTime);
+    const startTime = new Date(contest.startTime);
+    const endTime = new Date(startTime.getTime() + (contest.duration || 60) * 60000);
 
     if (startTime > now) {
       return isRegistered ? 'Registered' : 'Not Registered';
@@ -90,7 +93,7 @@ export default function ContestsPage() {
                     <div>
                       <CardTitle className="text-lg line-clamp-2">{contest.title}</CardTitle>
                       <CardDescription className="text-xs">
-                        {contest.category}
+                        {contest.topics?.[0] || 'General'}
                       </CardDescription>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
@@ -113,41 +116,41 @@ export default function ContestsPage() {
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Target className="h-4 w-4" />
-                      <span>{contest.totalQuestions} Questions</span>
+                      <span>{contest._count?.questions ?? 0} Questions</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      <span>{contest.durationMinutes} mins</span>
+                      <span>{contest.duration} mins</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      <span>{contest.currentParticipants} participants</span>
+                      <span>{(contest._count?.participants ?? 0).toLocaleString()} participants</span>
                     </div>
                   </div>
 
                   <div className="border-t pt-4">
                     <p className="text-xs text-muted-foreground mb-2">
-                      {new Date(contest.contestDate).toLocaleDateString()}
+                      {new Date(contest.startTime).toLocaleDateString()}
                     </p>
 
                     {status === 'Live Now' && isRegistered ? (
-                      <Link href={`/quiz/${contest.id}/live`}>
+                      <Link href={`/quiz/${contest.slug}/live`}>
                         <Button className="w-full bg-yellow-600 hover:bg-yellow-700">
                           Join Quiz Now
                         </Button>
                       </Link>
                     ) : status === 'Not Registered' ? (
-                      <Link href={`/quiz/${contest.id}/entry`}>
+                      <Link href={`/contests/${contest.slug}`}>
                         <Button className="w-full">Register</Button>
                       </Link>
                     ) : status === 'Registered' ? (
-                      <Link href={`/quiz/${contest.id}/waiting`}>
+                      <Link href={`/quiz/${contest.slug}/waiting`}>
                         <Button className="w-full" variant="outline">
                           View Details
                         </Button>
                       </Link>
                     ) : (
-                      <Link href={`/results/${contest.id}`}>
+                      <Link href={`/results/${contest.slug}`}>
                         <Button className="w-full" variant="outline">
                           View Results
                         </Button>

@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   return {
     title: result.data.title,
-    description: result.data.description,
+    description: result.data.description ?? undefined,
   };
 }
 

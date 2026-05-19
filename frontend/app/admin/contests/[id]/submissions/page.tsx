@@ -310,10 +310,10 @@ export default function ContestSubmissionsPage() {
           </Table>
 
           {/* Pagination */}
-          {pagination && pagination.totalPages > 1 && (
+          {pagination && pagination.pages > 1 && (
             <div className="p-4 border-t border-border/50 flex items-center justify-between bg-secondary/10">
               <p className="text-xs text-muted-foreground">
-                Showing page {page} of {pagination.totalPages} ({pagination.total} total)
+                Showing page {page} of {pagination.pages} ({pagination.total} total)
               </p>
               <div className="flex items-center gap-2">
                 <Button 
@@ -329,7 +329,7 @@ export default function ContestSubmissionsPage() {
                   variant="outline" 
                   size="sm" 
                   className="h-8 rounded-lg"
-                  disabled={page === pagination.totalPages}
+                  disabled={page === pagination.pages}
                   onClick={() => setPage(p => p + 1)}
                 >
                   Next <ChevronRight className="h-4 w-4 ml-1" />

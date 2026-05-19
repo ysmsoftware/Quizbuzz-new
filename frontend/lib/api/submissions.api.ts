@@ -20,7 +20,7 @@ export async function listSubmissions(
     limit?: number;
   }
 ): Promise<ApiResponse<{ data: any[]; pagination: any; summary?: any }>> {
-  return get<{ data: any[]; pagination: any; summary?: any }>(`/submissions/contests/${contestId}`, params);
+  return get<{ data: any[]; pagination: any; summary?: any }>(`/submissions/contests/${contestId}`, { params });
 }
 
 /**

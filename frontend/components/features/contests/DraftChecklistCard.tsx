@@ -33,9 +33,9 @@ export function DraftChecklistCard({ contest, onPublish, isPublishing = false, c
       met: contest.prizes && contest.prizes.length > 0 
     },
     { 
-      label: `Questions added (${contest._counts?.questions || 0} of recommended 10+)`, 
-      met: (contest._counts?.questions || 0) > 0,
-      warning: (contest._counts?.questions || 0) < 10
+      label: `Questions added (${contest._count?.questions || 0} of recommended 10+)`, 
+      met: (contest._count?.questions || 0) > 0,
+      warning: (contest._count?.questions || 0) < 10
     },
     { 
       label: contest.fee > 0 ? 'Fee configured' : 'Free contest toggled', 

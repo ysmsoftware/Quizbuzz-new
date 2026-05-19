@@ -47,8 +47,9 @@ export default function QuizJoinPage() {
     const router = useRouter();
     const slug = params.slug as string;
 
-    // Contest data
-    const [contest, setContest] = useState<Contest | null>(null);
+    // Contest data — uses 'any' because this page accesses quiz-specific fields
+    // that aren't on PublicContestDetail (proctoringEnabled, webcamRequired, etc.)
+    const [contest, setContest] = useState<any>(null);
     const [contestLoading, setContestLoading] = useState(true);
 
     // Step machine

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
     Calendar,
     Clock,
@@ -45,7 +45,14 @@ import { cn } from '@/lib/utils';
 
 export default function ContestOverviewPage() {
     const { id } = useParams() as { id: string };
-    const { data: contest, isLoading, error } = useContestDetail(id);
+    const router = useRouter();
+    const {
+        data: contest,
+        isLoading,
+        error,
+        publishContestMutation,
+        deleteContestMutation
+    } = useContestDetail(id);
     const updateMutation = useUpdateContest(id);
 
     const [descExpanded, setDescExpanded] = useState(false);
@@ -53,6 +60,14 @@ export default function ContestOverviewPage() {
     const phase = useMemo(() => {
         if (!contest) return 'DRAFT';
         return deriveContestPhase(contest);
+    }, [contest]);
+
+    const registrationUrl = useMemo(() => {
+        if (!contest) return '';
+        const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+            ?? (typeof window !== 'undefined' ? window.location.origin : '');
+        const slug = (contest as any).slug ?? '';
+        return `${base}/contests/${slug}`;
     }, [contest]);
 
     if (isLoading) {
@@ -212,6 +227,42 @@ export default function ContestOverviewPage() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Payment info — only shown when contest is paid */}
+                                {(contest as any).paymentEnabled && (
+                                    <>
+                                        <Separator />
+                                        <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                                                    Registration Fee
+                                                </label>
+                                                <p className="text-2xl font-black text-foreground">
+                                                    ₹{(contest as any).paymentConfig?.amount ?? contest.fee}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                                                    Payment Gateway
+                                                </label>
+                                                <div className="flex items-center gap-2 text-sm font-medium">
+                                                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                                                    <span>Razorpay</span>
+                                                </div>
+                                            </div>
+                                            {(contest as any).paymentConfig?.description && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                                                        Fee Description
+                                                    </label>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {(contest as any).paymentConfig.description}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </CardContent>
                         </Card>
                     </section>
@@ -334,42 +385,6 @@ export default function ContestOverviewPage() {
                             </p>
                         )}
                     </section>
-
-                    {/* FEES & PAYMENT */}
-                    <section className="space-y-4">
-                        <h2 className="text-xl font-bold tracking-tight">Registration Fees</h2>
-                        <Card className="border-border/50">
-                            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Base Fee</label>
-                                        <p className="text-3xl font-black text-foreground">₹{contest.fee}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Payment Gateway</label>
-                                        <div className="flex items-center gap-2 text-sm font-medium">
-                                            <span>Razorpay</span>
-                                            <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">rzp_live_••••{contest.razorpayKeyId?.slice(-4)}</code>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Promo Codes</label>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium">2 Active Codes</span>
-                                            <Button variant="link" size="sm" className="h-auto p-0 text-primary">View All</Button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Refund Policy</label>
-                                        <p className="text-xs text-muted-foreground italic">Non-refundable after registration deadline.</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </section>
                 </div>
 
                 {/* RIGHT COLUMN */}
@@ -377,7 +392,7 @@ export default function ContestOverviewPage() {
                     {/* Public Link Card */}
                     {isPublishedPlus && (
                         <PublicLinkCard
-                            url={`https://quizbuzz.pro/r/${contest.orgSlug}/${contest.slug}`}
+                            url={registrationUrl}
                             isRegistrationClosed={phase === 'REGISTRATION_CLOSED' || isLivePlus}
                         />
                     )}
@@ -395,10 +410,15 @@ export default function ContestOverviewPage() {
                             onPublish={async () => {
                                 const confirmed = window.confirm("Are you sure you want to publish this contest? This will make it visible to participants.");
                                 if (confirmed) {
-                                    await updateMutation.mutateAsync({ publishedAt: new Date().toISOString() });
+                                    try {
+                                        await publishContestMutation.mutateAsync();
+                                        toast.success("Contest published successfully!");
+                                    } catch (err: any) {
+                                        toast.error(err?.message || "Failed to publish contest");
+                                    }
                                 }
                             }}
-                            isPublishing={updateMutation.isPending}
+                            isPublishing={publishContestMutation.isPending}
                         />
                     )}
 
@@ -408,12 +428,21 @@ export default function ContestOverviewPage() {
                         phase={phase}
                         participantCount={contest?._count?.participants || 0}
                         onDelete={async () => {
-                            toast.error("Contest deleted (simulated)");
-                            // router.push('/admin/contests');
+                            try {
+                                await deleteContestMutation.mutateAsync();
+                                toast.success("Contest deleted successfully");
+                                router.push('/admin/contests');
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to delete contest");
+                            }
                         }}
                         onCancel={async (reason) => {
-                            await updateMutation.mutateAsync({ cancelledAt: new Date().toISOString() });
-                            toast.success("Contest cancelled and participants notified");
+                            try {
+                                await updateMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
+                                toast.success("Contest cancelled and participants notified");
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to cancel contest");
+                            }
                         }}
                         onArchive={async () => {
                             toast.success("Contest archived");

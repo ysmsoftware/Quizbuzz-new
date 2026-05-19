@@ -90,7 +90,30 @@ export class AdminAuthRepository {
         });
     }
 
+    async deleteUnverifiedAdmin(adminId: string): Promise<void> {
+        await prisma.$transaction(async (tx) => {
+            const memberships = await tx.orgMember.findMany({
+                where: { adminId }
+            });
 
+            await tx.orgMember.deleteMany({
+                where: { adminId }
+            });
 
+            for (const membership of memberships) {
+                try {
+                    await tx.organization.delete({
+                        where: { id: membership.organizationId }
+                    });
+                } catch (err) {
+                    // Ignore if organization cannot be deleted
+                }
+            }
+
+            await tx.admin.delete({
+                where: { id: adminId }
+            });
+        });
+    }
 
 }

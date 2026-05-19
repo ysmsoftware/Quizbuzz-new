@@ -99,7 +99,8 @@ export function useAuth() {
    * Reset password mutation
    */
   const resetPasswordMutation = useMutation({
-    mutationFn: authApi.resetPassword,
+    mutationFn: ({ token, newPassword }: { token: string; newPassword: string }) => 
+      authApi.resetPassword(token, newPassword),
   });
 
   /**
@@ -128,10 +129,11 @@ export function useAuth() {
   });
 
   // Derived state
-  const isLoggedIn = meQuery.isSuccess && !!meQuery.data?.data?.id;
-  const isEmailVerified = meQuery.data?.data?.emailVerified ?? false;
-  const admin = meQuery.data?.data as AdminUser | undefined;
-  const activeOrg = meQuery.data?.data?.organizations?.[0] as OrgMembership | undefined;
+  const meData = meQuery.data?.data as MeResponse | undefined;
+  const isLoggedIn = meQuery.isSuccess && !!meData?.id;
+  const isEmailVerified = meData?.emailVerified ?? false;
+  const admin = meData as AdminUser | undefined;
+  const activeOrg = meData?.organizations?.[0] as OrgMembership | undefined;
 
   return {
     // Queries

@@ -72,18 +72,22 @@ export default function QuizPlayPage() {
   const { isFullscreen, setFullscreen, totalWarnings, maxTabSwitches } = useProctoringStore();
 
   // Local state
-  const [contest, setContest] = useState<Contest | null>(null);
+  const [contest, setContest] = useState<any>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [warningModal, setWarningModal] = useState<{ open: boolean; type: WarningType }>({ open: false, type: "TAB_SWITCH" });
 
   // ─── WS Connection ─────────────────────────────
-  const { emitAnswer, emitSubmit, emitProctoringWarning, isConnected } = useQuizSocket(
-    contest?.id || slug,
+  const { submitAnswer: emitAnswer, submitQuiz: emitSubmit, sendProctoringEvent, isConnected } = useQuizSocket({
+    contestId: contest?.id || slug,
     participantId,
-    sessionToken
-  );
+    socketToken: sessionToken
+  });
+
+  const emitProctoringWarning = useCallback((type: string) => {
+    sendProctoringEvent(type, 1);
+  }, [sendProctoringEvent]);
 
   // ─── Answer Handler ────────────────────────────
   const { handleAnswer } = useAnswerHandler(emitAnswer);

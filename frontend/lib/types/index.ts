@@ -74,6 +74,7 @@ export interface Contest {
     createdAt: string;
     updatedAt: string;
     organizerId: string;
+    joinCode?: string | null;
 
     // Stats
     _count?: {

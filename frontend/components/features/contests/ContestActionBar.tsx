@@ -20,6 +20,7 @@ import {
   MessageSquare,
   ShieldAlert,
   Loader2,
+  Zap,
   ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -58,7 +59,12 @@ import { EditContestDetailsModal } from './EditContestDetailsModal';
 interface ContestActionBarProps {
   contest: Contest;
   contestPhase: ContestPhase;
-  onPublish?: () => void;
+  onPublish?: () => void | Promise<void>;
+  isPublishing?: boolean;
+  onEvaluate?: () => void | Promise<void>;
+  isEvaluating?: boolean;
+  onDeclareResults?: () => void | Promise<void>;
+  isDeclaringResults?: boolean;
   onCancel?: (reason: string) => void;
   onArchive?: () => void;
   onDelete?: () => void;
@@ -68,12 +74,18 @@ export function ContestActionBar({
   contest, 
   contestPhase,
   onPublish,
+  isPublishing: isPublishingProp,
+  onEvaluate,
+  isEvaluating,
+  onDeclareResults,
+  isDeclaringResults,
   onCancel,
   onArchive,
   onDelete 
 }: ContestActionBarProps) {
   const router = useRouter();
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [localIsPublishing, setLocalIsPublishing] = useState(false);
+  const publishingActive = isPublishingProp || localIsPublishing;
   const [isConfirmingPublish, setIsConfirmingPublish] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
@@ -88,22 +100,29 @@ export function ContestActionBar({
   };
 
   const handlePublish = async () => {
-    setIsPublishing(true);
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1500));
-    setIsPublishing(false);
-    setIsConfirmingPublish(false);
-    
-    if (onPublish) onPublish();
-    
-    confetti({
-      particleCount: 150,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#22c55e', '#3b82f6', '#f59e0b']
-    });
-    
-    toast.success('Contest published! Share your link.');
+    setLocalIsPublishing(true);
+    try {
+      if (onPublish) {
+        await onPublish();
+      } else {
+        // Simulate API call
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#22c55e', '#3b82f6', '#f59e0b']
+      });
+      
+      toast.success('Contest published! Share your link.');
+      setIsConfirmingPublish(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to publish contest');
+    } finally {
+      setLocalIsPublishing(false);
+    }
   };
 
   const renderDraftActions = () => (
@@ -156,7 +175,7 @@ export function ContestActionBar({
             <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Questions</span>
-                <span className="font-bold">{contest._counts.questions || 0}</span>
+                <span className="font-bold">{contest._count?.questions || 0}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Start Date</span>
@@ -170,8 +189,8 @@ export function ContestActionBar({
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsConfirmingPublish(false)}>Not yet</Button>
-            <Button onClick={handlePublish} disabled={isPublishing} className="bg-green-600 hover:bg-green-700">
-              {isPublishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+            <Button onClick={handlePublish} disabled={publishingActive} className="bg-green-600 hover:bg-green-700">
+              {publishingActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
               Publish Now
             </Button>
           </DialogFooter>
@@ -220,7 +239,7 @@ export function ContestActionBar({
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            Send to {contest._counts.registered} registered participants
+            Send to {contest._count?.participants || 0} registered participants
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -281,33 +300,72 @@ export function ContestActionBar({
     </div>
   );
 
-  const renderEndedActions = () => (
-    <div className="flex items-center gap-3">
-      <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
-        <Archive className="mr-2 h-4 w-4" />
-        Archive
-      </Button>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="inline-block">
-              <Button variant="outline" size="sm" disabled>
-                <Send className="mr-2 h-4 w-4" />
-                Send Results Notification
-              </Button>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>Publish results first</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <Button size="sm" className="bg-green-600 hover:bg-green-700" asChild>
-        <Link href={`/admin/contests/${contest.id}/results`}>
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          Publish Results
-        </Link>
-      </Button>
-    </div>
-  );
+  const renderEndedActions = () => {
+    const handleEvaluateClick = async () => {
+      if (onEvaluate) {
+        try {
+          await onEvaluate();
+          toast.success('Evaluation triggered successfully!');
+        } catch (err: any) {
+          toast.error(err?.message || 'Failed to trigger evaluation');
+        }
+      }
+    };
+
+    const handleDeclareResultsClick = async () => {
+      if (onDeclareResults) {
+        try {
+          await onDeclareResults();
+          toast.success('Results declared successfully!');
+        } catch (err: any) {
+          toast.error(err?.message || 'Failed to declare results');
+        }
+      }
+    };
+
+    return (
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
+          <Archive className="mr-2 h-4 w-4" />
+          Archive
+        </Button>
+
+        {onEvaluate && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEvaluateClick}
+            disabled={isEvaluating}
+            className="text-amber-600 border-amber-200 hover:bg-amber-50"
+          >
+            {isEvaluating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+            Trigger Evaluation
+          </Button>
+        )}
+
+        {onDeclareResults && (
+          <Button
+            size="sm"
+            onClick={handleDeclareResultsClick}
+            disabled={isDeclaringResults}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isDeclaringResults ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            Declare Results
+          </Button>
+        )}
+
+        {!onDeclareResults && (
+          <Button size="sm" className="bg-green-600 hover:bg-green-700" asChild>
+            <Link href={`/admin/contests/${contest.id}/results`}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Publish Results
+            </Link>
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   const renderResultsPublishedActions = () => (
     <div className="flex items-center gap-3">
@@ -372,7 +430,7 @@ export function ContestActionBar({
                   <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive font-medium text-xs space-y-2">
                     <p>• Stop the quiz for all active participants</p>
                     <p>• Auto-submit their current answers</p>
-                    <p>• Notify {contest._counts.registered} participants via WhatsApp</p>
+                    <p>• Notify {contest._count?.participants || 0} participants via WhatsApp</p>
                     <p>• Offer refunds to paid participants</p>
                   </div>
                   <div className="space-y-2">
@@ -387,7 +445,7 @@ export function ContestActionBar({
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-medium">
-                    {contest._counts.registered} participants are registered. They will be notified via WhatsApp.
+                    {contest._count?.participants || 0} participants are registered. They will be notified via WhatsApp.
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase text-muted-foreground">Reason for cancellation (shown to participants)</Label>

@@ -34,7 +34,7 @@ export function useMessageTemplates(orgId: string) {
         },
     });
 
-    const templates = templatesQuery.data?.data ?? [];
+    const templates = templatesQuery.data ?? [];
 
     return {
         templates,
@@ -46,8 +46,8 @@ export function useMessageTemplates(orgId: string) {
         deleteTemplate: deleteMutation.mutateAsync,
         loading:
             templatesQuery.isLoading ||
-            createMutation.isLoading ||
-            updateMutation.isLoading ||
-            deleteMutation.isLoading,
+            createMutation.isPending ||
+            updateMutation.isPending ||
+            deleteMutation.isPending,
     };
 }

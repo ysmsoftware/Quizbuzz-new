@@ -47,7 +47,7 @@ export default function WaitingRoomPage() {
     const contestId = useAuthStore((s) => s.contestId) || "";
 
     // Contest data (HTTP)
-    const [contest, setContest] = useState<Contest | null>(null);
+    const [contest, setContest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     // Countdown
@@ -67,8 +67,7 @@ export default function WaitingRoomPage() {
     // ─── Load contest ───────────────────────────────
     useEffect(() => {
         const load = async () => {
-            // Try by slug first if we have it, otherwise by ID
-            const res = await (slug ? contestService.getContestBySlug(slug) : contestService.getContestById(contestId));
+            const res = await contestService.getContestBySlug(slug);
             if (res.success && res.data) {
                 setContest(res.data);
             }
@@ -140,7 +139,16 @@ export default function WaitingRoomPage() {
                     </div>
                     <span className="text-sm font-semibold text-white/90">QuizBuzz</span>
                 </div>
-                <WSConnectionStatus status={wsStatus} variant="compact" />
+                <WSConnectionStatus 
+                    status={
+                        wsStatus === "connected" || wsStatus === "starting"
+                            ? "connected"
+                            : wsStatus === "connecting"
+                            ? "reconnecting"
+                            : "disconnected"
+                    } 
+                    variant="compact" 
+                />
             </header>
 
             {/* ─── Broadcast Banner ─────────────────────── */}
@@ -238,9 +246,9 @@ export default function WaitingRoomPage() {
                                                     exit={{ height: 0, opacity: 0 }}
                                                     className="overflow-hidden"
                                                 >
-                                                    {rules.slice(1).map((rule, i) => (
-                                                        <p key={i} className="text-sm text-white/80 mt-1">• {rule}</p>
-                                                    ))}
+                                                    {rules.slice(1).map((rule: string, i: number) => (
+                                                         <p key={i} className="text-sm text-white/80 mt-1">• {rule}</p>
+                                                     ))}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>

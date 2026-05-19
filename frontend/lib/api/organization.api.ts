@@ -12,7 +12,7 @@ import type { TeamRole } from '../types';
 /**
  * GET /org/:orgId
  */
-export async function getOrg(orgId: string): Promise<ApiResponse> {
+export async function getOrg(orgId: string): Promise<ApiResponse<any>> {
   return get(`/org/${orgId}`);
 }
 

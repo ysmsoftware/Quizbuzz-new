@@ -38,7 +38,7 @@ export function useMessageSending() {
     },
   });
 
-  const loading = sendMutation.isLoading || scheduleMutation.isLoading;
+  const loading = sendMutation.isPending || scheduleMutation.isPending;
   const error = (sendMutation.error || scheduleMutation.error) as Error | null;
 
   return {

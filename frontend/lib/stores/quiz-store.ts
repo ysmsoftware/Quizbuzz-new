@@ -13,7 +13,7 @@ export interface QuizQuestion {
   index: number;
   text: string;
   imageUrl?: string;
-  options: { index: number; text: string; imageUrl?: string }[];
+  options: { index: number; text: string; imageUrl?: string; id?: string }[];
   difficulty: 'easy' | 'medium' | 'hard';
   hint?: string;
   marks: number;

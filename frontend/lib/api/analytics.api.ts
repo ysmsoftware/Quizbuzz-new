@@ -34,7 +34,7 @@ export async function getScoreDistribution(
     buckets?: number;
   }
 ): Promise<ApiResponse> {
-  return get(`/analytics/${contestId}/score-distribution`, params);
+  return get(`/analytics/${contestId}/score-distribution`, { params });
 }
 
 /**

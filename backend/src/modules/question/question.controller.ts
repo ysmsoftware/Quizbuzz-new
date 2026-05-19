@@ -8,6 +8,7 @@ import {
     AssignQuestionsWithPositionCheckSchema,
     ReorderQuestionsSchema,
     UpdateContestQuestionSchema,
+    AutoGenerateQuestionsSchema,
 } from "./question.validator";
 import { UnauthorizedError } from "../../error/http-errors";
 
@@ -258,6 +259,31 @@ export class QuestionController {
             );
 
             res.json({ success: true, data: questions, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    autoGenerateQuestions = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized");
+            }
+            const dto = AutoGenerateQuestionsSchema.parse(req.body);
+
+            const result = await this.questionService.autoGenerateQuestions(
+                req.params.contestId as string,
+                user.organizationId,
+                dto
+            );
+
+            res.status(201).json({
+                success: true,
+                message: `Successfully auto-generated and assigned ${result.assignedCount} question(s) to the contest.`,
+                data: result,
+                requestId: req.id,
+            });
         } catch (err) {
             next(err);
         }

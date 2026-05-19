@@ -49,7 +49,17 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
     const router = useRouter();
     const contestId = params.id as string;
 
-    const { data: contest, isLoading, error, refetch } = useContestDetail(contestId);
+    const { 
+        data: contest, 
+        isLoading, 
+        error, 
+        refetch,
+        publishContestMutation,
+        evaluateMutation,
+        declareResultsMutation,
+        deleteContestMutation,
+        updateContestMutation
+    } = useContestDetail(contestId);
 
     const contestPhase = useMemo(() => {
         if (!contest) return 'DRAFT';
@@ -62,7 +72,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
     const { getParticipantStats } = useAdminContestSocket(
         contestId,
         'admin-123', // Mock admin ID for now, will be real admin ID from auth
-        contest?.organizationId,
+        contest?.orgId,
         undefined
     );
 
@@ -158,13 +168,30 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                 <ContestActionBar
                     contest={contest}
                     contestPhase={contestPhase}
-                    onPublish={() => refetch()}
-                    onCancel={(reason) => {
-                        console.log('Cancelled with reason:', reason);
+                    onPublish={async () => {
+                        await publishContestMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isPublishing={publishContestMutation.isPending}
+                    onEvaluate={async () => {
+                        await evaluateMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isEvaluating={evaluateMutation.isPending}
+                    onDeclareResults={async () => {
+                        await declareResultsMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isDeclaringResults={declareResultsMutation.isPending}
+                    onCancel={async (reason) => {
+                        await updateContestMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
                         refetch();
                     }}
                     onArchive={() => console.log('Archived')}
-                    onDelete={() => router.push('/admin/contests')}
+                    onDelete={async () => {
+                        await deleteContestMutation.mutateAsync();
+                        router.push('/admin/contests');
+                    }}
                 />
             </div>
 

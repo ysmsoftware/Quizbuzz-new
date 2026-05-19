@@ -129,7 +129,7 @@ export class ContestRepository implements IContestRepository {
                 prizes: true,
                 paymentConfig: true,
                 organization: { select: { name: true, logoUrl: true } },
-                _count: { select: { participants: true } },
+                _count: { select: { participants: true, questions: true } },
             },
         });
     }
@@ -249,5 +249,41 @@ export class ContestRepository implements IContestRepository {
 
     async countQuestions(contestId: string): Promise<number> {
         return await prisma.contestQuestion.count({ where: { contestId } });
+    }
+
+    async findManyPublic(args: {
+        where: Prisma.ContestWhereInput;
+        skip: number;
+        take: number;
+        orderBy: Prisma.ContestOrderByWithRelationInput;
+    }) {
+        return await prisma.contest.findMany({
+            where: args.where,
+            skip: args.skip,
+            take: args.take,
+            orderBy: args.orderBy,
+            select: {
+                id: true,
+                title: true,
+                slug: true,
+                description: true,
+                topics: true,
+                startTime: true,
+                registrationDeadline: true,
+                duration: true,
+                maxParticipants: true,
+                paymentEnabled: true,
+                paymentConfig: true,
+                status: true,
+                prizes: true,
+                cutoffScore: true,
+                showResultsAfter: true,
+                _count: { select: { participants: true, questions: true } },
+            },
+        });
+    }
+
+    async countPublic(where: Prisma.ContestWhereInput): Promise<number> {
+        return await prisma.contest.count({ where });
     }
 }

@@ -8,63 +8,22 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Search, Filter, X, Trophy } from 'lucide-react';
-import type { ContestFilters, DifficultyLevel, ContestStatus } from '@/lib/types';
-
-const difficultyOptions = [
-  { value: 'all', label: 'All Difficulties' },
-  { value: 'easy', label: 'Easy' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'hard', label: 'Hard' },
-];
-
-const statusOptions = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'published', label: 'Open for Registration' },
-  { value: 'active', label: 'Live Now' },
-  { value: 'completed', label: 'Completed' },
-];
+import { Search, X, Trophy } from 'lucide-react';
 
 export function ContestGrid() {
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<string>('all');
-  const [difficulty, setDifficulty] = useState<string>('all');
-  const [status, setStatus] = useState<string>('all');
 
-  const filters: ContestFilters = {
-    ...(search && { search }),
-    ...(category !== 'all' && { category }),
-    ...(difficulty !== 'all' && { difficulty: difficulty as DifficultyLevel }),
-    ...(status !== 'all' && { status: status as ContestStatus }),
-  };
-
-  const hasFilters = search || category !== 'all' || difficulty !== 'all' || status !== 'all';
-
-  const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => contestService.getCategories(),
-  });
+  const hasFilters = !!search;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['contests', filters],
-    queryFn: () => contestService.getContests(Object.keys(filters).length ? filters : undefined),
+    queryKey: ['contests', search],
+    queryFn: () =>
+      contestService.getContests(search ? { search } : undefined),
   });
 
   const clearFilters = () => {
     setSearch('');
-    setCategory('all');
-    setDifficulty('all');
-    setStatus('all');
   };
-
-  const categories = categoriesData?.data || [];
 
   return (
     <div className="space-y-6">
@@ -81,55 +40,12 @@ export function ContestGrid() {
           />
         </div>
 
-        {/* Filter dropdowns */}
-        <div className="flex flex-wrap gap-2">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={difficulty} onValueChange={setDifficulty}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Difficulty" />
-            </SelectTrigger>
-            <SelectContent>
-              {difficultyOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {hasFilters && (
-            <Button variant="ghost" size="icon" onClick={clearFilters}>
-              <X className="h-4 w-4" />
-              <span className="sr-only">Clear filters</span>
-            </Button>
-          )}
-        </div>
+        {hasFilters && (
+          <Button variant="ghost" size="icon" onClick={clearFilters}>
+            <X className="h-4 w-4" />
+            <span className="sr-only">Clear filters</span>
+          </Button>
+        )}
       </div>
 
       {/* Active filters */}
@@ -140,30 +56,6 @@ export function ContestGrid() {
             <Badge variant="secondary" className="gap-1">
               Search: {search}
               <button onClick={() => setSearch('')}>
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {category !== 'all' && (
-            <Badge variant="secondary" className="gap-1">
-              {category}
-              <button onClick={() => setCategory('all')}>
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {difficulty !== 'all' && (
-            <Badge variant="secondary" className="gap-1">
-              {difficulty}
-              <button onClick={() => setDifficulty('all')}>
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-          {status !== 'all' && (
-            <Badge variant="secondary" className="gap-1">
-              {statusOptions.find(s => s.value === status)?.label}
-              <button onClick={() => setStatus('all')}>
                 <X className="h-3 w-3" />
               </button>
             </Badge>
@@ -194,7 +86,7 @@ export function ContestGrid() {
           <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold">No contests found</h3>
           <p className="text-muted-foreground mt-1">
-            Try adjusting your filters or search term
+            Try adjusting your search term
           </p>
           {hasFilters && (
             <Button variant="outline" className="mt-4" onClick={clearFilters}>

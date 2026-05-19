@@ -70,6 +70,18 @@ export function useQuestions(filters?: {
     },
   });
 
+  /**
+   * Auto generate set mutation
+   */
+  const autoGenerateMutation = useMutation({
+    mutationFn: ({ contestId, body }: { contestId: string; body: questionsApi.AutoGenerateQuestionsInput }) =>
+      questionsApi.autoGenerateQuestions(contestId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['questions', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['contest-questions'] }); // Invalidate contest questions lists too
+    },
+  });
+
   // Extract nested data structure
   const questions = questionsQuery.data?.data?.questions;
   const pagination = questionsQuery.data?.data?.pagination;
@@ -85,6 +97,7 @@ export function useQuestions(filters?: {
     bulkCreateMutation,
     updateQuestionMutation,
     deleteQuestionMutation,
+    autoGenerateMutation,
 
     // Derived state
     questions,

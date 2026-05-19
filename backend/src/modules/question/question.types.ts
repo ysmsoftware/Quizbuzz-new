@@ -41,6 +41,7 @@ export interface BulkImportResult {
     created: number;
     failed: number;
     errors: Array<{ index: number; reason: string }>;
+    ids: string[];
 }
 
 // ─── Contest-Question Assignment DTOs ────────────────────────────────────────

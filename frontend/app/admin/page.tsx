@@ -38,6 +38,7 @@ export default function AdminPage() {
   const { activeOrg, isLoggedIn } = useAuth();
   const orgId = activeOrg?.id || '';
   const { org, loading: orgLoading } = useOrganization(orgId);
+  const orgData = org as any;
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -103,7 +104,7 @@ export default function AdminPage() {
               <CardContent>
                 <div className="space-y-2">
                   <p className="text-3xl font-bold">
-                    {org?._count?.contests || 0}
+                    {orgData?._count?.contests || 0}
                   </p>
                   <div className="flex items-center text-sm text-green-600 dark:text-green-400">
                     <TrendingUp className="h-4 w-4 mr-1" />
