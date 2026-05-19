@@ -133,7 +133,38 @@ export const UpdateContestQuestionSchema = z.object({
     negativeMark: z.number().min(0).max(10).optional(),
 });
 
-
+export const AutoGenerateQuestionsSchema = z.object({
+    totalQuestions: z.number().int().min(1).max(500),
+    rules: z.array(
+        z.object({
+            tags: z.array(z.string().min(1).max(50)),
+            percentage: z.number().min(1).max(100),
+            difficultyBreakdown: z.object({
+                EASY: z.number().min(0).max(100),
+                MEDIUM: z.number().min(0).max(100),
+                HARD: z.number().min(0).max(100),
+            }).superRefine((data, ctx) => {
+                const total = data.EASY + data.MEDIUM + data.HARD;
+                if (total !== 100) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: "Difficulty breakdown percentages must sum to 100%",
+                        path: ["EASY"],
+                    });
+                }
+            })
+        })
+    ).min(1).superRefine((rules, ctx) => {
+        const totalPercentage = rules.reduce((acc, rule) => acc + rule.percentage, 0);
+        if (totalPercentage !== 100) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Rule percentages must sum to 100%",
+                path: [],
+            });
+        }
+    })
+});
 
 export type CreateQuestionInput = z.infer<typeof CreateQuestionSchema>;
 export type UpdateQuestionInput = z.infer<typeof UpdateQuestionSchema>;
@@ -142,3 +173,4 @@ export type ListQuestionsQueryInput = z.infer<typeof ListQuestionsQuerySchema>;
 export type AssignQuestionsInput = z.infer<typeof AssignQuestionsSchema>;
 export type ReorderQuestionsInput = z.infer<typeof ReorderQuestionsSchema>;
 export type UpdateContestQuestionInput = z.infer<typeof UpdateContestQuestionSchema>;
+export type AutoGenerateQuestionsInput = z.infer<typeof AutoGenerateQuestionsSchema>;

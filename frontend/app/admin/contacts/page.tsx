@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, 
   Search, 
@@ -21,6 +21,7 @@ import {
   Info
 } from 'lucide-react';
 import { crmApi, Contact } from '@/lib/api/crm.api';
+import { ApiResponse } from '@/lib/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,11 +45,39 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 export default function ContactsListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [college, setCollege] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    college: '',
+    city: '',
+  });
+
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const createContactMutation = useMutation<
+    ApiResponse<Contact>,
+    Error,
+    Partial<Contact>
+  >({
+    mutationFn: (body) => crmApi.createContact(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      setIsCreateOpen(false);
+      setContactForm({ firstName: '', lastName: '', email: '', phone: '', college: '', city: '' });
+      setCreateError(null);
+    }
+  });
 
   const { data: contactsData, isLoading } = useQuery({
     queryKey: ['contacts', { page, search, college }],
@@ -59,14 +88,15 @@ export default function ContactsListPage() {
   const pagination = contactsData?.data?.pagination;
 
   return (
-    <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+    <>
+      <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Contacts</h1>
           <p className="text-muted-foreground">Manage deduplicated identity records across all contests.</p>
         </div>
-        <Button className="rounded-xl h-11 bg-primary shadow-lg shadow-primary/20">
+        <Button className="rounded-xl h-11 bg-primary shadow-lg shadow-primary/20" onClick={() => setIsCreateOpen(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
           Add Contact
         </Button>
@@ -100,7 +130,7 @@ export default function ContactsListPage() {
 
       {/* Table */}
       <WidgetErrorBoundary name="Contacts Table">
-        <Card className="bg-background/50 border-border/50 rounded-[2rem] overflow-hidden shadow-sm">
+        <Card className="bg-background/50 border-border/50 rounded-4xl overflow-hidden shadow-sm">
           <Table>
             <TableHeader className="bg-secondary/50">
               <TableRow className="hover:bg-transparent border-none">
@@ -247,5 +277,84 @@ export default function ContactsListPage() {
         </div>
       )}
     </div>
+
+    {/* Create Contact Dialog */}
+    <Dialog open={isCreateOpen} onOpenChange={(open) => {
+      setIsCreateOpen(open);
+      if (!open) setCreateError(null);
+    }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Create Contact</DialogTitle>
+          <DialogDescription>Add a person to the organization's contact database.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 mt-4">
+          {createError && (
+            <div className="p-3 rounded-xl bg-destructive/10 text-destructive text-xs border border-destructive/20 font-medium">
+              {createError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              placeholder="First name"
+              value={contactForm.firstName}
+              onChange={(e) => setContactForm((prev) => ({ ...prev, firstName: e.target.value }))}
+            />
+            <Input
+              placeholder="Last name"
+              value={contactForm.lastName}
+              onChange={(e) => setContactForm((prev) => ({ ...prev, lastName: e.target.value }))}
+            />
+          </div>
+          <Input
+            placeholder="Email"
+            value={contactForm.email}
+            onChange={(e) => setContactForm((prev) => ({ ...prev, email: e.target.value }))}
+          />
+          <Input
+            placeholder="Phone"
+            value={contactForm.phone}
+            onChange={(e) => setContactForm((prev) => ({ ...prev, phone: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              placeholder="College"
+              value={contactForm.college}
+              onChange={(e) => setContactForm((prev) => ({ ...prev, college: e.target.value }))}
+            />
+            <Input
+              placeholder="City"
+              value={contactForm.city}
+              onChange={(e) => setContactForm((prev) => ({ ...prev, city: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="mt-6">
+          <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+          <Button className="ml-2" onClick={async () => {
+            try {
+              setCreateError(null);
+              await createContactMutation.mutateAsync({
+                firstName: contactForm.firstName,
+                lastName: contactForm.lastName,
+                email: contactForm.email,
+                phone: contactForm.phone,
+                college: contactForm.college,
+                city: contactForm.city,
+              });
+            } catch (err: any) {
+              console.error('Create contact failed', err);
+              setCreateError(err.message || 'Failed to create contact. Please try again.');
+            }
+          }}>
+            {createContactMutation.isPending ? 'Creating...' : 'Create'}
+          </Button>
+        </DialogFooter>
+        <DialogClose />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

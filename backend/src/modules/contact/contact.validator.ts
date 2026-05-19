@@ -8,12 +8,26 @@ const emailField = z
   .trim();
 
 const phoneField = z
-  .string()
-  .regex(
-    /^\+[1-9]\d{6,14}$/,
+  .preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    if (typeof val !== "string") return val;
+    let clean = val.replace(/[\s\-\(\)]/g, ""); // remove spaces, dashes, parentheses
+    if (/^\d{10}$/.test(clean)) {
+      // 10 digits without country code -> default to India (+91)
+      clean = `+91${clean}`;
+    } else if (/^91\d{10}$/.test(clean)) {
+      // 91 with 10 digits without + -> prefix +
+      clean = `+${clean}`;
+    } else if (/^[1-9]\d{6,14}$/.test(clean)) {
+      // starts with non-zero digit but has no + -> prefix +
+      clean = `+${clean}`;
+    }
+    return clean;
+  }, z.string().optional())
+  .refine(
+    (val) => val === undefined || /^\+[1-9]\d{6,14}$/.test(val),
     "Phone must be in E.164 format, e.g. +919876543210"
-  )
-  .optional();
+  );
 
 const nameField = (label: string) =>
   z.string().min(1, `${label} is required`).max(100).trim();

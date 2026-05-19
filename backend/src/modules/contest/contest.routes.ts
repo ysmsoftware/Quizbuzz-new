@@ -9,6 +9,11 @@ contestRouter.post("/", authenticatedOrgMiddleware, contestController.createCont
 contestRouter.get("/", authenticatedOrgMiddleware, contestController.listContests);
 
 contestRouter.post("/register/:contestSlug", contestController.registerParticipant);
+
+// ─── Public Routes (no auth) ──────────────────────────────────────────────
+contestRouter.get("/public", contestController.listPublicContests);
+contestRouter.get("/public/:slug", contestController.getPublicContestBySlug);
+
 contestRouter.get("/:contestId", authenticatedOrgMiddleware, contestController.getContest);
 contestRouter.patch("/:contestId", authenticatedOrgMiddleware, contestController.updateContest);
 contestRouter.delete("/:contestId", authenticatedOrgMiddleware, contestController.deleteContest);

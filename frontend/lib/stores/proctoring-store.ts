@@ -91,6 +91,7 @@ interface ProctoringActions {
 
   // Reset
   reset: () => void;
+  stopProctoring: () => void;
 }
 
 export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
@@ -281,6 +282,9 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
         warningMessage: '',
         isDisqualified: false,
       });
+    },
+    stopProctoring: () => {
+      get().reset();
     },
   })
 );

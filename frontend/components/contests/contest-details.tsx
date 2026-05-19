@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { Contest } from '@/lib/types';
+import type { PublicContestDetail } from '@/lib/types/public-contest';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,29 +15,31 @@ import {
   ArrowRight,
   CheckCircle2,
   XCircle,
-  Shield,
   FileText,
   Award,
   Timer,
-  IndianRupee,
 } from 'lucide-react';
 
 interface ContestDetailsProps {
-  contest: Contest;
+  contest: PublicContestDetail;
 }
 
-const difficultyColors = {
-  easy: 'bg-success/10 text-success border-success/20',
-  medium: 'bg-warning/10 text-warning-foreground border-warning/30',
-  hard: 'bg-destructive/10 text-destructive border-destructive/20',
+const statusLabels: Record<string, string> = {
+  PUBLISHED: 'Open for Registration',
+  REGISTRATION_CLOSED: 'Registration Closed',
+  LIVE: 'Live Now',
+  EVALUATION: 'Under Evaluation',
+  RESULTS_OUT: 'Results Out',
+  COMPLETED: 'Completed',
 };
 
-const statusColors = {
-  draft: 'bg-muted text-muted-foreground',
-  published: 'bg-primary/10 text-primary',
-  active: 'bg-success/10 text-success',
-  completed: 'bg-secondary text-secondary-foreground',
-  cancelled: 'bg-destructive/10 text-destructive',
+const statusColors: Record<string, string> = {
+  PUBLISHED: 'bg-primary/10 text-primary',
+  REGISTRATION_CLOSED: 'bg-warning/10 text-warning-foreground',
+  LIVE: 'bg-success/10 text-success',
+  EVALUATION: 'bg-secondary text-secondary-foreground',
+  RESULTS_OUT: 'bg-accent/10 text-accent-foreground',
+  COMPLETED: 'bg-secondary text-secondary-foreground',
 };
 
 function formatDate(dateString: string): string {
@@ -49,11 +51,12 @@ function formatDate(dateString: string): string {
   });
 }
 
-function formatTime(timeString: string): string {
-  const [hours, minutes] = timeString.split(':');
-  const date = new Date();
-  date.setHours(parseInt(hours), parseInt(minutes));
-  return date.toLocaleTimeString('en-US', {
+function formatDateTime(dateString: string): string {
+  return new Date(dateString).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -69,9 +72,14 @@ function formatCurrency(amount: number): string {
 }
 
 export function ContestDetails({ contest }: ContestDetailsProps) {
-  const spotsLeft = contest.maxParticipants - contest.currentParticipants;
-  const spotsPercentage = (contest.currentParticipants / contest.maxParticipants) * 100;
-  const isRegistrationOpen = contest.status === 'published' || contest.status === 'active';
+  const participantCount = contest._count?.participants ?? 0;
+  const questionCount = contest._count?.questions ?? 0;
+  const maxParticipants = contest.maxParticipants;
+  const spotsLeft = maxParticipants ? maxParticipants - participantCount : null;
+  const spotsPercentage = maxParticipants ? (participantCount / maxParticipants) * 100 : 0;
+  const isRegistrationOpen = contest.status === 'PUBLISHED';
+  const fee = contest.paymentConfig?.amount ?? 0;
+  const topic = contest.topics?.[0] ?? '';
 
   return (
     <div className="bg-secondary/10">
@@ -79,51 +87,50 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
       <section className="bg-gradient-to-b from-primary/5 to-transparent border-b">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-start gap-2 mb-4">
-            <Badge variant="outline" className={statusColors[contest.status]}>
-              {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
+            <Badge variant="outline" className={statusColors[contest.status] ?? ''}>
+              {statusLabels[contest.status] ?? contest.status}
             </Badge>
-            <Badge variant="outline" className={difficultyColors[contest.difficulty]}>
-              {contest.difficulty.charAt(0).toUpperCase() + contest.difficulty.slice(1)}
-            </Badge>
-            <Badge variant="outline">{contest.category}</Badge>
+            {topic && <Badge variant="outline">{topic}</Badge>}
           </div>
 
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl text-balance">
             {contest.title}
           </h1>
 
-          <p className="mt-4 text-lg text-muted-foreground max-w-3xl">
-            {contest.description}
-          </p>
+          {contest.description && (
+            <p className="mt-4 text-lg text-muted-foreground max-w-3xl">
+              {contest.description}
+            </p>
+          )}
 
           {/* Quick Stats */}
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
               <Calendar className="h-8 w-8 text-primary" />
               <div>
-                <p className="text-xs text-muted-foreground">Contest Date</p>
-                <p className="font-semibold">{formatDate(contest.contestDate)}</p>
+                <p className="text-xs text-muted-foreground">Start Date</p>
+                <p className="font-semibold">{formatDate(contest.startTime)}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
               <Clock className="h-8 w-8 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Duration</p>
-                <p className="font-semibold">{contest.durationMinutes} minutes</p>
+                <p className="font-semibold">{contest.duration} minutes</p>
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
               <FileText className="h-8 w-8 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Questions</p>
-                <p className="font-semibold">{contest.totalQuestions} questions</p>
+                <p className="font-semibold">{questionCount} questions</p>
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
               <Users className="h-8 w-8 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Registered</p>
-                <p className="font-semibold">{(contest.currentParticipants || 0).toLocaleString()}</p>
+                <p className="font-semibold">{participantCount.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -143,7 +150,7 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground whitespace-pre-line">
-                    {contest.description}
+                    {contest.details || contest.description || 'No details provided.'}
                   </p>
                 </CardContent>
               </Card>
@@ -159,30 +166,25 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                       <FileText className="h-5 w-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Total Questions</p>
-                        <p className="text-sm text-muted-foreground">{contest.totalQuestions} questions</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Award className="h-5 w-5 text-primary mt-0.5" />
-                      <div>
-                        <p className="font-medium">Total Marks</p>
-                        <p className="text-sm text-muted-foreground">{contest.totalMarks} marks</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Trophy className="h-5 w-5 text-primary mt-0.5" />
-                      <div>
-                        <p className="font-medium">Passing Marks</p>
-                        <p className="text-sm text-muted-foreground">{contest.passingMarks} marks ({Math.round((contest.passingMarks / contest.totalMarks) * 100)}%)</p>
+                        <p className="text-sm text-muted-foreground">{questionCount} questions</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Timer className="h-5 w-5 text-primary mt-0.5" />
                       <div>
                         <p className="font-medium">Time Limit</p>
-                        <p className="text-sm text-muted-foreground">{contest.durationMinutes} minutes</p>
+                        <p className="text-sm text-muted-foreground">{contest.duration} minutes</p>
                       </div>
                     </div>
+                    {contest.cutoffScore != null && (
+                      <div className="flex items-start gap-3">
+                        <Award className="h-5 w-5 text-primary mt-0.5" />
+                        <div>
+                          <p className="font-medium">Cutoff Score</p>
+                          <p className="text-sm text-muted-foreground">{contest.cutoffScore}%</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <Separator />
@@ -190,19 +192,6 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                   <div className="space-y-3">
                     <h4 className="font-medium">Additional Rules</h4>
                     <ul className="space-y-2">
-                      <li className="flex items-center gap-2 text-sm">
-                        {contest.negativeMarking ? (
-                          <>
-                            <AlertCircle className="h-4 w-4 text-destructive" />
-                            <span>Negative marking: -{contest.negativeMarkValue} marks per wrong answer</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-4 w-4 text-success" />
-                            <span>No negative marking</span>
-                          </>
-                        )}
-                      </li>
                       <li className="flex items-center gap-2 text-sm">
                         {contest.shuffleQuestions ? (
                           <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -212,52 +201,29 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                         <span>Questions {contest.shuffleQuestions ? 'will be' : 'will not be'} shuffled</span>
                       </li>
                       <li className="flex items-center gap-2 text-sm">
-                        {contest.allowBackNavigation ? (
-                          <CheckCircle2 className="h-4 w-4 text-success" />
+                        {contest.shuffleOptions ? (
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
                         ) : (
-                          <XCircle className="h-4 w-4 text-destructive" />
+                          <XCircle className="h-4 w-4 text-muted-foreground" />
                         )}
-                        <span>Back navigation {contest.allowBackNavigation ? 'allowed' : 'not allowed'}</span>
+                        <span>Options {contest.shuffleOptions ? 'will be' : 'will not be'} shuffled</span>
                       </li>
                     </ul>
+
+                    {/* Server-defined rules */}
+                    {contest.rules && contest.rules.length > 0 && (
+                      <ul className="space-y-2 mt-3">
+                        {contest.rules.map((rule, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <span>{rule}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Proctoring */}
-              {contest.proctoringEnabled && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Shield className="h-5 w-5 text-primary" />
-                      Proctoring Requirements
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      This contest has proctoring enabled to ensure fair play. Please ensure you meet the following requirements:
-                    </p>
-                    <ul className="space-y-2">
-                      {contest.fullscreenRequired && (
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                          <span>Fullscreen mode required</span>
-                        </li>
-                      )}
-                      {contest.webcamRequired && (
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                          <span>Webcam access required</span>
-                        </li>
-                      )}
-                      <li className="flex items-center gap-2 text-sm">
-                        <AlertCircle className="h-4 w-4 text-warning" />
-                        <span>Tab switching limit: {contest.tabSwitchLimit} times (disqualification after exceeding)</span>
-                      </li>
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Prizes */}
               {contest.prizes && contest.prizes.length > 0 && (
@@ -272,33 +238,39 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                     <div className="space-y-4">
                       {contest.prizes.map((prize, index) => (
                         <div
-                          key={index}
+                          key={prize.id || index}
                           className={`flex items-center gap-4 p-4 rounded-lg border ${
-                            index === 0 
-                              ? 'bg-accent/10 border-accent/30' 
-                              : index === 1 
-                                ? 'bg-secondary border-border' 
+                            index === 0
+                              ? 'bg-accent/10 border-accent/30'
+                              : index === 1
+                                ? 'bg-secondary border-border'
                                 : 'bg-card'
                           }`}
                         >
                           <div className={`flex h-12 w-12 items-center justify-center rounded-full font-bold ${
-                            index === 0 
-                              ? 'bg-accent text-accent-foreground' 
-                              : index === 1 
-                                ? 'bg-muted text-muted-foreground' 
+                            index === 0
+                              ? 'bg-accent text-accent-foreground'
+                              : index === 1
+                                ? 'bg-muted text-muted-foreground'
                                 : 'bg-muted/50 text-muted-foreground'
                           }`}>
-                            {typeof prize.rank === 'number' ? `#${prize.rank}` : prize.rank}
+                            {prize.rankFrom === prize.rankTo
+                              ? `#${prize.rankFrom}`
+                              : `#${prize.rankFrom}-${prize.rankTo}`}
                           </div>
                           <div className="flex-1">
-                            <p className="font-semibold">{prize.title}</p>
-                            {prize.description && (
-                              <p className="text-sm text-muted-foreground">{prize.description}</p>
+                            <p className="font-semibold">
+                              {prize.label || `Rank ${prize.rankFrom}${prize.rankTo !== prize.rankFrom ? `-${prize.rankTo}` : ''}`}
+                            </p>
+                            {prize.benefits && prize.benefits.length > 0 && (
+                              <p className="text-sm text-muted-foreground">
+                                {prize.benefits.join(', ')}
+                              </p>
                             )}
                           </div>
-                          {prize.amount && (
+                          {Number(prize.amount) > 0 && (
                             <p className="text-lg font-bold text-primary">
-                              {formatCurrency(prize.amount)}
+                              {formatCurrency(Number(prize.amount))}
                             </p>
                           )}
                         </div>
@@ -320,7 +292,7 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                   <div className="text-center py-4 bg-secondary/50 rounded-lg">
                     <p className="text-sm text-muted-foreground">Registration Fee</p>
                     <p className="text-4xl font-bold text-primary">
-                      {contest.registrationFee === 0 ? 'Free' : formatCurrency(contest.registrationFee)}
+                      {fee === 0 ? 'Free' : formatCurrency(fee)}
                     </p>
                   </div>
 
@@ -328,35 +300,37 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Registration Ends</span>
-                      <span className="font-medium">{formatDate(contest.registrationEndDate)}</span>
+                      <span className="font-medium">{formatDate(contest.registrationDeadline)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Contest Time</span>
-                      <span className="font-medium">
-                        {formatTime(contest.contestStartTime)} - {formatTime(contest.contestEndTime)}
-                      </span>
+                      <span className="text-muted-foreground">Starts At</span>
+                      <span className="font-medium">{formatDateTime(contest.startTime)}</span>
                     </div>
                   </div>
 
                   {/* Capacity */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Available Spots</span>
-                      <span className="font-medium">{(spotsLeft || 0).toLocaleString()} / {(contest.maxParticipants || 0).toLocaleString()}</span>
+                  {maxParticipants && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Available Spots</span>
+                        <span className="font-medium">
+                          {(spotsLeft ?? 0).toLocaleString()} / {maxParticipants.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.min(spotsPercentage, 100)}%` }}
+                        />
+                      </div>
+                      {spotsPercentage >= 80 && (
+                        <p className="flex items-center gap-1 text-xs text-destructive">
+                          <AlertCircle className="h-3 w-3" />
+                          Filling up fast!
+                        </p>
+                      )}
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                      <div 
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(spotsPercentage, 100)}%` }}
-                      />
-                    </div>
-                    {spotsPercentage >= 80 && (
-                      <p className="flex items-center gap-1 text-xs text-destructive">
-                        <AlertCircle className="h-3 w-3" />
-                        Filling up fast!
-                      </p>
-                    )}
-                  </div>
+                  )}
 
                   {/* CTA */}
                   {isRegistrationOpen ? (
@@ -368,7 +342,9 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                     </Link>
                   ) : (
                     <Button size="lg" className="w-full" disabled>
-                      {contest.status === 'completed' ? 'Contest Ended' : 'Registration Closed'}
+                      {contest.status === 'COMPLETED' || contest.status === 'RESULTS_OUT'
+                        ? 'Contest Ended'
+                        : 'Registration Closed'}
                     </Button>
                   )}
 

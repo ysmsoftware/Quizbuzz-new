@@ -21,6 +21,7 @@ export interface LiveParticipant {
   proctoringAlerts: number;
   avatarInitials: string;
   isFlagged: boolean;
+  lastActivityAt: string;
 }
 
 export interface BroadcastMessage {
@@ -198,6 +199,7 @@ export function useAdminContestSocket(
     proctoringAlerts: p.violationCount || 0,
     avatarInitials: (p.name || 'A').split(' ').map((n: string) => n[0]).join('').slice(0, 2),
     isFlagged: !!p.isFlagged,
+    lastActivityAt: p.lastActivityAt || new Date().toISOString(),
   });
 
   const mapStatus = (status: string): LiveParticipant['status'] => {

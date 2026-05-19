@@ -32,7 +32,7 @@ export default function SubmissionDetailPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['submission', subId],
-    queryFn: () => submissionsApi.getSubmission(subId),
+    queryFn: () => submissionsApi.getSubmissionDetail(subId),
   });
 
   const invalidateMutation = useMutation({

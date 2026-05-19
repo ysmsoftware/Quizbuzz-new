@@ -21,8 +21,9 @@ export function useLeaderboard(contestId: string, page: number = 1) {
   });
 
   // Extract data
-  const entries = leaderboardQuery.data?.data?.entries || [];
-  const pagination = leaderboardQuery.data?.data?.pagination;
+  const leaderboardData = leaderboardQuery.data?.data as any;
+  const entries = leaderboardData?.entries || [];
+  const pagination = leaderboardData?.pagination;
   const isLoading = leaderboardQuery.isLoading;
 
   // Helper functions
@@ -52,7 +53,7 @@ export function useLeaderboard(contestId: string, page: number = 1) {
 
   const getParticipantRank = useCallback(
     (participantId: string) => {
-      const entry = entries.find((e) => e.participantId === participantId);
+      const entry = entries.find((e: any) => e.participantId === participantId);
       return entry?.rank ?? null;
     },
     [entries]
@@ -60,7 +61,7 @@ export function useLeaderboard(contestId: string, page: number = 1) {
 
   const getParticipantScore = useCallback(
     (participantId: string) => {
-      const entry = entries.find((e) => e.participantId === participantId);
+      const entry = entries.find((e: any) => e.participantId === participantId);
       return entry?.score ?? null;
     },
     [entries]

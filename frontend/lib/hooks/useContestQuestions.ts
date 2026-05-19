@@ -71,21 +71,59 @@ export function useContestQuestions(contestId: string) {
     },
   });
 
+  // Extract and map data to match expected frontend interface
+  const questions = ((questionsQuery.data?.data as any[]) || []).map((q: any) => ({
+    id: q.question?.id || q.questionId,
+    contestQuestionId: q.id,
+    text: q.question?.questionText || '',
+    difficulty: (q.question?.difficulty || 'MEDIUM').toLowerCase(),
+    options: q.question?.options || [],
+    hint: q.question?.hint || '',
+    explanation: q.question?.explanation || '',
+    tags: q.question?.tags || [],
+    marks: q.marks ?? 4,
+    negativeMark: q.negativeMark ?? 1,
+    position: q.position ?? 0,
+  }));
+  const isLoading = questionsQuery.isLoading;
+
   /**
    * Duplicate question logic
    */
   const duplicateMutation = useMutation({
     mutationFn: async (question: any) => {
-      const { id, ...rest } = question;
-      return questionsApi.createQuestion({
-        ...rest,
-        text: `${rest.text} (Copy)`,
+      // 1. Create the new question
+      const createRes = await questionsApi.createQuestion({
+        questionText: `${question.text} (Copy)`,
+        difficulty: question.difficulty.toUpperCase(),
+        tags: question.tags || [],
+        hint: question.hint || undefined,
+        explanation: question.explanation || undefined,
+        options: question.options.map((o: any, idx: number) => ({
+          text: o.text,
+          isCorrect: o.isCorrect,
+          position: idx,
+        })),
       });
+
+      const newQuestionId = createRes.data?.id;
+      if (!newQuestionId) {
+        throw new Error('Failed to create duplicated question');
+      }
+
+      // 2. Assign to contest
+      await questionsApi.assignQuestionsToContest(contestId, [{
+        questionId: newQuestionId,
+        position: questions.length + 1, // Put at the end (1-based to satisfy positive check)
+        marks: question.marks,
+        negativeMark: question.negativeMark,
+      }]);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
       toast.success('Question duplicated');
     },
   });
@@ -107,9 +145,94 @@ export function useContestQuestions(contestId: string) {
     },
   });
 
-  // Extract data
-  const questions = (questionsQuery.data?.data as any[]) || [];
-  const isLoading = questionsQuery.isLoading;
+  /**
+   * Create question globally and assign to contest
+   */
+  const createAndAssignMutation = useMutation({
+    mutationFn: async (data: {
+      questionText: string;
+      difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+      tags: string[];
+      hint?: string;
+      explanation?: string;
+      options: Array<{ text: string; isCorrect: boolean }>;
+      marks: number;
+      negativeMark?: number;
+    }) => {
+      const { marks, negativeMark, ...questionData } = data;
+      
+      // 1. Create the question
+      const createRes = await questionsApi.createQuestion({
+        ...questionData,
+        options: questionData.options.map((o, idx) => ({
+          ...o,
+          position: idx,
+        })),
+      });
+
+      const newQuestionId = createRes.data?.id;
+      if (!newQuestionId) {
+        throw new Error('Failed to create question');
+      }
+
+      // 2. Assign to contest
+      return questionsApi.assignQuestionsToContest(contestId, [{
+        questionId: newQuestionId,
+        position: questions.length + 1, // 1-based indexing for positive constraint
+        marks,
+        negativeMark,
+      }]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      toast.success('Question created and assigned to contest');
+    },
+  });
+
+  /**
+   * Update question globally and its contest config
+   */
+  const updateContestQuestionMutation = useMutation({
+    mutationFn: async (data: {
+      questionId: string;
+      contestQuestionId: string;
+      questionText: string;
+      difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+      tags: string[];
+      hint?: string;
+      explanation?: string;
+      options: Array<{ text: string; isCorrect: boolean }>;
+      marks: number;
+      negativeMark?: number;
+    }) => {
+      const { questionId, contestQuestionId, marks, negativeMark, ...questionData } = data;
+
+      // 1. Update the question in global pool
+      await questionsApi.updateQuestion(questionId, {
+        ...questionData,
+        options: questionData.options.map((o, idx) => ({
+          ...o,
+          position: idx,
+        })),
+      });
+
+      // 2. Update contest specific marks and negative marks
+      return questionsApi.updateContestQuestion(contestId, questionId, {
+        marks,
+        negativeMark,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      toast.success('Question updated successfully');
+    },
+  });
 
   return {
     // Derived state
@@ -120,6 +243,8 @@ export function useContestQuestions(contestId: string) {
     deleteQuestion: (id: string) => removeMutation.mutateAsync(id),
     duplicateQuestion: (q: any) => duplicateMutation.mutateAsync(q),
     bulkUpdateQuestions: (args: { ids: string[], updates: any }) => bulkUpdateMutation.mutateAsync(args),
+    createAndAssignQuestion: (data: any) => createAndAssignMutation.mutateAsync(data),
+    updateContestQuestion: (data: any) => updateContestQuestionMutation.mutateAsync(data),
     
     // Original mutations if needed
     assignMutation,

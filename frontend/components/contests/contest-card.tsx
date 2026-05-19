@@ -1,35 +1,38 @@
 import Link from 'next/link';
-import type { Contest } from '@/lib/types';
+import type { PublicContestSummary } from '@/lib/types/public-contest';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Calendar, 
-  Clock, 
-  Users, 
-  Trophy, 
+import {
+  Calendar,
+  Clock,
+  Users,
+  Trophy,
   AlertCircle,
   ArrowRight,
-  IndianRupee
 } from 'lucide-react';
 
 interface ContestCardProps {
-  contest: Contest;
+  contest: PublicContestSummary;
   variant?: 'default' | 'compact';
 }
 
-const difficultyColors = {
-  easy: 'bg-success/10 text-success border-success/20',
-  medium: 'bg-warning/10 text-warning-foreground border-warning/30',
-  hard: 'bg-destructive/10 text-destructive border-destructive/20',
+const statusLabels: Record<string, string> = {
+  PUBLISHED: 'Open for Registration',
+  REGISTRATION_CLOSED: 'Registration Closed',
+  LIVE: 'Live Now',
+  EVALUATION: 'Under Evaluation',
+  RESULTS_OUT: 'Results Out',
+  COMPLETED: 'Completed',
 };
 
-const statusColors = {
-  draft: 'bg-muted text-muted-foreground',
-  published: 'bg-primary/10 text-primary',
-  active: 'bg-success/10 text-success',
-  completed: 'bg-secondary text-secondary-foreground',
-  cancelled: 'bg-destructive/10 text-destructive',
+const statusColors: Record<string, string> = {
+  PUBLISHED: 'bg-primary/10 text-primary',
+  REGISTRATION_CLOSED: 'bg-warning/10 text-warning-foreground',
+  LIVE: 'bg-success/10 text-success',
+  EVALUATION: 'bg-secondary text-secondary-foreground',
+  RESULTS_OUT: 'bg-accent/10 text-accent-foreground',
+  COMPLETED: 'bg-secondary text-secondary-foreground',
 };
 
 function formatDate(dateString: string): string {
@@ -49,29 +52,33 @@ function formatCurrency(amount: number): string {
 }
 
 export function ContestCard({ contest, variant = 'default' }: ContestCardProps) {
-  const spotsLeft = contest.maxParticipants - contest.currentParticipants;
-  const spotsPercentage = (contest.currentParticipants / contest.maxParticipants) * 100;
-  const isAlmostFull = spotsPercentage >= 80;
+  const participantCount = contest._count?.participants ?? 0;
+  const questionCount = contest._count?.questions ?? 0;
+  const maxParticipants = contest.maxParticipants;
+  const spotsLeft = maxParticipants ? maxParticipants - participantCount : null;
+  const spotsPercentage = maxParticipants ? (participantCount / maxParticipants) * 100 : 0;
+  const isAlmostFull = maxParticipants ? spotsPercentage >= 80 : false;
+  const fee = contest.paymentConfig?.amount ?? 0;
+  const topic = contest.topics?.[0] ?? '';
 
   return (
     <Card className="group flex flex-col overflow-hidden transition-all hover:shadow-lg hover:border-primary/30">
       {/* Category Banner */}
       <div className="h-2 bg-primary" />
-      
+
       <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start justify-between gap-2">
-          <Badge variant="outline" className={statusColors[contest.status]}>
-            {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
-          </Badge>
-          <Badge variant="outline" className={difficultyColors[contest.difficulty]}>
-            {contest.difficulty.charAt(0).toUpperCase() + contest.difficulty.slice(1)}
+          <Badge variant="outline" className={statusColors[contest.status] ?? ''}>
+            {statusLabels[contest.status] ?? contest.status}
           </Badge>
         </div>
-        
+
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {contest.category}
-          </p>
+          {topic && (
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {topic}
+            </p>
+          )}
           <h3 className="mt-1 text-lg font-semibold leading-tight text-balance group-hover:text-primary transition-colors">
             {contest.title}
           </h3>
@@ -79,56 +86,60 @@ export function ContestCard({ contest, variant = 'default' }: ContestCardProps) 
       </CardHeader>
 
       <CardContent className="flex-1 space-y-4">
-        <p className="text-sm text-muted-foreground line-clamp-2">
-          {contest.description}
-        </p>
+        {contest.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {contest.description}
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 flex-shrink-0" />
-            <span>{formatDate(contest.contestDate)}</span>
+            <span>{formatDate(contest.startTime)}</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-4 w-4 flex-shrink-0" />
-            <span>{contest.durationMinutes} mins</span>
+            <span>{contest.duration} mins</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 flex-shrink-0" />
-            <span>{(contest.currentParticipants || 0).toLocaleString()} joined</span>
+            <span>{participantCount.toLocaleString()} joined</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Trophy className="h-4 w-4 flex-shrink-0" />
-            <span>{contest.totalQuestions} questions</span>
+            <span>{questionCount} questions</span>
           </div>
         </div>
 
-        {/* Capacity indicator */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              {(spotsLeft || 0).toLocaleString()} spots left
-            </span>
-            {isAlmostFull && (
-              <span className="flex items-center gap-1 text-destructive">
-                <AlertCircle className="h-3 w-3" />
-                Filling fast
+        {/* Capacity indicator — only show if maxParticipants is set */}
+        {maxParticipants && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                {(spotsLeft ?? 0).toLocaleString()} spots left
               </span>
-            )}
+              {isAlmostFull && (
+                <span className="flex items-center gap-1 text-destructive">
+                  <AlertCircle className="h-3 w-3" />
+                  Filling fast
+                </span>
+              )}
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.min(spotsPercentage, 100)}%` }}
+              />
+            </div>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-            <div 
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.min(spotsPercentage, 100)}%` }}
-            />
-          </div>
-        </div>
+        )}
       </CardContent>
 
       <CardFooter className="flex items-center justify-between border-t bg-secondary/30 pt-4">
         <div>
           <p className="text-xs text-muted-foreground">Registration Fee</p>
           <p className="text-lg font-semibold text-foreground">
-            {contest.registrationFee === 0 ? 'Free' : formatCurrency(contest.registrationFee)}
+            {fee === 0 ? 'Free' : formatCurrency(fee)}
           </p>
         </div>
         <Link href={`/contests/${contest.slug}`}>

@@ -96,6 +96,57 @@ export class ContestService {
         };
     }
 
+    // ─── Public (no auth) ─────────────────────────────────────────────────────
+
+    async listPublicContests(params: { search?: string; page?: number; limit?: number }) {
+        const { search, page = 1, limit = 20 } = params;
+
+        const where: any = {
+            isDeleted: false,
+            status: {
+                in: [
+                    ContestStatus.PUBLISHED,
+                    ContestStatus.REGISTRATION_CLOSED,
+                    ContestStatus.LIVE,
+                    ContestStatus.EVALUATION,
+                    ContestStatus.RESULTS_OUT,
+                    ContestStatus.COMPLETED,
+                ],
+            },
+            ...(search && {
+                OR: [
+                    { title: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } },
+                ],
+            }),
+        };
+
+        const [data, total] = await Promise.all([
+            this.contestRepo.findManyPublic({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: { startTime: 'asc' as const },
+            }),
+            this.contestRepo.countPublic(where),
+        ]);
+
+        return {
+            data,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        };
+    }
+
+    async getPublicContestBySlug(slug: string) {
+        const contest = await this.contestRepo.findBySlugPublic(slug);
+        if (!contest) {
+            throw new NotFoundError("Contest not found or not publicly available");
+        }
+        // Strip joinCode for security — never expose to public
+        const { joinCode, ...safeContest } = contest as any;
+        return safeContest;
+    }
+
     async updateContest(contestId: string, organizationId: string, dto: UpdateContestInput) {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");

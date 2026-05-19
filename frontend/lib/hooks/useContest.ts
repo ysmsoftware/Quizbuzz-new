@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 
 import * as contestsApi from '../api/contests.api';
 import { queryKeys } from '../api/queryClient';
+import { adaptServerContest } from '../utils/contest';
 
 /**
  * Single contest detail hook using TanStack Query
@@ -76,37 +77,35 @@ export function useContest(contestId: string) {
     },
   });
 
+  // Backward-compatible surface / Adapted contest
+  const serverContest = contestQuery.data?.data;
+  const contest = serverContest ? adaptServerContest(serverContest) : undefined;
+  const loading = contestQuery.isLoading;
+  const error = contestQuery.error?.message ?? null;
+
   // Helper functions for time logic
   const isRegistrationOpen = useCallback(() => {
-    if (!contestQuery.data?.data) return false;
-    const contest = contestQuery.data.data;
+    if (!contest) return false;
     const now = new Date();
     const deadline = new Date(contest.registrationDeadline);
     return now < deadline;
-  }, [contestQuery.data]);
+  }, [contest]);
 
   const isContestActive = useCallback(() => {
-    if (!contestQuery.data?.data) return false;
-    const contest = contestQuery.data.data;
+    if (!contest) return false;
     const now = new Date();
     const startTime = new Date(contest.startTime);
-    const endTime = new Date(contest.endTime);
+    const endTime = new Date(startTime.getTime() + (contest.durationMinutes || 0) * 60000);
     return now >= startTime && now <= endTime;
-  }, [contestQuery.data]);
+  }, [contest]);
 
   const getTimeRemaining = useCallback(() => {
-    if (!isContestActive()) return null;
-    const contest = contestQuery.data?.data;
-    if (!contest) return null;
-    const endTime = new Date(contest.endTime);
+    if (!isContestActive() || !contest) return null;
+    const startTime = new Date(contest.startTime);
+    const endTime = new Date(startTime.getTime() + (contest.durationMinutes || 0) * 60000);
     const now = new Date();
     return Math.max(0, Math.floor((endTime.getTime() - now.getTime()) / 1000));
-  }, [contestQuery.data, isContestActive]);
-
-  // Backward-compatible surface
-  const contest = contestQuery.data?.data;
-  const loading = contestQuery.isLoading;
-  const error = contestQuery.error?.message ?? null;
+  }, [contest, isContestActive]);
 
   return {
     // Query objects (for advanced usage)

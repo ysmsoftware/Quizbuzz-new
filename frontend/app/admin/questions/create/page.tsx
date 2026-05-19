@@ -16,10 +16,11 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft, Plus, Trash2, Save, CheckCircle2, Loader2,
-  Upload, FileText, X, AlertCircle, ChevronDown,
+  Upload, FileText, X, AlertCircle, AlertTriangle, ChevronDown,
 } from 'lucide-react';
 import { useQuestions, useQuestionTags } from '@/lib/hooks/useQuestions';
 import { toast } from 'sonner';
+import { parseQuestionFile as parseFile } from '@/lib/utils/question-parser';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,88 +41,6 @@ interface QuestionForm {
   options: Option[];
 }
 
-
-// ─── CSV Bulk Upload helpers ──────────────────────────────────────────────────
-
-/**
- * Expected CSV format (header row required):
- * questionText,difficulty,category,option1,option2,option3,option4,correctOption
- *
- * correctOption = 1-based index of the correct option column.
- * difficulty    = EASY | MEDIUM | HARD  (case-insensitive)
- * example row:
- *   "What is JSX?",MEDIUM,React,file extension,syntax extension for JS,variable name,class name,2
- */
-function parseCSV(text: string): { questions: any[]; errors: string[] } {
-  const lines = text.trim().split('\n').filter(Boolean);
-  const errors: string[] = [];
-  const questions: any[] = [];
-
-  if (lines.length < 2) {
-    errors.push('CSV must have a header row and at least one data row.');
-    return { questions, errors };
-  }
-
-  // Skip header
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitCSVRow(lines[i]);
-    const [questionText, rawDifficulty, category, opt1, opt2, opt3, opt4, rawCorrect] = cols;
-
-    if (!questionText || !rawDifficulty || !opt1 || !opt2 || !rawCorrect) {
-      errors.push(`Row ${i + 1}: Missing required fields (questionText, difficulty, option1, option2, correctOption).`);
-      continue;
-    }
-
-    const difficulty = rawDifficulty.trim().toUpperCase();
-    if (!['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
-      errors.push(`Row ${i + 1}: difficulty must be EASY, MEDIUM, or HARD. Got "${rawDifficulty}".`);
-      continue;
-    }
-
-    const correctIdx = parseInt(rawCorrect.trim()) - 1; // 0-based
-    const rawOptions = [opt1, opt2, opt3, opt4].filter(Boolean);
-    if (correctIdx < 0 || correctIdx >= rawOptions.length) {
-      errors.push(`Row ${i + 1}: correctOption (${rawCorrect.trim()}) out of range.`);
-      continue;
-    }
-
-    const options = rawOptions.map((text, idx) => ({
-      text: text.trim(),
-      isCorrect: idx === correctIdx,
-      position: idx,
-    }));
-
-    questions.push({
-      questionText: questionText.trim(),
-      difficulty,
-      tags: category?.trim() ? [category.trim()] : ['General'],
-      options,
-    });
-  }
-
-  return { questions, errors };
-}
-
-/** Split a CSV row respecting quoted fields */
-function splitCSVRow(row: string): string[] {
-  const cols: string[] = [];
-  let cur = '';
-  let inQuotes = false;
-  for (let i = 0; i < row.length; i++) {
-    const ch = row[i];
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (ch === ',' && !inQuotes) {
-      cols.push(cur);
-      cur = '';
-    } else {
-      cur += ch;
-    }
-  }
-  cols.push(cur);
-  return cols;
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateQuestionPage() {
@@ -132,8 +51,10 @@ export default function CreateQuestionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [categoryInput, setCategoryInput] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,20 +158,50 @@ export default function CreateQuestionPage() {
     }
   };
 
-  // ── CSV upload ────────────────────────────────────────────────────────────
+  // ── CSV / Excel File upload ────────────────────────────────────────────────
+  const processFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const arrayBuffer = ev.target?.result as ArrayBuffer;
+      const { questions, errors, warnings } = parseFile(arrayBuffer, file.name);
+      setCsvErrors(errors);
+      setCsvWarnings(warnings);
+      setCsvPreview(questions);
+
+      if (errors.length > 0) {
+        toast.error('File parsed with validation errors.');
+      } else if (warnings.length > 0) {
+        toast.warning('File parsed with warnings. Extra rows were automatically skipped.');
+      } else {
+        toast.success(`Successfully parsed ${questions.length} questions.`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const { questions, errors } = parseCSV(text);
-      setCsvErrors(errors);
-      setCsvPreview(questions);
-    };
-    reader.readAsText(file);
+    processFile(file);
   };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processFile(file);
+  }, []);
 
   const handleBulkSubmit = async () => {
     if (csvPreview.length === 0) {
@@ -264,6 +215,7 @@ export default function CreateQuestionPage() {
       toast.success(`Bulk upload complete: ${data?.created ?? csvPreview.length} created, ${data?.failed ?? 0} failed`);
       setCsvPreview([]);
       setCsvErrors([]);
+      setCsvWarnings([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       router.push('/admin/questions');
     } catch (err: any) {
@@ -316,38 +268,61 @@ export default function CreateQuestionPage() {
             <CardHeader>
               <CardTitle>Bulk Upload (CSV)</CardTitle>
               <CardDescription>
-                Download the <Link href="/templates/questions_template.csv" className="text-primary hover:underline">CSV Template</Link> to get started.
+                Download the <a href="/templates/questions_template.csv" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CSV Template</a> to get started.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div
-                className="border-2 border-dashed border-border rounded-xl p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-300 cursor-pointer ${
+                  isDragging
+                    ? 'border-primary bg-primary/5 scale-[1.02] shadow-md shadow-primary/10'
+                    : 'border-border hover:border-primary/50 hover:bg-secondary/10'
+                }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx,.xls"
                   className="hidden"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                 />
-                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <Upload className="h-6 w-6 text-primary" />
+                <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 transition-transform duration-300 ${
+                  isDragging ? 'bg-primary/20 scale-110' : 'bg-primary/10'
+                }`}>
+                  <Upload className={`h-6 w-6 text-primary transition-transform duration-300 ${isDragging ? 'animate-bounce' : ''}`} />
                 </div>
-                <h3 className="text-lg font-semibold mb-1">Choose CSV File</h3>
+                <h3 className="text-lg font-semibold mb-1">
+                  {isDragging ? 'Drop your file here!' : 'Choose CSV, Excel or Sheets File'}
+                </h3>
                 <p className="text-muted-foreground text-sm">
                   Drag and drop or click to browse (Max 100 questions per file)
                 </p>
               </div>
 
               {csvErrors.length > 0 && (
-                <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm space-y-1 border border-destructive/20">
+                <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm space-y-1 border border-destructive/20 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
                   <div className="flex items-center gap-2 font-semibold mb-2">
                     <AlertCircle className="h-4 w-4" />
                     Validation Errors
                   </div>
                   {csvErrors.map((err, i) => (
-                    <div key={i}>{err}</div>
+                    <div key={i} className="pl-6 list-item list-disc">{err}</div>
+                  ))}
+                </div>
+              )}
+
+              {csvWarnings.length > 0 && (
+                <div className="p-4 rounded-lg bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 text-sm space-y-1 border border-yellow-500/20 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center gap-2 font-semibold mb-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Validation Warnings
+                  </div>
+                  {csvWarnings.map((warn, i) => (
+                    <div key={i} className="pl-6 list-item list-disc">{warn}</div>
                   ))}
                 </div>
               )}
@@ -356,7 +331,17 @@ export default function CreateQuestionPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">Preview ({csvPreview.length} questions)</h3>
-                    <Button variant="ghost" size="sm" onClick={() => setCsvPreview([])} className="text-muted-foreground">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setCsvPreview([]);
+                        setCsvErrors([]);
+                        setCsvWarnings([]);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
                       Clear
                     </Button>
                   </div>

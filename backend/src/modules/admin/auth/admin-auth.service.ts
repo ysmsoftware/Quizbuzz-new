@@ -24,7 +24,13 @@ export class AdminAuthService {
     async register(data: RegisterAdminDTO): Promise<RegisterAdminResult> {
 
         const existing = await this.repo.findByEmail(data.email);
-        if (existing) throw new ConflictError("An account with this email already exists");
+        if (existing) {
+            if (existing.emailVerified) {
+                throw new ConflictError("An account with this email already exists");
+            }
+            // Delete the unverified registration attempt to allow a fresh, clean signup
+            await this.repo.deleteUnverifiedAdmin(existing.id);
+        }
 
         const passwordHash = await hashPassword(data.password);
 
@@ -84,6 +90,10 @@ export class AdminAuthService {
 
         if (!admin.isActive || admin.isDeleted) {
             throw new UnauthorizedError("Account is inactive. Please contact support.");
+        }
+
+        if (!admin.emailVerified) {
+            throw new ForbiddenError("Please verify your email before logging in.");
         }
 
         const memberships = await this.organizationService.listMemberships(admin.id);

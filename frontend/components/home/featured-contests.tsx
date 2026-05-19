@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export function FeaturedContests() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['featured-contests'],
-    queryFn: () => contestService.getFeaturedContests(3),
+    queryFn: () => contestService.getContests({ limit: 3 }),
   });
 
   if (isLoading) {

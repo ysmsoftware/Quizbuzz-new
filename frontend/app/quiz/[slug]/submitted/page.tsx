@@ -16,7 +16,7 @@ export default function SubmittedPage() {
   const router = useRouter();
   const slug = params.slug as string;
   
-  const [contest, setContest] = useState<Contest | null>(null);
+  const [contest, setContest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -83,7 +83,7 @@ export default function SubmittedPage() {
                 <Clock className="w-5 h-5 text-primary mb-2" />
                 <p className="text-xs text-muted-foreground">Results Release</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {contest?.resultsDeclared ? "Already Declared" : "TBA"}
+                  {contest?.resultsPublishedAt ? "Already Declared" : "TBA"}
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-muted/50 border text-left">

@@ -8,12 +8,12 @@ import { useContest } from './useContest';
  * Thin wrapper over useContest for backward compatibility.
  */
 export function useContestDetail(contestId: string) {
-  const { contest, loading, error, contestQuery } = useContest(contestId);
+  const result = useContest(contestId);
   return { 
-    data: contest, 
-    isLoading: loading, 
-    error, 
-    refetch: () => contestQuery.refetch(),
-    contestQuery 
+    ...result,
+    data: result.contest, 
+    isLoading: result.loading, 
+    error: result.error, 
+    refetch: () => result.contestQuery.refetch(),
   };
 }

@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { contestService } from '@/lib/services/contest-service';
-import { MockDB } from '@/lib/mock/db';
-import type { Contest } from '@/lib/types';
+import type { PublicContestSummary } from '@/lib/types/public-contest';
 
 export function useParticipantDashboard(participantId: string) {
   const contestsQuery = useQuery({
@@ -11,28 +10,18 @@ export function useParticipantDashboard(participantId: string) {
     enabled: !!participantId,
   });
 
-  const contests: Contest[] = contestsQuery.data?.data ?? [];
-
-  const registrations = useMemo(() => {
-    const reg = new Set(
-      MockDB.registrations
-        .filter((r) => r.participantId === participantId)
-        .map((registration) => registration.contestId)
-    );
-
-    return reg;
-  }, [participantId]);
+  const contests: PublicContestSummary[] = contestsQuery.data?.data ?? [];
 
   const now = new Date();
 
   const groupedContests = useMemo(() => {
-    const upcoming: Contest[] = [];
-    const active: Contest[] = [];
-    const past: Contest[] = [];
+    const upcoming: PublicContestSummary[] = [];
+    const active: PublicContestSummary[] = [];
+    const past: PublicContestSummary[] = [];
 
     contests.forEach((contest) => {
-      const start = contest.contestStartTime ? new Date(`${contest.contestDate}T${contest.contestStartTime}`) : new Date();
-      const end = contest.contestEndTime ? new Date(`${contest.contestDate}T${contest.contestEndTime}`) : new Date(start.getTime() + (contest.durationMinutes || 60) * 60000);
+      const start = new Date(contest.startTime);
+      const end = new Date(start.getTime() + (contest.duration || 60) * 60000);
 
       if (start > now) {
         upcoming.push(contest);
@@ -48,7 +37,6 @@ export function useParticipantDashboard(participantId: string) {
 
   return {
     ...groupedContests,
-    registrations,
     loading: contestsQuery.isLoading,
   };
 }

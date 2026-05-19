@@ -35,11 +35,7 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      const response = await forgotPassword(email);
-
-      if (!response.success) {
-        throw new Error(response.error?.message || 'Failed to send reset link');
-      }
+      await forgotPassword(email);
 
       setSubmitted(true);
     } catch (err: any) {

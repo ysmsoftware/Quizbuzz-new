@@ -131,6 +131,32 @@ export class ContestController {
         }
     };
 
+    // ─── Public Routes (no auth) ──────────────────────────────────────────────
+
+    listPublicContests = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { search, page, limit } = req.query;
+            const result = await this.contestService.listPublicContests({
+                search: search as string,
+                page: page ? parseInt(page as string) : 1,
+                limit: limit ? Math.min(parseInt(limit as string), 50) : 20,
+            });
+            res.json({ success: true, data: result });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getPublicContestBySlug = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const slug = req.params.slug as string;
+            const contest = await this.contestService.getPublicContestBySlug(slug);
+            res.json({ success: true, data: contest });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     // ─── Registration (Public) ────────────────────────────────────────────────
 
     registerParticipant = async (req: Request, res: Response, next: NextFunction) => {

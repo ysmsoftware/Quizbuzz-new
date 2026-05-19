@@ -134,9 +134,9 @@ export function useQuizSocket({
   /**
    * Final quiz submission
    */
-  const submitQuiz = useCallback(() => {
+  const submitQuiz = useCallback((reason?: string) => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit('quiz:v1:submit', { participantId, contestId });
+      socketRef.current.emit('quiz:v1:submit', { participantId, contestId, reason });
     }
   }, [participantId, contestId]);
 

@@ -1,4 +1,4 @@
-import { get, patch, post, ApiResponse } from './apiClient';
+import { get, patch, post, del, ApiResponse } from './apiClient';
 
 /**
  * Contact Types
@@ -97,9 +97,29 @@ export const crmApi = {
 
   getContactDetail: (contactId: string) =>
     get<Contact>(`/contacts/${contactId}`),
-
+  // Historical / registration records for a contact.
+  // The server exposes these under `/contacts/:id/contests` (registrations).
   getContactHistory: (contactId: string) =>
-    get<ContactHistoryItem[]>(`/contacts/${contactId}/history`),
+    get<ContactHistoryItem[]>(`/contacts/${contactId}/contests`),
+
+  // Alternative / explicit method names that map to documented endpoints
+  getContactRegistrations: (contactId: string) =>
+    get<ContactHistoryItem[]>(`/contacts/${contactId}/contests`),
+
+  getContactMessages: (contactId: string) =>
+    get<MessagesListResponse>(`/contacts/${contactId}/messages`),
+
+  getContactCertificates: (contactId: string) =>
+    get<any>(`/contacts/${contactId}/certificates`),
+
+  lookupContact: (params: { email?: string; phone?: string }) =>
+    get<Contact | null>(`/contacts/lookup`, { params }),
+
+  createContact: (body: Partial<Contact>) =>
+    post<Contact>(`/contacts`, body),
+
+  deleteContact: (contactId: string) =>
+    del<any>(`/contacts/${contactId}`),
 
   updateContact: (contactId: string, body: Partial<Contact>) =>
     patch<Contact>(`/contacts/${contactId}`, body),

@@ -1,113 +1,238 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, CreditCard, CheckCircle } from "lucide-react";
+import { ArrowLeft, Loader2, CreditCard, CheckCircle, Mail, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { contestService } from "@/lib/services/contest-service";
 import { registrationService } from "@/lib/services/registration-service";
-import type { Contest, RegistrationField } from "@/lib/types";
+import type { PublicContestDetail } from "@/lib/types/public-contest";
 
-const baseSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters"),
+// ─── Zod Schemas ────────────────────────────────────────────────────────────
+
+const emailSchema = z.object({
   email: z.string().email("Please enter a valid email"),
-  phone: z.string().min(10, "Phone number must be at least 10 digits"),
-  termsAccepted: z.boolean().refine(val => val === true, {
+});
+
+const detailsSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().optional(),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").optional().or(z.literal("")),
+  college: z.string().optional(),
+  department: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  termsAccepted: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions",
   }),
 });
 
+type EmailFormData = z.infer<typeof emailSchema>;
+type DetailsFormData = z.infer<typeof detailsSchema>;
+
+// ─── Step Type ──────────────────────────────────────────────────────────────
+
+type Step = "email" | "otp" | "details" | "payment" | "success";
+
+const STEP_LABELS: Record<Step, string> = {
+  email: "Email",
+  otp: "Verify",
+  details: "Details",
+  payment: "Payment",
+  success: "Done",
+};
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+
 export default function RegisterPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = params.slug as string;
 
-  const [contest, setContest] = useState<Contest | null>(null);
+  // State
+  const [contest, setContest] = useState<PublicContestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [step, setStep] = useState<"form" | "payment" | "success">("form");
-  const [registrationId, setRegistrationId] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState("");
+  const [contactToken, setContactToken] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otpError, setOtpError] = useState("");
+  const [registrationRef, setRegistrationRef] = useState("");
+  const [apiError, setApiError] = useState("");
+  const [razorpayOrder, setRazorpayOrder] = useState<{
+    amount: number;
+    currency: string;
+    description: string;
+  } | null>(null);
 
-  const form = useForm<z.infer<typeof baseSchema>>({
-    resolver: zodResolver(baseSchema),
+  // OTP input refs
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Email form
+  const emailForm = useForm<EmailFormData>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: "" },
+  });
+
+  // Details form
+  const detailsForm = useForm<DetailsFormData>({
+    resolver: zodResolver(detailsSchema),
     defaultValues: {
-      fullName: "",
-      email: "",
+      firstName: "",
+      lastName: "",
       phone: "",
+      college: "",
+      department: "",
+      city: "",
+      state: "",
       termsAccepted: false,
     },
   });
 
+  // ─── Load Contest ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     const loadContest = async () => {
-      const response = await contestService.getContestBySlug(slug);
-      if (response.success && response.data) {
-        setContest(response.data);
-      } else {
-        setContest(null);
+      try {
+        const response = await contestService.getContestBySlug(slug);
+        if (response.success && response.data) {
+          setContest(response.data);
+        }
+      } catch {
+        // Contest not found
       }
       setLoading(false);
     };
     loadContest();
   }, [slug]);
 
-  const onSubmit = async (data: z.infer<typeof baseSchema>) => {
-    if (!contest) return;
+  // ─── Step Handlers ──────────────────────────────────────────────────────────
 
+  const handleRequestOtp = async (data: EmailFormData) => {
     setSubmitting(true);
-
-    // Simulate form processing
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    if (contest.fee > 0) {
-      // Move to payment step
-      setStep("payment");
-      setSubmitting(false);
-    } else {
-      // Free contest - register directly
-      await completeRegistration(data);
+    setApiError("");
+    try {
+      await registrationService.requestOtp(data.email);
+      setEmail(data.email);
+      setStep("otp");
+    } catch (err: any) {
+      setApiError(err.message || "Failed to send OTP");
     }
+    setSubmitting(false);
   };
 
-  const completeRegistration = async (formData: z.infer<typeof baseSchema>) => {
+  const handleVerifyOtp = async () => {
+    const otp = otpDigits.join("");
+    if (otp.length !== 6) {
+      setOtpError("Please enter all 6 digits");
+      return;
+    }
+
+    setSubmitting(true);
+    setOtpError("");
+    try {
+      const result = await registrationService.verifyOtp(email, otp);
+      setContactToken(result.contactToken);
+      setStep("details");
+    } catch (err: any) {
+      setOtpError(err.message || "Invalid OTP. Please try again.");
+    }
+    setSubmitting(false);
+  };
+
+  const handleRegister = async (formData: DetailsFormData) => {
     if (!contest) return;
 
     setSubmitting(true);
+    setApiError("");
+    try {
+      const result = await registrationService.registerForContest(slug, {
+        contactToken,
+        email,
+        firstName: formData.firstName,
+        lastName: formData.lastName || undefined,
+        phone: formData.phone || undefined,
+        college: formData.college || undefined,
+        department: formData.department || undefined,
+        city: formData.city || undefined,
+        state: formData.state || undefined,
+      });
 
-    const response = await registrationService.createRegistration(contest.id, {
-      fullName: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      country: 'India', // Default or could be added to form
-      agreeToTerms: true
-    });
-
-    if (response.success && response.data) {
-      setRegistrationId(response.data.participantId);
-      setStep("success");
-    } else {
-      // Handle error
-      alert(response.error || "Registration failed");
+      if (result.data.paymentRequired && result.data.payment) {
+        setRazorpayOrder(result.data.payment);
+        setRegistrationRef(result.data.registrationRef);
+        setStep("payment");
+      } else {
+        setRegistrationRef(result.data.registrationRef);
+        setStep("success");
+      }
+    } catch (err: any) {
+      setApiError(err.message || "Registration failed");
     }
     setSubmitting(false);
   };
 
   const handlePayment = async () => {
+    // Online payment coming soon (full Razorpay integration is Wave 5)
     setSubmitting(true);
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    await completeRegistration(form.getValues() as z.infer<typeof baseSchema>);
+    setApiError("Online payment coming soon. Please contact the organizer for payment instructions.");
+    setSubmitting(false);
   };
+
+  // ─── OTP Input Helpers ──────────────────────────────────────────────────────
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+
+    const newDigits = [...otpDigits];
+    newDigits[index] = value.slice(-1);
+    setOtpDigits(newDigits);
+    setOtpError("");
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pasted[i] || "";
+    }
+    setOtpDigits(newDigits);
+    // Focus the next empty or the last
+    const nextEmpty = newDigits.findIndex((d) => !d);
+    otpRefs.current[nextEmpty >= 0 ? nextEmpty : 5]?.focus();
+  };
+
+  // ─── Compute visible steps for progress bar ────────────────────────────────
+
+  const fee = contest?.paymentConfig?.amount ?? 0;
+  const visibleSteps: Step[] = fee > 0
+    ? ["email", "otp", "details", "payment", "success"]
+    : ["email", "otp", "details", "success"];
+
+  const currentStepIndex = visibleSteps.indexOf(step);
+
+  // ─── Loading / Not Found ──────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -128,6 +253,8 @@ export default function RegisterPage() {
     );
   }
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -142,112 +269,268 @@ export default function RegisterPage() {
 
         {/* Progress Steps */}
         <div className="flex items-center justify-center gap-4 mb-8">
-          {["Details", contest.fee > 0 ? "Payment" : null, "Confirmation"]
-            .filter(Boolean)
-            .map((label, index) => {
-              const stepIndex =
-                step === "form" ? 0 : step === "payment" ? 1 : contest.fee > 0 ? 2 : 1;
-              const isActive = index === stepIndex;
-              const isCompleted = index < stepIndex;
-
-              return (
-                <div key={label} className="flex items-center gap-2">
-                  <div
-                    className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                      ${isCompleted ? "bg-primary text-primary-foreground" : ""}
-                      ${isActive ? "bg-primary text-primary-foreground" : ""}
-                      ${!isActive && !isCompleted ? "bg-muted text-muted-foreground" : ""}
-                    `}
-                  >
-                    {isCompleted ? <CheckCircle className="h-4 w-4" /> : index + 1}
-                  </div>
-                  <span
-                    className={`text-sm ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}
-                  >
-                    {label}
-                  </span>
-                  {index < (contest.fee > 0 ? 2 : 1) && (
-                    <div className="w-12 h-0.5 bg-muted mx-2" />
-                  )}
+          {visibleSteps.map((s, index) => {
+            const isActive = index === currentStepIndex;
+            const isCompleted = index < currentStepIndex;
+            return (
+              <div key={s} className="flex items-center gap-2">
+                <div
+                  className={`
+                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                    ${isCompleted ? "bg-primary text-primary-foreground" : ""}
+                    ${isActive ? "bg-primary text-primary-foreground" : ""}
+                    ${!isActive && !isCompleted ? "bg-muted text-muted-foreground" : ""}
+                  `}
+                >
+                  {isCompleted ? <CheckCircle className="h-4 w-4" /> : index + 1}
                 </div>
-              );
-            })}
+                <span
+                  className={`text-sm hidden sm:inline ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                >
+                  {STEP_LABELS[s]}
+                </span>
+                {index < visibleSteps.length - 1 && (
+                  <div className="w-8 sm:w-12 h-0.5 bg-muted mx-1" />
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Form Step */}
-        {step === "form" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+        {/* Global error */}
+        {apiError && (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+            {apiError}
+          </div>
+        )}
+
+        {/* ── Step: Email ────────────────────────────────────────────────── */}
+        {step === "email" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Card>
               <CardHeader>
-                <CardTitle>Register for {contest.title}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Register for {contest.title}
+                </CardTitle>
                 <CardDescription>
-                  Fill in your details to participate in this contest
+                  Enter your email to receive a verification code
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={emailForm.handleSubmit(handleRequestOtp)} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="john@example.com"
+                      {...emailForm.register("email")}
+                    />
+                    {emailForm.formState.errors.email && (
+                      <p className="text-sm text-destructive">
+                        {emailForm.formState.errors.email.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending OTP...
+                      </>
+                    ) : (
+                      "Send Verification Code"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* ── Step: OTP ──────────────────────────────────────────────────── */}
+        {step === "otp" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5" />
+                  Verify Your Email
+                </CardTitle>
+                <CardDescription>
+                  We sent a 6-digit code to <strong>{email}</strong>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* OTP Inputs */}
+                <div className="flex justify-center gap-3" onPaste={handleOtpPaste}>
+                  {otpDigits.map((digit, i) => (
+                    <Input
+                      key={i}
+                      ref={(el) => { otpRefs.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(i, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                      className="w-12 h-14 text-center text-2xl font-mono"
+                    />
+                  ))}
+                </div>
+
+                {otpError && (
+                  <p className="text-sm text-destructive text-center">{otpError}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setStep("email"); setOtpDigits(["", "", "", "", "", ""]); }}
+                    className="flex-1"
+                  >
+                    Change Email
+                  </Button>
+                  <Button onClick={handleVerifyOtp} disabled={submitting} className="flex-1">
+                    {submitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      "Verify Code"
+                    )}
+                  </Button>
+                </div>
+
+                <p className="text-xs text-center text-muted-foreground">
+                  Didn&apos;t receive the code?{" "}
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    onClick={() => {
+                      setSubmitting(true);
+                      registrationService.requestOtp(email).finally(() => setSubmitting(false));
+                    }}
+                  >
+                    Resend
+                  </button>
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* ── Step: Details ───────────────────────────────────────────────── */}
+        {step === "details" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Details</CardTitle>
+                <CardDescription>
+                  Fill in your information to complete registration
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={detailsForm.handleSubmit(handleRegister)} className="space-y-6">
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName">Full Name</Label>
-                      <Input
-                        id="fullName"
-                        placeholder="John Doe"
-                        {...form.register("fullName")}
-                      />
-                      {form.formState.errors.fullName && (
-                        <p className="text-sm text-destructive">
-                          {form.formState.errors.fullName.message}
-                        </p>
-                      )}
+                    {/* Name */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name *</Label>
+                        <Input
+                          id="firstName"
+                          placeholder="John"
+                          {...detailsForm.register("firstName")}
+                        />
+                        {detailsForm.formState.errors.firstName && (
+                          <p className="text-sm text-destructive">
+                            {detailsForm.formState.errors.firstName.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          placeholder="Doe"
+                          {...detailsForm.register("lastName")}
+                        />
+                      </div>
                     </div>
 
+                    {/* Verified Email (read-only) */}
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="john@example.com"
-                        {...form.register("email")}
-                      />
-                      {form.formState.errors.email && (
-                        <p className="text-sm text-destructive">
-                          {form.formState.errors.email.message}
-                        </p>
-                      )}
+                      <Label>Email (verified)</Label>
+                      <Input value={email} disabled className="bg-muted" />
                     </div>
 
+                    {/* Phone */}
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
                       <Input
                         id="phone"
                         type="tel"
-                        placeholder="+1 (555) 123-4567"
-                        {...form.register("phone")}
+                        placeholder="+91 98765 43210"
+                        {...detailsForm.register("phone")}
                       />
-                      {form.formState.errors.phone && (
+                      {detailsForm.formState.errors.phone && (
                         <p className="text-sm text-destructive">
-                          {form.formState.errors.phone.message}
+                          {detailsForm.formState.errors.phone.message}
                         </p>
                       )}
                     </div>
 
-                    {/* Dynamic Fields from Contest */}
-                    {contest.registrationFields?.map((field: RegistrationField) => (
-                      <DynamicField key={field.id} field={field} form={form} />
-                    ))}
+                    {/* College & Department */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="college">College / Institution</Label>
+                        <Input
+                          id="college"
+                          placeholder="XYZ University"
+                          {...detailsForm.register("college")}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="department">Department</Label>
+                        <Input
+                          id="department"
+                          placeholder="Computer Science"
+                          {...detailsForm.register("department")}
+                        />
+                      </div>
+                    </div>
+
+                    {/* City & State */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          placeholder="Mumbai"
+                          {...detailsForm.register("city")}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Input
+                          id="state"
+                          placeholder="Maharashtra"
+                          {...detailsForm.register("state")}
+                        />
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Terms */}
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id="terms"
-                      checked={form.watch("termsAccepted")}
+                      checked={detailsForm.watch("termsAccepted")}
                       onCheckedChange={(checked) =>
-                        form.setValue("termsAccepted", checked === true, { shouldValidate: true })
+                        detailsForm.setValue("termsAccepted", checked === true, { shouldValidate: true })
                       }
                     />
                     <div className="space-y-1">
@@ -261,9 +544,9 @@ export default function RegisterPage() {
                           privacy policy
                         </Link>
                       </Label>
-                      {form.formState.errors.termsAccepted && (
+                      {detailsForm.formState.errors.termsAccepted && (
                         <p className="text-sm text-destructive">
-                          {form.formState.errors.termsAccepted.message}
+                          {detailsForm.formState.errors.termsAccepted.message}
                         </p>
                       )}
                     </div>
@@ -274,9 +557,7 @@ export default function RegisterPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Entry Fee</span>
                       <span className="font-semibold text-foreground">
-                        {contest.fee > 0
-                          ? `${contest.currency} ${contest.fee.toFixed(2)}`
-                          : "Free"}
+                        {fee > 0 ? `₹${fee}` : "Free"}
                       </span>
                     </div>
                   </div>
@@ -285,9 +566,9 @@ export default function RegisterPage() {
                     {submitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
+                        Registering...
                       </>
-                    ) : contest.fee > 0 ? (
+                    ) : fee > 0 ? (
                       "Continue to Payment"
                     ) : (
                       "Complete Registration"
@@ -299,13 +580,9 @@ export default function RegisterPage() {
           </motion.div>
         )}
 
-        {/* Payment Step */}
-        {step === "payment" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+        {/* ── Step: Payment ───────────────────────────────────────────────── */}
+        {step === "payment" && razorpayOrder && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -323,47 +600,25 @@ export default function RegisterPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{contest.title}</span>
                     <span className="text-foreground">
-                      {contest.currency} {contest.fee.toFixed(2)}
+                      ₹{razorpayOrder.amount}
                     </span>
                   </div>
                   <div className="border-t pt-3 flex justify-between font-semibold">
                     <span>Total</span>
                     <span className="text-primary">
-                      {contest.currency} {contest.fee.toFixed(2)}
+                      ₹{razorpayOrder.amount}
                     </span>
                   </div>
                 </div>
 
-                {/* Simulated Payment Form */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cardNumber">Card Number</Label>
-                    <Input
-                      id="cardNumber"
-                      placeholder="4242 4242 4242 4242"
-                      defaultValue="4242 4242 4242 4242"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expiry">Expiry Date</Label>
-                      <Input id="expiry" placeholder="MM/YY" defaultValue="12/28" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cvc">CVC</Label>
-                      <Input id="cvc" placeholder="123" defaultValue="123" />
-                    </div>
-                  </div>
-                </div>
-
                 <p className="text-xs text-muted-foreground text-center">
-                  This is a simulated payment. No real charges will be made.
+                  Razorpay payment gateway will open for secure payment processing.
                 </p>
 
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    onClick={() => setStep("form")}
+                    onClick={() => setStep("details")}
                     disabled={submitting}
                     className="flex-1"
                   >
@@ -373,10 +628,10 @@ export default function RegisterPage() {
                     {submitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing Payment...
+                        Processing...
                       </>
                     ) : (
-                      `Pay ${contest.currency} ${contest.fee.toFixed(2)}`
+                      `Pay ₹${razorpayOrder.amount}`
                     )}
                   </Button>
                 </div>
@@ -385,8 +640,8 @@ export default function RegisterPage() {
           </motion.div>
         )}
 
-        {/* Success Step */}
-        {step === "success" && registrationId && (
+        {/* ── Step: Success ───────────────────────────────────────────────── */}
+        {step === "success" && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -410,12 +665,12 @@ export default function RegisterPage() {
               </div>
 
               <CardContent className="p-6 space-y-6">
-                {/* Participant ID Card */}
+                {/* Registration Ref Card */}
                 <div className="rounded-lg border-2 border-dashed border-primary/30 p-6 bg-primary/5">
                   <div className="text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">Your Participant ID</p>
+                    <p className="text-sm text-muted-foreground">Your Registration ID</p>
                     <p className="text-3xl font-mono font-bold text-primary tracking-wider">
-                      {registrationId}
+                      {registrationRef}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Save this ID - you will need it to access the quiz
@@ -429,16 +684,18 @@ export default function RegisterPage() {
                   <div className="grid gap-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Name</span>
-                      <span className="text-foreground">{form.getValues("fullName")}</span>
+                      <span className="text-foreground">
+                        {detailsForm.getValues("firstName")} {detailsForm.getValues("lastName")}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Email</span>
-                      <span className="text-foreground">{form.getValues("email")}</span>
+                      <span className="text-foreground">{email}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Contest Date</span>
                       <span className="text-foreground">
-                        {new Date(contest.contestDate).toLocaleDateString("en-US", {
+                        {new Date(contest.startTime).toLocaleDateString("en-US", {
                           weekday: "long",
                           year: "numeric",
                           month: "long",
@@ -456,7 +713,7 @@ export default function RegisterPage() {
                     <li>1. Check your email for confirmation</li>
                     <li>2. Note the contest date and time</li>
                     <li>3. Prepare your system for proctoring requirements</li>
-                    <li>4. Join the quiz using your Participant ID</li>
+                    <li>4. Join the quiz using your Registration ID</li>
                   </ul>
                 </div>
 
@@ -477,60 +734,4 @@ export default function RegisterPage() {
       </div>
     </div>
   );
-}
-
-// Dynamic Field Component
-function DynamicField({
-  field,
-  form,
-}: {
-  field: RegistrationField;
-  form: any;
-}) {
-  const fieldName = field.id;
-
-  switch (field.type) {
-    case "text":
-    case "email":
-    case "tel":
-      return (
-        <div className="space-y-2">
-          <Label htmlFor={fieldName}>
-            {field.label}
-            {field.required && <span className="text-destructive ml-1">*</span>}
-          </Label>
-          <Input
-            id={fieldName}
-            type={field.type}
-            placeholder={field.placeholder}
-            {...form.register(fieldName)}
-          />
-        </div>
-      );
-
-    case "select":
-      return (
-        <div className="space-y-2">
-          <Label htmlFor={fieldName}>
-            {field.label}
-            {field.required && <span className="text-destructive ml-1">*</span>}
-          </Label>
-          <Select onValueChange={(value) => form.setValue(fieldName, value)}>
-            <SelectTrigger>
-              <SelectValue placeholder={field.placeholder || `Select ${field.label}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {field.options?.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      );
-
-    default:
-      return null;
-  }
 }

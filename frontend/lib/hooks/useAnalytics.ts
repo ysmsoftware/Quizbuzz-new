@@ -16,8 +16,8 @@ export function useContestAnalytics(contestId: string) {
   });
 
   return {
-    snapshot,
-    live,
+    snapshot: snapshot?.data as any,
+    live: live?.data as any,
     loading: isSnapshotLoading || isLiveLoading,
   };
 }

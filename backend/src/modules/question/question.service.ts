@@ -9,12 +9,14 @@ import {
     ListQuestionsQueryInput,
     AssignQuestionsInput,
     UpdateContestQuestionInput,
+    AutoGenerateQuestionsInput,
 } from "./question.validator";
 import { BulkImportResult, AssignQuestionsResult, ShuffledQuestionSet } from "./question.types";
 import { shuffleQuestionsForParticipant, replayShuffleFromSeed, buildSessionSeed, } from "./question.shuffle";
 import { BadRequestError, NotFoundError, UnprocessableEntityError } from "../../error/http-errors";
 import { config } from "../../config";
 import { ContestService } from "../contest/contest.service";
+import { prisma } from "../../config/db";
 
 // ─── Contest context the service needs but doesn't own ───────────────────────
 
@@ -63,19 +65,21 @@ export class QuestionService {
         const results = await this.questionRepo.bulkCreate(organizationId, dto.questions);
 
         const errors: BulkImportResult["errors"] = [];
+        const ids: string[] = [];
         let created = 0;
         let failed = 0;
 
-        results.forEach((result: { success: boolean; error?: string }, index: number) => {
-            if (result.success) {
+        results.forEach((result: { success: boolean; id?: string; error?: string }, index: number) => {
+            if (result.success && result.id) {
                 created++;
+                ids.push(result.id);
             } else {
                 failed++;
                 errors.push({ index, reason: result.error ?? "Unknown error" });
             }
         });
 
-        return { created, failed, errors };
+        return { created, failed, errors, ids };
     }
 
     async getQuestion(questionId: string, organizationId: string) {
@@ -248,6 +252,161 @@ export class QuestionService {
         const questions = await this.questionRepo.getContestQuestions(contestId, organizationId);
         const sessionSeed = buildSessionSeed(participantId, contestId);
         return replayShuffleFromSeed(questions, sessionSeed, shuffleQ, shuffleOpts);
+    }
+
+    async autoGenerateQuestions(
+        contestId: string,
+        organizationId: string,
+        dto: AutoGenerateQuestionsInput
+    ) {
+        const contest = await this.contestService.getContestContext(contestId, organizationId);
+        if (contest.status !== ContestStatus.DRAFT) {
+            throw new UnprocessableEntityError("Questions can only be generated for DRAFT contests");
+        }
+
+        const totalTarget = dto.totalQuestions;
+        const ruleTargetCounts = dto.rules.map((rule) => {
+            const fraction = rule.percentage / 100;
+            return {
+                rule,
+                target: Math.floor(fraction * totalTarget),
+            };
+        });
+
+        let currentSum = ruleTargetCounts.reduce((sum, r) => sum + r.target, 0);
+        let remainder = totalTarget - currentSum;
+        let ruleIdx = 0;
+        while (remainder > 0) {
+            ruleTargetCounts[ruleIdx % ruleTargetCounts.length]!.target += 1;
+            remainder--;
+            ruleIdx++;
+        }
+
+        const selectedQuestionIds = new Set<string>();
+
+        for (const ruleCount of ruleTargetCounts) {
+            const rule = ruleCount.rule;
+            const targetForRule = ruleCount.target;
+            if (targetForRule <= 0) continue;
+
+            const difficulties = ["EASY", "MEDIUM", "HARD"] as const;
+            const diffTargets = difficulties.map((diff) => {
+                const pct = rule.difficultyBreakdown[diff] || 0;
+                return {
+                    difficulty: diff,
+                    target: Math.floor((pct / 100) * targetForRule),
+                };
+            });
+
+            let diffSum = diffTargets.reduce((sum, d) => sum + d.target, 0);
+            let diffRemainder = targetForRule - diffSum;
+            let diffIdx = 0;
+            while (diffRemainder > 0) {
+                diffTargets[diffIdx % diffTargets.length]!.target += 1;
+                diffRemainder--;
+                diffIdx++;
+            }
+
+            const ruleCandidatesByDiff: Record<"EASY" | "MEDIUM" | "HARD", string[]> = {
+                EASY: [],
+                MEDIUM: [],
+                HARD: [],
+            };
+
+            for (const diff of difficulties) {
+                const candidates = await this.questionRepo.findCandidatesForAutoGenerate(
+                    organizationId,
+                    contestId,
+                    rule.tags,
+                    diff
+                );
+                ruleCandidatesByDiff[diff] = candidates
+                    .map((c) => c.id)
+                    .filter((id) => !selectedQuestionIds.has(id));
+            }
+
+            const shuffleArray = <T>(arr: T[]): T[] => {
+                const res = [...arr];
+                for (let i = res.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [res[i], res[j]] = [res[j]!, res[i]!];
+                }
+                return res;
+            };
+
+            const ruleSelectedIds: string[] = [];
+            const extraCandidates: string[] = [];
+
+            for (const diffTarget of diffTargets) {
+                const diff = diffTarget.difficulty;
+                const reqCount = diffTarget.target;
+                const pool = shuffleArray(ruleCandidatesByDiff[diff]);
+
+                const taken = pool.slice(0, reqCount);
+                ruleSelectedIds.push(...taken);
+
+                const leftover = pool.slice(reqCount);
+                extraCandidates.push(...leftover);
+            }
+
+            let needed = targetForRule - ruleSelectedIds.length;
+            if (needed > 0 && extraCandidates.length > 0) {
+                const shuffledExtras = shuffleArray(extraCandidates);
+                const takenExtras = shuffledExtras.slice(0, needed);
+                ruleSelectedIds.push(...takenExtras);
+                needed -= takenExtras.length;
+            }
+
+            for (const id of ruleSelectedIds) {
+                selectedQuestionIds.add(id);
+            }
+        }
+
+        if (selectedQuestionIds.size === 0) {
+            throw new BadRequestError("No questions matching your criteria were found in the question bank.");
+        }
+
+        const currentMaxPosition = await this.questionRepo.countContestQuestions(contestId, organizationId);
+        let nextPosition = currentMaxPosition + 1;
+
+        const assignments = Array.from(selectedQuestionIds).map((qId, idx) => ({
+            questionId: qId,
+            position: nextPosition + idx,
+            marks: 1,
+            negativeMark: 0,
+        }));
+
+        const assignResult = await this.questionRepo.assignToContest(
+            organizationId,
+            contestId,
+            assignments
+        );
+
+        const assignedQuestions = await prisma.contestQuestion.findMany({
+            where: {
+                contestId,
+                questionId: { in: Array.from(selectedQuestionIds) },
+                organizationId,
+            },
+            include: {
+                question: {
+                    include: { options: { orderBy: { position: "asc" } } },
+                },
+            },
+            orderBy: { position: "asc" },
+        });
+
+        return {
+            assignedCount: assignResult.count,
+            questions: assignedQuestions.map((aq) => ({
+                id: aq.question.id,
+                questionText: aq.question.questionText,
+                difficulty: aq.question.difficulty,
+                tags: aq.question.tags,
+                marks: aq.marks,
+                negativeMark: Number(aq.negativeMark),
+            })),
+        };
     }
 
     private validateQuestionDto(dto: { options: Array<{ isCorrect: boolean }> }) {

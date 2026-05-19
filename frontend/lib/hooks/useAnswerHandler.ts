@@ -20,7 +20,7 @@ export function useAnswerHandler(emitAnswer: (questionId: string, selectedOption
 
         // 2. Find the selected option ID from the question object
         const selectedOption = question.options.find(opt => opt.index === optionIndex);
-        const selectedOptionId = selectedOption ? selectedOption.id : null;
+        const selectedOptionId = selectedOption ? (selectedOption.id || String(selectedOption.index)) : null;
 
         // 3. Emit to server via socket
         emitAnswer(question.id, selectedOptionId, questionIndex);

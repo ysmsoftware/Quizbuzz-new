@@ -19,7 +19,7 @@ import paymentRouter from "./modules/payment/payment.routes.js";
 const apiRouter = Router();
 
 apiRouter.use("/org", organizationRouter);
-apiRouter.use("/auth/admin", authLimiter, adminAuthRouter);
+apiRouter.use("/auth/admin", adminAuthRouter);
 apiRouter.use("/contacts", contactRouter);
 apiRouter.use("/contests", contestRouter);
 apiRouter.use("/contests", participantRouter);
