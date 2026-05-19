@@ -55,9 +55,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Lint frontend
+      - name: Validate Frontend Build
         working-directory: frontend
-        run: npm run lint
+        run: npm run build
 
       # ── Notify Slack on test failure ──────────────────────────────────────
       - name: Notify Slack — Tests Failed
