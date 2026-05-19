@@ -11,8 +11,7 @@
     "worker": "node  dist/worker.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "postinstall": "prisma generate",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "Austin",
