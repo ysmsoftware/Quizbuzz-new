@@ -89,25 +89,28 @@ export const resultsApi = {
     get<ScoreDistributionResponse>(`/contests/${contestId}/analytics/score-distribution`),
 };
 
-/**
- * Certificates API
- */
 export const certificatesApi = {
-  getContestCertificates: (contestId: string, params?: { status?: string; page?: number; limit?: number }) =>
-    get<CertificatesListResponse>(`/certificates/contests/${contestId}`, { params }),
+  getContestCertificates: (contestId: string, params?: { page?: number; limit?: number }) =>
+    get<CertificatesListResponse>(`/certificates/contest/${contestId}`, { params }),
 
-  getParticipantCertificate: (participantId: string) =>
-    get<any>(`/certificates/participants/${participantId}`),
+  getParticipantCertificate: (id: string) =>
+    get<any>(`/certificates/public/${id}`),
 
-  issueCertificate: (contestId: string, body: { participantId: string; templateData?: any }) =>
-    post<any>(`/certificates/issue/${contestId}`, body),
+  getCertificateByContactAndContest: (contactId: string, contestId: string) =>
+    get<any>(`/certificates/contact/${contactId}/contest/${contestId}`),
 
-  bulkIssueCertificates: (contestId: string, body?: { cutoffPercentage?: number }) =>
-    post<any>(`/certificates/bulk-issue/${contestId}`, body),
+  getCertificateById: (id: string) =>
+    get<any>(`/certificates/${id}`),
+
+  issueCertificate: (body: { participantId?: string; contactId?: string; contestId?: string }) =>
+    post<any>(`/certificates/issue`, body),
+
+  bulkIssueCertificates: (body: { contestId: string }) =>
+    post<any>(`/certificates/bulk-issue`, body),
 
   retryCertificate: (certificateId: string) =>
     post<any>(`/certificates/${certificateId}/retry`),
 
-  deleteCertificate: (certificateId: string) =>
-    del<any>(`/certificates/${certificateId}`),
+  retryFailedCertificates: (params?: { contestId?: string }) =>
+    post<any>(`/certificates/retry-failed`, {}, { params }),
 };

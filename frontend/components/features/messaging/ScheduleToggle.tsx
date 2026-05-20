@@ -1,8 +1,9 @@
 import React from 'react';
-import { Clock, Send } from 'lucide-react';
+import { Clock, Send, Construction } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ScheduleToggleProps {
   isScheduled: boolean;
@@ -30,33 +31,29 @@ export function ScheduleToggle({
           <Send className="h-4 w-4" />
           Send Now
         </Button>
-        <Button
-          variant={isScheduled ? 'default' : 'outline'}
-          onClick={() => onToggle(true)}
-          className="gap-2"
-        >
-          <Clock className="h-4 w-4" />
-          Schedule
-        </Button>
-      </div>
 
-      {isScheduled && (
-        <div className="space-y-2 pt-2 border-t">
-          <Label htmlFor="schedule-time" className="text-sm">
-            Schedule For
-          </Label>
-          <Input
-            id="schedule-time"
-            type="datetime-local"
-            value={scheduledTime}
-            onChange={(e) => onTimeChange(e.target.value)}
-            min={new Date().toISOString().slice(0, 16)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Message will be sent at the specified date and time
-          </p>
-        </div>
-      )}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Wrapping in a span so the tooltip fires even when button is disabled */}
+              <span className="w-full">
+                <Button
+                  variant="outline"
+                  disabled
+                  className="gap-2 w-full opacity-50 cursor-not-allowed"
+                >
+                  <Clock className="h-4 w-4" />
+                  Schedule
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="flex items-center gap-1.5">
+              <Construction className="h-3.5 w-3.5" />
+              <span>Scheduled messaging coming soon</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
     </div>
   );
 }

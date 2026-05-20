@@ -4,6 +4,9 @@ import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.
 
 const certificateRouter = Router();
 
+// Public endpoint for participants to download and view their certificates
+certificateRouter.get("/public/:id", certificateController.getCertificateByIdPublic);
+
 certificateRouter.use(authenticatedOrgMiddleware);
 
 // ─── Static routes BEFORE parameterised ones ─────────────────────────────────

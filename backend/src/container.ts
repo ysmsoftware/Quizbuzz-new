@@ -1,6 +1,7 @@
 import { AdminAuthController } from './modules/admin/auth/admin-auth.controller.js';
 import { AdminAuthRepository } from './modules/admin/auth/admin-auth.repository.js';
 import { AdminAuthService } from './modules/admin/auth/admin-auth.service.js';
+import { EmailProvider } from './providers/email.provider.js';
 import { ContactController } from './modules/contact/contact.controller.js';
 import { ContactRepository } from './modules/contact/contact.repository.js';
 import { ContactService } from './modules/contact/contact.service.js';
@@ -41,6 +42,8 @@ import { AnalyticsController } from './modules/analytics/analytics.controller.js
 import { QuizSession } from './modules/quiz/quiz.session.js';
 import { QuizService } from './modules/quiz/quiz.service.js';
 import { QuizAuthService } from './modules/quiz/quiz-auth.service.js';
+import { QuizRegistrationService } from './modules/quiz/quiz-registration.service.js';
+import { QuizRegistrationController } from './modules/quiz/quiz-registration.controller.js';
 import { ProctoringService } from './modules/quiz/proctoring.service.js';
 import { QuizGateway } from './modules/quiz/quiz.gateway.js';
 import { AdminGateway } from './modules/quiz/admin.gateway.js';
@@ -51,6 +54,7 @@ import { injectTimerWorkerDeps } from './workers/quiz-timer.worker.js';
 import { prisma } from './config/db.js';
 
 export const razorpay = new RazorpayProvider();
+export const emailProvider = new EmailProvider();
 
 // ─── Repositories ─────────────────────────────────────────────────────────────
 export const organizationRepository = new OrganizationRepository()
@@ -85,6 +89,7 @@ export const analyticsService = new AnalyticsService(analyticsRepository, quizSe
 export const proctoringService = new ProctoringService(prisma, quizSession);
 export const quizService = new QuizService(quizSession, proctoringService, submissionService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
+export const quizRegistrationService = new QuizRegistrationService(emailProvider);
 export const socketService = new SocketService();
 
 
@@ -119,3 +124,4 @@ export const participantController = new ParticipantController(participantServic
 export const paymentController = new PaymentController(paymentService);
 export const proctoringController = new ProctoringController(adminProctoringService);
 export const analyticsController = new AnalyticsController(analyticsService);
+export const quizRegistrationController = new QuizRegistrationController(quizRegistrationService);

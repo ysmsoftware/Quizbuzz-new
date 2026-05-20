@@ -64,12 +64,19 @@ export interface MessageRecord {
   sentAt?: string;
   deliveredAt?: string;
   retryCount: number;
-  participant: {
-    contact: {
-      firstName: string;
-      lastName: string;
-    }
-  }
+  createdAt: string;
+  updatedAt: string;
+  contact?: {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+  };
+  contest?: {
+    id: string;
+    title: string;
+  };
 }
 
 export interface MessagesListResponse {
@@ -124,22 +131,49 @@ export const crmApi = {
   updateContact: (contactId: string, body: Partial<Contact>) =>
     patch<Contact>(`/contacts/${contactId}`, body),
 
-  // Messaging
-  getContestMessages: (contestId: string, params?: { channel?: string; status?: string; template?: string; page?: number; limit?: number }) =>
-    get<MessagesListResponse>(`/messages/contests/${contestId}`, { params }),
+  getContestMessages: async (contestId: string, params?: { channel?: string; status?: string; template?: string; page?: number; limit?: number }) => {
+    const response = await get<any>(`/messaging/contest/${contestId}`, { params });
+    if (response.success && response.data) {
+      const { data, total, page, limit, totalPages, summary } = response.data;
+      return {
+        ...response,
+        data: {
+          data: data || [],
+          pagination: {
+            page: page || 1,
+            limit: limit || 20,
+            total: total || 0,
+            totalPages: totalPages || 1,
+          },
+          summary: summary || { sent: 0, failed: 0, pending: 0 },
+        }
+      } as ApiResponse<MessagesListResponse>;
+    }
+    return response as unknown as ApiResponse<MessagesListResponse>;
+  },
 
   getMessageDetail: (messageId: string) =>
-    get<MessageRecord>(`/messages/${messageId}`),
+    get<MessageRecord>(`/messaging/${messageId}`),
 
   retryMessage: (messageId: string) =>
-    post<any>(`/messages/${messageId}/retry`),
+    post<any>(`/messaging/${messageId}/retry`),
 
-  sendBulkMessage: (body: { 
-    contestId: string; 
-    channel: 'EMAIL' | 'WHATSAPP'; 
-    subject?: string; 
-    body: string; 
-    template: string; 
+  sendMessage: (body: {
+    participantId?: string;
+    contactId?: string;
+    contestId?: string;
+    channel: 'EMAIL' | 'WHATSAPP';
+    template: string;
+    recipient: string;
+    subject?: string;
+    body?: string;
+    parameters?: Record<string, string>;
   }) =>
-    post<any>('/messages/bulk', body),
+    post<any>('/messaging/send', body),
+
+  retryFailedMessages: () =>
+    post<any>('/messaging/retry-failed'),
+
+  getMessageTemplates: () =>
+    get<any>('/messaging/templates'),
 };

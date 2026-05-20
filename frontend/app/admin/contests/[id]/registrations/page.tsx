@@ -71,9 +71,10 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, isValidDate, toDateOrNull } from '@/lib/utils';
 import { Registration, RegistrationStatus } from '@/lib/types';
 import { toast } from 'sonner';
+import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
 
 export default function RegistrationsTabPage() {
     const { id } = useParams() as { id: string };
@@ -87,6 +88,10 @@ export default function RegistrationsTabPage() {
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
+
+    // Message modal state
+    const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+    const [messageModalParticipantIds, setMessageModalParticipantIds] = useState<string[]>([]);
 
     const filters = useMemo(() => ({
         search: searchQuery,
@@ -108,11 +113,11 @@ export default function RegistrationsTabPage() {
         // Calculate filtered stats from the current registrations list
         // Note: This might be partial if registrations is paginated, but better than nothing
         // For absolute accuracy, we'd need a separate summary endpoint
-        const confirmedCount = registrations.filter(r => r.status === 'confirmed').length;
-        const paidCount = registrations.filter(r => r.paymentStatus === 'completed').length;
-        const pendingCount = registrations.filter(r => r.paymentStatus === 'pending').length;
-        const failedCount = registrations.filter(r => r.paymentStatus === 'failed').length;
-        const freeCount = registrations.filter(r => !r.amount || r.amount === 0).length;
+        const confirmedCount = registrations.filter((r: Registration) => r.status === 'confirmed').length;
+        const paidCount = registrations.filter((r: Registration) => r.paymentStatus === 'completed').length;
+        const pendingCount = registrations.filter((r: Registration) => r.paymentStatus === 'pending').length;
+        const failedCount = registrations.filter((r: Registration) => r.paymentStatus === 'failed').length;
+        const freeCount = registrations.filter((r: Registration) => !r.amount || r.amount === 0).length;
 
         return {
             total: contest?._count?.participants || 0,
@@ -122,7 +127,7 @@ export default function RegistrationsTabPage() {
             failed: failedCount,
             free: freeCount,
             submitted: contest?._count?.submissions || 0,
-            revenue: registrations.reduce((sum, r) => sum + (r.paymentStatus === 'completed' ? (r.amount || fee) : 0), 0)
+            revenue: registrations.reduce((sum: number, r: Registration) => sum + (r.paymentStatus === 'completed' ? (r.amount || fee) : 0), 0)
         };
     }, [contest, registrations]);
 
@@ -153,6 +158,14 @@ export default function RegistrationsTabPage() {
         navigator.clipboard.writeText(text);
         toast.success(`${label} copied!`, { duration: 2000 });
     };
+
+    // Virtualized table sizing and layout helpers
+    const virtualItems = rowVirtualizer.getVirtualItems();
+    const totalSize = rowVirtualizer.getTotalSize();
+    const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+    const paddingBottom = virtualItems.length > 0 ? totalSize - virtualItems[virtualItems.length - 1].end : 0;
+    const hasQuizStatus = phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED';
+    const totalColSpan = hasQuizStatus ? 9 : 8;
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -243,7 +256,10 @@ export default function RegistrationsTabPage() {
 
                     <Button
                         className="bg-primary text-primary-foreground h-9"
-                        onClick={() => router.push(`/admin/contests/${id}/messages`)}
+                        onClick={() => {
+                            setMessageModalParticipantIds([]);
+                            setIsMessageModalOpen(true);
+                        }}
                     >
                         <MessageSquare className="mr-2 h-4 w-4" />
                         Send Message
@@ -253,34 +269,39 @@ export default function RegistrationsTabPage() {
 
             {/* REGISTRATIONS TABLE */}
             <WidgetErrorBoundary name="Registrations Table">
-                <Card className="border-border/50 overflow-hidden">
+                <Card className="border-border/50 overflow-hidden bg-card">
                     <div ref={parentRef} className="h-[600px] overflow-auto relative">
                         <table className="w-full text-sm border-collapse">
-                            <thead className="bg-muted/50 sticky top-0 z-10">
-                                <tr className="text-muted-foreground font-medium uppercase text-[10px] tracking-widest border-b">
-                                    <th className="w-12 px-4 py-3">
+                            <thead className="bg-muted sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                                <tr className="text-muted-foreground font-medium uppercase text-[10px] tracking-widest border-b border-border/40">
+                                    <th className="w-12 px-4 py-3 bg-muted">
                                         <Checkbox
                                             checked={selectedIds.length === registrations?.length && (registrations?.length || 0) > 0}
                                             onCheckedChange={(checked) => {
-                                                if (checked) setSelectedIds(registrations?.map(r => r.id) || []);
+                                                if (checked) setSelectedIds(registrations?.map((r: Registration) => r.id) || []);
                                                 else setSelectedIds([]);
                                             }}
                                         />
                                     </th>
-                                    <th className="px-4 py-3 text-left">Participant ID</th>
-                                    <th className="px-4 py-3 text-left">Name</th>
-                                    <th className="px-4 py-3 text-left">Contact</th>
-                                    <th className="px-4 py-3 text-center">Payment</th>
-                                    <th className="px-4 py-3 text-center">Reg Status</th>
-                                    <th className="px-4 py-3 text-left">Custom Fields</th>
+                                    <th className="px-4 py-3 text-left bg-muted">Participant ID</th>
+                                    <th className="px-4 py-3 text-left bg-muted">Name</th>
+                                    <th className="px-4 py-3 text-left bg-muted">Contact</th>
+                                    <th className="px-4 py-3 text-center bg-muted">Payment</th>
+                                    <th className="px-4 py-3 text-center bg-muted">Reg Status</th>
+                                    <th className="px-4 py-3 text-left bg-muted">Custom Fields</th>
                                     {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
-                                        <th className="px-4 py-3 text-center">Quiz Status</th>
+                                        <th className="px-4 py-3 text-center bg-muted">Quiz Status</th>
                                     )}
-                                    <th className="w-12 px-4 py-3 text-right"></th>
+                                    <th className="w-12 px-4 py-3 text-right bg-muted"></th>
                                 </tr>
                             </thead>
-                            <tbody style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
-                                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            <tbody>
+                                {paddingTop > 0 && (
+                                    <tr>
+                                        <td colSpan={totalColSpan} style={{ height: `${paddingTop}px` }} />
+                                    </tr>
+                                )}
+                                {virtualItems.map((virtualRow) => {
                                     const reg = registrations![virtualRow.index];
                                     return (
                                         <tr
@@ -290,12 +311,7 @@ export default function RegistrationsTabPage() {
                                                 selectedIds.includes(reg.id) && "bg-primary/5"
                                             )}
                                             style={{
-                                                position: 'absolute',
-                                                top: 0,
-                                                left: 0,
-                                                width: '100%',
                                                 height: `${virtualRow.size}px`,
-                                                transform: `translateY(${virtualRow.start}px)`,
                                             }}
                                             onClick={() => handleRowClick(reg)}
                                         >
@@ -323,19 +339,19 @@ export default function RegistrationsTabPage() {
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-8 w-8 rounded-full border border-border/50">
                                                         <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-black">
-                                                            {reg.participantDetails.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                                            {((reg.participantDetails?.fullName || 'Participant').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2))}
                                                         </AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold truncate max-w-[120px]">{reg.participantDetails.fullName}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(reg.registeredAt))} ago</span>
+                                                        <span className="font-bold truncate max-w-30">{reg.participantDetails?.fullName || 'Participant'}</span>
+                                                        <span className="text-[10px] text-muted-foreground">{isValidDate(reg.registeredAt) ? formatDistanceToNow(new Date(reg.registeredAt)) + ' ago' : '—'}</span>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4">
                                                 <div className="flex flex-col text-xs">
-                                                    <span className="truncate max-w-[150px]">{reg.participantDetails.email}</span>
-                                                    <span className="text-muted-foreground text-[10px]">{reg.participantDetails.phone}</span>
+                                                    <span className="truncate max-w-37.5">{reg.participantDetails?.email || '—'}</span>
+                                                    <span className="text-muted-foreground text-[10px]">{reg.participantDetails?.phone || '—'}</span>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 text-center">
@@ -364,7 +380,7 @@ export default function RegistrationsTabPage() {
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <div className="text-xs text-muted-foreground truncate max-w-[150px]">
+                                                <div className="text-xs text-muted-foreground truncate max-w-37.5">
                                                     {reg.participantDetails.institution || '—'}
                                                 </div>
                                             </td>
@@ -382,8 +398,14 @@ export default function RegistrationsTabPage() {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuItem onClick={() => handleRowClick(reg)}>View Full Details</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => toast.info("WhatsApp feature coming soon")}>Send WhatsApp</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => toast.info("Email feature coming soon")}>Send Email</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setMessageModalParticipantIds([reg.id]);
+                                                            setIsMessageModalOpen(true);
+                                                        }}>Send WhatsApp</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => {
+                                                            setMessageModalParticipantIds([reg.id]);
+                                                            setIsMessageModalOpen(true);
+                                                        }}>Send Email</DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         {reg.status !== 'revoked' && (
                                                             <DropdownMenuItem
@@ -403,6 +425,11 @@ export default function RegistrationsTabPage() {
                                         </tr>
                                     );
                                 })}
+                                {paddingBottom > 0 && (
+                                    <tr>
+                                        <td colSpan={totalColSpan} style={{ height: `${paddingBottom}px` }} />
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -430,7 +457,15 @@ export default function RegistrationsTabPage() {
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <Button variant="ghost" size="sm" className="text-background hover:bg-background/10 h-8 text-xs">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-background hover:bg-background/10 h-8 text-xs"
+                                onClick={() => {
+                                    setMessageModalParticipantIds(selectedIds);
+                                    setIsMessageModalOpen(true);
+                                }}
+                            >
                                 <MessageSquare className="mr-2 h-4 w-4" />
                                 Message
                             </Button>
@@ -482,7 +517,7 @@ export default function RegistrationsTabPage() {
                             />
                         </div>
 
-                        <div className="mt-8 h-[120px] w-full bg-muted/20 rounded-xl p-4 border border-border/50">
+                        <div className="mt-8 h-30 w-full bg-muted/20 rounded-xl p-4 border border-border/50">
                             <div className="flex items-center justify-between mb-4">
                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Registration Revenue Trend</span>
                                 <TrendingUp className="h-4 w-4 text-green-500" />
@@ -519,6 +554,17 @@ export default function RegistrationsTabPage() {
                 onMarkAsPaid={(ref) => markAsPaid({ id: selectedRegistration!.id, reference: ref })}
                 onAllowFree={() => allowFreeEntry(selectedRegistration!.id)}
                 onRevoke={(reason) => revokeRegistrations({ ids: [selectedRegistration!.id], reason })}
+                onSendMessage={(participantId) => {
+                    setMessageModalParticipantIds([participantId]);
+                    setIsMessageModalOpen(true);
+                }}
+            />
+
+            <SendMessageModal
+                open={isMessageModalOpen}
+                onOpenChange={setIsMessageModalOpen}
+                contestId={id}
+                selectedParticipantIds={messageModalParticipantIds}
             />
 
         </div>
@@ -636,7 +682,8 @@ function ParticipantDrawer({
     phase,
     onMarkAsPaid,
     onAllowFree,
-    onRevoke
+    onRevoke,
+    onSendMessage
 }: {
     isOpen: boolean;
     onClose: () => void;
@@ -646,22 +693,27 @@ function ParticipantDrawer({
     onMarkAsPaid: (ref: string) => void;
     onAllowFree: () => void;
     onRevoke: (reason: string) => void;
+    onSendMessage: (participantId: string) => void;
 }) {
     if (!registration) return null;
 
+    const registeredAtDate = toDateOrNull(registration.registeredAt);
+    const joinedAtDate = toDateOrNull(registration.joinedAt);
+    const lastActivityDate = toDateOrNull(registration.lastActivityAt);
+
     return (
         <Sheet open={isOpen} onOpenChange={onClose}>
-            <SheetContent className="w-full sm:max-w-[480px] p-0 flex flex-col">
+                <SheetContent className="w-full sm:max-w-120 p-0 flex flex-col">
                 <SheetHeader className="p-6 pb-0 space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <Avatar className="h-16 w-16 border-2 border-primary/20 p-0.5">
                                 <AvatarFallback className="text-xl font-black bg-primary/10 text-primary uppercase">
-                                    {registration.participantDetails.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    {((registration.participantDetails?.fullName || 'Participant').split(' ').map((n: string) => n[0]).join('').slice(0, 2))}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col">
-                                <h3 className="text-xl font-black tracking-tight">{registration.participantDetails.fullName}</h3>
+                                <h3 className="text-xl font-black tracking-tight">{registration.participantDetails?.fullName || 'Participant'}</h3>
                                 <Badge variant="outline" className={cn(
                                     "w-fit text-[10px] uppercase mt-1",
                                     registration.status === 'confirmed' ? "border-green-500 text-green-600" : "border-amber-500 text-amber-600"
@@ -688,17 +740,17 @@ function ParticipantDrawer({
                             <TabsContent value="overview" className="space-y-8 m-0">
                                 <DetailSection title="Contact Information" icon={<User className="h-4 w-4" />}>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <DetailItem label="Full Name" value={registration.participantDetails.fullName} />
-                                        <DetailItem label="Email" value={registration.participantDetails.email} copyable />
-                                        <DetailItem label="Phone" value={registration.participantDetails.phone} copyable />
-                                        <DetailItem label="City/State" value={`${registration.participantDetails.city || '—'}, ${registration.participantDetails.state || '—'}`} />
+                                        <DetailItem label="Full Name" value={registration.participantDetails?.fullName || 'Participant'} />
+                                        <DetailItem label="Email" value={registration.participantDetails?.email || '—'} copyable />
+                                        <DetailItem label="Phone" value={registration.participantDetails?.phone || '—'} copyable />
+                                        <DetailItem label="City/State" value={`${registration.participantDetails?.city || '—'}, ${registration.participantDetails?.state || '—'}`} />
                                     </div>
                                 </DetailSection>
 
                                 <DetailSection title="Registration Details" icon={<CalendarIcon className="h-4 w-4" />}>
                                     <div className="grid grid-cols-2 gap-4">
                                         <DetailItem label="Participant ID" value={registration.participantId} mono copyable />
-                                        <DetailItem label="Registered At" value={format(new Date(registration.registeredAt), 'PPP p')} />
+                                        <DetailItem label="Registered At" value={registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
                                         <DetailItem label="WhatsApp Opt-in" value={registration.whatsappOptIn ? 'Yes' : 'No'} />
                                     </div>
                                 </DetailSection>
@@ -741,7 +793,7 @@ function ParticipantDrawer({
                                 <DetailSection title="Transaction History" icon={<CreditCard className="h-4 w-4" />}>
                                     <div className="space-y-4">
                                         <DetailItem label="Payment ID" value={registration.paymentId || '—'} mono copyable />
-                                        <DetailItem label="Transaction Date" value={registration.paymentId ? format(new Date(registration.registeredAt), 'PPP p') : '—'} />
+                                        <DetailItem label="Transaction Date" value={registration.paymentId && registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
                                     </div>
                                 </DetailSection>
 
@@ -779,9 +831,9 @@ function ParticipantDrawer({
                                     <div className="space-y-6">
                                         <DetailSection title="Activity Timeline" icon={<Clock className="h-4 w-4" />}>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <DetailItem label="Joined at" value={registration.joinedAt ? format(new Date(registration.joinedAt), 'HH:mm:ss') : '—'} />
+                                                <DetailItem label="Joined at" value={joinedAtDate ? format(joinedAtDate, 'HH:mm:ss') : '—'} />
                                                 <DetailItem label="Current Question" value={`Question ${registration.currentQuestionIndex || 0} of ${registration.totalQuestions || 50}`} />
-                                                <DetailItem label="Last Activity" value={registration.lastActivityAt ? formatDistanceToNow(new Date(registration.lastActivityAt)) + ' ago' : '—'} />
+                                                <DetailItem label="Last Activity" value={lastActivityDate ? formatDistanceToNow(lastActivityDate) + ' ago' : '—'} />
                                                 <DetailItem label="Status" value={registration.quizStatus?.toUpperCase() || '—'} />
                                             </div>
                                         </DetailSection>
@@ -807,11 +859,22 @@ function ParticipantDrawer({
                 </SheetHeader>
 
                 <SheetFooter className="mt-auto p-6 border-t bg-muted/5 grid grid-cols-2 gap-3">
-                    <Button className="bg-[#25D366] hover:bg-[#20ba5a] text-white">
+                    <Button
+                        className="bg-[#25D366] hover:bg-[#20ba5a] text-white"
+                        onClick={() => {
+                            if (registration) onSendMessage(registration.id);
+                        }}
+                    >
                         <MessageCircle className="mr-2 h-4 w-4" />
                         WhatsApp
                     </Button>
-                    <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                    <Button
+                        variant="outline"
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        onClick={() => {
+                            if (registration) onSendMessage(registration.id);
+                        }}
+                    >
                         <Mail className="mr-2 h-4 w-4" />
                         Email
                     </Button>

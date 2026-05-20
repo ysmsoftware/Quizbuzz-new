@@ -401,13 +401,7 @@ export default function CreateContestPage() {
           <span>Back to Contests</span>
         </Link>
         <h1 className="text-3xl font-bold tracking-tight">Create New Contest</h1>
-        <div className="w-[120px]" />
-      </div>
-
-      <div className="mx-auto max-w-4xl space-y-8">
-        {/* Progress Steps */}
-        <Stepper steps={STEPS} currentStep={currentStep} onStepChange={setCurrentStep} />
-
+          <div className="w-30" />
         {/* Form Content */}
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
@@ -478,7 +472,7 @@ export default function CreateContestPage() {
                     />
                     <Button type="button" variant="outline" onClick={handleAddTopic}>Add</Button>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 min-h-[36px] p-2 border rounded-md border-border/30 bg-muted/20">
+                  <div className="flex flex-wrap gap-1.5 min-h-9 p-2 border rounded-md border-border/30 bg-muted/20">
                     {form.topics.length === 0 ? (
                       <span className="text-xs text-muted-foreground self-center px-1">No topics added yet.</span>
                     ) : (
@@ -510,7 +504,7 @@ export default function CreateContestPage() {
                     />
                     <Button type="button" variant="outline" onClick={handleAddRule}>Add</Button>
                   </div>
-                  <div className="border rounded-md border-border/30 bg-muted/20 p-3 space-y-2 min-h-[80px]">
+                  <div className="border rounded-md border-border/30 bg-muted/20 p-3 space-y-2 min-h-20">
                     {form.rules.length === 0 ? (
                       <p className="text-xs text-muted-foreground">No rules defined yet.</p>
                     ) : (

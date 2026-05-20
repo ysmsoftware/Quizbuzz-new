@@ -27,6 +27,16 @@ export class CertificateRepository {
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
+    async findByIdPublic(
+        id: string
+    ): Promise<CertificateResult | null> {
+        const row = await prisma.certificate.findFirst({
+            where: { id },
+            include: CERT_INCLUDE,
+        });
+        return row as CertificateResult | null;
+    }
+
     async findById(
         id: string,
         organizationId: string

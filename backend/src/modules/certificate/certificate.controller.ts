@@ -9,6 +9,17 @@ import {
 export class CertificateController {
     constructor(private readonly certificateService: CertificateService) {}
 
+    // ── GET /certificates/public/:id ──────────────────────────────────────────
+
+    getCertificateByIdPublic = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const cert = await this.certificateService.getCertificateByIdPublic(
+                req.params.id as string
+            );
+            res.status(200).json({ success: true, data: cert });
+        } catch (err) { next(err); }
+    };
+
     // ── GET /certificates/:id ─────────────────────────────────────────────────
 
     getCertificateById = async (req: Request, res: Response, next: NextFunction) => {

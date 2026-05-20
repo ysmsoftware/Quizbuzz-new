@@ -73,9 +73,10 @@ export class MessagingService {
     ): Promise<PaginatedMessagesResult> {
         const skip = (page - 1) * limit;
 
-        const [rows, total] = await Promise.all([
+        const [rows, total, summary] = await Promise.all([
             this.messagingRepo.findByContestId(contestId, organizationId, skip, limit),
             this.messagingRepo.countByContestId(contestId, organizationId),
+            this.messagingRepo.getSummary(contestId, organizationId),
         ]);
 
         const data: MessageLogResult[] = (rows as any[]).map((m) => ({
@@ -89,7 +90,7 @@ export class MessagingService {
             } : undefined
         } as MessageLogResult));
 
-        return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+        return { data, total, page, limit, totalPages: Math.ceil(total / limit), summary };
     }
 
     async getMessagesByContactInContest(

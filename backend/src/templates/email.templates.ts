@@ -206,4 +206,19 @@ export const EmailTemplates: {
             `,
         }),
     },
+    [MessageTemplate.CUSTOM]: {
+        build: (params) => ({
+            subject: params.subject || `Notification from YSM Info Solution`,
+            html: `
+                <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee;border-radius:12px;color:#333;">
+                    <h2 style="color:#1a1a1a;margin-bottom:16px;">${params.subject || 'Announcement'}</h2>
+                    <p style="white-space:pre-wrap;line-height:1.6;">${params.body || ''}</p>
+                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+                    <p style="color:#999;font-size:12px;">
+                        This email was sent by YSM Info Solution. Please do not reply directly to this email.
+                    </p>
+                </div>
+            `,
+        }),
+    },
 };

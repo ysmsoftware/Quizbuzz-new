@@ -20,6 +20,14 @@ export class CertificateService {
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
+    async getCertificateByIdPublic(
+        id: string
+    ): Promise<CertificateResult> {
+        const cert = await this.certificateRepo.findByIdPublic(id);
+        if (!cert) throw new NotFoundError("Certificate not found");
+        return cert;
+    }
+
     async getCertificateById(
         id: string,
         organizationId: string

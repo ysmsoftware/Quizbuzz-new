@@ -1,80 +1,48 @@
-import { MessageTemplate, MessageDraft, SentMessage, RecipientFilter, MessageChannel, MessageStatus } from '@/lib/types';
-import { MockDB } from '@/lib/mock/db';
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock data stores
-let messageTemplates: MessageTemplate[] = MockDB.messageTemplates;
-
-// TEMPLATE DEFINITIONS REMOVED - Now using MockDB.messageTemplates
-
-let sentMessages: SentMessage[] = [];
-let scheduledMessages: MessageDraft[] = [];
+import { MessageTemplate, MessageDraft, SentMessage, RecipientFilter, MessageChannel } from '@/lib/types';
+import { crmApi } from '@/lib/api/crm.api';
+import { getContest, listParticipants } from '@/lib/api/contests.api';
 
 class MessageService {
   async getTemplates(orgId: string): Promise<MessageTemplate[]> {
-    await delay(300);
-    return messageTemplates;
+    try {
+      const res = await crmApi.getMessageTemplates();
+      if (res.success && Array.isArray(res.data)) {
+        return res.data;
+      }
+      return [];
+    } catch (e) {
+      console.error('Failed to fetch message templates from backend:', e);
+      return [];
+    }
   }
 
   async getTemplateById(id: string): Promise<MessageTemplate | null> {
-    await delay(200);
-    return messageTemplates.find(t => t.id === id) || null;
+    const templates = await this.getTemplates('all');
+    return templates.find(t => t.id === id) || null;
   }
 
   async createTemplate(data: Omit<MessageTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<MessageTemplate> {
-    await delay(400);
-    
-    const template: MessageTemplate = {
-      ...data,
-      id: `tpl-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    messageTemplates.push(template);
-    return template;
+    throw new Error('Template creation is managed in the backend repository.');
   }
 
   async updateTemplate(id: string, data: Partial<MessageTemplate>): Promise<MessageTemplate | null> {
-    await delay(400);
-    
-    const index = messageTemplates.findIndex(t => t.id === id);
-    if (index === -1) return null;
-    
-    const updated = {
-      ...messageTemplates[index],
-      ...data,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    messageTemplates[index] = updated;
-    return updated;
+    throw new Error('Template update is managed in the backend repository.');
   }
 
   async deleteTemplate(id: string): Promise<boolean> {
-    await delay(300);
-    
-    const template = messageTemplates.find(t => t.id === id);
-    if (!template || template.isSystem) return false;
-    
-    messageTemplates = messageTemplates.filter(t => t.id !== id);
-    return true;
+    throw new Error('Template deletion is managed in the backend repository.');
   }
 
   async calculateRecipientCount(contestId: string, filter: RecipientFilter): Promise<number> {
-    await delay(200);
-    
-    // Mock counts based on filter
-    const baseCount = 500;
-    switch (filter) {
-      case 'confirmed':
-        return Math.floor(baseCount * 0.9);
-      case 'paid':
-        return Math.floor(baseCount * 0.75);
-      case 'all':
-      default:
-        return baseCount;
+    if (!contestId || contestId === 'all') return 0;
+    try {
+      const res = await listParticipants(contestId, {
+        limit: 1000,
+        status: filter === 'all' ? undefined : filter
+      });
+      return res?.data?.participants?.length || 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -82,26 +50,135 @@ class MessageService {
     contestId: string,
     templateId: string,
     recipientFilter: RecipientFilter,
-    channel: MessageChannel
+    channel: MessageChannel,
+    selectedParticipantIds?: string[]
   ): Promise<SentMessage> {
-    await delay(1500);
-    
-    const recipientCount = await this.calculateRecipientCount(contestId, recipientFilter);
-    
-    const message: SentMessage = {
+    // 1. Fetch template & contest info
+    const template = await this.getTemplateById(templateId);
+    if (!template) {
+      throw new Error(`Template not found: ${templateId}`);
+    }
+
+    let contestTitle = 'QuizBuzz Contest';
+    let contestDate = new Date().toLocaleDateString();
+    let contestStartTime = new Date().toLocaleTimeString();
+    let contestLink = typeof window !== 'undefined' ? `${window.location.origin}/contests/${contestId}` : '';
+
+    if (contestId && contestId !== 'all') {
+      try {
+        const cRes = await getContest(contestId);
+        if (cRes.success && cRes.data) {
+          contestTitle = cRes.data.title || contestTitle;
+          if (cRes.data.startTime) {
+            const startDate = new Date(cRes.data.startTime);
+            contestDate = startDate.toLocaleDateString();
+            contestStartTime = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch contest detail in sendMessage', e);
+      }
+    }
+
+    // 2. Fetch targeted participants
+    let participants: any[] = [];
+    if (contestId && contestId !== 'all') {
+      try {
+        const pRes = await listParticipants(contestId, {
+          limit: 1000,
+          status: recipientFilter === 'all' ? undefined : recipientFilter
+        });
+        if (pRes.success && pRes.data?.participants) {
+          participants = pRes.data.participants;
+        }
+      } catch (e) {
+        console.error('Failed to list participants for sending message', e);
+      }
+    }
+
+    // Filter by selected IDs if in bulk/selection mode
+    if (selectedParticipantIds && selectedParticipantIds.length > 0) {
+      participants = participants.filter(p => selectedParticipantIds.includes(p.id) || selectedParticipantIds.includes(p.participantId));
+    }
+
+    if (participants.length === 0) {
+      throw new Error('No participants found matching current criteria.');
+    }
+
+    const channelEnum = channel.toUpperCase() as 'EMAIL' | 'WHATSAPP';
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // 3. Dispatch calls concurrently
+    await Promise.all(
+      participants.map(async (p) => {
+        const details = p.participantDetails || {};
+        const fullName = details.fullName || 'Participant';
+        const email = details.email;
+        const phone = details.phone;
+        const recipient = channel === 'email' ? email : phone;
+
+        if (!recipient) {
+          failCount++;
+          return;
+        }
+
+        // Interpolate templates for custom message bodies
+        let interpolatedBody = template.body
+          .replace(/\{\{name\}\}/g, fullName)
+          .replace(/\{\{fullName\}\}/g, fullName)
+          .replace(/\{\{eventName\}\}/g, contestTitle)
+          .replace(/\{\{contestTitle\}\}/g, contestTitle)
+          .replace(/\{\{contestDate\}\}/g, contestDate)
+          .replace(/\{\{contestStartTime\}\}/g, contestStartTime)
+          .replace(/\{\{contestLink\}\}/g, contestLink)
+          .replace(/\{\{reason\}\}/g, 'Evaluation policy violation')
+          .replace(/\{\{resultsLink\}\}/g, `${contestLink}/results`)
+          .replace(/\{\{certificateLink\}\}/g, `${contestLink}/certificate`);
+
+        const parameters: Record<string, string> = {
+          name: fullName,
+          eventName: contestTitle,
+          date: contestDate,
+          time: contestStartTime,
+          link: contestLink,
+          subject: template.name,
+          body: interpolatedBody,
+        };
+
+        try {
+          await crmApi.sendMessage({
+            participantId: p.id,
+            contestId: contestId !== 'all' ? contestId : undefined,
+            channel: channelEnum,
+            template: templateId,
+            recipient,
+            subject: template.name,
+            body: interpolatedBody,
+            parameters,
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to send message to ${recipient}`, err);
+          failCount++;
+        }
+      })
+    );
+
+    const sentMessageRecord: SentMessage = {
       id: `msg-${Date.now()}`,
       contestId,
       templateId,
       channel,
       sentAt: new Date().toISOString(),
-      totalRecipients: recipientCount,
-      deliveredCount: Math.floor(recipientCount * 0.98),
-      failedCount: Math.floor(recipientCount * 0.02),
-      status: 'sent',
+      totalRecipients: participants.length,
+      deliveredCount: successCount,
+      failedCount: failCount,
+      status: failCount === 0 ? 'sent' : failCount === participants.length ? 'failed' : 'sent',
     };
-    
-    sentMessages.push(message);
-    return message;
+
+    return sentMessageRecord;
   }
 
   async scheduleMessage(
@@ -111,59 +188,35 @@ class MessageService {
     channel: MessageChannel,
     scheduledFor: string
   ): Promise<MessageDraft> {
-    await delay(400);
-    
-    const recipientCount = await this.calculateRecipientCount(contestId, recipientFilter);
-    
+    const count = await this.calculateRecipientCount(contestId, recipientFilter);
     const draft: MessageDraft = {
       id: `draft-${Date.now()}`,
       contestId,
       templateId,
       channel,
       recipientFilter,
-      recipientCount,
+      recipientCount: count,
       scheduledFor,
       status: 'scheduled',
       createdAt: new Date().toISOString(),
     };
-    
-    scheduledMessages.push(draft);
     return draft;
   }
 
   async getSentMessages(contestId: string): Promise<SentMessage[]> {
-    await delay(300);
-    return sentMessages.filter(m => m.contestId === contestId).sort((a, b) => 
-      new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
-    );
+    return [];
   }
 
   async getScheduledMessages(contestId: string): Promise<MessageDraft[]> {
-    await delay(300);
-    return scheduledMessages.filter(m => m.contestId === contestId && m.status === 'scheduled');
+    return [];
   }
 
   async cancelScheduled(id: string): Promise<boolean> {
-    await delay(300);
-    
-    const index = scheduledMessages.findIndex(m => m.id === id);
-    if (index === -1) return false;
-    
-    scheduledMessages[index].status = 'draft';
     return true;
   }
 
   async getDeliveryStatus(messageId: string): Promise<{ delivered: number; failed: number; total: number } | null> {
-    await delay(200);
-    
-    const message = sentMessages.find(m => m.id === messageId);
-    if (!message) return null;
-    
-    return {
-      delivered: message.deliveredCount,
-      failed: message.failedCount,
-      total: message.totalRecipients,
-    };
+    return null;
   }
 }
 

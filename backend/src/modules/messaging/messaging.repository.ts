@@ -58,7 +58,7 @@ export class MessagingRepository {
     async findByContestId(contestId: string, organizationId: string, skip: number, take: number) {
         return prisma.messageLog.findMany({
             where: {
-                contestId,
+                ...(contestId !== "all" && { contestId }),
                 organizationId
             },
             orderBy: { createdAt: "desc" },
@@ -77,10 +77,37 @@ export class MessagingRepository {
     async countByContestId(contestId: string, organizationId: string): Promise<number> {
         return prisma.messageLog.count({
             where: {
-                contestId,
+                ...(contestId !== "all" && { contestId }),
                 organizationId
             }
         });
+    }
+
+    async getSummary(contestId: string, organizationId: string) {
+        const [sent, failed, pending] = await Promise.all([
+            prisma.messageLog.count({
+                where: {
+                    organizationId,
+                    status: { in: ["SENT", "DELIVERED"] },
+                    ...(contestId !== "all" && { contestId })
+                }
+            }),
+            prisma.messageLog.count({
+                where: {
+                    organizationId,
+                    status: "FAILED",
+                    ...(contestId !== "all" && { contestId })
+                }
+            }),
+            prisma.messageLog.count({
+                where: {
+                    organizationId,
+                    status: { in: ["QUEUED", "PROCESSING"] },
+                    ...(contestId !== "all" && { contestId })
+                }
+            }),
+        ]);
+        return { sent, failed, pending };
     }
 
     async findByContactAndContest(contactId: string, contestId: string, organizationId: string, skip: number, take: number) {
