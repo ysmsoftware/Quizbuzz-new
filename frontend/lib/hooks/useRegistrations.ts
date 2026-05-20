@@ -5,6 +5,66 @@ import { toast } from 'sonner';
 
 import * as contestsApi from '../api/contests.api';
 import { queryKeys } from '../api/queryClient';
+import type { Registration } from '../types';
+
+function normalizeRegistration(raw: any): Registration {
+  const contact = raw.contact || raw.participantDetails || {};
+  const fullName = [contact.fullName, contact.firstName, contact.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || raw.registrationRef || raw.participantId || 'Participant';
+
+  const participantDetails = {
+    fullName,
+    email: contact.email || '',
+    phone: contact.phone || '',
+    institution: contact.institution || contact.college,
+    city: contact.city,
+    state: contact.state,
+    country: contact.country,
+    profileImage: contact.profileImage,
+    dateOfBirth: contact.dateOfBirth,
+  };
+
+  const status = String(raw.status || '').toUpperCase();
+  const normalizedStatus: Registration['status'] =
+    status === 'REGISTERED' ? 'confirmed' :
+    status === 'PENDING' ? 'pending' :
+    status === 'CANCELLED' ? 'cancelled' :
+    status === 'REVOKED' ? 'revoked' : 'pending';
+
+  const paymentStatusRaw = String(raw.payment?.status || raw.paymentStatus || '').toUpperCase();
+  const normalizedPaymentStatus: Registration['paymentStatus'] =
+    paymentStatusRaw === 'COMPLETED' ? 'completed' :
+    paymentStatusRaw === 'PENDING' ? 'pending' :
+    paymentStatusRaw === 'FAILED' ? 'failed' :
+    paymentStatusRaw === 'REFUNDED' ? 'refunded' : 'pending';
+
+  return {
+    id: raw.id,
+    participantId: raw.participantId || raw.registrationRef || raw.id,
+    contestId: raw.contestId,
+    organizationId: raw.organizationId,
+    contactId: raw.contactId,
+    registrationRef: raw.registrationRef,
+    status: normalizedStatus,
+    registeredAt: raw.registeredAt || raw.createdAt || raw.updatedAt || '',
+    paymentId: raw.payment?.id || raw.paymentId,
+    paymentStatus: normalizedPaymentStatus,
+    amount: raw.payment?.amount || raw.amount,
+    paymentMethod: raw.payment?.method || raw.paymentMethod,
+    participantDetails,
+    whatsappOptIn: raw.whatsappOptIn,
+    customFields: raw.customFields || {},
+    quizStatus: raw.quizStatus,
+    currentQuestionIndex: raw.currentQuestionIndex,
+    totalQuestions: raw.totalQuestions,
+    joinedAt: raw.joinedAt,
+    submittedAt: raw.submittedAt,
+    lastActivityAt: raw.lastActivityAt,
+    proctoringWarnings: raw.proctoringWarnings,
+  } as Registration;
+}
 
 /**
  * Contest participants/registrations hook using TanStack Query
@@ -91,7 +151,7 @@ export function useRegistrations(
   });
 
   // Extract nested data structure
-  const participants = participantsQuery.data?.data?.data || [];
+  const participants = (participantsQuery.data?.data?.participants || []).map(normalizeRegistration);
   const pagination = participantsQuery.data?.data?.pagination;
   const isLoading = participantsQuery.isLoading;
   const error = participantsQuery.error;

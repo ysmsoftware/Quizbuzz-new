@@ -135,7 +135,7 @@ export default function TeamPage() {
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                      Expires {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : '—'}
                     </div>
                     <Button
                       variant="outline"

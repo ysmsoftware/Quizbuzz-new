@@ -15,11 +15,13 @@ import { analyticsRouter } from "./modules/analytics/analytics.routes";
 
 import { authLimiter, analyticsLimiter } from "./middlewares/rate-limit.js";
 import paymentRouter from "./modules/payment/payment.routes.js";
+import { quizRegistrationRouter } from "./modules/quiz/quiz-registration.routes.js";
 
 const apiRouter = Router();
 
 apiRouter.use("/org", organizationRouter);
 apiRouter.use("/auth/admin", adminAuthRouter);
+apiRouter.use("/auth/quiz", quizRegistrationRouter);
 apiRouter.use("/contacts", contactRouter);
 apiRouter.use("/contests", contestRouter);
 apiRouter.use("/contests", participantRouter);

@@ -39,8 +39,20 @@ export function ParticipantDetailDrawer({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const { fullName, email, phone, institution, city, state, country, dateOfBirth } =
-    registration.participantDetails;
+  const details: any =
+    registration.participantDetails || (registration as any).contact || {};
+
+  const fullName =
+    details.fullName || `${details.firstName || ''} ${details.lastName || ''}`.trim() ||
+    registration.participantId ||
+    'Participant';
+  const email = details.email || '';
+  const phone = details.phone || '';
+  const institution = details.institution || details.college;
+  const city = details.city;
+  const state = details.state;
+  const country = details.country;
+  const dateOfBirth = details.dateOfBirth;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -145,7 +157,7 @@ export function ParticipantDetailDrawer({
                 <div>
                   <p className="text-xs text-muted-foreground">Registered</p>
                   <p className="text-sm font-medium">
-                    {new Date(registration.registeredAt).toLocaleString()}
+                    {registration.registeredAt ? new Date(registration.registeredAt).toLocaleString() : '—'}
                   </p>
                 </div>
               </div>

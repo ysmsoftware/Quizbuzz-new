@@ -47,4 +47,9 @@ export interface PaginatedMessagesResult {
     page: number;
     limit: number;
     totalPages: number;
+    summary?: {
+        sent: number;
+        failed: number;
+        pending: number;
+    };
 }

@@ -55,6 +55,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { EditContestDetailsModal } from './EditContestDetailsModal';
+import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
 
 interface ContestActionBarProps {
   contest: Contest;
@@ -91,6 +92,7 @@ export function ContestActionBar({
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [confirmText, setConfirmText] = useState('');
+  const [isSendMessageOpen, setIsSendMessageOpen] = useState(false);
 
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/r/${contest.orgSlug}/${contest.slug}` : '';
 
@@ -228,21 +230,14 @@ export function ContestActionBar({
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
       </Button>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="inline-block">
-              <Button size="sm" className="bg-primary shadow-lg shadow-primary/20">
-                <Send className="mr-2 h-4 w-4" />
-                Send Reminder to All
-              </Button>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            Send to {contest._count?.participants || 0} registered participants
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Button 
+        size="sm" 
+        className="bg-primary shadow-lg shadow-primary/20"
+        onClick={() => setIsSendMessageOpen(true)}
+      >
+        <Send className="mr-2 h-4 w-4" />
+        Send Message
+      </Button>
     </div>
   );
 
@@ -487,6 +482,13 @@ export function ContestActionBar({
           // For now, just show a success message
           toast.success('Contest details updated');
         }}
+      />
+
+      {/* Send Message Modal */}
+      <SendMessageModal
+        contestId={contest.id}
+        open={isSendMessageOpen}
+        onOpenChange={setIsSendMessageOpen}
       />
     </div>
   );

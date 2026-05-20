@@ -115,7 +115,7 @@ export default function ContestsPage() {
                           </TableCell>
                           <TableCell>{contest.currentParticipants}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {new Date(contest.contestDate).toLocaleDateString()}
+                            {contest.contestDate ? new Date(contest.contestDate).toLocaleDateString() : 'TBD'}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">

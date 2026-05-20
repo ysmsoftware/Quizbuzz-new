@@ -16,6 +16,7 @@ import {
     X,
     ChevronLeft,
     User,
+    Award,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -33,7 +34,8 @@ const navItems = [
     { label: 'Contests', href: '/admin/contests', icon: Trophy },
     { label: 'Questions', href: '/admin/questions', icon: HelpCircle },
     { label: 'Contacts', href: '/admin/contacts', icon: Users },
-    { label: 'Messages', href: '/admin/messages', icon: BarChart3 }, // Changing icon/label as well for messages
+    { label: 'Messages', href: '/admin/messages', icon: BarChart3 },
+    { label: 'Certificates', href: '/admin/certificates', icon: Award },
     { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -121,7 +123,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div 
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     className={cn(
-                        "border-b border-border/40 p-6 flex-shrink-0 cursor-pointer hover:bg-secondary/40 transition-colors flex items-center justify-between",
+                        "border-b border-border/40 p-6 shrink-0 cursor-pointer hover:bg-secondary/40 transition-colors flex items-center justify-between",
                         !sidebarOpen && "justify-center p-5"
                     )}
                 >
@@ -227,7 +229,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </nav>
 
                     {/* User Info and Logout */}
-                    <div className="border-t border-border/40 p-4 space-y-3 flex-shrink-0">
+                    <div className="border-t border-border/40 p-4 space-y-3 shrink-0">
                         <AnimatePresence mode="wait" initial={false}>
                             {sidebarOpen ? (
                                 <motion.div
@@ -292,7 +294,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                 {/* Top Bar */}
-                <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-xl flex-shrink-0">
+                <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-xl shrink-0">
                     <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
                         <Button
                             variant="ghost"

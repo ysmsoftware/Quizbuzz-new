@@ -74,7 +74,7 @@ export async function listParticipants(
     status?: string;
     search?: string;
   }
-): Promise<ApiResponse<{ data: Registration[]; pagination?: any }>> {
+): Promise<ApiResponse<{ participants: Registration[]; pagination?: any }>> {
   const query = new URLSearchParams();
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
@@ -84,7 +84,7 @@ export async function listParticipants(
   const path = `/contests/${contestId}/participants${
     query.toString() ? '?' + query.toString() : ''
   }`;
-  return get<{ data: Registration[]; pagination?: any }>(path);
+  return get<{ participants: Registration[]; pagination?: any }>(path);
 }
 
 /**

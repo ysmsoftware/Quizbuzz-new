@@ -10,12 +10,14 @@ export function useMessageSending() {
       templateId: string;
       recipientFilter: RecipientFilter;
       channel: MessageChannel;
+      selectedParticipantIds?: string[];
     }) => {
       return messageService.sendMessage(
         payload.contestId,
         payload.templateId,
         payload.recipientFilter,
-        payload.channel
+        payload.channel,
+        payload.selectedParticipantIds
       );
     },
   });
@@ -27,13 +29,15 @@ export function useMessageSending() {
       recipientFilter: RecipientFilter;
       channel: MessageChannel;
       scheduledFor: string;
+      selectedParticipantIds?: string[];
     }) => {
       return messageService.scheduleMessage(
         payload.contestId,
         payload.templateId,
         payload.recipientFilter,
         payload.channel,
-        payload.scheduledFor
+        payload.scheduledFor,
+        payload.selectedParticipantIds
       );
     },
   });

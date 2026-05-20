@@ -5,6 +5,7 @@ import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.
 export const messagingRouter = Router();
 
 // Admin Message Management Routes
+messagingRouter.get("/templates", authenticatedOrgMiddleware, messagingController.getTemplates);
 messagingRouter.get("/:id", authenticatedOrgMiddleware, messagingController.getMessageById);
 messagingRouter.post("/send", authenticatedOrgMiddleware, messagingController.sendMessage);
 messagingRouter.post("/:id/retry", authenticatedOrgMiddleware, messagingController.retryMessage);

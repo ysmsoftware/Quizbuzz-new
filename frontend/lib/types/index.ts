@@ -280,6 +280,7 @@ export interface MessageTemplate {
     id: string;
     orgId: string;
     name: string;
+    subject?: string;
     channel: MessageChannel;
     body: string;
     variables: string[];
