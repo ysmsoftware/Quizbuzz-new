@@ -64,6 +64,32 @@ export async function publishContest(contestId: string): Promise<ApiResponse> {
 }
 
 /**
+ * PATCH /contests/:contestId/archive
+ */
+export async function archiveContest(contestId: string): Promise<ApiResponse> {
+  return patch(`/contests/${contestId}/archive`);
+}
+
+/**
+ * GET /contests/archived
+ */
+export async function listArchivedContests(params?: {
+  status?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<ApiResponse<{ data: Contest[]; pagination?: any }>> {
+  const query = new URLSearchParams();
+  if (params?.status) query.append('status', params.status);
+  if (params?.page) query.append('page', String(params.page));
+  if (params?.limit) query.append('limit', String(params.limit));
+  if (params?.search) query.append('search', params.search);
+
+  const path = `/contests/archived${query.toString() ? '?' + query.toString() : ''}`;
+  return get<{ data: Contest[]; pagination?: any }>(path);
+}
+
+/**
  * GET /contests/:contestId/participants
  */
 export async function listParticipants(
@@ -106,6 +132,29 @@ export async function disqualifyParticipant(
   reason: string
 ): Promise<ApiResponse> {
   return patch(`/contests/${contestId}/participants/${participantId}/disqualify`, { reason });
+}
+
+/**
+ * GET /contests/:contestId/participants/status-summary
+ */
+export async function getParticipantStatusSummary(
+  contestId: string
+): Promise<ApiResponse<Record<string, number>>> {
+  return get<Record<string, number>>(`/contests/${contestId}/participants/status-summary`);
+}
+
+/**
+ * POST /contests/:contestId/participants/bulk-status
+ */
+export async function bulkUpdateParticipantStatus(
+  contestId: string,
+  participantIds: string[],
+  status: 'REGISTERED' | 'DISQUALIFIED'
+): Promise<ApiResponse<{ updatedCount: number }>> {
+  return post<{ updatedCount: number }>(`/contests/${contestId}/participants/bulk-status`, {
+    participantIds,
+    status,
+  });
 }
 
 /**

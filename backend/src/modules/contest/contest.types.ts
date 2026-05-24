@@ -94,6 +94,7 @@ export interface ListContestsFilter {
   page?: number;
   limit?: number;
   search?: string | null | undefined;
+  isArchived?: boolean;
 }
 
 export interface ListParticipantsFilter {

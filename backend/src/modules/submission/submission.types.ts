@@ -30,6 +30,7 @@ export interface ApplyEvaluationInput {
     attempted: number;
     score: Decimal;
     percentage: Decimal;
+    isPassed: boolean;
     evaluatedAt: Date;
     scoredAnswers: Array<{
         questionId: string;
@@ -58,6 +59,7 @@ export interface SubmissionSummary {
     source: SubmissionSource;
     score: number | null;
     percentage: number | null;
+    isPassed: boolean | null;
     timeTakenSecs: number | null;
     submittedAt: Date | null;
     evaluatedAt: Date | null;
@@ -67,6 +69,8 @@ export interface SubmissionSummary {
 export interface AnswerDetail {
     questionId: string;
     questionText: string;
+    difficulty?: string;
+    explanation?: string | null;
     selectedOptionId: string | null;
     selectedOptionText: string | null;
     correctOptionId: string;

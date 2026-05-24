@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { EditContestDetailsModal } from './EditContestDetailsModal';
 import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
+import { resultsApi } from '@/lib/api/results-certs.api';
 
 interface ContestActionBarProps {
   contest: Contest;
@@ -93,12 +94,57 @@ export function ContestActionBar({
   const [cancelReason, setCancelReason] = useState('');
   const [confirmText, setConfirmText] = useState('');
   const [isSendMessageOpen, setIsSendMessageOpen] = useState(false);
+  const [localIsDeclaringResults, setLocalIsDeclaringResults] = useState(false);
+  const [isEarlyDeclareModalOpen, setIsEarlyDeclareModalOpen] = useState(false);
+  const [earlyDeclareInfo, setEarlyDeclareInfo] = useState<any>(null);
 
-  const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/r/${contest.orgSlug}/${contest.slug}` : '';
+  const confirmDeclareResults = async () => {
+    if (onDeclareResults) {
+      try {
+        setLocalIsDeclaringResults(true);
+        await onDeclareResults();
+        toast.success('Results declared successfully!');
+        setIsEarlyDeclareModalOpen(false);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to declare results');
+      } finally {
+        setLocalIsDeclaringResults(false);
+      }
+    }
+  };
+
+  const publicUrl = useMemo(() => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    return `${baseUrl}/contests/${contest.slug}`;
+  }, [contest.slug]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl);
     toast.success('Registration link copied!');
+  };
+
+  const handleShare = async () => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: contest.title,
+          text: `Register for the contest "${contest.title}" on QuizBuzz! 🚀`,
+          url: publicUrl,
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          navigator.clipboard.writeText(publicUrl);
+          toast.success('Link copied to clipboard for sharing!');
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(publicUrl);
+        toast.success('Registration link copied to clipboard!');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
+    }
   };
 
   const handlePublish = async () => {
@@ -214,7 +260,7 @@ export function ContestActionBar({
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
       </Button>
-      <Button size="sm" className="bg-primary shadow-lg shadow-primary/20">
+      <Button size="sm" className="bg-primary shadow-lg shadow-primary/20" onClick={handleShare}>
         <Share2 className="mr-2 h-4 w-4" />
         Share
       </Button>
@@ -308,13 +354,22 @@ export function ContestActionBar({
     };
 
     const handleDeclareResultsClick = async () => {
-      if (onDeclareResults) {
-        try {
-          await onDeclareResults();
-          toast.success('Results declared successfully!');
-        } catch (err: any) {
-          toast.error(err?.message || 'Failed to declare results');
+      try {
+        setLocalIsDeclaringResults(true);
+        const res = await resultsApi.getResultsDeclarationInfo(contest.id);
+        const info = res.data;
+        
+        if (info.isEarlyDeclare && !info.isAlreadyDeclared) {
+          setEarlyDeclareInfo(info);
+          setIsEarlyDeclareModalOpen(true);
+          setLocalIsDeclaringResults(false);
+        } else {
+          // If not early or already declared, just proceed
+          await confirmDeclareResults();
         }
+      } catch (err: any) {
+        setLocalIsDeclaringResults(false);
+        toast.error(err?.message || 'Failed to check results declaration status');
       }
     };
 
@@ -342,10 +397,10 @@ export function ContestActionBar({
           <Button
             size="sm"
             onClick={handleDeclareResultsClick}
-            disabled={isDeclaringResults}
+            disabled={isDeclaringResults || localIsDeclaringResults}
             className="bg-green-600 hover:bg-green-700"
           >
-            {isDeclaringResults ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+            {(isDeclaringResults || localIsDeclaringResults) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
             Declare Results
           </Button>
         )}
@@ -375,7 +430,7 @@ export function ContestActionBar({
         </Link>
       </Button>
       <Button size="sm" className="bg-primary" asChild>
-        <a href={`${publicUrl}/results`} target="_blank" rel="noopener noreferrer">
+        <a href={`/quiz/${contest.slug}/leaderboard`} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="mr-2 h-4 w-4" />
           View Public Leaderboard
         </a>
@@ -490,6 +545,56 @@ export function ContestActionBar({
         open={isSendMessageOpen}
         onOpenChange={setIsSendMessageOpen}
       />
+
+      {/* Early Declare Confirmation Modal */}
+      <Dialog open={isEarlyDeclareModalOpen} onOpenChange={setIsEarlyDeclareModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Declare Results Early?
+            </DialogTitle>
+            <DialogDescription className="space-y-4 pt-4 text-left">
+              <p>
+                This contest is scheduled to automatically publish results on{' '}
+                <span className="font-semibold text-foreground">
+                  {earlyDeclareInfo?.scheduledAt ? format(new Date(earlyDeclareInfo.scheduledAt), 'PPp') : '...'}
+                </span>
+                .
+              </p>
+              <div className="bg-amber-50 text-amber-900 p-4 rounded-xl border border-amber-200">
+                <p className="text-sm font-medium">By proceeding now, you will:</p>
+                <ul className="list-disc list-inside text-sm mt-2 space-y-1">
+                  <li>Immediately make the leaderboard public</li>
+                  <li>Send email notifications to all participants instantly</li>
+                  <li>Override the automated schedule</li>
+                </ul>
+              </div>
+              {earlyDeclareInfo?.pendingCount > 0 && (
+                <div className="bg-destructive/10 text-destructive p-4 rounded-xl border border-destructive/20 flex gap-2">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <p className="text-sm font-medium">
+                    Warning: {earlyDeclareInfo.pendingCount} submissions are still pending evaluation. Wait for them to finish before declaring results.
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setIsEarlyDeclareModalOpen(false)} disabled={localIsDeclaringResults}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-amber-600 hover:bg-amber-700 text-white" 
+              onClick={confirmDeclareResults}
+              disabled={localIsDeclaringResults || (earlyDeclareInfo?.pendingCount > 0)}
+            >
+              {localIsDeclaringResults ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Publish Results Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

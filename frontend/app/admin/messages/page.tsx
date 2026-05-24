@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Mail,
     MessageSquare,
@@ -22,7 +22,7 @@ import {
     AlertCircle,
     Plus
 } from 'lucide-react';
-import { crmApi, MessageRecord } from '@/lib/api/crm.api';
+import { useContestMessages } from '@/lib/hooks/useContestMessages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -55,6 +55,8 @@ import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { useRouter } from 'next/navigation';
 import { useContests } from '@/lib/hooks/useContests';
+import { useContacts } from '@/lib/hooks/useContacts';
+import { useMessageDetail } from '@/lib/hooks/useMessageDetail';
 import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
 import {
     Dialog,
@@ -87,11 +89,9 @@ export default function MessagingLogsPage() {
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
     const [isMessageDetailOpen, setIsMessageDetailOpen] = useState(false);
 
-    const { data: messageDetailData, isLoading: isMessageDetailLoading } = useQuery({
-        queryKey: ['message', selectedMessageId],
-        queryFn: () => (selectedMessageId ? crmApi.getMessageDetail(selectedMessageId) : Promise.resolve(null)),
-        enabled: !!selectedMessageId && isMessageDetailOpen,
-    });
+    const { data: messageDetailData, isLoading: isMessageDetailLoading } = useMessageDetail(
+      selectedMessageId && isMessageDetailOpen ? selectedMessageId : null
+    );
 
     // Fetch contests list for broadcast selection targeting
     const { contests: contestsList = [], isLoading: isContestsLoading } = useContests();
@@ -99,39 +99,35 @@ export default function MessagingLogsPage() {
     // Queries
     // For the global log, we might need a different endpoint, but using contest-specific as per rule for now.
     // Assuming if contestId is empty, it might fetch all or we use a fallback ID for demonstration.
-    const { data: messagesData, isLoading } = useQuery({
-        queryKey: ['messages', contestId, { page, channel, status }],
-        queryFn: () => crmApi.getContestMessages(contestId || 'all', {
-            channel: channel === 'all' ? undefined : channel,
-            status: status === 'all' ? undefined : status,
-            page,
-            limit: 20
-        }),
-        enabled: true,
+    const {
+      messages,
+      pagination,
+      summary,
+      isLoading: isMessagesLoading,
+      retryMessage,
+    } = useContestMessages(contestId || 'all', {
+      channel: channel === 'all' ? undefined : channel,
+      status: status === 'all' ? undefined : status,
+      page,
+      limit: 20,
     });
 
     // Contacts search for direct messaging
-    const { data: contactsSearchData, isLoading: isContactsSearching } = useQuery({
-        queryKey: ['contacts-search', directSearch],
-        queryFn: () => crmApi.getContacts({ search: directSearch, limit: 10 }),
-        enabled: directSearch.trim().length > 0,
-    });
+    const { contacts: contactsSearchData, isLoading: isContactsSearching } = useContacts(
+      { search: directSearch, limit: 10 },
+      { enabled: directSearch.trim().length > 0 }
+    );
 
     // Mutations
     const retryMutation = useMutation({
-        mutationFn: (msgId: string) => crmApi.retryMessage(msgId),
-        onSuccess: () => {
-            toast.success('Message re-queued for delivery');
-            queryClient.invalidateQueries({ queryKey: ['messages'] });
-        },
-        onError: (err: any) => {
-            toast.error(err.message || 'Failed to retry message');
-        },
+      mutationFn: (msgId: string) => retryMessage(msgId),
+      onSuccess: () => {
+        toast.success('Message re-queued for delivery');
+      },
+      onError: (err: any) => {
+        toast.error(err.message || 'Failed to retry message');
+      },
     });
-
-    const messages = messagesData?.data?.data || [];
-    const pagination = messagesData?.data?.pagination;
-    const summary = messagesData?.data?.summary;
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -293,7 +289,7 @@ export default function MessagingLogsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {isLoading ? (
+                            {isMessagesLoading ? (
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <TableRow key={i} className="animate-pulse">
                                         <TableCell colSpan={5} className="h-16 bg-secondary/10" />
@@ -441,10 +437,10 @@ export default function MessagingLogsPage() {
                                 </div>
                             ) : directSearch.trim().length === 0 ? (
                                 <p className="text-center text-sm text-muted-foreground italic py-6">Type to search contacts.</p>
-                            ) : (contactsSearchData?.data?.data || []).length === 0 ? (
+                            ) : contactsSearchData.length === 0 ? (
                                 <p className="text-center text-sm text-muted-foreground italic py-6">No contacts found.</p>
                             ) : (
-                                (contactsSearchData?.data?.data || []).map((c: any) => (
+                                contactsSearchData.map((c) => (
                                     <Button
                                         key={c.id}
                                         variant="outline"

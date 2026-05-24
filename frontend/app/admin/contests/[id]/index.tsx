@@ -16,7 +16,8 @@ import {
     MonitorPlay,
     Settings,
     AlertTriangle,
-    Archive
+    Archive,
+    Award
 } from 'lucide-react';
 import {
     Breadcrumb,
@@ -30,9 +31,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
-import { useAdminContestSocket } from '@/lib/hooks/useAdminContestSocket';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useContestAnalytics } from '@/lib/hooks/useAnalytics';
-import { deriveContestPhase } from '@/lib/utils/contest';
+import { deriveContestPhase, isContestLive } from '@/lib/utils/contest';
 import { ContestPhaseBadge } from '@/components/features/contests/ContestPhaseBadge';
 import { StatCard } from '@/components/features/contests/StatCard';
 import { ContestActionBar } from '@/components/features/contests/ContestActionBar';
@@ -49,10 +50,12 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
     const router = useRouter();
     const contestId = params.id as string;
 
-    const { 
-        data: contest, 
-        isLoading, 
-        error, 
+    const { admin } = useAuth();
+
+    const {
+        data: contest,
+        isLoading,
+        error,
         refetch,
         publishContestMutation,
         evaluateMutation,
@@ -68,34 +71,34 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
 
     const { snapshot, live, loading: isAnalyticsLoading } = useContestAnalytics(contestId);
 
-    // WebSocket for real-time LIVE data
-    const { getParticipantStats } = useAdminContestSocket(
-        contestId,
-        'admin-123', // Mock admin ID for now, will be real admin ID from auth
-        contest?.orgId,
-        undefined
-    );
-
-    const liveStats = useMemo(() => {
-        if (contestPhase === 'LIVE') {
-            return getParticipantStats();
-        }
-        return null;
-    }, [contestPhase, getParticipantStats]);
+    // Admin WebSocket lives only on the /live page — removed from shell to prevent
+    // the dual-connection reconnect storm (shell + live page both connecting).
+    // Tab counts use the REST analytics snapshot instead.
+    const liveActiveCount = snapshot?.inQuizCount ?? 0;
+    const liveFlaggedCount = snapshot?.flaggedCount ?? 0;
 
     const tabs = useMemo(() => {
+        const status = contest?.serverStatus || 'DRAFT';
         const allTabs = [
             { id: 'overview', label: 'Overview', icon: LayoutDashboard, show: true },
-            { id: 'questions', label: 'Questions', icon: HelpCircle, show: true },
-            { id: 'registrations', label: 'Registrations', icon: Users, show: contestPhase !== 'DRAFT', count: contest?._count?.participants },
-            { id: 'live', label: 'Live Monitor', icon: MonitorPlay, show: contestPhase === 'LIVE', isLive: true, count: liveStats?.activeNow },
-            { id: 'proctoring', label: 'Proctoring Alerts', icon: ShieldCheck, show: contestPhase === 'LIVE' || contestPhase === 'ENDED', isFlagged: liveStats?.flagged && liveStats.flagged > 0, count: liveStats?.flagged },
-            { id: 'submissions', label: 'Submissions', icon: FileText, show: contestPhase === 'ENDED' || contestPhase === 'RESULTS_PUBLISHED' },
-            { id: 'results', label: 'Results', icon: CheckCircle2, show: contestPhase === 'RESULTS_PUBLISHED' },
-            { id: 'analytics', label: 'Analytics', icon: BarChart3, show: contestPhase !== 'DRAFT' },
+            { id: 'questions', label: 'Questions', icon: HelpCircle, show: ['DRAFT', 'PUBLISHED', 'REGISTRATION_CLOSED', 'LIVE', 'EVALUATION'].includes(status) },
+            { id: 'registrations', label: 'Registrations', icon: Users, show: status !== 'DRAFT' && status !== 'CANCELLED', count: contest?._count?.participants },
+            {
+                id: 'live',
+                label: 'Live Monitor',
+                icon: MonitorPlay,
+                show: status === 'LIVE',
+                isLive: true,
+                count: liveActiveCount || undefined,
+            },
+            { id: 'proctoring', label: 'Proctoring Alerts', icon: ShieldCheck, show: ['LIVE', 'EVALUATION', 'RESULTS_OUT', 'COMPLETED'].includes(status), isFlagged: liveFlaggedCount > 0, count: liveFlaggedCount || undefined },
+            { id: 'submissions', label: 'Submissions', icon: FileText, show: ['EVALUATION', 'RESULTS_OUT', 'COMPLETED'].includes(status) },
+            { id: 'results', label: 'Results', icon: CheckCircle2, show: ['ENDED', 'RESULTS_OUT', 'COMPLETED'].includes(status) },
+            { id: 'analytics', label: 'Analytics', icon: BarChart3, show: status !== 'DRAFT' && status !== 'CANCELLED' },
+            { id: 'certificates', label: 'Certificates', icon: Award, show: ['RESULTS_OUT', 'COMPLETED'].includes(status) },
         ];
         return allTabs.filter(tab => tab.show);
-    }, [contestPhase, contest, liveStats]);
+    }, [contest, liveActiveCount, liveFlaggedCount]);
 
     const activeTab = useMemo(() => {
         const parts = pathname.split('/');

@@ -1,7 +1,14 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { PublicContestDetail } from '@/lib/types/public-contest';
+import { contestService } from '@/lib/services/contest-service';
+import {
+  getContestPhase,
+  publicPhaseBanner,
+  type PublicContestPhase,
+} from '@/lib/contestStatus';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,15 +78,45 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function ContestDetails({ contest }: ContestDetailsProps) {
+export function ContestDetails({ contest: initialContest }: ContestDetailsProps) {
+  const [contest, setContest] = useState(initialContest);
+  const [phase, setPhase] = useState<PublicContestPhase>(() =>
+    getContestPhase(initialContest),
+  );
+
+  useEffect(() => {
+    setContest(initialContest);
+    setPhase(getContestPhase(initialContest));
+  }, [initialContest]);
+
+  // Recompute phase every 30s (banner transitions without reload)
+  useEffect(() => {
+    const phaseTimer = setInterval(() => setPhase(getContestPhase(contest)), 30_000);
+    return () => clearInterval(phaseTimer);
+  }, [contest]);
+
+  // Refresh participant count every 60s
+  useEffect(() => {
+    const refresh = async () => {
+      const res = await contestService.getContestBySlug(contest.slug);
+      if (res.success && res.data) {
+        setContest(res.data);
+        setPhase(getContestPhase(res.data));
+      }
+    };
+    const pollTimer = setInterval(refresh, 60_000);
+    return () => clearInterval(pollTimer);
+  }, [contest.slug]);
+
   const participantCount = contest._count?.participants ?? 0;
   const questionCount = contest._count?.questions ?? 0;
   const maxParticipants = contest.maxParticipants;
   const spotsLeft = maxParticipants ? maxParticipants - participantCount : null;
   const spotsPercentage = maxParticipants ? (participantCount / maxParticipants) * 100 : 0;
-  const isRegistrationOpen = contest.status === 'PUBLISHED';
+  const isRegistrationOpen = phase === 'registration_open';
   const fee = contest.paymentConfig?.amount ?? 0;
   const topic = contest.topics?.[0] ?? '';
+  const banner = publicPhaseBanner[phase];
 
   return (
     <div className="bg-secondary/10">
@@ -87,8 +124,8 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
       <section className="bg-gradient-to-b from-primary/5 to-transparent border-b">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-start gap-2 mb-4">
-            <Badge variant="outline" className={statusColors[contest.status] ?? ''}>
-              {statusLabels[contest.status] ?? contest.status}
+            <Badge variant="outline" className={banner.className}>
+              {banner.label}
             </Badge>
             {topic && <Badge variant="outline">{topic}</Badge>}
           </div>
@@ -342,9 +379,11 @@ export function ContestDetails({ contest }: ContestDetailsProps) {
                     </Link>
                   ) : (
                     <Button size="lg" className="w-full" disabled>
-                      {contest.status === 'COMPLETED' || contest.status === 'RESULTS_OUT'
+                      {phase === 'ended'
                         ? 'Contest Ended'
-                        : 'Registration Closed'}
+                        : phase === 'live'
+                          ? 'Contest In Progress'
+                          : 'Registration Closed'}
                     </Button>
                   )}
 

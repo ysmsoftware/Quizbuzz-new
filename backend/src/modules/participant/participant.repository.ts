@@ -45,6 +45,10 @@ export interface IParticipantRepository {
     findContestIdByParticipantId(participantId: string, organizationId: string): Promise<string | null>;
 
     findOrganizationIdByParticipantId(participantId: string): Promise<string | null>;
+
+    getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>>;
+
+    updateStatuses(participantIds: string[], status: ParticipantStatus, organizationId: string): Promise<number>;
 }
 
 
@@ -97,7 +101,14 @@ export class ParticipantRepository implements IParticipantRepository {
         organizationId?: string
     ): Promise<ParticipantDetailRecord | null> {
         return prisma.participant.findFirst({
-            where: { id: participantId, contestId, ...(organizationId && { organizationId }) },
+            where: {
+                OR: [
+                    { id: participantId },
+                    { registrationRef: participantId },
+                ],
+                ...(contestId ? { contestId } : {}),
+                ...(organizationId ? { organizationId } : {}),
+            },
             include: {
                 contact: true,
                 payment: true,
@@ -192,5 +203,40 @@ export class ParticipantRepository implements IParticipantRepository {
             select: { organizationId: true },
         });
         return participant?.organizationId ?? null;
+    }
+
+    async getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>> {
+        const counts = await prisma.participant.groupBy({
+            by: ["status"],
+            where: { contestId, organizationId },
+            _count: { status: true },
+        });
+
+        const summary: Record<ParticipantStatus, number> = {
+            REGISTERED: 0,
+            CHECKED_IN: 0,
+            IN_WAITING: 0,
+            IN_QUIZ: 0,
+            SUBMITTED: 0,
+            DISQUALIFIED: 0,
+            ABSENT: 0,
+        };
+
+        for (const item of counts) {
+            summary[item.status] = item._count.status;
+        }
+
+        return summary;
+    }
+
+    async updateStatuses(participantIds: string[], status: ParticipantStatus, organizationId: string): Promise<number> {
+        const result = await prisma.participant.updateMany({
+            where: {
+                id: { in: participantIds },
+                organizationId,
+            },
+            data: { status },
+        });
+        return result.count;
     }
 }

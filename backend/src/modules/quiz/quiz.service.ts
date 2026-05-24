@@ -1,273 +1,585 @@
+/**
+ * QuizService
+ *
+ * All live state (phase transitions, heartbeat, answers) is Redis-only.
+ * The DB is NEVER written to during a live quiz — that is the analytics
+ * worker's job (runs every N minutes via BullMQ).
+ *
+ * Engineering rule: stateless API instances, Redis = single source of truth
+ * during contest execution.
+ */
+
 import { QuizSession } from "./quiz.session";
 import { prisma } from "../../config/db";
+import { redis } from "../../config/redis";
 import logger from "../../config/logger";
 import {
     QuizSessionState,
     QuizSubmitResult,
-    SavedAnswer
+    SavedAnswer,
 } from "./quiz.types";
 import { ProctoringService } from "./proctoring.service";
 import { SubmissionService } from "../submission/submission.service";
 import { submissionQueue } from "../../queues";
 import { buildSessionSeed, shuffleQuestionsForParticipant } from "../question/question.shuffle";
+import { QuizSchedulerService } from "./quiz-scheduler.service";
+import { config } from "../../config";
 
 export class QuizService {
     constructor(
         private session: QuizSession,
         private proctoring: ProctoringService,
-        private submissionService: SubmissionService
-    ) { }
+        private submissionService: SubmissionService,
+        private scheduler: QuizSchedulerService,
+    ) {}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WAITING ROOM
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Handle participant joining the waiting room
+     * Called when a participant socket connects and joins the waiting room.
+     * Stores their name in Redis meta so the live snapshot never needs the DB.
+     * No DB writes — Redis only.
      */
-    async joinWaitingRoom(contestId: string, participantId: string): Promise<{
-        participantCount: number;
-        status: string;
-    }> {
+    async joinWaitingRoom(
+        contestId:     string,
+        participantId: string,
+        participantName?: string,
+        contactId?:    string,
+    ): Promise<{ participantCount: number; status: string }> {
         logger.info(`[QuizService] Participant ${participantId} joining waiting room for contest ${contestId}`);
 
-        // 1. Add to waiting set
-        await this.session.addToWaitingRoom(contestId, participantId);
+        // ── Check 1: Redis session hash exists (hot path) ──────────────────────────────
+        const existingSession = await this.session.getSession(contestId, participantId);
+        if (existingSession) {
+            const phase = existingSession.phase;
+            if (phase === "SUBMITTED") {
+                return { participantCount: 0, status: "SUBMITTED" };
+            }
+            if (phase === "IN_QUIZ" || phase === "DISCONNECTED") {
+                await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
+                return {
+                    participantCount: await this.session.getWaitingCount(contestId),
+                    status: "IN_QUIZ",
+                };
+            }
+        }
 
-        // 2. Set initial phase to WAITING
+        // ── Check 2: Redis SET membership (handles session-hash TTL expiry) ──────────────
+        // IMPORTANT: markDisconnected moves participants from `active` → `disconnected`.
+        // We MUST check BOTH sets, not just `active`.
+        const [inActive, inSubmitted, inDisconnected] = await Promise.all([
+            redis.sismember(`quiz:${contestId}:active`,       participantId),
+            redis.sismember(`quiz:${contestId}:submitted`,    participantId),
+            redis.sismember(`quiz:${contestId}:disconnected`, participantId),
+        ]);
+
+        if (inSubmitted) {
+            return { participantCount: 0, status: "SUBMITTED" };
+        }
+
+        if (inActive || inDisconnected) {
+            // Participant was in-quiz and either still active or disconnected mid-quiz.
+            // Either way, treat as IN_QUIZ reconnect — rebuild session if hash expired.
+            logger.info(
+                `[QuizService] Reconnecting IN_QUIZ participant ${participantId} ` +
+                `(inActive=${!!inActive}, inDisconnected=${!!inDisconnected})`
+            );
+            if (!existingSession) {
+                // Session hash expired — rebuild from DB so handleRejoin can serve questions
+                await this.rebuildExpiredSession(contestId, participantId, contactId ?? "", participantName ?? "Participant");
+            }
+            await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
+            return {
+                participantCount: await this.session.getWaitingCount(contestId),
+                status: "IN_QUIZ",
+            };
+        }
+
+        // ── Check 3: DB fallback (Redis TTL fully expired AND sets cleared) ────────────
+        // The participant DB record is the authoritative source of truth.
+        try {
+            const dbParticipant = await prisma.participant.findUnique({
+                where:  { id: participantId },
+                select: { status: true, contactId: true, organizationId: true },
+            });
+            if (dbParticipant?.status === "IN_QUIZ") {
+                logger.info(
+                    `[QuizService] DB fallback: participant ${participantId} status=IN_QUIZ — rebuilding session`
+                );
+                await this.rebuildExpiredSession(
+                    contestId, participantId,
+                    dbParticipant.contactId || contactId || "",
+                    participantName ?? "Participant",
+                );
+                await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
+                return {
+                    participantCount: await this.session.getWaitingCount(contestId),
+                    status: "IN_QUIZ",
+                };
+            }
+        } catch (err) {
+            logger.warn(`[QuizService] DB fallback check failed for ${participantId}: ${(err as Error).message}`);
+        }
+
+        // ── Normal path: first join or clean waiting-room rejoin ────────────────────────
+        if (participantName || contactId) {
+            await this.session.setParticipantMeta(contestId, participantId, {
+                name:      participantName ?? "Participant",
+                contactId: contactId       ?? "",
+            });
+        }
+
+        await this.session.addToWaitingRoom(contestId, participantId);
         await this.session.updatePhase(contestId, participantId, "WAITING");
 
-        // 3. Get total waiting count
         const count = await this.session.getWaitingCount(contestId);
-
-        return {
-            participantCount: count,
-            status: "WAITING"
-        };
+        return { participantCount: count, status: "WAITING" };
     }
 
     /**
-     * Heartbeat to track presence and session health
+     * Rebuild a minimal Redis session for a participant whose session TTL expired
+     * while they were in-quiz. Fetches organizationId + contactId from DB (one read).
+     * The full question shuffle is deterministic from the seed, so no answers are lost.
      */
+    private async rebuildExpiredSession(
+        contestId:     string,
+        participantId: string,
+        contactId:     string,
+        name:          string,
+    ): Promise<void> {
+        // Fetch the minimal DB context needed to reconstruct the session
+        const participant = await prisma.participant.findUnique({
+            where:  { id: participantId },
+            select: {
+                organizationId: true,
+                contactId:      true,
+                contest: {
+                    select: {
+                        endTime:  true,
+                        duration: true,
+                    },
+                },
+            },
+        });
+
+        if (!participant) {
+            logger.warn(`[QuizService] Cannot rebuild session: participant ${participantId} not found in DB`);
+            return;
+        }
+
+        const sessionSeed  = buildSessionSeed(participantId, contestId);
+        const resolvedContactId = participant.contactId || contactId;
+
+        await Promise.all([
+            this.session.createSession({
+                contestId,
+                participantId,
+                organizationId:  participant.organizationId,
+                contactId:       resolvedContactId,
+                socketId:        "reconnected",
+                phase:           "IN_QUIZ",
+                seed:            sessionSeed,
+                startedAt:       new Date().toISOString(), // approximate — answers are preserved in Redis
+                currentQuestion: 0,                        // handleRejoin will use savedAnswers count
+                totalQuestions:  0,                        // filled by handleRejoin from DB
+                contestEndTime:  participant.contest?.endTime?.toISOString() ?? "",
+                violationCount:  0,
+                lastHeartbeatAt: new Date().toISOString(),
+            }),
+            this.session.setParticipantMeta(contestId, participantId, {
+                name:      name,
+                contactId: resolvedContactId,
+            }),
+        ]);
+
+        logger.info(`[QuizService] Rebuilt expired session for participant ${participantId}`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HEARTBEAT
+    // ─────────────────────────────────────────────────────────────────────────
+
     async handleHeartbeat(contestId: string, participantId: string): Promise<void> {
         await this.session.refreshHeartbeat(contestId, participantId);
     }
 
-    /**
-     * Start the quiz for a participant
-     */
-    async startQuiz(contestId: string, organizationId: string, participantId: string, contactId: string, socketId: string): Promise<{
-        questions: any[];
-        totalTimeMs: number;
-        serverTimestamp: string;
-    }> {
-        // 1. Transition to IN_QUIZ
-        await this.session.updatePhase(contestId, participantId, "IN_QUIZ");
-        await this.session.removeFromWaitingRoom(contestId, participantId);
-        await this.session.addToActive(contestId, participantId);
+    // ─────────────────────────────────────────────────────────────────────────
+    // START QUIZ
+    // ─────────────────────────────────────────────────────────────────────────
 
-        // 2. Fetch contest data and questions in a single round trip
+    /**
+     * Transitions participant from WAITING → IN_QUIZ.
+     * Fetches questions from DB once per participant start (acceptable — it's
+     * a single CONTEST_QUESTIONS read, not a state write).
+     * All subsequent operations are Redis-only.
+     */
+    async startQuiz(
+        contestId:      string,
+        organizationId: string,
+        participantId:  string,
+        contactId:      string,
+        socketId:       string,
+        participantName?: string,
+    ): Promise<{ questions: any[]; totalTimeMs: number; serverTimestamp: string }> {
+        // Transition Redis sets (no DB)
+        await Promise.all([
+            this.session.updatePhase(contestId, participantId, "IN_QUIZ"),
+            this.session.addToActive(contestId, participantId),  // also removes from waiting internally
+        ]);
+
+        // Ensure meta exists (may already be set from joinWaitingRoom)
+        if (participantName) {
+            await this.session.setParticipantMeta(contestId, participantId, {
+                name:      participantName,
+                contactId: contactId,
+            });
+        }
+
+        // Single DB read: fetch questions (read-only, not a state write)
         const contest = await prisma.contest.findUnique({
             where: { id: contestId },
             select: {
                 shuffleQuestions: true,
-                shuffleOptions: true,
-                duration: true,
-                endTime: true,
-                contestQuestions: {
-                    orderBy: { position: 'asc' },
+                shuffleOptions:   true,
+                duration:         true,
+                endTime:          true,
+                questions: {
+                    orderBy: { position: "asc" },
                     include: {
                         question: {
                             include: {
                                 options: {
-                                    select: { id: true, text: true, position: true, isCorrect: true }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                                    select: { id: true, text: true, position: true, isCorrect: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         });
 
-        if (!contest) {
-            throw new Error(`[quiz-service] Contest ${contestId} not found`);
-        }
+        if (!contest) throw new Error(`[quiz-service] Contest ${contestId} not found`);
 
-        const contestQuestions = contest.contestQuestions;
-
-        // Build session seed for deterministic shuffle
         const sessionSeed = buildSessionSeed(participantId, contestId);
-
-        // Shuffle questions deterministically using seeded PRNG
         const shuffled = shuffleQuestionsForParticipant(
-            contestQuestions,
+            contest.questions,
             sessionSeed,
             contest.shuffleQuestions,
-            contest.shuffleOptions
+            contest.shuffleOptions,
         );
 
-        await this.session.saveQuestionOrder(contestId, participantId, shuffled.questions.map(q => q.id));
+        const totalTimeMs = (contest.duration ?? 60) * 60 * 1000;
 
-        const totalTimeMs = (contest.duration || 60) * 60 * 1000;
-
-        // 3. Initialize session state in Redis
+        // Write full session state to Redis
         await this.session.createSession({
             contestId,
             participantId,
             organizationId,
             contactId,
             socketId,
-            phase: "IN_QUIZ",
-            seed: sessionSeed,
-            startedAt: new Date().toISOString(),
+            phase:           "IN_QUIZ",
+            seed:            sessionSeed,
+            startedAt:       new Date().toISOString(),
             currentQuestion: 0,
-            totalQuestions: shuffled.questions.length,
-            contestEndTime: contest.endTime.toISOString(),
-            violationCount: 0,
-            lastHeartbeatAt: new Date().toISOString()
+            totalQuestions:  shuffled.questions.length,
+            contestEndTime:  contest.endTime.toISOString(),
+            violationCount:  0,
+            lastHeartbeatAt: new Date().toISOString(),
         });
 
+        await this.session.saveQuestionOrder(contestId, participantId, shuffled.questions.map(q => q.id));
+
+        // Schedule proctoring snapshot captures async (fire-and-forget)
+        this.scheduler.scheduleSnapshotCaptures(contestId, organizationId, participantId, totalTimeMs)
+            .catch(err => logger.error(`[QuizService] Failed to schedule snapshots for ${participantId}:`, err));
+
         return {
-            questions: shuffled.questions,
+            questions:       shuffled.questions,
             totalTimeMs,
-            serverTimestamp: new Date().toISOString()
+            serverTimestamp: new Date().toISOString(),
         };
     }
 
-    /**
-     * Persist an answer to Redis
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // SAVE ANSWER
+    // ─────────────────────────────────────────────────────────────────────────
+
     async saveAnswer(
-        contestId: string,
-        participantId: string,
-        questionId: string,
+        contestId:        string,
+        participantId:    string,
+        questionId:       string,
         selectedOptionId: string | null,
-        answeredAt: string
+        answeredAt:       string,
     ): Promise<boolean> {
         const state = await this.session.getSession(contestId, participantId);
         if (state?.phase !== "IN_QUIZ") return false;
 
         await this.session.saveAnswer(contestId, participantId, questionId, {
             selectedOptionId,
-            answeredAt
+            answeredAt,
         });
-
         return true;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // SUBMIT QUIZ
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Final submission of the quiz
-     * Enqueues a submission job for async processing instead of creating a raw submission.
-     * This ensures the entire pipeline runs: submission persistence → evaluation → leaderboard → certificates
+     * Final submission.
+     * 1. Transition Redis state → SUBMITTED (no DB write)
+     * 2. Enqueue BullMQ job → submission worker handles DB persistence
+     *
+     * The DB write of participant.status happens later in the analytics worker
+     * flush, or via the submission worker which has full context.
      */
     async submitQuiz(
-        contestId: string,
+        contestId:     string,
         participantId: string,
-        reason: "MANUAL" | "AUTO" | "TIMEOUT"
+        reason:        "MANUAL" | "AUTO" | "TIMEOUT",
     ): Promise<QuizSubmitResult> {
-        const answers = await this.session.getAllAnswers(contestId, participantId);
-        const state = await this.session.getSession(contestId, participantId);
+        const [answers, state] = await Promise.all([
+            this.session.getAllAnswers(contestId, participantId),
+            this.session.getSession(contestId, participantId),
+        ]);
 
         if (!state) {
-            throw new Error(`[quiz-service] No session state found for participant ${participantId}`);
+            // Session expired (Redis TTL) — graceful fallback, no server crash
+            logger.warn(
+                `[quiz-service] Session expired for participant ${participantId} in contest ${contestId} — enqueueing zero-answer submission`
+            );
+            const fallbackJobId = `fallback-${participantId}-${contestId}`;
+            await submissionQueue.add(
+                "persist-submission",
+                {
+                    organizationId: "",   // resolved by submission service from DB
+                    participantId,
+                    contestId,
+                    submittedAt:    new Date().toISOString(),
+                    timeTakenSecs:  0,
+                    source:         reason === "MANUAL" ? "MANUAL" : "AUTO",
+                    totalQuestions: 0,
+                    attempted:      0,
+                    answers:        [],
+                },
+                { jobId: fallbackJobId }
+            );
+            // Move to submitted set in Redis even on fallback
+            await this.session.addToSubmitted(contestId, participantId);
+            return { submissionRef: fallbackJobId, timeTakenSecs: 0, totalQuestions: 0, attempted: 0 };
         }
 
+        // Transition Redis sets (no DB write)
+        await this.session.addToSubmitted(contestId, participantId);   // also removes from active
         await this.session.updatePhase(contestId, participantId, "SUBMITTED");
-        await this.session.removeFromActive(contestId, participantId);
 
-        // Convert answers object to array format for submission job
         const answersArray = Object.entries(answers).map(([questionId, answer]) => ({
             questionId,
-            selectedOptionId: (answer as SavedAnswer).selectedOptionId || null
+            selectedOptionId: (answer as SavedAnswer).selectedOptionId ?? null,
         }));
 
-        const timeTakenSecs = (new Date().getTime() - new Date(state.startedAt).getTime()) / 1000;
-        const attemptedCount = answersArray.filter(a => a.selectedOptionId !== null).length;
+        const timeTakenSecs   = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
+        const attemptedCount  = answersArray.filter(a => a.selectedOptionId !== null).length;
+        const jobId           = `${participantId}-${contestId}`;
 
-        // Enqueue submission job for async processing
-        const jobId = `${participantId}-${contestId}`;
         await submissionQueue.add(
             "persist-submission",
             {
                 organizationId: state.organizationId,
                 participantId,
                 contestId,
-                submittedAt: new Date().toISOString(),
+                submittedAt:    new Date().toISOString(),
                 timeTakenSecs,
-                source: reason === "MANUAL" ? "MANUAL" : "AUTO",
+                source:         reason === "MANUAL" ? "MANUAL" : "AUTO",
                 totalQuestions: state.totalQuestions,
-                attempted: attemptedCount,
-                answers: answersArray
+                attempted:      attemptedCount,
+                answers:        answersArray,
             },
             { jobId }
         );
 
-        logger.info(
-            `[quiz-service] Enqueued submission job for participant ${participantId} in contest ${contestId}`
-        );
+        logger.info(`[quiz-service] Submission enqueued for participant ${participantId}`);
 
         return {
             submissionRef: jobId,
             timeTakenSecs,
             totalQuestions: state.totalQuestions,
-            attempted: attemptedCount
+            attempted:      attemptedCount,
         };
     }
 
-    /**
-     * Handle participant rejoining
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISCONNECT / RECONNECT
+    // ─────────────────────────────────────────────────────────────────────────
+
+    async handleDisconnect(contestId: string, participantId: string): Promise<void> {
+        await this.session.markDisconnected(contestId, participantId);
+        logger.info(`[QuizService] Participant ${participantId} marked disconnected`);
+    }
+
     async handleRejoin(contestId: string, participantId: string): Promise<any | null> {
         const state = await this.session.getSession(contestId, participantId);
         if (!state) return null;
 
+        // Restore set membership
+        await this.session.markReconnected(contestId, participantId, state.phase);
+
         const answers = await this.session.getAllAnswers(contestId, participantId);
-        const questions = await this.session.getQuestionOrder(contestId, participantId);
+
+        // DB read — acceptable on reconnect (not a hot path)
+        const contest = await prisma.contest.findUnique({
+            where: { id: contestId },
+            select: {
+                shuffleQuestions: true,
+                shuffleOptions:   true,
+                duration:         true,
+                endTime:          true,
+                questions: {
+                    orderBy: { position: "asc" },
+                    include: {
+                        question: {
+                            include: {
+                                options: {
+                                    select: { id: true, text: true, position: true, isCorrect: true },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!contest) return null;
+
+        const sessionSeed = buildSessionSeed(participantId, contestId);
+        const shuffled    = shuffleQuestionsForParticipant(
+            contest.questions, sessionSeed, contest.shuffleQuestions, contest.shuffleOptions,
+        );
+
+        // Patch totalQuestions in Redis if session was rebuilt with 0 (TTL-expired rebuild)
+        if (state.totalQuestions === 0 && shuffled.questions.length > 0) {
+            await redis.hset(
+                `quiz:${contestId}:session:${participantId}`,
+                "totalQuestions",
+                String(shuffled.questions.length),
+            );
+        }
+
+        const answeredCount = Object.keys(answers).length;
 
         return {
-            phase: state.phase,
-            questions,
-            savedAnswers: answers,
-            remainingTimeMs: state.contestEndTime ? new Date(state.contestEndTime).getTime() - new Date().getTime() : 0,
-            serverTimestamp: new Date().toISOString()
+            phase:          state.phase,
+            questions:      shuffled.questions,
+            savedAnswers:   answers,
+            // Use contestEndTime for accurate remaining time; fall back to duration
+            remainingTimeMs: state.contestEndTime
+                ? Math.max(0, new Date(state.contestEndTime).getTime() - Date.now())
+                : (contest.duration ?? 60) * 60 * 1000,
+            currentQuestionIndex: answeredCount,  // resume from last answered + 1
+            serverTimestamp: new Date().toISOString(),
         };
     }
 
-    /**
-     * Transition all waiting participants to quiz
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // BULK TRANSITIONS (called by timer worker)
+    // ─────────────────────────────────────────────────────────────────────────
+
     async transitionToQuiz(contestId: string): Promise<{ transitioned: string[]; blocked: string[] }> {
-        const waitingIds = await this.session.getActiveMembers(contestId, "waiting");
-        const transitioned: string[] = [];
-        const blocked: string[] = [];
-
-        for (const pid of waitingIds) {
-            // Check readiness (permission, OTP, etc. - in a real scenario we'd check more)
-            const isReady = await this.session.getReadiness(contestId, pid);
-            if (isReady.camera && isReady.otp) {
-                transitioned.push(pid);
-            } else {
-                blocked.push(pid);
-            }
-        }
-
-        return { transitioned, blocked };
+        const waitingIds = await this.session.getSetMembers(contestId, "waiting");
+        return { transitioned: waitingIds, blocked: [] };
     }
 
-    /**
-     * Force submit participants for a contest when time expires
-     * Enqueues submission jobs for each participant.
-     */
     async handleTimeExpiry(contestId: string): Promise<{ submitted: string[]; errors: any[] }> {
-        const activeIds = await this.session.getActiveMembers(contestId, "active");
+        const activeIds = await this.session.getSetMembers(contestId, "active");
         const submitted: string[] = [];
-        const errors: any[] = [];
+        const errors:    any[]    = [];
 
-        for (const pid of activeIds) {
-            try {
-                await this.submitQuiz(contestId, pid, "TIMEOUT");
-                submitted.push(pid);
-            } catch (err) {
-                errors.push({ participantId: pid, error: String(err) });
-            }
+        // Process concurrently in batches of 50 to avoid overwhelming Redis
+        const BATCH = 50;
+        for (let i = 0; i < activeIds.length; i += BATCH) {
+            const batch = activeIds.slice(i, i + BATCH);
+            await Promise.allSettled(
+                batch.map(async (pid) => {
+                    try {
+                        await this.submitQuiz(contestId, pid, "TIMEOUT");
+                        submitted.push(pid);
+                    } catch (err) {
+                        errors.push({ participantId: pid, error: String(err) });
+                    }
+                })
+            );
         }
-
         return { submitted, errors };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PARTICIPANT PROGRESS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    async getParticipantProgress(contestId: string, participantId: string) {
+        const [state, answers] = await Promise.all([
+            this.session.getSession(contestId, participantId),
+            this.session.getAllAnswers(contestId, participantId),
+        ]);
+        return {
+            currentQuestionIndex: state?.currentQuestion ?? 0,
+            answeredCount:        Object.keys(answers).length,
+            totalQuestions:       state?.totalQuestions ?? 0,
+        };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ADMIN LIVE SNAPSHOT  — pure Redis, zero DB, 2 round-trips
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns live contest state entirely from Redis.
+     *
+     * Performance at 10k users:
+     *   Round-trip 1 : 4× SCARD + 3× SMEMBERS in one pipeline   → O(1) per set
+     *   Round-trip 2 : 4× Redis commands per participant          → O(N) one pipeline
+     *   Total DB queries: 0
+     *   Total Redis round-trips: 2 (regardless of N)
+     */
+    async getAdminLiveSnapshot(contestId: string, _organizationId: string) {
+        const threshold = config.proctoring.threshold;
+
+        const { counts, participants } = await this.session.getLiveSnapshot(
+            contestId,
+            threshold,
+        );
+
+        const totalViolations = participants.reduce((sum, p) => sum + p.violationCount, 0);
+        const totalFlagged    = participants.filter(p => p.isFlagged).length;
+
+        return {
+            contestId,
+            timestamp:        new Date().toISOString(),
+            // Set-level counts (directly from Redis SCARD)
+            waiting:          counts.waiting,
+            active:           counts.active,
+            totalWaiting:     counts.waiting,
+            totalInQuiz:      counts.active,
+            totalSubmitted:   counts.submitted,
+            totalDisconnected: counts.disconnected,
+            totalFlagged,
+            totalViolations,
+            // Per-participant rows (from pipelined HGETALL)
+            participants:     participants.map(p => ({
+                participantId:        p.participantId,
+                name:                 p.name,
+                status:               p.phase,           // phase is the live truth
+                currentQuestionIndex: p.currentQuestionIndex,
+                totalQuestions:       p.totalQuestions,
+                answeredCount:        p.answeredCount,
+                violationCount:       p.violationCount,
+                trustScore:           p.trustScore,
+                isFlagged:            p.isFlagged,
+                lastActivityAt:       p.lastActivityAt,
+                isAlive:              p.isAlive,
+            })),
+        };
     }
 }

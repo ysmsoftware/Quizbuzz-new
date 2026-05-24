@@ -92,8 +92,15 @@ export async function apiClient<T = unknown>(
 
   const res = await fetch(url, fetchOptions);
 
-  // Handle 401 — try to refresh once
-  if (res.status === 401 && retry) {
+  // Handle 401 — try to refresh once (never on login/register — those return real error messages)
+  const isAuthAttempt =
+    path.includes('/auth/admin/login') ||
+    path.includes('/auth/admin/register') ||
+    path.includes('/auth/admin/forgot-password') ||
+    path.includes('/auth/admin/logout') ||
+    path.includes('/auth/admin/logout-all');
+
+  if (res.status === 401 && retry && !isAuthAttempt) {
     if (isRefreshing) {
       // Wait for the ongoing refresh to complete
       await new Promise<void>((resolve) => refreshQueue.push(resolve));

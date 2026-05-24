@@ -5,6 +5,11 @@ declare global {
                 id: string
                 organizationId: string
             };
+            participant?: {
+                id: string;
+                contestId: string;
+                organizationId: string;
+            };
             id: string;
         }
     }

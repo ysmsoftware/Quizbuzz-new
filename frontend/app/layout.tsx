@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 const geistSans = Geist({
@@ -63,6 +64,7 @@ export default function RootLayout({
                     <QueryProvider>
                         {children}
                     </QueryProvider>
+                    <Toaster />
                 </ThemeProvider>
                 {process.env.NODE_ENV === 'production' && <Analytics />}
             </body>

@@ -51,4 +51,22 @@ export class LocalStorageProvider implements FileStorageProvider {
         }
     }
 
+    async getPresignedPutUrl(params: {
+        filename: string;
+        folder: string;
+        mimeType: string;
+        expiresInSeconds?: number;
+    }): Promise<{ url: string; storageKey: string }> {
+        const extension = params.filename.split(".").pop() || "webp";
+        const key = `${params.folder}/${crypto.randomUUID()}.${extension}`;
+        
+        // Point local-upload back to the express backend
+        const appUrl = config.app.baseUrl || `http://localhost:${config.app.port}`;
+        const url = `${appUrl}/api/quiz-proctoring/local-upload?key=${encodeURIComponent(key)}`;
+
+        return {
+            storageKey: key,
+            url,
+        };
+    }
 }

@@ -28,7 +28,10 @@ import {
     Loader2,
     Trash2,
     ShieldCheck,
-    ChevronRight
+    ChevronRight,
+    RefreshCw,
+    AlertTriangle,
+    FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -71,10 +74,19 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { cn, isValidDate, toDateOrNull } from '@/lib/utils';
 import { Registration, RegistrationStatus } from '@/lib/types';
 import { toast } from 'sonner';
 import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
+import { exportToCSV, exportToPDF } from '@/lib/utils/export-utils';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 export default function RegistrationsTabPage() {
     const { id } = useParams() as { id: string };
@@ -89,6 +101,11 @@ export default function RegistrationsTabPage() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
 
+    // Date range filter and export states
+    const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportScope, setExportScope] = useState<'filtered' | 'all'>('filtered');
+
     // Message modal state
     const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
     const [messageModalParticipantIds, setMessageModalParticipantIds] = useState<string[]>([]);
@@ -97,9 +114,35 @@ export default function RegistrationsTabPage() {
         search: searchQuery,
         status: statusFilter === 'all' ? undefined : statusFilter,
         payment: paymentFilter === 'all' ? undefined : paymentFilter,
+        limit: 1000, // Fetch up to 1000 participant registrations for seamless client virtualization and local exporting
     }), [searchQuery, statusFilter, paymentFilter]);
 
-    const { data: registrations, isLoading, revokeRegistrations, markAsPaid, allowFreeEntry } = useRegistrations(id, filters);
+    const {
+        data: registrations,
+        isLoading,
+        revokeRegistrations,
+        markAsPaid,
+        allowFreeEntry,
+        bulkUpdateStatus,
+        statusSummary
+    } = useRegistrations(id, filters);
+
+    // Client-side filtration by Date Range
+    const filteredRegistrations = useMemo(() => {
+        if (!registrations) return [];
+        return registrations.filter((reg: Registration) => {
+            if (!dateRange) return true;
+            if (!reg.registeredAt) return false;
+
+            const regDate = new Date(reg.registeredAt);
+            const startDate = dateRange.start ? new Date(dateRange.start + 'T00:00:00') : null;
+            const endDate = dateRange.end ? new Date(dateRange.end + 'T23:59:59') : null;
+
+            if (startDate && regDate < startDate) return false;
+            if (endDate && regDate > endDate) return false;
+            return true;
+        });
+    }, [registrations, dateRange]);
 
     const phase = useMemo(() => {
         if (!contest) return 'DRAFT';
@@ -110,9 +153,7 @@ export default function RegistrationsTabPage() {
         if (!contest || !registrations) return null;
         const fee = contest.fee || 0;
 
-        // Calculate filtered stats from the current registrations list
-        // Note: This might be partial if registrations is paginated, but better than nothing
-        // For absolute accuracy, we'd need a separate summary endpoint
+        // Calculate stats using the active filtered list for maximum context feedback
         const confirmedCount = registrations.filter((r: Registration) => r.status === 'confirmed').length;
         const paidCount = registrations.filter((r: Registration) => r.paymentStatus === 'completed').length;
         const pendingCount = registrations.filter((r: Registration) => r.paymentStatus === 'pending').length;
@@ -121,7 +162,7 @@ export default function RegistrationsTabPage() {
 
         return {
             total: contest?._count?.participants || 0,
-            confirmed: confirmedCount || contest?._count?.participants || 0, // Fallback to participants if we can't filter
+            confirmed: confirmedCount || contest?._count?.participants || 0,
             paid: paidCount || contest?._count?.payments || 0,
             pending: pendingCount,
             failed: failedCount,
@@ -131,12 +172,33 @@ export default function RegistrationsTabPage() {
         };
     }, [contest, registrations]);
 
-    // Virtualizer setup
+    const handleExport = (format: 'csv' | 'pdf') => {
+        const dataset = exportScope === 'filtered' ? filteredRegistrations : (registrations || []);
+        if (dataset.length === 0) {
+            toast.error("No registrations matching scope to export");
+            return;
+        }
+
+        try {
+            if (format === 'csv') {
+                exportToCSV({ contestTitle: contest?.title || 'Contest', registrations: dataset });
+                toast.success("CSV file downloaded successfully!");
+            } else {
+                exportToPDF({ contestTitle: contest?.title || 'Contest', registrations: dataset });
+                toast.success("PDF Print dialog triggered!");
+            }
+            setIsExportModalOpen(false);
+        } catch (err: any) {
+            toast.error(err.message || "Failed to trigger export");
+        }
+    };
+
+    // Virtualizer setup using client-filtered registrations
     const parentRef = useRef<HTMLDivElement>(null);
     const rowVirtualizer = useVirtualizer({
-        count: registrations?.length || 0,
+        count: filteredRegistrations?.length || 0,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => 72, // height of row
+        estimateSize: () => 72,
         overscan: 10,
     });
 
@@ -215,15 +277,42 @@ export default function RegistrationsTabPage() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-9 whitespace-nowrap">
-                                Status: {statusFilter}
+                                Status: {
+                                    statusFilter === 'all' ? 'All' :
+                                        statusFilter === 'REGISTERED' ? 'Registered' :
+                                            statusFilter === 'CHECKED_IN' ? 'Checked In' :
+                                                statusFilter === 'SUBMITTED' ? 'Submitted' :
+                                                    statusFilter === 'ABSENT' ? 'Absent' :
+                                                        statusFilter === 'DISQUALIFIED' ? 'Disqualified' : statusFilter
+                                }
                                 <ChevronDown className="ml-2 h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => setStatusFilter('all')}>All</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('confirmed')}>Confirmed</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('pending')}>Pending</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('failed')}>Failed</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('all')}>
+                                All ({stats?.total || 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('REGISTERED')}>
+                                Registered ({statusSummary?.REGISTERED ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('CHECKED_IN')}>
+                                Checked In ({statusSummary?.CHECKED_IN ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('IN_WAITING')}>
+                                In Waiting Room ({statusSummary?.IN_WAITING ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('IN_QUIZ')}>
+                                Actively Answering ({statusSummary?.IN_QUIZ ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('SUBMITTED')}>
+                                Submitted ({statusSummary?.SUBMITTED ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('ABSENT')}>
+                                Absent ({statusSummary?.ABSENT ?? 0})
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setStatusFilter('DISQUALIFIED')}>
+                                Disqualified ({statusSummary?.DISQUALIFIED ?? 0})
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
 
@@ -244,12 +333,13 @@ export default function RegistrationsTabPage() {
                         </DropdownMenu>
                     )}
 
-                    <Button variant="outline" size="sm" className="h-9">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        Date Range
-                    </Button>
+                    <DateRangePicker
+                        value={dateRange}
+                        onChange={setDateRange}
+                        label="Date"
+                    />
 
-                    <Button variant="outline" size="sm" className="h-9" onClick={() => toast.success("Exporting CSV...")}>
+                    <Button variant="outline" size="sm" className="h-9" onClick={() => setIsExportModalOpen(true)}>
                         <Download className="mr-2 h-4 w-4" />
                         Export
                     </Button>
@@ -271,164 +361,220 @@ export default function RegistrationsTabPage() {
             <WidgetErrorBoundary name="Registrations Table">
                 <Card className="border-border/50 overflow-hidden bg-card">
                     <div ref={parentRef} className="h-[600px] overflow-auto relative">
-                        <table className="w-full text-sm border-collapse">
-                            <thead className="bg-muted sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                                <tr className="text-muted-foreground font-medium uppercase text-[10px] tracking-widest border-b border-border/40">
-                                    <th className="w-12 px-4 py-3 bg-muted">
+                        <table className="w-full text-sm border-collapse table-fixed min-w-[1000px]">
+                            <colgroup>
+                                <col style={{ width: '48px' }} />
+                                <col style={{ width: '135px' }} />
+                                <col style={{ width: '220px' }} />
+                                <col style={{ width: '220px' }} />
+                                <col style={{ width: '120px' }} />
+                                <col style={{ width: '110px' }} />
+                                {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
+                                    <col style={{ width: '140px' }} />
+                                )}
+                                <col style={{ width: '220px' }} />
+                                <col style={{ width: '48px' }} />
+                            </colgroup>
+                            <thead>
+                                <tr className="text-muted-foreground font-bold uppercase text-[10px] tracking-widest border-b border-border/40">
+                                    <th className="w-12 px-4 py-3 bg-muted sticky top-0 z-10 text-center shadow-[inset_0_-1px_0_rgba(var(--border))]">
                                         <Checkbox
-                                            checked={selectedIds.length === registrations?.length && (registrations?.length || 0) > 0}
+                                            checked={selectedIds.length === (filteredRegistrations?.length || 0) && (filteredRegistrations?.length || 0) > 0}
                                             onCheckedChange={(checked) => {
-                                                if (checked) setSelectedIds(registrations?.map((r: Registration) => r.id) || []);
+                                                if (checked) setSelectedIds(filteredRegistrations?.map((r: Registration) => r.id) || []);
                                                 else setSelectedIds([]);
                                             }}
                                         />
                                     </th>
-                                    <th className="px-4 py-3 text-left bg-muted">Participant ID</th>
-                                    <th className="px-4 py-3 text-left bg-muted">Name</th>
-                                    <th className="px-4 py-3 text-left bg-muted">Contact</th>
-                                    <th className="px-4 py-3 text-center bg-muted">Payment</th>
-                                    <th className="px-4 py-3 text-center bg-muted">Reg Status</th>
-                                    <th className="px-4 py-3 text-left bg-muted">Custom Fields</th>
+                                    <th className="px-4 py-3 text-left bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Registration Ref</th>
+                                    <th className="px-4 py-3 text-left bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Name</th>
+                                    <th className="px-4 py-3 text-left bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Contact</th>
+                                    <th className="px-4 py-3 text-center bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Payment</th>
+                                    <th className="px-4 py-3 text-center bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Reg Status</th>
                                     {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
-                                        <th className="px-4 py-3 text-center bg-muted">Quiz Status</th>
+                                        <th className="px-4 py-3 text-center bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Quiz Status</th>
                                     )}
-                                    <th className="w-12 px-4 py-3 text-right bg-muted"></th>
+                                    <th className="px-4 py-3 text-left bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]">Custom Fields</th>
+                                    <th className="w-12 px-4 py-3 text-right bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {paddingTop > 0 && (
+                                {!filteredRegistrations || filteredRegistrations.length === 0 ? (
                                     <tr>
-                                        <td colSpan={totalColSpan} style={{ height: `${paddingTop}px` }} />
+                                        <td colSpan={totalColSpan} className="py-24 text-center">
+                                            <div className="flex flex-col items-center justify-center max-w-md mx-auto gap-4">
+                                                <div className="h-16 w-16 rounded-full bg-muted/40 flex items-center justify-center border border-border/40">
+                                                    <Search className="h-6 w-6 text-muted-foreground/50 animate-pulse" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <h3 className="text-lg font-black tracking-tight text-foreground">No registrations found</h3>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        No participants match the search query "{searchQuery}" or selected filters.
+                                                    </p>
+                                                </div>
+                                                {(searchQuery || statusFilter !== 'all' || paymentFilter !== 'all' || dateRange) && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="mt-2 text-xs font-bold uppercase tracking-wider hover:bg-muted"
+                                                        onClick={() => {
+                                                            setSearchQuery('');
+                                                            setStatusFilter('all');
+                                                            setPaymentFilter('all');
+                                                            setDateRange(null);
+                                                        }}
+                                                    >
+                                                        Reset Filters
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
-                                )}
-                                {virtualItems.map((virtualRow) => {
-                                    const reg = registrations![virtualRow.index];
-                                    return (
-                                        <tr
-                                            key={reg.id}
-                                            className={cn(
-                                                "group border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer",
-                                                selectedIds.includes(reg.id) && "bg-primary/5"
-                                            )}
-                                            style={{
-                                                height: `${virtualRow.size}px`,
-                                            }}
-                                            onClick={() => handleRowClick(reg)}
-                                        >
-                                            <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                                                <Checkbox
-                                                    checked={selectedIds.includes(reg.id)}
-                                                    onCheckedChange={(checked) => {
-                                                        if (checked) setSelectedIds(prev => [...prev, reg.id]);
-                                                        else setSelectedIds(prev => prev.filter(id => id !== reg.id));
+                                ) : (
+                                    <>
+                                        {paddingTop > 0 && (
+                                            <tr>
+                                                <td colSpan={totalColSpan} style={{ height: `${paddingTop}px` }} />
+                                            </tr>
+                                        )}
+                                        {virtualItems.map((virtualRow) => {
+                                            const reg = filteredRegistrations[virtualRow.index];
+                                            if (!reg) return null;
+                                            return (
+                                                <tr
+                                                    key={reg.id}
+                                                    className={cn(
+                                                        "group border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer",
+                                                        selectedIds.includes(reg.id) && "bg-primary/5"
+                                                    )}
+                                                    style={{
+                                                        height: `${virtualRow.size}px`,
                                                     }}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <button
-                                                    className="font-mono text-xs font-bold hover:text-primary transition-colors"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        copyToClipboard(reg.participantId, 'ID');
-                                                    }}
+                                                    onClick={() => handleRowClick(reg)}
                                                 >
-                                                    {reg.participantId}
-                                                </button>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-8 w-8 rounded-full border border-border/50">
-                                                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-black">
-                                                            {((reg.participantDetails?.fullName || 'Participant').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2))}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold truncate max-w-30">{reg.participantDetails?.fullName || 'Participant'}</span>
-                                                        <span className="text-[10px] text-muted-foreground">{isValidDate(reg.registeredAt) ? formatDistanceToNow(new Date(reg.registeredAt)) + ' ago' : '—'}</span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="flex flex-col text-xs">
-                                                    <span className="truncate max-w-37.5">{reg.participantDetails?.email || '—'}</span>
-                                                    <span className="text-muted-foreground text-[10px]">{reg.participantDetails?.phone || '—'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <Badge variant={
-                                                        reg.paymentStatus === 'completed' ? 'secondary' :
-                                                            reg.paymentStatus === 'pending' ? 'outline' : 'destructive'
-                                                    } className={cn(
-                                                        "text-[10px] font-bold uppercase",
-                                                        reg.paymentStatus === 'completed' && "bg-green-500/10 text-green-700 border-green-500/20",
-                                                        reg.paymentStatus === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20"
-                                                    )}>
-                                                        {reg.paymentStatus === 'completed' ? 'Paid' : reg.paymentStatus === 'pending' ? 'Pending' : 'Failed'}
-                                                    </Badge>
-                                                    {reg.amount && <span className="text-[10px] font-medium text-muted-foreground">₹{reg.amount}</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <Badge className={cn(
-                                                    "text-[10px] font-bold uppercase",
-                                                    reg.status === 'confirmed' ? "bg-green-500 text-white" :
-                                                        reg.status === 'pending' ? "bg-amber-500 text-white" :
-                                                            reg.status === 'revoked' ? "bg-muted text-muted-foreground" : "bg-destructive text-white"
-                                                )}>
-                                                    {reg.status}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="text-xs text-muted-foreground truncate max-w-37.5">
-                                                    {reg.participantDetails.institution || '—'}
-                                                </div>
-                                            </td>
-                                            {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
-                                                <td className="px-4 py-4 text-center">
-                                                    <QuizStatusBadge status={reg.quizStatus || 'not_joined'} progress={reg.currentQuestionIndex} total={reg.totalQuestions} />
-                                                </td>
-                                            )}
-                                            <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleRowClick(reg)}>View Full Details</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
-                                                            setMessageModalParticipantIds([reg.id]);
-                                                            setIsMessageModalOpen(true);
-                                                        }}>Send WhatsApp</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => {
-                                                            setMessageModalParticipantIds([reg.id]);
-                                                            setIsMessageModalOpen(true);
-                                                        }}>Send Email</DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        {reg.status !== 'revoked' && (
-                                                            <DropdownMenuItem
-                                                                className="text-destructive"
-                                                                onClick={() => {
-                                                                    if (confirm("Revoking will prevent this participant from entering the quiz. Continue?")) {
-                                                                        revokeRegistrations({ ids: [reg.id], reason: 'Manual admin revoke' });
-                                                                    }
-                                                                }}
-                                                            >
-                                                                Revoke Registration
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                {paddingBottom > 0 && (
-                                    <tr>
-                                        <td colSpan={totalColSpan} style={{ height: `${paddingBottom}px` }} />
-                                    </tr>
+                                                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                                                        <Checkbox
+                                                            checked={selectedIds.includes(reg.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                if (checked) setSelectedIds(prev => [...prev, reg.id]);
+                                                                else setSelectedIds(prev => prev.filter(id => id !== reg.id));
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-4">
+                                                        <button
+                                                            className="font-mono text-xs font-bold hover:text-primary transition-colors block w-full text-left truncate"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                copyToClipboard(reg.registrationRef, 'Registration Ref');
+                                                            }}
+                                                        >
+                                                            {reg.registrationRef}
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-4 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-8 w-8 rounded-full border border-border/50 shrink-0">
+                                                                <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-black">
+                                                                    {((reg.participantDetails?.fullName || 'Participant').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2))}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="font-bold truncate block w-full">{reg.participantDetails?.fullName || 'Participant'}</span>
+                                                                <span className="text-[10px] text-muted-foreground truncate">{isValidDate(reg.registeredAt) ? formatDistanceToNow(new Date(reg.registeredAt)) + ' ago' : '—'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-4">
+                                                        <div className="flex flex-col text-xs min-w-0">
+                                                            <span className="truncate block w-full">{reg.participantDetails?.email || '—'}</span>
+                                                            <span className="text-muted-foreground text-[10px] truncate">{reg.participantDetails?.phone || '—'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-center">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            {(!contest?.fee || contest.fee === 0) ? (
+                                                                <Badge variant="secondary" className="text-[10px] font-bold uppercase bg-green-500/10 text-green-700 border-green-500/20">
+                                                                    Confirmed
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant={
+                                                                    reg.paymentStatus === 'completed' ? 'secondary' :
+                                                                        reg.paymentStatus === 'pending' ? 'outline' : 'destructive'
+                                                                } className={cn(
+                                                                    "text-[10px] font-bold uppercase",
+                                                                    reg.paymentStatus === 'completed' && "bg-green-500/10 text-green-700 border-green-500/20",
+                                                                    reg.paymentStatus === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20"
+                                                                )}>
+                                                                    {reg.paymentStatus === 'completed' ? 'Paid' : reg.paymentStatus === 'pending' ? 'Pending' : 'Failed'}
+                                                                </Badge>
+                                                            )}
+                                                            {contest?.fee && contest.fee > 0 && reg.amount && <span className="text-[10px] font-medium text-muted-foreground">₹{reg.amount}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-center">
+                                                        <Badge className={cn(
+                                                            "text-[10px] font-bold uppercase",
+                                                            reg.status === 'confirmed' ? "bg-green-500 text-white" :
+                                                                reg.status === 'pending' ? "bg-amber-500 text-white" :
+                                                                    reg.status === 'revoked' ? "bg-muted text-muted-foreground" : "bg-destructive text-white"
+                                                        )}>
+                                                            {reg.status}
+                                                        </Badge>
+                                                    </td>
+                                                    {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
+                                                        <td className="px-4 py-4 text-center">
+                                                            <QuizStatusBadge status={reg.quizStatus || 'not_joined'} progress={reg.currentQuestionIndex} total={reg.totalQuestions} />
+                                                        </td>
+                                                    )}
+                                                    <td className="px-4 py-4">
+                                                        <div className="text-xs text-muted-foreground truncate block w-full">
+                                                            {reg.participantDetails.institution || '—'}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
+                                                                    <MoreHorizontal className="h-4 w-4" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem onClick={() => handleRowClick(reg)}>View Full Details</DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => {
+                                                                    setMessageModalParticipantIds([reg.id]);
+                                                                    setIsMessageModalOpen(true);
+                                                                }}>Send WhatsApp</DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => {
+                                                                    setMessageModalParticipantIds([reg.id]);
+                                                                    setIsMessageModalOpen(true);
+                                                                }}>Send Email</DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                {reg.status !== 'revoked' && (
+                                                                    <DropdownMenuItem
+                                                                        className="text-destructive"
+                                                                        onClick={() => {
+                                                                            if (confirm("Revoking will prevent this participant from entering the quiz. Continue?")) {
+                                                                                revokeRegistrations({ ids: [reg.id], reason: 'Manual admin revoke' });
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Revoke Registration
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {paddingBottom > 0 && (
+                                            <tr>
+                                                <td colSpan={totalColSpan} style={{ height: `${paddingBottom}px` }} />
+                                            </tr>
+                                        )}
+                                    </>
                                 )}
                             </tbody>
                         </table>
@@ -472,6 +618,34 @@ export default function RegistrationsTabPage() {
                             <Button variant="ghost" size="sm" className="text-background hover:bg-background/10 h-8 text-xs">
                                 <Download className="mr-2 h-4 w-4" />
                                 Export
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-background hover:bg-background/10 h-8 text-xs"
+                                onClick={async () => {
+                                    if (confirm(`Reset status of ${selectedIds.length} participants back to Registered?`)) {
+                                        await bulkUpdateStatus({ ids: selectedIds, status: 'REGISTERED' });
+                                        setSelectedIds([]);
+                                    }
+                                }}
+                            >
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Reset to Registered
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-400 hover:bg-red-400/10 h-8 text-xs font-bold"
+                                onClick={async () => {
+                                    if (confirm(`Disqualify ${selectedIds.length} participants?`)) {
+                                        await bulkUpdateStatus({ ids: selectedIds, status: 'DISQUALIFIED' });
+                                        setSelectedIds([]);
+                                    }
+                                }}
+                            >
+                                <AlertTriangle className="mr-2 h-4 w-4" />
+                                Disqualify
                             </Button>
                             <Button
                                 variant="ghost"
@@ -567,6 +741,86 @@ export default function RegistrationsTabPage() {
                 selectedParticipantIds={messageModalParticipantIds}
             />
 
+            {/* HIGH-FIDELITY EXPORT CONFIGURATION MODAL */}
+            <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+                <DialogContent className="max-w-md bg-card/95 backdrop-blur-xl border border-border/50 rounded-3xl p-6 shadow-2xl">
+                    <DialogHeader className="space-y-2">
+                        <DialogTitle className="text-xl font-black tracking-tight text-foreground flex items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary">
+                                <Download className="h-5 w-5" />
+                            </div>
+                            Export Registrations
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-muted-foreground">
+                            Configure your data exports below. Select the scope of participants you want to compile and choose your preferred file format.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 my-4">
+                        <div className="space-y-2.5">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Select Export Scope</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    className={cn(
+                                        "p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all hover:bg-muted/40",
+                                        exportScope === 'filtered'
+                                            ? "border-primary bg-primary/5 shadow-md shadow-primary/5 ring-1 ring-primary"
+                                            : "border-border/50 bg-background/40"
+                                    )}
+                                    onClick={() => setExportScope('filtered')}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <Filter className={cn("h-4 w-4", exportScope === 'filtered' ? "text-primary" : "text-muted-foreground")} />
+                                        <div className={cn("h-2 w-2 rounded-full", exportScope === 'filtered' ? "bg-primary" : "bg-transparent")} />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <span className="font-bold text-xs block text-foreground">Filtered List</span>
+                                        <span className="text-[10px] text-muted-foreground font-semibold">{filteredRegistrations.length} participants</span>
+                                    </div>
+                                </button>
+
+                                <button
+                                    className={cn(
+                                        "p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all hover:bg-muted/40",
+                                        exportScope === 'all'
+                                            ? "border-primary bg-primary/5 shadow-md shadow-primary/5 ring-1 ring-primary"
+                                            : "border-border/50 bg-background/40"
+                                    )}
+                                    onClick={() => setExportScope('all')}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <div className={cn("h-4 w-4", exportScope === 'all' ? "text-primary" : "text-muted-foreground")} />
+                                        <div className={cn("h-2 w-2 rounded-full", exportScope === 'all' ? "bg-primary" : "bg-transparent")} />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <span className="font-bold text-xs block text-foreground">All Registrations</span>
+                                        <span className="text-[10px] text-muted-foreground font-semibold">{registrations?.length || 0} participants</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-border/40">
+                        <Button
+                            variant="outline"
+                            className="rounded-xl font-bold uppercase tracking-wider text-xs h-11 border-border/80"
+                            onClick={() => handleExport('csv')}
+                        >
+                            <Download className="mr-2 h-4 w-4" />
+                            Export CSV
+                        </Button>
+                        <Button
+                            className="rounded-xl font-bold uppercase tracking-wider text-xs h-11 bg-primary text-primary-foreground"
+                            onClick={() => handleExport('pdf')}
+                        >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Print PDF
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }
@@ -594,16 +848,71 @@ function StatChip({ label, value, color }: { label: string; value: number | stri
 
 function QuizStatusBadge({ status, progress, total }: { status: string; progress?: number; total?: number }) {
     const config = {
-        not_joined: { label: 'Not joined', className: 'bg-muted text-muted-foreground' },
-        waiting: { label: 'In waiting room', className: 'bg-blue-500/10 text-blue-600' },
-        answering: { label: `Answering (Q${progress}/${total})`, className: 'bg-green-500/10 text-green-600', dot: true },
-        submitted: { label: 'Submitted', className: 'bg-green-500 text-white' },
-        absent: { label: 'Did not attempt', className: 'bg-muted text-muted-foreground' }
-    }[status] || { label: status, className: 'bg-muted' };
+        // Raw values map
+        REGISTERED: {
+            label: 'Registered',
+            className: 'bg-muted/60 text-muted-foreground border border-border/50 shadow-sm'
+        },
+        CHECKED_IN: {
+            label: 'Checked In',
+            className: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-sm shadow-indigo-500/5'
+        },
+        IN_WAITING: {
+            label: 'In Waiting Room',
+            className: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shadow-sm shadow-cyan-500/5 animate-pulse'
+        },
+        IN_QUIZ: {
+            label: progress && total ? `Answering (Q${progress}/${total})` : 'In Quiz',
+            className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/35 shadow-md shadow-emerald-500/5 font-black',
+            dot: true,
+            dotColor: 'bg-emerald-500'
+        },
+        SUBMITTED: {
+            label: 'Submitted',
+            className: 'bg-emerald-600 text-white dark:bg-emerald-500 border border-emerald-500/20 shadow-md shadow-emerald-500/10 font-bold'
+        },
+        ABSENT: {
+            label: 'Absent',
+            className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm shadow-amber-500/5'
+        },
+        DISQUALIFIED: {
+            label: 'Disqualified',
+            className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/35 shadow-md shadow-rose-500/5 font-black uppercase tracking-wider'
+        },
+
+        // Legacy/fallback values map
+        not_joined: {
+            label: 'Not joined',
+            className: 'bg-muted/60 text-muted-foreground border border-border/50 shadow-sm'
+        },
+        waiting: {
+            label: 'In waiting room',
+            className: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shadow-sm'
+        },
+        answering: {
+            label: progress && total ? `Answering (Q${progress}/${total})` : 'Answering',
+            className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/35 shadow-md shadow-emerald-500/5 font-black',
+            dot: true,
+            dotColor: 'bg-emerald-500'
+        },
+        submitted: {
+            label: 'Submitted',
+            className: 'bg-emerald-600 text-white dark:bg-emerald-500 border border-emerald-500/20 shadow-md shadow-emerald-500/10 font-bold'
+        },
+        absent: {
+            label: 'Did not attempt',
+            className: 'bg-muted/60 text-muted-foreground border border-border/50 shadow-sm'
+        }
+    }[status] || { label: status, className: 'bg-muted text-muted-foreground' };
 
     return (
-        <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", config.className)}>
-            {config.dot && <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+        <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider", config.className)}>
+            {config.dot && (
+                <span className="relative flex h-2 w-2">
+                    <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", config.dotColor || 'bg-primary')}></span>
+                    <span className={cn("relative inline-flex rounded-full h-2 w-2", config.dotColor || 'bg-primary')}></span>
+                </span>
+            )}
             {config.label}
         </div>
     );
@@ -703,7 +1012,7 @@ function ParticipantDrawer({
 
     return (
         <Sheet open={isOpen} onOpenChange={onClose}>
-                <SheetContent className="w-full sm:max-w-120 p-0 flex flex-col">
+            <SheetContent className="w-full sm:max-w-120 p-0 flex flex-col">
                 <SheetHeader className="p-6 pb-0 space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -749,6 +1058,7 @@ function ParticipantDrawer({
 
                                 <DetailSection title="Registration Details" icon={<CalendarIcon className="h-4 w-4" />}>
                                     <div className="grid grid-cols-2 gap-4">
+                                        <DetailItem label="Registration Ref" value={registration.registrationRef} mono copyable />
                                         <DetailItem label="Participant ID" value={registration.participantId} mono copyable />
                                         <DetailItem label="Registered At" value={registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
                                         <DetailItem label="WhatsApp Opt-in" value={registration.whatsappOptIn ? 'Yes' : 'No'} />
@@ -781,46 +1091,50 @@ function ParticipantDrawer({
                             <TabsContent value="payment" className="space-y-8 m-0">
                                 <div className="flex flex-col items-center justify-center py-6 bg-primary/5 rounded-2xl border border-primary/10">
                                     <Badge className={cn(
-                                        "mb-3 uppercase text-[10px]",
-                                        registration.paymentStatus === 'completed' ? "bg-green-500" : "bg-amber-500"
+                                        "mb-3 uppercase text-[10px] text-white",
+                                        (!contest?.fee || contest.fee === 0 || registration.paymentStatus === 'completed') ? "bg-green-500" : "bg-amber-500"
                                     )}>
-                                        {registration.paymentStatus}
+                                        {(!contest?.fee || contest.fee === 0) ? 'Confirmed' : registration.paymentStatus}
                                     </Badge>
-                                    <span className="text-4xl font-black">₹{registration.amount || contest.fee}</span>
-                                    <span className="text-xs text-muted-foreground mt-1">Payment Method: {registration.paymentMethod || 'Razorpay'}</span>
+                                    <span className="text-4xl font-black">{(!contest?.fee || contest.fee === 0) ? 'Free' : `₹${registration.amount || contest.fee}`}</span>
+                                    {contest?.fee && contest.fee > 0 && <span className="text-xs text-muted-foreground mt-1">Payment Method: {registration.paymentMethod || 'Razorpay'}</span>}
                                 </div>
 
-                                <DetailSection title="Transaction History" icon={<CreditCard className="h-4 w-4" />}>
-                                    <div className="space-y-4">
-                                        <DetailItem label="Payment ID" value={registration.paymentId || '—'} mono copyable />
-                                        <DetailItem label="Transaction Date" value={registration.paymentId && registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
-                                    </div>
-                                </DetailSection>
+                                {contest?.fee && contest.fee > 0 && (
+                                    <>
+                                        <DetailSection title="Transaction History" icon={<CreditCard className="h-4 w-4" />}>
+                                            <div className="space-y-4">
+                                                <DetailItem label="Payment ID" value={registration.paymentId || '—'} mono copyable />
+                                                <DetailItem label="Transaction Date" value={registration.paymentId && registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
+                                            </div>
+                                        </DetailSection>
 
-                                {registration.paymentStatus === 'failed' && (
-                                    <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 space-y-4">
-                                        <div className="flex items-center gap-3 text-destructive">
-                                            <ShieldAlert className="h-5 w-5" />
-                                            <span className="text-sm font-bold">Reason: Payment declined by bank</span>
-                                        </div>
-                                        <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onAllowFree}>
-                                            Allow Free Entry
-                                        </Button>
-                                    </div>
-                                )}
+                                        {registration.paymentStatus === 'failed' && (
+                                            <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 space-y-4">
+                                                <div className="flex items-center gap-3 text-destructive">
+                                                    <ShieldAlert className="h-5 w-5" />
+                                                    <span className="text-sm font-bold">Reason: Payment declined by bank</span>
+                                                </div>
+                                                <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onAllowFree}>
+                                                    Allow Free Entry
+                                                </Button>
+                                            </div>
+                                        )}
 
-                                {registration.paymentStatus === 'pending' && (
-                                    <Button className="w-full" onClick={() => {
-                                        const ref = prompt("Enter reference (Cash/Cheque ID):");
-                                        if (ref) onMarkAsPaid(ref);
-                                    }}>
-                                        Mark as Manually Paid
-                                    </Button>
+                                        {registration.paymentStatus === 'pending' && (
+                                            <Button className="w-full" onClick={() => {
+                                                const ref = prompt("Enter reference (Cash/Cheque ID):");
+                                                if (ref) onMarkAsPaid(ref);
+                                            }}>
+                                                Mark as Manually Paid
+                                            </Button>
+                                        )}
+                                    </>
                                 )}
                             </TabsContent>
 
                             <TabsContent value="activity" className="space-y-8 m-0">
-                                {registration.quizStatus === 'not_joined' ? (
+                                {['not_joined', 'REGISTERED'].includes(registration.quizStatus || '') ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
                                         <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
                                             <User className="h-8 w-8 text-muted-foreground/30" />
@@ -834,7 +1148,7 @@ function ParticipantDrawer({
                                                 <DetailItem label="Joined at" value={joinedAtDate ? format(joinedAtDate, 'HH:mm:ss') : '—'} />
                                                 <DetailItem label="Current Question" value={`Question ${registration.currentQuestionIndex || 0} of ${registration.totalQuestions || 50}`} />
                                                 <DetailItem label="Last Activity" value={lastActivityDate ? formatDistanceToNow(lastActivityDate) + ' ago' : '—'} />
-                                                <DetailItem label="Status" value={registration.quizStatus?.toUpperCase() || '—'} />
+                                                <DetailItem label="Status" value={<QuizStatusBadge status={registration.quizStatus || 'not_joined'} progress={registration.currentQuestionIndex} total={registration.totalQuestions} />} />
                                             </div>
                                         </DetailSection>
 
@@ -907,7 +1221,7 @@ function DetailSection({ title, icon, children }: { title: string; icon: React.R
     );
 }
 
-function DetailItem({ label, value, mono, copyable }: { label: string; value: string; mono?: boolean; copyable?: boolean }) {
+function DetailItem({ label, value, mono, copyable }: { label: string; value: React.ReactNode; mono?: boolean; copyable?: boolean }) {
     return (
         <div className="flex flex-col gap-0.5 group">
             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{label}</span>
@@ -916,7 +1230,7 @@ function DetailItem({ label, value, mono, copyable }: { label: string; value: st
                     "text-sm font-medium",
                     mono && "font-mono"
                 )}>{value}</span>
-                {copyable && (
+                {copyable && typeof value === 'string' && (
                     <button
                         className="p-1 rounded-md hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => {

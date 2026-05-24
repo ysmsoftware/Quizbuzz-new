@@ -1,7 +1,7 @@
 'use client';
 
 import { useProctoringStore } from '@/lib/stores/proctoring-store';
-import { CameraFeed } from './CameraFeed';
+
 import { AlertTriangle, Wifi, WifiOff, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,20 +45,7 @@ export function ProctoringRightPanel() {
 
   return (
     <aside className="w-80 border-l border-white/5 bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col p-4 gap-4 overflow-y-auto">
-      {/* Camera Feed */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-white">Live Proctoring</h3>
-        <div className="bg-slate-800/50 rounded-lg p-3 aspect-video flex items-center justify-center">
-          {videoStream ? (
-            <CameraFeed stream={videoStream} variant="panel" />
-          ) : (
-            <div className="text-center text-muted-foreground text-xs">
-              <EyeOff className="w-6 h-6 mx-auto mb-2 opacity-50" />
-              <p>Camera inactive</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Removed Camera Feed from sidebar since it is now in the main top-center view */}
 
       {/* Status Section */}
       <div className="space-y-3 border-t border-white/5 pt-4">

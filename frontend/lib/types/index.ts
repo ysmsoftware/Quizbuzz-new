@@ -15,6 +15,10 @@ export interface Contest {
     id: string;
     title: string;
     slug: string;
+    /** Raw Prisma/API status (DRAFT, PUBLISHED, LIVE, …) — use for tabs and phase */
+    serverStatus?: string;
+    /** Derived from serverStatus via deriveContestPhase */
+    phase?: ContestPhase;
     orgId: string;
     orgSlug: string;
     description: string;
@@ -129,6 +133,7 @@ export interface Registration {
     id: string;
     contestId: string;
     participantId: string;
+    registrationRef: string;
     status: RegistrationStatus;
     registeredAt: string;
     paymentId?: string;

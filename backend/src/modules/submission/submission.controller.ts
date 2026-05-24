@@ -178,7 +178,13 @@ export class SubmissionController {
     ): Promise<void> => {
         try {
             const participantId = req.params.participantId as string;
-            const submission = await this.submissionService.getMySubmission(participantId);
+            const contestId = req.query.contestId as string | undefined;
+            const contestSlug = req.query.contestSlug as string | undefined;
+
+            const submission = await this.submissionService.getMySubmission(participantId, {
+                contestId,
+                contestSlug
+            });
 
             res.status(200).json({ success: true, data: submission });
 

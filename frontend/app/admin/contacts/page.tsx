@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Mail, 
-  Phone, 
-  Building2, 
-  MapPin, 
+import { useContacts } from '@/lib/hooks/useContacts';
+import {
+  Users,
+  Search,
+  Filter,
+  MoreVertical,
+  Mail,
+  Phone,
+  Building2,
+  MapPin,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -20,8 +20,6 @@ import {
   History,
   Info
 } from 'lucide-react';
-import { crmApi, Contact } from '@/lib/api/crm.api';
-import { ApiResponse } from '@/lib/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -63,29 +61,25 @@ export default function ContactsListPage() {
 
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const queryClient = useQueryClient();
+  const {
+    contacts,
+    pagination,
+    isLoading,
+    createContact,
+    createContactLoading,
+    createContactError,
+  } = useContacts({ search, college, page, limit: 20 });
 
-  const createContactMutation = useMutation<
-    ApiResponse<Contact>,
-    Error,
-    Partial<Contact>
-  >({
-    mutationFn: (body) => crmApi.createContact(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+  const handleCreateContact = async () => {
+    try {
+      await createContact(contactForm);
       setIsCreateOpen(false);
       setContactForm({ firstName: '', lastName: '', email: '', phone: '', college: '', city: '' });
       setCreateError(null);
+    } catch (err: any) {
+      setCreateError(err?.message || 'Failed to create contact');
     }
-  });
-
-  const { data: contactsData, isLoading } = useQuery({
-    queryKey: ['contacts', { page, search, college }],
-    queryFn: () => crmApi.getContacts({ search, college, page, limit: 20 }),
-  });
-
-  const contacts = contactsData?.data?.data || [];
-  const pagination = contactsData?.data?.pagination;
+  };
 
   return (
     <>
@@ -333,23 +327,12 @@ export default function ContactsListPage() {
 
         <DialogFooter className="mt-6">
           <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-          <Button className="ml-2" onClick={async () => {
-            try {
-              setCreateError(null);
-              await createContactMutation.mutateAsync({
-                firstName: contactForm.firstName,
-                lastName: contactForm.lastName,
-                email: contactForm.email,
-                phone: contactForm.phone,
-                college: contactForm.college,
-                city: contactForm.city,
-              });
-            } catch (err: any) {
-              console.error('Create contact failed', err);
-              setCreateError(err.message || 'Failed to create contact. Please try again.');
-            }
-          }}>
-            {createContactMutation.isPending ? 'Creating...' : 'Create'}
+          <Button 
+            className="ml-2" 
+            onClick={handleCreateContact}
+            disabled={createContactLoading}
+          >
+            {createContactLoading ? 'Creating...' : 'Create'}
           </Button>
         </DialogFooter>
         <DialogClose />

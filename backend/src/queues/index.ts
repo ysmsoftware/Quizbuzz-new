@@ -76,7 +76,7 @@ export const messageQueue = new Queue("message-queue", {
 export interface QuizTimerJobPayload {
     contestId: string;
     organizationId: string;
-    type: "CONTEST_START" | "TIME_WARNING" | "AUTO_SUBMIT" | "CAPTURE_REQUEST";
+    type: "CONTEST_START" | "TIME_WARNING" | "AUTO_SUBMIT" | "CAPTURE_REQUEST" | "MARK_ABSENT" | "AUTO_DECLARE_RESULTS";
     /** For TIME_WARNING: seconds remaining */
     secondsRemaining?: number;
     /** For CAPTURE_REQUEST: participant + capture type */
@@ -103,6 +103,23 @@ export interface LeaderboardBuildPayload {
 }
 
 export const leaderboardQueue = new Queue<LeaderboardBuildPayload>("leaderboard-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});
+
+export interface CaptureMetadataJobPayload {
+    participantId: string;
+    contestId: string;
+    organizationId: string;
+    type: string;
+    storageKey?: string;
+    severity?: number;
+    metadata?: Record<string, any>;
+    occurredAt?: string;
+}
+
+export const captureMetadataQueue = new Queue<CaptureMetadataJobPayload>("capture-metadata-queue", {
     connection: redis,
     prefix: config.queue.prefix,
     defaultJobOptions,

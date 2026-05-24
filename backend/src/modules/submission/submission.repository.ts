@@ -43,6 +43,8 @@ const DETAIL_INCLUDE = {
             question: {
                 select: {
                     questionText: true,
+                    difficulty: true,
+                    explanation: true,
                     options: {
                         select: { id: true, text: true, isCorrect: true },
                     },
@@ -73,6 +75,7 @@ export class SubmissionRepository {
                     timeTakenSecs: input.timeTakenSecs,
                     totalQuestions: input.totalQuestions,
                     attempted: input.attempted,
+                    source: input.source,
                     // score / correct / wrong / skipped filled by evaluation worker
                 },
             });
@@ -112,6 +115,7 @@ export class SubmissionRepository {
                     attempted: input.attempted,
                     score: input.score,
                     percentage: input.percentage,
+                    isPassed: input.isPassed,
                     evaluatedAt: input.evaluatedAt,
                 },
             });
@@ -350,6 +354,7 @@ export class SubmissionRepository {
             source: (row.source ?? "MANUAL") as SubmissionSummary["source"],
             score: row.score !== null ? Number(row.score) : null,
             percentage: row.percentage !== null ? Number(row.percentage) : null,
+            isPassed: row.isPassed ?? null,
             timeTakenSecs: row.timeTakenSecs ?? null,
             submittedAt: row.submittedAt ?? null,
             evaluatedAt: row.evaluatedAt ?? null,
@@ -369,6 +374,8 @@ export class SubmissionRepository {
                 return {
                     questionId: a.questionId,
                     questionText: a.question?.questionText ?? "",
+                    difficulty: a.question?.difficulty ?? "Standard",
+                    explanation: a.question?.explanation ?? null,
                     selectedOptionId: a.selectedOptionId ?? null,
                     selectedOptionText: selectedOption?.text ?? null,
                     correctOptionId: correctOption?.id ?? "",

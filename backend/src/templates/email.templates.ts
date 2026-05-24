@@ -63,6 +63,7 @@ export const EmailTemplates: {
                 <p>Thank you for registering for <strong>${params.eventName}</strong> at YSM Info Solution.</p>
                 <p>📅 <strong>Date:</strong> ${params.date}</p>
                 <p>⏰ <strong>Time:</strong> ${params.time}</p>
+                <p>🔑 <strong>Join Code:</strong> <code>${params.joinCode}</code></p>
                 <p>📍 <strong>Location/Link:</strong> <a href="${params.link}">${params.link}</a></p>
                 <p>We look forward to your participation. For queries, contact: +91 898 308 3698<br/> - Team YSM Info Solution</p>
             `,

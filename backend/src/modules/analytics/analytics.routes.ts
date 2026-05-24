@@ -12,3 +12,6 @@ analyticsRouter.get("/:id/live", authenticatedOrgMiddleware, (req, res) => analy
 
 // POST /analytics/:id/refresh
 analyticsRouter.post("/:id/refresh", authenticatedOrgMiddleware, (req, res) => analyticsController.refreshAnalytics(req, res));
+
+// GET /analytics/:id/score-distribution
+analyticsRouter.get("/:id/score-distribution", authenticatedOrgMiddleware, (req, res) => analyticsController.getScoreDistribution(req, res));

@@ -9,7 +9,9 @@ export type WarningType =
   | 'FULLSCREEN_EXIT'
   | 'MULTIPLE_FACES'
   | 'NO_FACE'
-  | 'CAMERA_OFF';
+  | 'CAMERA_OFF'
+  | 'GAZE_AWAY'
+  | 'HIGH_VOLUME';
 
 export type CameraStatus = 'idle' | 'requesting' | 'active' | 'denied' | 'error';
 
@@ -147,7 +149,7 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
             height: { ideal: 480 },
             frameRate: { ideal: 15, max: 30 },
           },
-          audio: false,
+          audio: true,
         };
 
         // iOS Safari: must request in response to user gesture (handled by caller)

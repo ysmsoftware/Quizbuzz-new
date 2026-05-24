@@ -2,6 +2,8 @@ import { IParticipantRepository } from "./participant.repository";
 import { ContestRepository } from "../contest/contest.repository";
 import { NotFoundError, ConflictError } from "../../error/http-errors";
 import { FindAllParticipantsOptions } from "./participant.types";
+import { redis } from "../../config/redis";
+import { ParticipantStatus } from "@prisma/client";
 
 export class ParticipantService {
     constructor(
@@ -54,7 +56,13 @@ export class ParticipantService {
 
         // Additional business logic for disqualification could go here
 
-        return this.participantRepo.disqualify(participantId, organizationId);
+        const result = await this.participantRepo.disqualify(participantId, organizationId);
+        try {
+            await redis.del(`contest:status-summary:${contestId}`);
+        } catch (e) {
+            console.error("Failed to invalidate Redis cache in disqualifyParticipant:", e);
+        }
+        return result;
     }
 
     async registerParticipant(input: {
@@ -101,5 +109,68 @@ export class ParticipantService {
     
     async getContestIdByParticipantId(participantId: string, organizationId: string) {
         return this.participantRepo.findContestIdByParticipantId(participantId, organizationId);
+    }
+
+    async getStatusSummary(organizationId: string, contestId: string) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) {
+            throw new NotFoundError("Contest not found");
+        }
+
+        const cacheKey = `contest:status-summary:${contestId}`;
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return JSON.parse(cached);
+            }
+        } catch (e) {
+            console.error("Failed to get from Redis cache:", e);
+        }
+
+        const summary = await this.participantRepo.getStatusSummary(contestId, organizationId);
+
+        try {
+            await redis.set(cacheKey, JSON.stringify(summary), "EX", 30);
+        } catch (e) {
+            console.error("Failed to write to Redis cache:", e);
+        }
+
+        return summary;
+    }
+
+    async bulkStatusOverride(
+        organizationId: string,
+        contestId: string,
+        participantIds: string[],
+        status: "REGISTERED" | "DISQUALIFIED"
+    ): Promise<{ updatedCount: number }> {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) {
+            throw new NotFoundError("Contest not found");
+        }
+
+        const prismaStatus = status as ParticipantStatus;
+        const batchSize = 500;
+        let updatedCount = 0;
+
+        for (let i = 0; i < participantIds.length; i += batchSize) {
+            const batch = participantIds.slice(i, i + batchSize);
+            
+            const count = await this.participantRepo.updateStatuses(batch, prismaStatus, organizationId);
+            updatedCount += count;
+
+            if (i + batchSize < participantIds.length) {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+        }
+
+        try {
+            const cacheKey = `contest:status-summary:${contestId}`;
+            await redis.del(cacheKey);
+        } catch (e) {
+            console.error("Failed to invalidate Redis cache in bulkStatusOverride:", e);
+        }
+
+        return { updatedCount };
     }
 }

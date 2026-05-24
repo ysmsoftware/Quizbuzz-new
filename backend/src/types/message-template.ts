@@ -24,6 +24,7 @@ export type TemplateParamsMap = {
         date: string,
         time: string,
         link: string,
+        joinCode: string,
     },
     [MessageTemplate.WORKSHOP_REMINDER_MESSAGE]: {
         name: string,

@@ -58,7 +58,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Rate Limiting
-app.use('/api/v1', globalLimiter);
+// app.use('/api/v1', globalLimiter);
 
 // Routes
 app.use('/api/v1', apiRouter);

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import { fmtDateTime } from '@/lib/formatDate';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
 import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
 import { deriveContestPhase } from '@/lib/utils/contest';
@@ -51,7 +52,8 @@ export default function ContestOverviewPage() {
         isLoading,
         error,
         publishContestMutation,
-        deleteContestMutation
+        deleteContestMutation,
+        archiveContestMutation
     } = useContestDetail(id);
     const updateMutation = useUpdateContest(id);
 
@@ -101,6 +103,18 @@ export default function ContestOverviewPage() {
     const isCancelled = phase === 'CANCELLED';
     const isPublishedPlus = phase !== 'DRAFT' && phase !== 'CANCELLED';
     const isLivePlus = phase === 'LIVE' || phase === 'ENDED';
+
+    const formatToLocalDatetime = (dateStr: string) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
 
     const handleSave = async (field: string, value: any) => {
         // In PUBLISHED+, show confirm modal if needed (simulated here)
@@ -274,18 +288,20 @@ export default function ContestOverviewPage() {
                             <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                                 <EditableField
                                     label="Start Date & Time"
-                                    type="date"
-                                    value={contest.startTime}
-                                    onSave={(v) => handleSave('startTime', v)}
+                                    type="datetime-local"
+                                    value={formatToLocalDatetime(contest.startTime)}
+                                    displayValue={contest.startTime ? fmtDateTime(new Date(contest.startTime)) : ''}
+                                    onSave={(v) => handleSave('startTime', new Date(v).toISOString())}
                                     disabled={isLivePlus || isCancelled}
                                     lockReason={isLivePlus ? "Cannot change start time after contest begins" : ""}
                                     autoSave={isDraft}
                                 />
                                 <EditableField
                                     label="Registration Deadline"
-                                    type="date"
-                                    value={contest.registrationDeadline}
-                                    onSave={(v) => handleSave('registrationDeadline', v)}
+                                    type="datetime-local"
+                                    value={formatToLocalDatetime(contest.registrationDeadline)}
+                                    displayValue={contest.registrationDeadline ? fmtDateTime(new Date(contest.registrationDeadline)) : ''}
+                                    onSave={(v) => handleSave('registrationDeadline', new Date(v).toISOString())}
                                     disabled={phase === 'REGISTRATION_CLOSED' || isLivePlus || isCancelled}
                                     autoSave={isDraft}
                                 />
@@ -445,7 +461,13 @@ export default function ContestOverviewPage() {
                             }
                         }}
                         onArchive={async () => {
-                            toast.success("Contest archived");
+                            try {
+                                await archiveContestMutation.mutateAsync();
+                                toast.success("Contest archived");
+                                router.push('/admin/contests/archived');
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to archive contest");
+                            }
                         }}
                     />
                 </div>

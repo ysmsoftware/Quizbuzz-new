@@ -260,6 +260,7 @@ model Contest {
   shuffleOptions        Boolean         @default(false)
   showResultsAfter      Int             @default(24)  // hours after end before results published
   isDeleted             Boolean         @default(false)
+  isArchived            Boolean         @default(false)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
@@ -281,6 +282,7 @@ model Contest {
   @@index([startTime, status])
   @@index([registrationDeadline])
   @@index([isDeleted, status])
+  @@index([organizationId, isArchived])
   @@map("contests")
 }
 
@@ -525,6 +527,7 @@ model Submission {
   participantId   String            @unique   // one submission per participant
   contestId       String            // denormalized
   status          SubmissionStatus  @default(PENDING)
+  source          String            @default("MANUAL")
   submittedAt     DateTime?
   evaluatedAt     DateTime?
 
@@ -536,6 +539,7 @@ model Submission {
   skipped         Int?
   score           Decimal?          @db.Decimal(8, 2)
   percentage      Decimal?          @db.Decimal(5, 2)
+  isPassed        Boolean?
   timeTakenSecs   Int?              // seconds from first question to submit
 
   createdAt       DateTime          @default(now())
@@ -588,6 +592,7 @@ model LeaderboardEntry {
   score           Decimal   @db.Decimal(8, 2)
   percentage      Decimal   @db.Decimal(5, 2)
   timeTakenSecs   Int
+  isPassed        Boolean   @default(false)
   prizeId         String?             // resolved prize bracket (nullable — not everyone wins)
   isPublished     Boolean   @default(false)
   createdAt       DateTime  @default(now())

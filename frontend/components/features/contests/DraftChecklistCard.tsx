@@ -4,7 +4,9 @@ import { Check, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useMemo } from 'react';
 import { Contest } from '@/lib/types';
+import { buildPublishChecklist } from '@/lib/publishChecklist';
 import { cn } from '@/lib/utils';
 
 interface DraftChecklistCardProps {
@@ -15,38 +17,38 @@ interface DraftChecklistCardProps {
 }
 
 export function DraftChecklistCard({ contest, onPublish, isPublishing = false, className }: DraftChecklistCardProps) {
-  const requirements = [
-    { 
-      label: 'Title added', 
-      met: !!contest.title.trim() 
-    },
-    { 
-      label: 'Start date set', 
-      met: !!contest.startTime 
-    },
-    { 
-      label: 'At least 1 rule added', 
-      met: contest.rules && contest.rules.length > 0 
-    },
-    { 
-      label: 'At least 1 prize defined', 
-      met: contest.prizes && contest.prizes.length > 0 
-    },
-    { 
-      label: `Questions added (${contest._count?.questions || 0} of recommended 10+)`, 
-      met: (contest._count?.questions || 0) > 0,
-      warning: (contest._count?.questions || 0) < 10
-    },
-    { 
-      label: contest.fee > 0 ? 'Fee configured' : 'Free contest toggled', 
-      met: true // Based on current logic, fee is always set
-    },
-  ];
+  const requirements = useMemo(() => {
+    if (!contest) return [];
+    return buildPublishChecklist(contest);
+  }, [contest]);
 
-  const metCount = requirements.filter(r => r.met).length;
+  if (!contest) {
+    return (
+      <Card className={cn("overflow-hidden border-primary/20 bg-primary/5 animate-pulse", className)}>
+        <CardHeader className="pb-3">
+          <div className="h-6 w-32 bg-primary/10 rounded" />
+          <div className="h-4 w-48 bg-primary/10 rounded mt-2" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="h-2 w-full bg-primary/10 rounded" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-4 w-4 bg-primary/10 rounded-full shrink-0" />
+                <div className="h-4 w-3/4 bg-primary/10 rounded" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const metCount = requirements.filter((r) => r.done).length;
+  const requiredItems = requirements.filter((r) => r.required);
+  const requiredMet = requiredItems.every((r) => r.done);
   const totalCount = requirements.length;
-  const progress = (metCount / totalCount) * 100;
-  const allMet = metCount === totalCount;
+  const progress = totalCount > 0 ? (metCount / totalCount) * 100 : 0;
 
   return (
     <Card className={cn("overflow-hidden border-primary/20 bg-primary/5", className)}>
@@ -72,17 +74,17 @@ export function DraftChecklistCard({ contest, onPublish, isPublishing = false, c
             <div key={index} className="flex items-start gap-3">
               <div className={cn(
                 "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
-                req.met ? "bg-green-500 text-white" : "bg-muted text-muted-foreground/30"
+                req.done ? "bg-green-500 text-white" : "bg-muted text-muted-foreground/30"
               )}>
-                {req.met ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                {req.done ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
               </div>
               <span className={cn(
                 "text-sm font-medium transition-colors",
-                req.met ? "text-foreground" : "text-muted-foreground",
-                req.met && req.warning && "text-orange-600 dark:text-orange-400"
+                req.done ? "text-foreground" : "text-muted-foreground",
+                req.done && req.warning && "text-orange-600 dark:text-orange-400"
               )}>
                 {req.label}
-                {req.met && req.warning && (
+                {req.done && req.warning && (
                   <AlertTriangle className="inline-block h-3 w-3 ml-1 mb-0.5" />
                 )}
               </span>
@@ -92,7 +94,7 @@ export function DraftChecklistCard({ contest, onPublish, isPublishing = false, c
 
         <Button 
           className="w-full h-11 font-bold shadow-lg shadow-primary/20" 
-          disabled={!allMet || isPublishing}
+          disabled={!requiredMet || isPublishing}
           onClick={onPublish}
         >
           {isPublishing ? (
@@ -105,7 +107,7 @@ export function DraftChecklistCard({ contest, onPublish, isPublishing = false, c
           )}
         </Button>
         
-        {!allMet && (
+        {!requiredMet && (
           <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-wider">
             Please complete all requirements above
           </p>

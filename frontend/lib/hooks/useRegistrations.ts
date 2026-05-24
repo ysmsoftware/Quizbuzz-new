@@ -27,8 +27,18 @@ function normalizeRegistration(raw: any): Registration {
   };
 
   const status = String(raw.status || '').toUpperCase();
+  const isConfirmed = [
+    'REGISTERED',
+    'CHECKED_IN',
+    'IN_WAITING',
+    'IN_QUIZ',
+    'SUBMITTED',
+    'DISQUALIFIED',
+    'ABSENT'
+  ].includes(status);
+
   const normalizedStatus: Registration['status'] =
-    status === 'REGISTERED' ? 'confirmed' :
+    isConfirmed ? 'confirmed' :
     status === 'PENDING' ? 'pending' :
     status === 'CANCELLED' ? 'cancelled' :
     status === 'REVOKED' ? 'revoked' : 'pending';
@@ -42,7 +52,7 @@ function normalizeRegistration(raw: any): Registration {
 
   return {
     id: raw.id,
-    participantId: raw.participantId || raw.registrationRef || raw.id,
+    participantId: raw.id,
     contestId: raw.contestId,
     organizationId: raw.organizationId,
     contactId: raw.contactId,
@@ -56,7 +66,7 @@ function normalizeRegistration(raw: any): Registration {
     participantDetails,
     whatsappOptIn: raw.whatsappOptIn,
     customFields: raw.customFields || {},
-    quizStatus: raw.quizStatus,
+    quizStatus: raw.status || raw.quizStatus,
     currentQuestionIndex: raw.currentQuestionIndex,
     totalQuestions: raw.totalQuestions,
     joinedAt: raw.joinedAt,
@@ -99,6 +109,7 @@ export function useRegistrations(
       queryClient.invalidateQueries({
         queryKey: queryKeys.contests.participants(contestId, params),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
       toast.success('Participant disqualified');
     },
   });
@@ -150,11 +161,38 @@ export function useRegistrations(
     },
   });
 
+  /**
+   * Participant status summary query
+   */
+  const statusSummaryQuery = useQuery({
+    queryKey: ['contest-status-summary', contestId],
+    queryFn: () => contestsApi.getParticipantStatusSummary(contestId),
+    enabled: !!contestId,
+  });
+
+  /**
+   * Bulk status update mutation
+   */
+  const bulkStatusMutation = useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) =>
+      contestsApi.bulkUpdateParticipantStatus(contestId, ids, status),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.contests.participants(contestId, params),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['contest-status-summary', contestId],
+      });
+      toast.success(`Updated status to ${variables.status} for ${variables.ids.length} participants`);
+    },
+  });
+
   // Extract nested data structure
   const participants = (participantsQuery.data?.data?.participants || []).map(normalizeRegistration);
   const pagination = participantsQuery.data?.data?.pagination;
   const isLoading = participantsQuery.isLoading;
   const error = participantsQuery.error;
+  const statusSummary = statusSummaryQuery.data?.data || null;
 
   return {
     // Derived state
@@ -163,12 +201,14 @@ export function useRegistrations(
     pagination,
     isLoading,
     error,
+    statusSummary,
 
     // Mutations
     revokeRegistrations: (args: { ids: string[], reason: string }) => revokeMutation.mutateAsync(args),
     markAsPaid: (args: { id: string, reference: string }) => markAsPaidMutation.mutateAsync(args),
     allowFreeEntry: (id: string) => allowFreeEntryMutation.mutateAsync(id),
     disqualifyParticipant: (id: string, reason: string) => disqualifyMutation.mutateAsync({ participantId: id, reason }),
+    bulkUpdateStatus: (args: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) => bulkStatusMutation.mutateAsync(args),
   };
 }
 

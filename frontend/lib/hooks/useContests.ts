@@ -54,3 +54,29 @@ export function useContests(filters?: {
     isLoading,
   };
 }
+
+/**
+ * Archived Contests hook
+ */
+export function useArchivedContests(filters?: {
+  status?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}) {
+  const contestsQuery = useQuery({
+    queryKey: ['archived-contests', filters],
+    queryFn: () => contestsApi.listArchivedContests(filters),
+  });
+
+  const contests = contestsQuery.data?.data?.data;
+  const pagination = contestsQuery.data?.data?.pagination;
+  const isLoading = contestsQuery.isLoading;
+
+  return {
+    contestsQuery,
+    contests,
+    pagination,
+    isLoading,
+  };
+}

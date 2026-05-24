@@ -22,7 +22,11 @@ import jwt from "jsonwebtoken";
 import { MessagingService } from "../messaging/messaging.service";
 import { MessageTemplate } from "../../types/message-template.enum";
 
-const OTP_TTL       = config.redis.ttl.otp;            // 300s
+// Redis key used by QuizRegistrationService for registration OTPs.
+// Must stay in sync with quiz-registration.service.ts → regOtpKey()
+const regOtpKey = (email: string) => `auth:reg:otp:${email.toLowerCase()}`;
+
+const OTP_TTL = config.redis.ttl.otp;            // 300s
 const MAX_OTP_ATTEMPTS = config.auth.otp.maxAttempts;   // 5
 
 export class QuizAuthService {
@@ -30,7 +34,7 @@ export class QuizAuthService {
         private prisma: PrismaClient,
         private sessionRepo: QuizSession,
         private messagingService: MessagingService,
-    ) {}
+    ) { }
 
     // ─── Step 1: Authenticate participant identity ────────────────────────────
 
@@ -114,16 +118,16 @@ export class QuizAuthService {
             // This is a reconnect — skip auth steps, return session token
             const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId);
             return {
-                participantId:    participant.id,
-                contactId:        contact.id,
-                contestId:        contest.id,
+                participantId: participant.id,
+                contactId: contact.id,
+                contestId: contest.id,
                 organizationId,
                 sessionToken,
-                requiredSteps:    [], // no steps needed for reconnect
-                contestTitle:     contest.title,
+                requiredSteps: [], // no steps needed for reconnect
+                contestTitle: contest.title,
                 contestStartTime: contest.startTime.toISOString(),
-                contestEndTime:   contest.endTime.toISOString(),
-                contestDuration:  contest.duration,
+                contestEndTime: contest.endTime.toISOString(),
+                contestDuration: contest.duration,
                 joinCodeRequired: false,
             };
         }
@@ -159,16 +163,16 @@ export class QuizAuthService {
         const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId);
 
         return {
-            participantId:    participant.id,
-            contactId:        contact.id,
-            contestId:        contest.id,
+            participantId: participant.id,
+            contactId: contact.id,
+            contestId: contest.id,
             organizationId,
             sessionToken,
             requiredSteps,
-            contestTitle:     contest.title,
+            contestTitle: contest.title,
             contestStartTime: contest.startTime.toISOString(),
-            contestEndTime:   contest.endTime.toISOString(),
-            contestDuration:  contest.duration,
+            contestEndTime: contest.endTime.toISOString(),
+            contestDuration: contest.duration,
             joinCodeRequired: !!contest.joinCode,
         };
     }
@@ -289,9 +293,117 @@ export class QuizAuthService {
             organizationId: string;
         };
     }
-}
 
-// ─── Domain Error ─────────────────────────────────────────────────────────────
+    // ─── Participant Login (Quiz Join) ────────────────────────────────────────
+    // Called by POST /auth/quiz/participant-login.
+    // Verifies the OTP that was sent by QuizRegistrationService.requestOtp,
+    // then looks up the participant record and issues a sessionToken for the
+    // WebSocket connection. Keeps a single OTP step for quiz entry UX.
+
+    async participantLogin(
+        email: string,
+        otp: string,
+        contestSlug?: string,
+        contestId?: string,
+        joinCode?: string,
+    ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string }> {
+        // 1. Verify OTP stored under the registration Redis key
+        const key = regOtpKey(email);
+        const stored = await redis.hgetall(key);
+
+        if (!stored.hash) {
+            throw new QuizAuthError("OTP_EXPIRED", "OTP has expired. Please request a new one.");
+        }
+
+        const attempts = parseInt(stored.attempts || "0", 10);
+        if (attempts >= MAX_OTP_ATTEMPTS) {
+            await redis.del(key);
+            throw new QuizAuthError("OTP_MAX_ATTEMPTS", "Too many incorrect attempts. Please request a new OTP.");
+        }
+
+        await redis.hincrby(key, "attempts", 1);
+
+        if (!compareOtp(otp, stored.hash)) {
+            const remaining = MAX_OTP_ATTEMPTS - attempts - 1;
+            throw new QuizAuthError(
+                "OTP_INVALID",
+                remaining > 0
+                    ? `Invalid OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+                    : "Invalid OTP. No attempts remaining — please request a new code.",
+            );
+        }
+
+        // OTP verified — consume it immediately
+        await redis.del(key);
+
+        // 2. Resolve contest by slug/id (accept LIVE, PUBLISHED, REGISTRATION_CLOSED)
+        const contest = await this.prisma.contest.findFirst({
+            where: {
+                OR: [
+                    ...(contestId ? [{ id: contestId }] : []),
+                    ...(contestSlug ? [{ slug: contestSlug }] : []),
+                ],
+                status: { in: ["LIVE", "PUBLISHED", "REGISTRATION_CLOSED"] },
+                isDeleted: false,
+            },
+            select: { id: true, organizationId: true, startTime: true, endTime: true, joinCode: true },
+        });
+
+        if (!contest) {
+            throw new QuizAuthError("CONTEST_NOT_FOUND", "Contest not found or not currently accepting participants");
+        }
+
+        // 3. Verify joinCode if contest requires one
+        if (contest.joinCode) {
+            if (!joinCode) {
+                throw new QuizAuthError("JOINCODE_REQUIRED", "Join code is required for this contest");
+            }
+            if (contest.joinCode.toLowerCase() !== joinCode.toLowerCase()) {
+                throw new QuizAuthError("JOINCODE_INVALID", "Invalid join code");
+            }
+        }
+
+        if (new Date() > contest.endTime) {
+            throw new QuizAuthError("CONTEST_ENDED", "This contest has already ended");
+        }
+
+        // 3. Resolve contact → participant
+        const contact = await this.prisma.contact.findFirst({
+            where: { email: email.toLowerCase(), organizationId: contest.organizationId },
+            select: { id: true, firstName: true },
+        });
+
+        if (!contact) {
+            throw new QuizAuthError("CONTACT_NOT_FOUND", "No account found for this email address");
+        }
+
+        const participant = await this.prisma.participant.findFirst({
+            where: {
+                contactId: contact.id,
+                contestId: contest.id,
+                organizationId: contest.organizationId,
+                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ"] },
+            },
+            select: { id: true },
+        });
+
+        if (!participant) {
+            throw new QuizAuthError("NOT_REGISTERED", "You are not registered for this contest");
+        }
+
+        // 4. Issue session token scoped to this participant + contest
+        const sessionToken = this.createSessionToken(participant.id, contest.id, contest.organizationId);
+
+        logger.info(`[quiz-auth] participantLogin: participant ${participant.id} authenticated for contest ${contest.id}`);
+
+        return {
+            sessionToken,
+            participantId: participant.id,
+            contestId: contest.id,
+            organizationId: contest.organizationId,
+        };
+    }
+}
 
 export class QuizAuthError extends Error {
     constructor(

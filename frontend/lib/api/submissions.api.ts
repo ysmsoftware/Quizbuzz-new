@@ -1,15 +1,15 @@
 /**
  * Submissions API Functions
  * 
- * Maps directly to 10-submissions.md endpoints.
- * Base path: /submissions
+ * Maps directly to backend endpoints.
+ * Base path: /admin/contests or /admin/submissions or /submissions
  */
 
-import { get, post } from './apiClient';
+import { get, post, patch } from './apiClient';
 import type { ApiResponse } from './apiClient';
 
 /**
- * GET /submissions/contests/:contestId
+ * GET /admin/contests/:contestId/submissions
  * List all submissions for a contest
  */
 export async function listSubmissions(
@@ -20,32 +20,49 @@ export async function listSubmissions(
     limit?: number;
   }
 ): Promise<ApiResponse<{ data: any[]; pagination: any; summary?: any }>> {
-  return get<{ data: any[]; pagination: any; summary?: any }>(`/submissions/contests/${contestId}`, { params });
+  const res = await get<any>(`/admin/contests/${contestId}/submissions`, { params });
+  return {
+    success: true,
+    data: {
+      data: res.data,
+      pagination: (res as any).pagination || { page: 1, limit: 50, total: 0, totalPages: 1 }
+    }
+  };
 }
 
 /**
- * GET /submissions/:submissionId
+ * GET /admin/submissions/:submissionId
  * Full submission with answer breakdown
  */
 export async function getSubmissionDetail(submissionId: string): Promise<ApiResponse> {
-  return get(`/submissions/${submissionId}`);
+  return get(`/admin/submissions/${submissionId}`);
+}
+
+export async function getParticipantSubmission(
+  participantId: string,
+  params?: { contestId?: string; contestSlug?: string }
+): Promise<ApiResponse<any>> {
+  return get(`/submissions/me/${participantId}`, { params });
 }
 
 /**
- * GET /submissions/participants/:participantId
- * Get a participant's submission
- */
-export async function getParticipantSubmission(participantId: string): Promise<ApiResponse> {
-  return get(`/submissions/participants/${participantId}`);
-}
-
-/**
- * POST /submissions/:submissionId/invalidate
+ * PATCH /admin/submissions/:submissionId/invalidate
  * Invalidate a submission
  */
 export async function invalidateSubmission(
   submissionId: string,
   reason: string
 ): Promise<ApiResponse> {
-  return post(`/submissions/${submissionId}/invalidate`, { reason });
+  return patch(`/admin/submissions/${submissionId}/invalidate`, { reason });
+}
+
+/**
+ * GET /contests/:contestId/leaderboard
+ * Public leaderboard for a contest
+ */
+export async function getPublicLeaderboard(
+  contestId: string,
+  params?: { page?: number; limit?: number }
+): Promise<ApiResponse<{ entries: any[]; pagination: any }>> {
+  return get(`/contests/${contestId}/leaderboard`, { params });
 }

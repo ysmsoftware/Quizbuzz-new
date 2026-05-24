@@ -11,7 +11,7 @@ export type ContestWithRelation = Contest & {
 
 export interface IContestRepository {
     create(organizationId: string, createdById: string, data: CreateContestDTO): Promise<ContestWithRelation>;
-    findById(contestId: string, organizationId: string): Promise<ContestWithRelation | null>;
+    findById(contestId: string, organizationId?: string): Promise<ContestWithRelation | null>;
     findBySlug(slug: string): Promise<Contest | null>;
     findBySlugPublic(slug: string): Promise<Contest | null>;
     list(organizationId: string, query: ListContestsFilter): Promise<{ data: ContestSummary[]; total: number }>;
@@ -19,6 +19,7 @@ export interface IContestRepository {
     updateStatus(contestId: string, organizationId: string, status: ContestStatus, joinCode?: string): Promise<any>;
     listByIds(ids: string[], organizationId: string, status?: ContestStatus): Promise<{ total: number }>;
     softDelete(contestId: string, organizationId: string): Promise<void>;
+    archive(contestId: string, organizationId: string): Promise<void>;
     countQuestions(contestId: string): Promise<number>;
 }
 
@@ -94,9 +95,13 @@ export class ContestRepository implements IContestRepository {
         });
     }
 
-    async findById(contestId: string, organizationId: string): Promise<ContestWithRelation | null> {
+    async findById(contestId: string, organizationId?: string): Promise<ContestWithRelation | null> {
         return await prisma.contest.findFirst({
-            where: { id: contestId, organizationId, isDeleted: false },
+            where: {
+                id: contestId,
+                ...(organizationId ? { organizationId } : {}),
+                isDeleted: false,
+            },
             include: {
                 prizes: true,
                 paymentConfig: true,
@@ -105,6 +110,7 @@ export class ContestRepository implements IContestRepository {
                         participants: true,
                         submissions: true,
                         payments: true,
+                        questions: true,
                     }
                 }
             }
@@ -141,7 +147,9 @@ export class ContestRepository implements IContestRepository {
         const skip = (page - 1) * limit;
 
         const where: Prisma.ContestWhereInput = {
-            organizationId, isDeleted: false,
+            organizationId, 
+            isDeleted: false,
+            isArchived: query.isArchived ?? false,
             ...(status ? { status } : {}),
             ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
         };
@@ -233,6 +241,13 @@ export class ContestRepository implements IContestRepository {
         await prisma.contest.update({
             where: { id: contestId, organizationId },
             data: { isDeleted: true },
+        });
+    }
+
+    async archive(contestId: string, organizationId: string): Promise<void> {
+        await prisma.contest.update({
+            where: { id: contestId, organizationId },
+            data: { isArchived: true },
         });
     }
 

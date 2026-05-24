@@ -181,14 +181,42 @@ class MessageService {
     return sentMessageRecord;
   }
 
+  async sendDirectMessage(payload: {
+    contactId: string;
+    contestId?: string;
+    channel: MessageChannel;
+    templateId: string;
+    recipient: string;
+    subject?: string;
+    body: string;
+    parameters?: Record<string, string>;
+  }) {
+    return crmApi.sendMessage({
+      contactId: payload.contactId,
+      contestId: payload.contestId,
+      channel: payload.channel.toUpperCase() as 'EMAIL' | 'WHATSAPP',
+      template: payload.templateId,
+      recipient: payload.recipient,
+      subject: payload.subject,
+      body: payload.body,
+      parameters: payload.parameters,
+    });
+  }
+
   async scheduleMessage(
     contestId: string,
     templateId: string,
     recipientFilter: RecipientFilter,
     channel: MessageChannel,
-    scheduledFor: string
+    scheduledFor: string,
+    selectedParticipantIds?: string[]
   ): Promise<MessageDraft> {
-    const count = await this.calculateRecipientCount(contestId, recipientFilter);
+    let count = 0;
+    if (selectedParticipantIds && selectedParticipantIds.length > 0) {
+      count = selectedParticipantIds.length;
+    } else {
+      count = await this.calculateRecipientCount(contestId, recipientFilter);
+    }
     const draft: MessageDraft = {
       id: `draft-${Date.now()}`,
       contestId,

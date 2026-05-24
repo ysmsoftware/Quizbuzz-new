@@ -404,7 +404,15 @@ export class CertificateService {
         dto: IssueCertificateDTO,
         organizationId: string
     ): Promise<string> {
-        if (dto.participantId) return dto.participantId;
+        if (dto.participantId) {
+            const participant = await this.participantRepo.findById(
+                "",
+                dto.participantId,
+                organizationId
+            );
+            if (!participant) throw new NotFoundError("Participant not found");
+            return participant.id;
+        }
 
         if (dto.contactId && dto.contestId) {
             const id = await this.participantRepo.findIdByContactAndContest(

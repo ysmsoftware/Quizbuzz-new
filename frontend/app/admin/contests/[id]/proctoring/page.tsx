@@ -115,9 +115,28 @@ export default function ProctoringControlPanel() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Proctoring Control</h1>
-          <p className="text-muted-foreground">Monitor contest integrity and review flagged participants.</p>
+          <p className="text-muted-foreground">
+            Post-contest review and flagged-participant management. For live violations,
+            waiting-room counts, and in-quiz progress, use{' '}
+            <button
+              type="button"
+              className="text-primary font-semibold underline-offset-2 hover:underline"
+              onClick={() => router.push(`/admin/contests/${contestId}/live`)}
+            >
+              Live Monitor
+            </button>{' '}
+            (WebSocket).
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="rounded-xl border-border/50 h-11"
+            onClick={() => router.push(`/admin/contests/${contestId}/live`)}
+          >
+            <Activity className="h-4 w-4 mr-2" />
+            Live Monitor
+          </Button>
           <Button variant="outline" className="rounded-xl border-border/50 h-11" onClick={() => router.push(`/admin/contests/${contestId}/proctoring/events`)}>
             <Activity className="h-4 w-4 mr-2" />
             Full Event Log

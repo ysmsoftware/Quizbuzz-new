@@ -63,6 +63,22 @@ export class ContestController {
         }
     };
 
+    listArchivedContests = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            };
+            const query = ListContestsQuerySchema.parse(req.query);
+
+            const contests = await this.contestService.listArchivedContests(user.organizationId, query);
+
+            res.status(200).json({ success: true, data: contests, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     getContest = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const user = req.user;
@@ -126,6 +142,20 @@ export class ContestController {
             await this.contestService.deleteContest(req.params.contestId as string, user.organizationId);
 
             res.json({ success: true, message: "Contest deleted", requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    archiveContest = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            };
+            await this.contestService.archiveContest(req.params.contestId as string, user.organizationId);
+
+            res.json({ success: true, message: "Contest archived", requestId: req.id });
         } catch (err) {
             next(err);
         }
@@ -209,6 +239,23 @@ export class ContestController {
         }
     };
 
+    getResultsDeclarationInfo = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const result = await this.contestService.getResultsDeclarationInfo(
+                req.params.contestId as string,
+                user.organizationId
+            );
+
+            res.json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     getLeaderboard = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const contestId = req.params.contestId as string;
@@ -220,6 +267,30 @@ export class ContestController {
             const result = await this.contestService.getLeaderboard(
                 contestId,
                 organizationId,
+                page,
+                limit
+            );
+
+            res.status(200).json({ success: true, ...result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getAdminLeaderboard = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const contestId = req.params.contestId as string;
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 50;
+
+            const result = await this.contestService.getAdminLeaderboard(
+                contestId,
+                user.organizationId,
                 page,
                 limit
             );

@@ -21,7 +21,7 @@ export default function TemplatesPage() {
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    (t.subject && t.subject.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleCopyId = (id: string) => {
@@ -105,12 +105,12 @@ export default function TemplatesPage() {
                   <Badge 
                     variant="secondary" 
                     className={`rounded-full px-2.5 py-0.5 gap-1 text-xs font-semibold ${
-                      template.channel === 'EMAIL' 
+                      template.channel.toLowerCase() === 'email' 
                         ? 'bg-blue-50 text-blue-700 border-blue-100' 
                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                     }`}
                   >
-                    {template.channel === 'EMAIL' ? (
+                    {template.channel.toLowerCase() === 'email' ? (
                       <Mail className="h-3 w-3" />
                     ) : (
                       <MessageSquare className="h-3 w-3" />

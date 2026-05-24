@@ -14,6 +14,16 @@ export interface FileStorageProvider {
     }>;
 
     delete(storageKey: string): Promise<void>;
+
+    getPresignedPutUrl(params: {
+        filename: string;
+        folder: string;
+        mimeType: string;
+        expiresInSeconds?: number;
+    }): Promise<{
+        url: string;
+        storageKey: string;
+    }>;
 }
 
 

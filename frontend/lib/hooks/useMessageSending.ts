@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { messageService } from '@/lib/services/message-service';
 import type { MessageChannel, RecipientFilter } from '@/lib/types';
@@ -22,6 +21,21 @@ export function useMessageSending() {
     },
   });
 
+  const sendDirectMutation = useMutation({
+    mutationFn: (payload: {
+      contactId: string;
+      contestId?: string;
+      templateId: string;
+      recipient: string;
+      channel: MessageChannel;
+      subject?: string;
+      body: string;
+      parameters?: Record<string, string>;
+    }) => {
+      return messageService.sendDirectMessage(payload);
+    },
+  });
+
   const scheduleMutation = useMutation({
     mutationFn: (payload: {
       contestId: string;
@@ -42,11 +56,12 @@ export function useMessageSending() {
     },
   });
 
-  const loading = sendMutation.isPending || scheduleMutation.isPending;
-  const error = (sendMutation.error || scheduleMutation.error) as Error | null;
+  const loading = sendMutation.isPending || scheduleMutation.isPending || sendDirectMutation.isPending;
+  const error = (sendMutation.error || scheduleMutation.error || sendDirectMutation.error) as Error | null;
 
   return {
     sendNow: sendMutation.mutateAsync,
+    sendDirect: sendDirectMutation.mutateAsync,
     scheduleMessage: scheduleMutation.mutateAsync,
     loading,
     error: error?.message ?? null,

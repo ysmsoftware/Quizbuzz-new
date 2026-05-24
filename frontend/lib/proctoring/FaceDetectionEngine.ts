@@ -15,20 +15,23 @@ export class FaceDetectionEngine {
     this.status = 'loading';
 
     try {
-      await faceapi.nets.ssdMobilenetv1.load(this.MODEL_URL);
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.load(this.MODEL_URL),
+        faceapi.nets.faceLandmark68Net.load(this.MODEL_URL),
+      ]);
       this.modelLoaded = true;
       this.status = 'ready';
-      console.log('[QuizPro] Face detection model loaded');
+      console.log('[QuizPro] Face detection & landmark models loaded');
     } catch (err) {
       this.status = 'failed';
-      console.error('[QuizPro] Failed to load face detection model:', err);
-      throw new Error('Failed to load face detection model: ' + err);
+      console.error('[QuizPro] Failed to load face detection models:', err);
+      throw new Error('Failed to load face detection models: ' + err);
     }
   }
 
   /**
    * Run face detection on a video element.
-   * Returns DetectionResult with faceCount, brightness, boundingBoxes.
+   * Returns DetectionResult with faceCount, brightness, boundingBoxes, and gazeAway.
    */
   async detect(video: HTMLVideoElement): Promise<DetectionResult> {
     if (!this.modelLoaded) {
@@ -43,21 +46,61 @@ export class FaceDetectionEngine {
         lightingOk: false,
         faces: [],
         timestamp: Date.now(),
+        gazeAway: false,
       };
     }
 
     try {
       const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
-      const detections = await faceapi.detectAllFaces(video, options);
-      const brightness = this.measureBrightness(video);
+      
+      let detections: any[] = [];
+      try {
+        detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks();
+      } catch (err) {
+        // Fallback to simple face detection if landmarks cannot be parsed
+        const simpleDets = await faceapi.detectAllFaces(video, options);
+        detections = simpleDets.map(d => ({ detection: d }));
+      }
 
-      const faces: FaceBoundingBox[] = detections.map((d) => ({
-        x: d.box.x,
-        y: d.box.y,
-        width: d.box.width,
-        height: d.box.height,
-        score: d.score,
-      }));
+      const brightness = this.measureBrightness(video);
+      let gazeAway = false;
+
+      const faces: FaceBoundingBox[] = detections.map((d) => {
+        const det = d.detection || d;
+        
+        if (d.landmarks) {
+          try {
+            const nose = d.landmarks.getNose();
+            const jaw = d.landmarks.getJawOutline();
+            if (nose && nose.length >= 4 && jaw && jaw.length >= 17) {
+              const noseTip = nose[3];
+              const jawLeft = jaw[0];
+              const jawRight = jaw[16];
+              
+              // Standard horizontal head yaw ratio:
+              // ratio = left_distance / right_distance
+              const distLeft = Math.abs(noseTip.x - jawLeft.x);
+              const distRight = Math.abs(jawRight.x - noseTip.x);
+              const ratio = distLeft / (distRight || 1);
+              
+              // If ratio is < 0.45 or > 2.2, the user is looking away horizontally (yaw rotation)
+              if (ratio < 0.45 || ratio > 2.2) {
+                gazeAway = true;
+              }
+            }
+          } catch (e) {
+            console.error('[QuizPro] Landmark gaze away estimation failed:', e);
+          }
+        }
+
+        return {
+          x: det.box.x,
+          y: det.box.y,
+          width: det.box.width,
+          height: det.box.height,
+          score: det.score,
+        };
+      });
 
       return {
         faceCount: detections.length,
@@ -65,6 +108,7 @@ export class FaceDetectionEngine {
         lightingOk: brightness > 40,
         faces,
         timestamp: Date.now(),
+        gazeAway,
       };
     } catch (error) {
       console.error('[QuizPro] Face detection error:', error);
@@ -74,6 +118,7 @@ export class FaceDetectionEngine {
         lightingOk: false,
         faces: [],
         timestamp: Date.now(),
+        gazeAway: false,
       };
     }
   }

@@ -62,7 +62,24 @@ export default function WaitingRoomPage() {
         clearBroadcast,
         showStartingOverlay,
         contestStartTime,
-    } = useWaitingRoomSocket(contestId || slug, participantId, sessionToken);
+    } = useWaitingRoomSocket(
+        contestId || contest?.id || '',
+        participantId,
+        sessionToken,
+        {
+            onUnauthorized: () => {
+                useAuthStore.getState().clearSession();
+                router.replace(`/quiz/${slug}/join`);
+            },
+        },
+    );
+
+    // ─── Require participant session ──────────────
+    useEffect(() => {
+        if (!sessionToken) {
+            router.replace(`/quiz/${slug}/join`);
+        }
+    }, [sessionToken, slug, router]);
 
     // ─── Load contest ───────────────────────────────
     useEffect(() => {
@@ -76,19 +93,63 @@ export default function WaitingRoomPage() {
         load();
     }, [slug, contestId]);
 
-    // ─── Countdown timer ───────────────────────────
+    // ─── Redirect to play, submitted, or disqualified screen based on status ───
     useEffect(() => {
-        const target = contestStartTime || (contest ? new Date(`${contest.contestDate}T${contest.contestStartTime}:00`) : null);
-        if (!target) return;
+        if (wsStatus === "starting") {
+            const timer = setTimeout(() => {
+                router.push(`/quiz/${slug}/play`);
+            }, 1500);
+            return () => clearTimeout(timer);
+        } else if (wsStatus === "submitted") {
+            router.push(`/quiz/${slug}/submitted`);
+        } else if (wsStatus === "disqualified") {
+            router.push(`/quiz/${slug}/disqualified`);
+        }
+    }, [wsStatus, router, slug]);
+
+    // ─── Require system check ─────────────────────
+    useEffect(() => {
+        const passed = sessionStorage.getItem(`system_check_${slug}`);
+        if (!passed) {
+            router.replace(`/quiz/${slug}/system-check`);
+        }
+    }, [slug, router]);
+
+    // ─── Countdown timer + HTTP fallback when timer hits zero ─────────────────
+    useEffect(() => {
+        if (loading || !contest?.startTime) return;
+
+        const target = contestStartTime ?? new Date(contest.startTime);
+        if (Number.isNaN(target.getTime())) return;
+
+        let pollInterval: ReturnType<typeof setInterval> | null = null;
+        let redirected = false;
+
+        const startPolling = () => {
+            if (pollInterval || redirected) return;
+            // Poll every 3s — if WS missed quiz:v1:start, redirect via REST fallback
+            pollInterval = setInterval(async () => {
+                try {
+                    const res = await contestService.getContestBySlug(slug);
+                    if (res.success && res.data?.status === 'LIVE' && !redirected) {
+                        redirected = true;
+                        clearInterval(pollInterval!);
+                        router.push(`/quiz/${slug}/play`);
+                    }
+                } catch {
+                    // ignore transient errors
+                }
+            }, 3000);
+        };
 
         const tick = () => {
             const diffMs = target.getTime() - Date.now();
             if (diffMs <= 0) {
                 setTimeToStart({ d: 0, h: 0, m: 0, s: 0 });
-                // Handle auto-redirect if starting overlay didn't trigger
+                // Timer hit zero but WS hasn't pushed quiz:v1:start yet — start polling
+                startPolling();
                 return;
             }
-
             setTimeToStart({
                 d: Math.floor(diffMs / 86400000),
                 h: Math.floor((diffMs % 86400000) / 3600000),
@@ -99,8 +160,11 @@ export default function WaitingRoomPage() {
 
         tick();
         const id = setInterval(tick, 1000);
-        return () => clearInterval(id);
-    }, [contest, contestStartTime]);
+        return () => {
+            clearInterval(id);
+            if (pollInterval) clearInterval(pollInterval);
+        };
+    }, [loading, contest, contestStartTime, slug, router]);
 
     // ─── Mask identifier ────────────────────────────
     const maskedContact = useMemo(() => {
@@ -266,7 +330,6 @@ export default function WaitingRoomPage() {
                         </div>
                     </div>
 
-                    <p className="mt-12 text-xs text-white/20">Press Ctrl+Shift+S to simulate contest start</p>
                 </main>
             </WidgetErrorBoundary>
         </div>

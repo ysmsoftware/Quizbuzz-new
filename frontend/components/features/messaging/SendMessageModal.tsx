@@ -24,9 +24,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { messageService } from '@/lib/services/message-service';
-import { crmApi } from '@/lib/api/crm.api';
 import { useMessageTemplates } from '@/lib/hooks/useMessageTemplates';
 import { useMessageSending } from '@/lib/hooks/useMessageSending';
+import { useContact } from '@/lib/hooks/useContact';
 import { ChannelSelector } from './ChannelSelector';
 import { MessagePreview } from './MessagePreview';
 import { TemplateCard } from './TemplateCard';
@@ -62,7 +62,7 @@ export function SendMessageModal({
   }, [open]);
 
   // Hook for message sending mutations
-  const { sendNow, loading: sendingLoading, error: sendingError } = useMessageSending();
+  const { sendNow, sendDirect, loading: sendingLoading, error: sendingError } = useMessageSending();
 
   // Hook for templates loading
   const { templates, loading: templatesLoading } = useMessageTemplates('org-1');
@@ -103,13 +103,13 @@ export function SendMessageModal({
             ? confirmedCountQuery.data
             : paidCountQuery.data) ?? 0;
 
-  // If direct mode, fetch contact details
-  const contactQuery = useQuery({
-    queryKey: ['contact-detail', contactId],
-    queryFn: () => (contactId ? crmApi.getContactDetail(contactId) : Promise.resolve(null)),
+  // If direct mode, load contact details from the centralized contact hook
+  const { contact } = useContact(contactId ?? '', {
     enabled: open && isDirectMode && !!contactId,
+    loadHistory: false,
+    loadMessages: false,
+    loadCertificates: false,
   });
-  const contact = contactQuery.data?.data ?? null;
 
   const handleSend = async () => {
     if (!selectedTemplate) {
@@ -119,7 +119,6 @@ export function SendMessageModal({
 
     try {
       if (isDirectMode) {
-        // direct single contact send via crmApi
         if (!contact) {
           toast.error('Contact not found');
           return;
@@ -142,11 +141,11 @@ export function SendMessageModal({
           return;
         }
 
-        await crmApi.sendMessage({
+        await sendDirect({
           contactId: contact.id,
           contestId: contestId && contestId !== 'all' ? contestId : undefined,
-          channel: selectedChannel.toUpperCase() as 'EMAIL' | 'WHATSAPP',
-          template: selectedTemplate.id,
+          channel: selectedChannel,
+          templateId: selectedTemplate.id,
           recipient,
           subject: selectedTemplate.name,
           body: interpolatedBody,
@@ -157,8 +156,6 @@ export function SendMessageModal({
           },
         });
 
-        // Refresh messages list
-        queryClient.invalidateQueries({ queryKey: ['messages'] });
 
         toast.success(`Message successfully sent to ${fullName}`);
         onOpenChange(false);

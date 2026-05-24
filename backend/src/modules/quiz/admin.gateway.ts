@@ -62,16 +62,21 @@ export class AdminGateway {
     }
 
     private async emitLiveStats(socket: Socket, contestId: string): Promise<void> {
-        // This would involve fetching counts from Redis/DB
-        // For now, emit a placeholder or use specialized service methods if available
-        // In the full implementation, QuizService or a specialized AnalyticsService would provide this
-        socket.emit("admin:v1:live-stats", {
+        const organizationId = socket.data.organizationId as string;
+        const snapshot = await this.quizService.getAdminLiveSnapshot(
             contestId,
-            timestamp: new Date().toISOString(),
-            // activeParticipants: ...,
-            // totalSubmissions: ...,
-            // totalViolations: ...
-        });
+            organizationId,
+        );
+        socket.emit("admin:v1:live-stats", snapshot);
+    }
+
+    /** Push live stats to every admin subscribed to this contest room */
+    async broadcastLiveStats(contestId: string, organizationId: string): Promise<void> {
+        const snapshot = await this.quizService.getAdminLiveSnapshot(
+            contestId,
+            organizationId,
+        );
+        this.io.of(this.NAMESPACE).to(`admin:${contestId}`).emit("admin:v1:live-stats", snapshot);
     }
 
     private emitError(socket: Socket, error: any): void {

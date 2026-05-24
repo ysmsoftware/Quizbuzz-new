@@ -5,6 +5,7 @@ interface ScoredRow {
     participantId: string;
     score: Prisma.Decimal;
     percentage: Prisma.Decimal;
+    isPassed: boolean | null;
     timeTakenSecs: number | null;
 }
 
@@ -24,6 +25,7 @@ export class LeaderboardRepository {
                 participantId: true,
                 score: true,
                 percentage: true,
+                isPassed: true,
                 timeTakenSecs: true,
             },
         }) as unknown as Promise<ScoredRow[]>;
@@ -54,6 +56,7 @@ export class LeaderboardRepository {
                     participantId: r.participantId,
                     score: r.score,
                     percentage: r.percentage,
+                    isPassed: r.isPassed ?? false,
                     timeTakenSecs: r.timeTakenSecs ?? 0,
                     rank: r.rank,
                     isPublished: false,
@@ -104,6 +107,25 @@ export class LeaderboardRepository {
                 },
             }),
             prisma.leaderboardEntry.count({ where: { contestId, organizationId, isPublished: true } }),
+        ]);
+        return { entries, total };
+    }
+
+    async findAllAdmin(contestId: string, organizationId: string, page: number, limit: number) {
+        const skip = (page - 1) * limit;
+        const [entries, total] = await prisma.$transaction([
+            prisma.leaderboardEntry.findMany({
+                where: { contestId, organizationId },
+                skip,
+                take: limit,
+                orderBy: { rank: "asc" },
+                include: {
+                    participant: {
+                        include: { contact: { select: { firstName: true, lastName: true } } },
+                    },
+                },
+            }),
+            prisma.leaderboardEntry.count({ where: { contestId, organizationId } }),
         ]);
         return { entries, total };
     }
