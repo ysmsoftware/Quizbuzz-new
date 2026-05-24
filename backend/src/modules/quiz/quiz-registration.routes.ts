@@ -20,3 +20,4 @@ export const quizRegistrationRouter = Router();
 // Both routes are public — participants are not authenticated at this stage
 quizRegistrationRouter.post("/request-otp", otpLimiter, quizRegistrationController.requestOtp);
 quizRegistrationRouter.post("/verify-otp",  otpLimiter, quizRegistrationController.verifyOtp);
+quizRegistrationRouter.post("/participant-login", otpLimiter, quizRegistrationController.participantLogin);

@@ -1,5 +1,5 @@
-// src/modules/file/providers/s3.provider.ts
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FileStorageProvider } from "./storage.provider";
 import crypto from "crypto";
 import { config } from "../config";
@@ -54,5 +54,30 @@ export class S3StorageProvider implements FileStorageProvider {
                 Key: storageKey,
             })
         );
+    }
+
+    async getPresignedPutUrl(params: {
+        filename: string;
+        folder: string;
+        mimeType: string;
+        expiresInSeconds?: number;
+    }): Promise<{ url: string; storageKey: string }> {
+        const extension = params.filename.split(".").pop() || "webp";
+        const key = `${params.folder}/${crypto.randomUUID()}.${extension}`;
+
+        const command = new PutObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+            ContentType: params.mimeType,
+        });
+
+        const url = await getSignedUrl(this.client, command, {
+            expiresIn: params.expiresInSeconds || 300,
+        });
+
+        return {
+            storageKey: key,
+            url,
+        };
     }
 }

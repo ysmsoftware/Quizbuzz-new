@@ -8,40 +8,36 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { forgotPassword } from '@/lib/api/auth.api';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  const auth = useAuth();
+  const loading = auth.forgotPasswordMutation.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+
+    if (!email) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
 
     try {
-      if (!email) {
-        setError('Please enter your email address');
-        setLoading(false);
-        return;
-      }
-
-      if (!email.includes('@')) {
-        setError('Please enter a valid email');
-        setLoading(false);
-        return;
-      }
-
-      await forgotPassword(email);
-
+      await auth.forgotPasswordMutation.mutateAsync(email);
       setSubmitted(true);
     } catch (err: any) {
       setError(err.message || 'Failed to send reset link. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 

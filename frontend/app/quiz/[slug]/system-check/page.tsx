@@ -1,5 +1,5 @@
 "use client";
-
+ 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -11,13 +11,14 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
+  Mic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProctoringStore } from "@/lib/stores/proctoring-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
-
+ 
 interface SystemCheck {
   id: string;
   label: string;
@@ -26,7 +27,7 @@ interface SystemCheck {
   status: "pending" | "checking" | "passed" | "failed";
   errorMessage?: string;
 }
-
+ 
 export default function SystemCheckPage() {
   const params = useParams();
   const router = useRouter();
@@ -34,13 +35,20 @@ export default function SystemCheckPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const { setCameraStream, setFullscreenEnabled, setCameraEnabled } = useProctoringStore();
-
+ 
   const [checks, setChecks] = useState<SystemCheck[]>([
     {
       id: "camera",
       label: "Camera Access",
       description: "Required for proctoring",
       icon: <Camera className="h-5 w-5" />,
+      status: "pending",
+    },
+    {
+      id: "microphone",
+      label: "Microphone Access",
+      description: "Required for environmental audio checks",
+      icon: <Mic className="h-5 w-5" />,
       status: "pending",
     },
     {
@@ -58,10 +66,13 @@ export default function SystemCheckPage() {
       status: "pending",
     },
   ]);
-
+ 
   const [allChecksPassed, setAllChecksPassed] = useState(false);
-  const [cameraStream, setCameraStreamLocal] = useState<MediaStream | null>(null);
-
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isProceeding, setIsProceeding] = useState(false);
+  const [hasFailedChecks, setHasFailedChecks] = useState(false);
+  const [deviceCheckFailed, setDeviceCheckFailed] = useState(false);
+ 
   const updateCheckStatus = (
     id: string,
     status: SystemCheck["status"],
@@ -73,37 +84,54 @@ export default function SystemCheckPage() {
       )
     );
   };
-
-  const checkCamera = async () => {
+ 
+  const checkDevices = async () => {
     updateCheckStatus("camera", "checking");
+    updateCheckStatus("microphone", "checking");
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 640, height: 480 },
-        audio: false,
-      });
+      const store = useProctoringStore.getState();
+      // Single unified permission request to support iOS Safari constraints
+      const success = await store.requestCameraPermission();
       
-      setCameraStreamLocal(stream);
-      setCameraStream(stream);
-      setCameraEnabled(true);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      if (success && store.videoStream) {
+        const hasVideo = store.videoStream.getVideoTracks().some(t => t.readyState === 'live');
+        const hasAudio = store.videoStream.getAudioTracks().some(t => t.readyState === 'live');
+        
+        if (!hasVideo) {
+          throw new Error("No active video track found.");
+        }
+        if (!hasAudio) {
+          throw new Error("No active audio track found.");
+        }
+        
+        setCameraEnabled(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = store.videoStream;
+        }
+        
+        updateCheckStatus("camera", "passed");
+        updateCheckStatus("microphone", "passed");
+        return true;
+      } else {
+        throw new Error("Camera or microphone permission was denied.");
       }
-      
-      updateCheckStatus("camera", "passed");
-      return true;
-    } catch (error) {
-      console.error("Camera access denied:", error);
+    } catch (error: any) {
+      console.error("Camera/Microphone access denied:", error);
       updateCheckStatus(
         "camera",
         "failed",
-        "Camera access denied. Please allow camera permissions and try again."
+        "Camera permission is required. Please check your browser/OS settings."
+      );
+      updateCheckStatus(
+        "microphone",
+        "failed",
+        "Microphone permission is required. Please check your browser/OS settings."
       );
       return false;
     }
   };
-
+ 
   const checkFullscreen = async () => {
     updateCheckStatus("fullscreen", "checking");
     
@@ -130,7 +158,7 @@ export default function SystemCheckPage() {
       return false;
     }
   };
-
+ 
   const checkNetwork = async () => {
     updateCheckStatus("network", "checking");
     
@@ -156,49 +184,63 @@ export default function SystemCheckPage() {
   };
 
   const runAllChecks = async () => {
-    const cameraOk = await checkCamera();
-    const fullscreenOk = await checkFullscreen();
-    const networkOk = await checkNetwork();
-
-    setAllChecksPassed(cameraOk && fullscreenOk && networkOk);
+    setIsRetrying(true);
+    setHasFailedChecks(false);
+    setDeviceCheckFailed(false);
+    try {
+      const [devOk, fsOk, netOk] = await Promise.all([
+        checkDevices(),
+        checkFullscreen(),
+        checkNetwork(),
+      ]);
+      const failed = !devOk || !fsOk || !netOk;
+      setHasFailedChecks(failed);
+      setDeviceCheckFailed(!devOk);
+      setAllChecksPassed(!failed);
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
-  const retryCheck = async (checkId: string) => {
-    switch (checkId) {
-      case "camera":
-        await checkCamera();
-        break;
-      case "fullscreen":
-        await checkFullscreen();
-        break;
-      case "network":
-        await checkNetwork();
-        break;
+  const retryCheck = async (id: string) => {
+    setIsRetrying(true);
+    try {
+      let ok = false;
+      if (id === "camera" || id === "microphone") ok = await checkDevices();
+      else if (id === "fullscreen") ok = await checkFullscreen();
+      else if (id === "network") ok = await checkNetwork();
+      // Recompute global pass state
+      setChecks((prev) => {
+        const updated = prev.map((c) =>
+          c.id === id ? { ...c, status: ok ? "passed" as const : "failed" as const } : c
+        );
+        const allPassed = updated.every((c) => c.status === "passed");
+        setAllChecksPassed(allPassed);
+        setHasFailedChecks(!allPassed);
+        return updated;
+      });
+    } finally {
+      setIsRetrying(false);
     }
-
-    const allPassed = checks.every(
-      (check) => check.status === "passed" || check.id === checkId
-    );
-    setAllChecksPassed(allPassed);
   };
 
   const proceedToWaitingRoom = () => {
-    router.push(`/quiz/${slug}/waiting`);
+    if (!slug || !allChecksPassed) return;
+    setIsProceeding(true);
+    try {
+      sessionStorage.setItem(`system_check_${slug}`, "passed");
+      router.push(`/quiz/${slug}/waiting`);
+    } catch {
+      setIsProceeding(false);
+    }
   };
 
+  // Run checks automatically on first mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      runAllChecks();
-    }, 500);
-
-    return () => {
-      clearTimeout(timer);
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((track) => track.stop());
-      }
-    };
+    runAllChecks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+ 
   const getStatusIcon = (status: SystemCheck["status"]) => {
     switch (status) {
       case "pending":
@@ -211,7 +253,7 @@ export default function SystemCheckPage() {
         return <XCircle className="h-5 w-5 text-destructive" />;
     }
   };
-
+ 
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -227,13 +269,16 @@ export default function SystemCheckPage() {
                 We need to verify your system meets the requirements for the quiz
               </CardDescription>
             </CardHeader>
-
+ 
             <CardContent className="space-y-6">
               <CameraCheckWidget
-                onProceed={() => updateCheckStatus("camera", "passed")}
-                onRetryCamera={() => {}}
+                onProceed={() => {
+                  updateCheckStatus("camera", "passed");
+                  updateCheckStatus("microphone", "passed");
+                }}
+                onRetryCamera={() => checkDevices()}
               />
-
+ 
               <div className="space-y-3">
                 {checks.map((check) => (
                   <motion.div
@@ -257,69 +302,125 @@ export default function SystemCheckPage() {
                     >
                       {check.icon}
                     </div>
-
+ 
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{check.label}</p>
                       <p className="text-sm text-muted-foreground">
                         {check.errorMessage || check.description}
                       </p>
                     </div>
-
-                    <div className="flex items-center gap-2">
+ 
+                      <div className="flex items-center gap-2">
                       {getStatusIcon(check.status)}
                       {check.status === "failed" && (
                         <Button
                           variant="outline"
                           size="sm"
+                          disabled={isRetrying}
                           onClick={() => retryCheck(check.id)}
+                          className="min-w-[72px]"
                         >
-                          Retry
+                          {isRetrying ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            "Retry"
+                          )}
                         </Button>
                       )}
                     </div>
                   </motion.div>
                 ))}
               </div>
-
-              {checks.some((check) => check.status === "failed") && (
+ 
+              {deviceCheckFailed && (
+                <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-5 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-amber-900 dark:text-amber-300">How to Enable Camera & Microphone Permissions</h4>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">Both permissions are strictly mandatory to start this quiz. Please follow these steps:</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div className="space-y-1 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-amber-100 dark:border-zinc-800">
+                      <p className="font-semibold text-zinc-950 dark:text-zinc-50">📱 iOS (Safari)</p>
+                      <ol className="list-decimal pl-4 space-y-1 text-zinc-600 dark:text-zinc-400">
+                        <li>Open device **Settings**</li>
+                        <li>Go to **Safari**</li>
+                        <li>Scroll to **Camera** & **Microphone**</li>
+                        <li>Set access to **Allow**</li>
+                      </ol>
+                    </div>
+                    
+                    <div className="space-y-1 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-amber-100 dark:border-zinc-800">
+                      <p className="font-semibold text-zinc-950 dark:text-zinc-50">🤖 Android (Chrome)</p>
+                      <ol className="list-decimal pl-4 space-y-1 text-zinc-600 dark:text-zinc-400">
+                        <li>Tap 🔒 lock icon left of URL bar</li>
+                        <li>Go to **Site Settings**</li>
+                        <li>Find **Camera** and **Microphone**</li>
+                        <li>Change options to **Allow**</li>
+                      </ol>
+                    </div>
+                    
+                    <div className="space-y-1 bg-white dark:bg-zinc-900 p-3 rounded-lg border border-amber-100 dark:border-zinc-800">
+                      <p className="font-semibold text-zinc-950 dark:text-zinc-50">💻 Desktop browsers</p>
+                      <ol className="list-decimal pl-4 space-y-1 text-zinc-600 dark:text-zinc-400">
+                        <li>Click 🔒 lock icon left of URL bar</li>
+                        <li>Enable **Camera** & **Microphone**</li>
+                        <li>Click **Refresh** / **Reload** page</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              )}
+ 
+              {hasFailedChecks && !deviceCheckFailed && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Some checks failed</AlertTitle>
                   <AlertDescription>
-                    Please resolve the failed checks to continue. You can retry
-                    individual checks using the retry buttons.
+                    Please resolve all failed checks to continue. You can retry individual checks using the retry buttons.
                   </AlertDescription>
                 </Alert>
               )}
-
+ 
               {allChecksPassed && (
                 <Alert className="border-success/50 bg-success/5">
                   <CheckCircle className="h-4 w-4 text-success" />
                   <AlertTitle className="text-success">All checks passed!</AlertTitle>
                   <AlertDescription>
-                    Your system meets all requirements. You can proceed to the
-                    waiting room.
+                    Your system meets all requirements. You can proceed to the waiting room.
                   </AlertDescription>
                 </Alert>
               )}
-
+ 
               <div className="flex gap-3">
                 <Button
                   variant="outline"
                   className="flex-1"
+                  disabled={isRetrying}
                   onClick={() => runAllChecks()}
                 >
-                  Run All Checks Again
+                  {isRetrying ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Checking...</>
+                  ) : (
+                    "Run All Checks Again"
+                  )}
                 </Button>
                 <Button
                   className="flex-1"
-                  disabled={!allChecksPassed}
+                  disabled={!allChecksPassed || isProceeding}
                   onClick={proceedToWaitingRoom}
                 >
-                  Continue to Waiting Room
+                  {isProceeding ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Entering...</>
+                  ) : (
+                    "Continue to Waiting Room"
+                  )}
                 </Button>
               </div>
-
+ 
               <p className="text-xs text-center text-muted-foreground">
                 By continuing, you agree to keep your camera on and remain in
                 fullscreen mode during the entire quiz session.

@@ -238,4 +238,26 @@ export class AdminAuthController {
         }
     }
 
+    /**
+     * GET /auth/admin/socket-token
+     * Returns a short-lived JWT the frontend uses to authenticate
+     * the admin WebSocket connection (/quiz-admin namespace).
+     * Protected by authenticatedOrgMiddleware (cookie-based).
+     */
+    getSocketToken = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const result = this.service.issueSocketToken(
+                req.user!.id,
+                req.user!.organizationId,
+            );
+            res.status(200).json({
+                success: true,
+                data: result,
+                requestId: req.id,
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
 }

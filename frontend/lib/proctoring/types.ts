@@ -16,6 +16,7 @@ export interface DetectionResult {
   lightingOk: boolean; // brightness > 40
   faces: FaceBoundingBox[];
   timestamp: number;
+  gazeAway?: boolean;
 }
 
 export type ModelLoadStatus = 'idle' | 'loading' | 'ready' | 'failed';

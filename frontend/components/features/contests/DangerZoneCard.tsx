@@ -104,13 +104,13 @@ export function DangerZoneCard({
                 <DialogHeader>
                   <DialogTitle>Are you absolutely sure?</DialogTitle>
                   <DialogDescription>
-                    This will permanently delete the contest <strong>"{contestTitle}"</strong>.
-                    Please type the contest title to confirm.
+                    This action cannot be reversed. This contest and all its data will be deleted.
+                    Please type <strong>delete</strong> to confirm.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
                   <Input 
-                    placeholder="Enter contest title" 
+                    placeholder="Type delete to confirm" 
                     value={confirmText} 
                     onChange={(e) => setConfirmText(e.target.value)} 
                   />
@@ -118,7 +118,7 @@ export function DangerZoneCard({
                 <DialogFooter>
                   <Button 
                     variant="destructive" 
-                    disabled={confirmText !== contestTitle || isActionInProgress}
+                    disabled={confirmText.toLowerCase() !== 'delete' || isActionInProgress}
                     onClick={handleDelete}
                   >
                     {isActionInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -183,10 +183,77 @@ export function DangerZoneCard({
               <span className="text-sm font-bold">Archive Contest</span>
               <span className="text-xs text-muted-foreground">Hide this contest from the main list but keep its data for records.</span>
             </div>
-            <Button variant="outline" className="w-full" onClick={handleArchive} disabled={isActionInProgress}>
-              {isActionInProgress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
-              Archive Contest
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Archive className="mr-2 h-4 w-4" />
+                  Archive Contest
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Archive Contest?</DialogTitle>
+                  <DialogDescription>
+                    This contest and all its data will be archived. It will be hidden from the main list but kept for records.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    disabled={isActionInProgress}
+                    onClick={handleArchive}
+                  >
+                    {isActionInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirm Archive
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+
+        {/* COMPLETED/ENDED: Delete (added because we now allow deleting completed) */}
+        {isArchivable && !isDraft && (
+          <div className="flex flex-col gap-3 p-4 rounded-lg bg-background/50 border border-destructive/10 mt-4">
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-destructive">Delete Contest</span>
+              <span className="text-xs text-muted-foreground">Permanently remove this contest and all its data.</span>
+            </div>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full border-destructive/20 text-destructive hover:bg-destructive hover:text-white">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Contest
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Are you absolutely sure?</DialogTitle>
+                  <DialogDescription>
+                    This action cannot be reversed. This contest and all its data will be deleted.
+                    Please type <strong>delete</strong> to confirm.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Input 
+                    placeholder="Type delete to confirm" 
+                    value={confirmText} 
+                    onChange={(e) => setConfirmText(e.target.value)} 
+                  />
+                </div>
+                <DialogFooter>
+                  <Button 
+                    variant="destructive" 
+                    disabled={confirmText.toLowerCase() !== 'delete' || isActionInProgress}
+                    onClick={handleDelete}
+                  >
+                    {isActionInProgress && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirm Deletion
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </CardContent>

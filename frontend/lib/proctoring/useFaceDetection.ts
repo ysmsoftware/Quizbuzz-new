@@ -19,16 +19,17 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
   // Timestamp-based tracking for continuous violations
   const noFaceStartRef = useRef<number | null>(null);
   const multiFaceStartRef = useRef<number | null>(null);
-
+  const gazeAwayStartRef = useRef<number | null>(null);
+ 
   // Selectors for store (avoid re-renders from unrelated state changes)
   const faceCount = useProctoringStore((s) => s.faceCount);
   const faceDetected = useProctoringStore((s) => s.faceDetected);
   const lightingOk = useProctoringStore((s) => s.lightingOk);
-
+ 
   // Initialize model on first mount when active
   useEffect(() => {
     if (!active || isInitialized) return;
-
+ 
     const initModel = async () => {
       try {
         const { faceEngine } = await import('./index');
@@ -39,10 +40,10 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
         console.error('[QuizPro] Failed to initialize face detection:', error);
       }
     };
-
+ 
     initModel();
   }, [active, isInitialized]);
-
+ 
   // Handle detection result — update store and check for violations
   const handleResult = useCallback(
     (result: DetectionResult) => {
@@ -50,7 +51,7 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
       store.setFaceCount(result.faceCount);
       store.setFaceDetected(result.faceCount === 1);
       store.setLightingOk(result.lightingOk);
-
+ 
       // NO FACE for > 5 continuous seconds
       if (result.faceCount === 0) {
         if (!noFaceStartRef.current) {
@@ -66,7 +67,7 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
       } else {
         noFaceStartRef.current = null;
       }
-
+ 
       // MULTIPLE FACES for > 3 continuous seconds
       if (result.faceCount >= 2) {
         if (!multiFaceStartRef.current) {
@@ -81,6 +82,22 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
         }
       } else {
         multiFaceStartRef.current = null;
+      }
+ 
+      // GAZE AWAY for > 4 continuous seconds
+      if (result.gazeAway) {
+        if (!gazeAwayStartRef.current) {
+          gazeAwayStartRef.current = Date.now();
+        } else if (Date.now() - gazeAwayStartRef.current > 4000) {
+          store.addWarning({ type: 'GAZE_AWAY', timestamp: Date.now() });
+          wsEmit?.('PROCTOR_WARNING', {
+            warningType: 'GAZE_AWAY',
+            timestamp: Date.now(),
+          });
+          gazeAwayStartRef.current = null; // Reset to avoid spam
+        }
+      } else {
+        gazeAwayStartRef.current = null;
       }
     },
     [wsEmit]

@@ -1,19 +1,10 @@
-import { Contest, ServerContest, ContestPhase } from '@/lib/types';
+import { Contest, ServerContest } from '@/lib/types';
 
-export function deriveContestPhase(contest: Contest | ServerContest): ContestPhase {
-  const status = (contest as any).status?.toUpperCase?.() ?? '';
-  const map: Record<string, ContestPhase> = {
-    DRAFT: 'DRAFT',
-    PUBLISHED: 'PUBLISHED',
-    REGISTRATION_CLOSED: 'REGISTRATION_CLOSED',
-    LIVE: 'LIVE',
-    EVALUATION: 'ENDED',
-    RESULTS_OUT: 'RESULTS_PUBLISHED',
-    COMPLETED: 'RESULTS_PUBLISHED',
-    CANCELLED: 'CANCELLED',
-  };
-  return map[status] || 'DRAFT';
-}
+export {
+  deriveContestPhase,
+  getServerContestStatus,
+  isContestLive,
+} from '@/lib/serverContestStatus';
 
 /**
  * Transforms a ServerContest from the backend API into the local Contest shape
@@ -54,6 +45,7 @@ export function adaptServerContest(server: ServerContest): Contest {
     id: server.id,
     title: server.title,
     slug: server.slug,
+    serverStatus: server.status,
     orgId: '',
     orgSlug: '',
     description: server.description || '',

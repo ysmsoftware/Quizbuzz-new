@@ -36,6 +36,10 @@ export class AnalyticsController {
             }
 
             const analytics = await this.analyticsService.getContestAnalytics(contestId, organizationId);
+
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+            res.setHeader("Pragma", "no-cache");
+
             return res.json({ success: true, data: analytics.live });
         } catch (error) {
             logger.error(`[analytics-controller] Failed to fetch live analytics:`, error);
@@ -56,6 +60,22 @@ export class AnalyticsController {
             return res.json({ success: true, data: snapshot, message: "Analytics refreshed" });
         } catch (error) {
             logger.error(`[analytics-controller] Failed to refresh analytics:`, error);
+            return res.status(500).json({ message: "Internal server error" });
+        }
+    }
+
+    async getScoreDistribution(req: Request, res: Response) {
+        try {
+            const { id: contestId } = req.params;
+
+            if (!contestId || typeof contestId !== "string") {
+                return res.status(400).json({ message: "Invalid contest ID" });
+            }
+
+            const distribution = await this.analyticsService.getScoreDistribution(contestId);
+            return res.json({ success: true, data: distribution });
+        } catch (error) {
+            logger.error(`[analytics-controller] Failed to fetch score distribution:`, error);
             return res.status(500).json({ message: "Internal server error" });
         }
     }

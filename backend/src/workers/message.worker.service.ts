@@ -4,6 +4,7 @@ import { MessagingService } from "../modules/messaging/messaging.service";
 import { MessageProvider } from "../providers/message.provider";
 import { TemplateParamsMap } from "../types/message-template";
 import { prisma } from "../config/db";
+import { config } from "../config";
 
 
 export class MessageWorkerService {
@@ -80,21 +81,24 @@ export class MessageWorkerService {
      * Fan-out handler for bulk notifications (reminders, results published, etc.)
      * Fetches all participants for a contest and creates individual send-message jobs.
      */
-    async processBulkNotify(data: { contestId: string; organizationId: string; template: string }) {
+    async processBulkNotify(data: { contestId: string; organizationId: string; template: string; contestSlug?: string }) {
         const { contestId, organizationId, template } = data;
 
         logger.info(`[message-worker] Starting bulk-notify: template=${template} contest=${contestId}`);
 
-        // Fetch contest title for template params
+        // Fetch contest with all fields needed for template params
         const contest = await prisma.contest.findFirst({
             where: { id: contestId, organizationId },
-            select: { title: true },
+            select: { title: true, startTime: true, slug: true, joinCode: true },
         });
 
         if (!contest) {
             logger.error(`[message-worker] Contest ${contestId} not found for bulk-notify`);
             return;
         }
+
+        const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || config.app.frontendUrl || 'https://quizbuzz.in';
+        const isResultsTemplate = template === 'RESULTS_PUBLISHED';
 
         // Fetch all registered participants with their contact info
         const participants = await prisma.participant.findMany({
@@ -120,7 +124,17 @@ export class MessageWorkerService {
                     params: {
                         name: p.contact.firstName,
                         eventName: contest.title,
-                        link: "",  // populated at render time if needed
+                        date: contest.startTime
+                            ? new Date(contest.startTime).toLocaleDateString('en-IN', { dateStyle: 'long', timeZone: 'Asia/Kolkata' })
+                            : 'TBD',
+                        time: contest.startTime
+                            ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short', timeZone: 'Asia/Kolkata' })
+                            : 'TBD',
+                        // Results: link to public leaderboard. Reminder/confirmation: link to contest page.
+                        link: isResultsTemplate
+                            ? `${appUrl}/contests/${contest.slug}/results`
+                            : `${appUrl}/contests/${contest.slug}`,
+                        joinCode: contest.joinCode ?? 'To be revealed on contest day',
                     },
                 });
                 enqueued++;

@@ -16,6 +16,7 @@ import {
   Share2
 } from 'lucide-react';
 import { resultsApi, LeaderboardEntry } from '@/lib/api/results-certs.api';
+import { contestService } from '@/lib/services/contest-service';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -37,20 +38,29 @@ export default function PublicLeaderboardPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
-  // We need to get the contest ID from the slug. 
-  // For now, assuming the API might support slug or we have a way to resolve it.
-  // In our current structure, usually we fetch contest details by slug first.
-  // Using a placeholder 'slug' for the ID if the API supports it, or I should fetch contest info.
-  const { data: leaderboardData, isLoading, error } = useQuery({
-    queryKey: ['public-leaderboard', slug, { page }],
-    queryFn: () => resultsApi.getPublicLeaderboard(slug, { page, limit: 50 }),
+  // Fetch the contest details by slug first to get the correct UUID (id)
+  const { data: contestRes, isLoading: isContestLoading } = useQuery({
+    queryKey: ['contest-by-slug', slug],
+    queryFn: () => contestService.getContestBySlug(slug),
+  });
+
+  const contest = contestRes?.success ? contestRes.data : null;
+  const contestId = contest?.id;
+
+  const { data: leaderboardData, isLoading: isLeaderboardLoading, error } = useQuery({
+    queryKey: ['public-leaderboard', contestId, { page }],
+    queryFn: () => resultsApi.getPublicLeaderboard(contestId!, { page, limit: 50 }),
+    enabled: !!contestId,
     retry: false, // If 404, results not declared
   });
+
+  const isLoading = isContestLoading || (!!contestId && isLeaderboardLoading);
+  const isError = error || (contestRes !== undefined && !contestRes.success);
 
   const leaderboard = leaderboardData?.data;
   const entries = leaderboard?.entries || [];
 
-  if (error) {
+  if (isError) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
         <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center mb-6">

@@ -16,6 +16,7 @@ import { config } from "../config";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import type { Worker } from "./worker.interface";
+import { quizTimerQueue } from "../queues";
 import type { QuizTimerJobPayload } from "../queues";
 import type { PrismaClient } from "@prisma/client";
 
@@ -39,6 +40,7 @@ let quizService: {
 
 let contestService: {
     triggerEvaluation: (cid: string, oid: string) => Promise<any>;
+    declareResults: (cid: string, oid: string) => Promise<any>;
 } | null = null;
 
 let prisma: PrismaClient | null = null;
@@ -82,6 +84,14 @@ async function processTimerJob(job: Job<QuizTimerJobPayload>): Promise<void> {
             await handleCaptureRequest(job.data.participantId!, job.data.captureType!);
             break;
 
+        case "MARK_ABSENT":
+            await handleMarkAbsent(contestId, organizationId);
+            break;
+
+        case "AUTO_DECLARE_RESULTS":
+            await handleAutoDeclareResults(contestId, organizationId);
+            break;
+
         default:
             logger.warn(`[quiz-timer] Unknown job type: ${type}`);
     }
@@ -91,7 +101,10 @@ async function processTimerJob(job: Job<QuizTimerJobPayload>): Promise<void> {
 
 async function handleContestStart(contestId: string, organizationId: string): Promise<void> {
     if (!quizService || !quizGateway || !prisma) {
-        logger.error("[quiz-timer] Dependencies not injected");
+        logger.error(
+            "[quiz-timer] CONTEST_START aborted — dependencies not injected. " +
+            "Ensure worker.ts imports ./container before startWorkers().",
+        );
         return;
     }
 
@@ -101,27 +114,57 @@ async function handleContestStart(contestId: string, organizationId: string): Pr
         data: { status: "LIVE" },
     });
 
-    // 2. Transition ready participants from waiting room
+    // 2. Transition waiting-room participants (Redis set) to quiz
     const { transitioned, blocked } = await quizService.transitionToQuiz(contestId);
 
     logger.info(
         `[quiz-timer] Contest ${contestId} started: ${transitioned.length} transitioned, ${blocked.length} blocked`,
     );
 
-    // 3. Start quiz for each transitioned participant
+    // 3. Start quiz for each participant who was in the Redis waiting set
+    const startedPids = new Set<string>();
     for (const pid of transitioned) {
         try {
             const session = await quizService.handleRejoin(contestId, pid);
             const contactId = session?.contactId ?? "";
             await quizGateway.startQuizForParticipant(pid, contestId, organizationId, contactId);
+            startedPids.add(pid);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error(`[quiz-timer] Failed to start quiz for ${pid}: ${msg}`);
         }
     }
 
-    // 4. Broadcast admin stats
-    quizGateway.broadcastAdminEvent(contestId, "admin:live-stats", {
+    // 4. DB-level fallback: also start quiz for any REGISTERED/CHECKED_IN participants
+    //    who were on the waiting page but whose socket never emitted quiz:v1:join
+    //    (network blip, page refresh, slow connection, etc.)
+    try {
+        const dbParticipants = await prisma.participant.findMany({
+            where: {
+                contestId,
+                organizationId,
+                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"] },
+            },
+            select: { id: true, contactId: true },
+        });
+
+        for (const p of dbParticipants) {
+            if (startedPids.has(p.id)) continue; // already handled above
+            try {
+                await quizGateway.startQuizForParticipant(p.id, contestId, organizationId, p.contactId);
+                logger.info(`[quiz-timer] DB-fallback: started quiz for ${p.id}`);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error(`[quiz-timer] DB-fallback failed for ${p.id}: ${msg}`);
+            }
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`[quiz-timer] DB-fallback query failed: ${msg}`);
+    }
+
+    // 5. Broadcast admin stats
+    quizGateway.broadcastAdminEvent(contestId, "admin:v1:live-stats", {
         contestId,
         active: transitioned.length,
         submitted: 0,
@@ -160,12 +203,139 @@ async function handleAutoSubmit(contestId: string, organizationId: string): Prom
     logger.info(
         `[quiz-timer] Auto-submit for contest ${contestId}: ${submitted.length} submitted, ${errors.length} errors`,
     );
+
+    // Enqueue MARK_ABSENT delayed job
+    try {
+        await quizTimerQueue.add(
+            "mark-absent",
+            {
+                contestId,
+                organizationId,
+                type: "MARK_ABSENT",
+            },
+            {
+                jobId: `MARK_ABSENT-${contestId}`,
+            }
+        );
+        logger.info(`[quiz-timer] Enqueued MARK_ABSENT job for contest ${contestId}`);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`[quiz-timer] Failed to enqueue MARK_ABSENT job for contest ${contestId}: ${msg}`);
+    }
 }
 
 async function handleCaptureRequest(participantId: string, captureType: string): Promise<void> {
     if (!quizGateway) return;
     await quizGateway.emitCaptureRequest(participantId, captureType);
     logger.info(`[quiz-timer] Capture request sent to ${participantId}: ${captureType}`);
+}
+
+async function handleMarkAbsent(contestId: string, organizationId: string): Promise<void> {
+    if (!prisma) {
+        logger.error("[quiz-timer] Prisma client not injected for MARK_ABSENT");
+        return;
+    }
+
+    logger.info(`[quiz-timer] Starting MARK_ABSENT processing for contest ${contestId}`);
+
+    try {
+        // 1. Query participants
+        const participants = await prisma.participant.findMany({
+            where: {
+                contestId,
+                organizationId,
+                status: {
+                    in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"],
+                },
+            },
+            select: { id: true },
+        });
+
+        const participantIds = participants.map((p) => p.id);
+        logger.info(`[quiz-timer] Found ${participantIds.length} absent participants to transition`);
+
+        if (participantIds.length === 0) {
+            logger.info(`[quiz-timer] No absent participants to process for contest ${contestId}`);
+            return;
+        }
+
+        // 2. Chunk into batches of 500
+        const batchSize = 500;
+        const delayMs = 50;
+
+        for (let i = 0; i < participantIds.length; i += batchSize) {
+            const batch = participantIds.slice(i, i + batchSize);
+
+            // 3. Update each batch in a transaction
+            await prisma.$transaction(
+                async (tx) => {
+                    await tx.participant.updateMany({
+                        where: {
+                            id: { in: batch },
+                            status: {
+                                in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"],
+                            },
+                        },
+                        data: { status: "ABSENT" },
+                    });
+                },
+                {
+                    timeout: 5000, // 5s timeout
+                }
+            );
+
+            logger.info(`[quiz-timer] Updated batch of ${batch.length} participants to ABSENT`);
+
+            // Invalidate Redis cache key after each batch commit
+            const cacheKey = `contest:status-summary:${contestId}`;
+            await redis.del(cacheKey);
+
+            // 4. Inter-batch delay of 50ms to prevent DB index lock contention
+            if (i + batchSize < participantIds.length) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+
+        logger.info(`[quiz-timer] Completed MARK_ABSENT processing for contest ${contestId}`);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`[quiz-timer] Error in MARK_ABSENT for contest ${contestId}: ${msg}`);
+        throw err;
+    }
+}
+
+async function handleAutoDeclareResults(contestId: string, organizationId: string): Promise<void> {
+    if (!contestService || !prisma) {
+        logger.error("[quiz-timer] AUTO_DECLARE_RESULTS aborted — dependencies not injected.");
+        return;
+    }
+
+    // Check if contest has already had results declared (idempotent guard)
+    const contest = await prisma.contest.findUnique({
+        where: { id: contestId },
+        select: { status: true },
+    });
+
+    if (!contest) {
+        logger.warn(`[quiz-timer] AUTO_DECLARE_RESULTS: Contest ${contestId} not found — skipping.`);
+        return;
+    }
+
+    if (["RESULTS_OUT", "COMPLETED", "CANCELLED"].includes(contest.status)) {
+        logger.info(
+            `[quiz-timer] AUTO_DECLARE_RESULTS: Contest ${contestId} already in ${contest.status} — no-op.`,
+        );
+        return;
+    }
+
+    try {
+        await contestService.declareResults(contestId, organizationId);
+        logger.info(`[quiz-timer] AUTO_DECLARE_RESULTS: Successfully declared results for contest ${contestId}.`);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`[quiz-timer] AUTO_DECLARE_RESULTS failed for contest ${contestId}: ${msg}`);
+        throw err; // Let BullMQ retry
+    }
 }
 
 // ─── Worker Registration ──────────────────────────────────────────────────────

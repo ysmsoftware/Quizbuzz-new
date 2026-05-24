@@ -1,4 +1,4 @@
-import { ContestStatus, ParticipantStatus } from "@prisma/client";
+import { ContestStatus, ParticipantStatus, SubmissionStatus } from "@prisma/client";
 import { ContestRepository } from "./contest.repository";
 import { ParticipantService } from "../participant/participant.service";
 import { LeaderboardRepository } from "./leaderboard.repository";
@@ -23,6 +23,7 @@ import { ContactService } from "../contact/contact.service";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { messageQueue } from "../../queues";
+import { rankRows } from "../../workers/leaderboard.worker";
 import logger from "../../config/logger";
 
 
@@ -144,7 +145,10 @@ export class ContestService {
         }
         // Strip joinCode for security — never expose to public
         const { joinCode, ...safeContest } = contest as any;
-        return safeContest;
+        return {
+            ...safeContest,
+            joinCodeRequired: !!joinCode,
+        };
     }
 
     async updateContest(contestId: string, organizationId: string, dto: UpdateContestInput) {
@@ -209,7 +213,8 @@ export class ContestService {
             contestId,
             organizationId,
             new Date(contest.startTime),
-            new Date(contest.endTime)
+            new Date(contest.endTime),
+            contest.showResultsAfter ?? 24,
         );
 
         return { status: updated.status, joinCode };
@@ -220,11 +225,32 @@ export class ContestService {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");
 
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new BadRequestError("Only DRAFT contests can be deleted");
+        if (contest.status !== ContestStatus.DRAFT && contest.status !== ContestStatus.COMPLETED) {
+            throw new BadRequestError("Only DRAFT or COMPLETED contests can be deleted");
         }
 
         return this.contestRepo.softDelete(contestId, organizationId);
+    }
+
+    async archiveContest(contestId: string, organizationId: string) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        return this.contestRepo.archive(contestId, organizationId);
+    }
+
+    async listArchivedContests(organizationId: string, query: Omit<ListContestsFilter, 'isArchived'>) {
+        const { data, total } = await this.contestRepo.list(organizationId, { ...query, isArchived: true });
+        const { page = 1, limit = 20 } = query;
+        return {
+            data,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
     }
 
 
@@ -314,7 +340,14 @@ export class ContestService {
                 params: {
                     name: dto.firstName,
                     eventName: contest.title,
-                    registrationRef,
+                    date: contest.startTime
+                        ? new Date(contest.startTime).toLocaleDateString('en-IN', { dateStyle: 'long' })
+                        : 'TBD',
+                    time: contest.startTime
+                        ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short' })
+                        : 'TBD',
+                    link: `${config.app.frontendUrl}/contests/${contest.slug}`,
+                    joinCode: contest.joinCode || 'N/A',
                 },
             }).catch((err) => {
                 logger.error(`[contest] Failed to enqueue registration confirmation: ${(err as Error).message}`);
@@ -390,8 +423,8 @@ export class ContestService {
     async triggerEvaluation(contestId: string, organizationId: string) {
         const contest = await this.getContest(contestId, organizationId);
 
-        if (contest.status !== ContestStatus.LIVE) {
-            throw new BadRequestError("Evaluation can only be triggered on a LIVE contest");
+        if (contest.status === ContestStatus.DRAFT || contest.status === ContestStatus.CANCELLED) {
+            throw new BadRequestError("Evaluation cannot be triggered on a DRAFT or CANCELLED contest");
         }
 
         await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.EVALUATION);
@@ -406,25 +439,84 @@ export class ContestService {
     async declareResults(contestId: string, organizationId: string) {
         const contest = await this.getContest(contestId, organizationId);
 
-        if (contest.status !== ContestStatus.EVALUATION) {
-            throw new BadRequestError("Results can only be declared after evaluation is complete");
+        // Idempotent: if results are already out, return early
+        if (contest.status === ContestStatus.RESULTS_OUT || contest.status === ContestStatus.COMPLETED) {
+            logger.info(`[contest] declareResults: Contest ${contestId} already in ${contest.status} — no-op`);
+            return { status: contest.status };
         }
 
-        const entryCount = await this.leaderboardRepo.countEntries(contestId, organizationId);
-        if (entryCount === 0) {
-            throw new BadRequestError("Leaderboard has not been built yet. Wait for evaluation to complete.");
+        if (contest.status === ContestStatus.DRAFT || contest.status === ContestStatus.CANCELLED) {
+            throw new BadRequestError("Results cannot be declared on a DRAFT or CANCELLED contest");
         }
 
+        // Check if there are any submissions still in SUBMITTED status (pending evaluation)
+        const pendingCount = await this.submissionService.countByContest(contestId, organizationId, [SubmissionStatus.SUBMITTED]);
+        if (pendingCount > 0) {
+            throw new BadRequestError("Submissions are still being evaluated. Wait for evaluation to complete.");
+        }
+
+        // Check leaderboard state
+        const evaluatedCount = await this.submissionService.countByContest(contestId, organizationId, [SubmissionStatus.EVALUATED]);
+        let entryCount = await this.leaderboardRepo.countEntries(contestId, organizationId);
+
+        // If evaluations exist but leaderboard entries don't, build inline
+        if (evaluatedCount > 0 && entryCount === 0) {
+            logger.info(`[contest] declareResults: Building leaderboard inline for contest ${contestId} (${evaluatedCount} evaluated, 0 entries)`);
+            const scores = await this.leaderboardRepo.fetchEvaluatedScores(contestId, organizationId);
+            if (scores.length > 0) {
+                const ranked = rankRows(scores);
+                await this.leaderboardRepo.buildLeaderboard(contestId, organizationId, ranked);
+                entryCount = ranked.length;
+                logger.info(`[contest] declareResults: Built ${entryCount} leaderboard entries inline for contest ${contestId}`);
+            }
+        }
+
+        // Final guard: if there are still no entries, block declaration
+        if (entryCount === 0 && evaluatedCount > 0) {
+            throw new BadRequestError("Leaderboard could not be built. Please try again or contact support.");
+        }
+
+        // Publish all entries and update contest status
         await this.leaderboardRepo.publishAll(contestId, organizationId);
         await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.RESULTS_OUT);
 
         // Notify all participants that results are out (fan-out via worker)
+        // Pass contest slug so the worker can build the leaderboard URL
         await messageQueue.add('bulk-notify', {
             contestId, organizationId, template: MessageTemplate.RESULTS_PUBLISHED,
+            contestSlug: contest.slug,
         }, { jobId: `results-notify-${contestId}` });
         logger.info(`[contest] Enqueued results-published notification for contest ${contestId}`);
 
         return { status: ContestStatus.RESULTS_OUT };
+    }
+
+    /**
+     * Returns info about the auto-declare schedule for the frontend confirmation modal.
+     * Allows the admin to know whether they are declaring results early.
+     */
+    async getResultsDeclarationInfo(contestId: string, organizationId: string) {
+        const contest = await this.getContest(contestId, organizationId);
+
+        const showResultsAfter = contest.showResultsAfter ?? 24;
+        const endTime = new Date(contest.endTime);
+        const scheduledAt = new Date(endTime.getTime() + showResultsAfter * 3600 * 1000);
+        const now = new Date();
+        const isEarlyDeclare = now < scheduledAt;
+
+        const evaluatedCount = await this.submissionService.countByContest(contestId, organizationId, [SubmissionStatus.EVALUATED]);
+        const entryCount = await this.leaderboardRepo.countEntries(contestId, organizationId);
+        const pendingCount = await this.submissionService.countByContest(contestId, organizationId, [SubmissionStatus.SUBMITTED]);
+
+        return {
+            showResultsAfter,
+            scheduledAt: scheduledAt.toISOString(),
+            isEarlyDeclare,
+            isAlreadyDeclared: contest.status === ContestStatus.RESULTS_OUT || contest.status === ContestStatus.COMPLETED,
+            leaderboardReady: entryCount > 0,
+            evaluatedCount,
+            pendingCount,
+        };
     }
 
 
@@ -434,8 +526,26 @@ export class ContestService {
         page: number,
         limit: number
     ) {
-        await this.getContest(contestId, organizationId);
-        const { entries, total } = await this.leaderboardRepo.findAll(contestId, organizationId, page, limit);
+        const contest = await this.contestRepo.findById(contestId, organizationId || undefined);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        const { entries, total } = await this.leaderboardRepo.findAll(contestId, contest.organizationId, page, limit);
+        return {
+            entries,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        };
+    }
+
+    async getAdminLeaderboard(
+        contestId: string,
+        organizationId: string,
+        page: number,
+        limit: number
+    ) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        const { entries, total } = await this.leaderboardRepo.findAllAdmin(contestId, contest.organizationId, page, limit);
         return {
             entries,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },

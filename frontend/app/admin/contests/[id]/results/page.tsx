@@ -22,6 +22,7 @@ import {
   Activity
 } from 'lucide-react';
 import { resultsApi, LeaderboardEntry } from '@/lib/api/results-certs.api';
+import { getContest } from '@/lib/api/contests.api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -52,39 +53,57 @@ export default function AdminResultsPage() {
   // Queries
   const { data: leaderboardData, isLoading } = useQuery({
     queryKey: ['admin-leaderboard', contestId, { page }],
-    queryFn: () => resultsApi.getPublicLeaderboard(contestId, { page, limit: 50 }),
+    queryFn: () => resultsApi.getAdminLeaderboard(contestId, { page, limit: 50 }),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(attempt * 1000, 5000),
   });
+
+  const { data: contestData } = useQuery({
+    queryKey: ['contests', contestId],
+    queryFn: () => getContest(contestId),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(attempt * 1000, 5000),
+  });
+  const contest = contestData?.data;
 
   const { data: scoreDistribution } = useQuery({
     queryKey: ['score-distribution', contestId],
     queryFn: () => resultsApi.getScoreDistribution(contestId),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(attempt * 1000, 5000),
   });
 
   // Mutations
+  // Rebuild leaderboard maps to the evaluate endpoint (re-runs scoring pipeline)
   const rebuildMutation = useMutation({
-    mutationFn: () => resultsApi.rebuildLeaderboard(contestId),
+    mutationFn: () => resultsApi.triggerEvaluate(contestId),
     onSuccess: () => {
-      toast.success('Leaderboard rebuild queued');
+      toast.success('Re-evaluation queued — rankings will update shortly');
       queryClient.invalidateQueries({ queryKey: ['admin-leaderboard', contestId] });
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Failed to rebuild leaderboard');
+      toast.error(err.message || 'Failed to queue re-evaluation');
     },
   });
 
+  // Declare results: makes leaderboard public to participants
+  // Per product design: this should only be used for manual override.
+  // Normally results auto-publish after showResultsAfter hours via BullMQ.
   const declareResultsMutation = useMutation({
     mutationFn: () => resultsApi.declareResults(contestId),
     onSuccess: () => {
-      toast.success('Results officially declared! Public leaderboard is now live.');
+      toast.success('Results declared — public leaderboard is now live.');
       queryClient.invalidateQueries({ queryKey: ['admin-leaderboard', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['contests', contestId] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to declare results');
     },
   });
 
-  const leaderboard = leaderboardData?.data;
-  const entries = leaderboard?.entries || [];
+  const entries = leaderboardData?.data?.entries || (leaderboardData as any)?.entries || [];
+  const pagination = leaderboardData?.data?.pagination || (leaderboardData as any)?.pagination;
+  const totalEntries = leaderboardData?.data?.totalEntries || (leaderboardData as any)?.totalEntries || pagination?.total || 0;
 
   const handleExportCSV = () => {
     toast.info('Exporting results as CSV...');
@@ -166,6 +185,7 @@ export default function AdminResultsPage() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="font-bold w-20">Rank</TableHead>
                       <TableHead className="font-bold">Participant</TableHead>
+                      <TableHead className="font-bold text-center">Status</TableHead>
                       <TableHead className="font-bold text-center">Score</TableHead>
                       <TableHead className="font-bold text-center">Percentage</TableHead>
                       <TableHead className="font-bold text-right pr-6">Actions</TableHead>
@@ -175,35 +195,49 @@ export default function AdminResultsPage() {
                     {isLoading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <TableRow key={i} className="animate-pulse">
-                          <TableCell colSpan={5} className="h-16 bg-secondary/10" />
+                          <TableCell colSpan={6} className="h-16 bg-secondary/10" />
                         </TableRow>
                       ))
                     ) : entries.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">
+                        <TableCell colSpan={6} className="h-32 text-center text-muted-foreground italic">
                           Leaderboard is empty. Evaluation might be in progress.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      entries.map((entry) => (
-                        <TableRow key={entry.participant.registrationRef} className="hover:bg-secondary/20 transition-colors group">
+                      entries.map((entry: any) => (
+                        <TableRow key={entry.participant?.registrationRef || entry.id} className="hover:bg-secondary/20 transition-colors group">
                           <TableCell className="font-black text-primary">#{entry.rank}</TableCell>
                           <TableCell>
                             <div>
                               <p className="font-bold text-sm">
-                                {entry.participant.contact.firstName} {entry.participant.contact.lastName}
+                                {entry.participant?.contact ? `${entry.participant.contact.firstName || ''} ${entry.participant.contact.lastName || ''}`.trim() : 'Unknown Participant'}
                               </p>
                               <p className="text-[10px] text-muted-foreground font-mono">
-                                {entry.participant.registrationRef}
+                                {entry.participant?.registrationRef || 'No Ref'}
                               </p>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {entry.isPassed ? (
+                              <Badge className="bg-green-500/10 text-green-500 border-none hover:bg-green-500/20">PASSED</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="bg-red-500/10 text-red-500 border-none hover:bg-red-500/20">FAILED</Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-center font-bold">{entry.score}</TableCell>
                           <TableCell className="text-center font-bold text-green-500">{entry.percentage}%</TableCell>
                           <TableCell className="text-right pr-6">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            {entry.id && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10 hover:text-primary"
+                                onClick={() => router.push(`/admin/contests/${contestId}/submissions/${entry.id}`)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -230,7 +264,9 @@ export default function AdminResultsPage() {
                 <Button className="w-full bg-white text-primary hover:bg-white/90 rounded-xl h-12 font-bold" onClick={() => declareResultsMutation.mutate()}>
                   Declare Official Results
                 </Button>
-                <Button variant="ghost" className="w-full text-white hover:bg-white/10 rounded-xl h-12 font-medium" onClick={() => router.push(`/quiz/${contestId}/leaderboard`)}>
+                <Button variant="ghost" className="w-full text-white hover:bg-white/10 rounded-xl h-12 font-medium" onClick={() => {
+                  if (contest?.slug) router.push(`/quiz/${contest.slug}/leaderboard`);
+                }}>
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Preview Public View
                 </Button>
@@ -260,7 +296,7 @@ export default function AdminResultsPage() {
             <Card className="bg-secondary/20 border-border/50 rounded-2xl p-6 flex items-center justify-between group hover:border-primary/30 transition-all">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Ranked</p>
-                <p className="text-2xl font-black">{leaderboard?.totalEntries || 0}</p>
+                <p className="text-2xl font-black">{totalEntries}</p>
               </div>
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                 <Activity className="h-5 w-5" />

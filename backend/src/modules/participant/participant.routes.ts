@@ -14,6 +14,18 @@ participantRouter.get(
 );
 
 participantRouter.get(
+    "/:contestId/participants/status-summary",
+    authenticatedOrgMiddleware,
+    participantController.getStatusSummary
+);
+
+participantRouter.post(
+    "/:contestId/participants/bulk-status",
+    authenticatedOrgMiddleware,
+    participantController.bulkStatusOverride
+);
+
+participantRouter.get(
     "/:contestId/participants/:participantId",
     authenticatedOrgMiddleware,
     participantController.getParticipantDetails

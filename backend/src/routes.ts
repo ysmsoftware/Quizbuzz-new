@@ -14,14 +14,18 @@ import { proctoringRouter } from "./modules/proctoring/proctoring.routes";
 import { analyticsRouter } from "./modules/analytics/analytics.routes";
 
 import { authLimiter, analyticsLimiter } from "./middlewares/rate-limit.js";
+import { authenticatedOrgMiddleware } from "./middlewares/authenticated-org.middleware";
+import { bullBoardRouter } from "./queues/board";
 import paymentRouter from "./modules/payment/payment.routes.js";
 import { quizRegistrationRouter } from "./modules/quiz/quiz-registration.routes.js";
+import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
 
 const apiRouter = Router();
 
 apiRouter.use("/org", organizationRouter);
 apiRouter.use("/auth/admin", adminAuthRouter);
 apiRouter.use("/auth/quiz", quizRegistrationRouter);
+apiRouter.use("/quiz-proctoring", quizProctoringRouter);
 apiRouter.use("/contacts", contactRouter);
 apiRouter.use("/contests", contestRouter);
 apiRouter.use("/contests", participantRouter);
@@ -31,6 +35,7 @@ apiRouter.use("/payment", paymentRouter);
 apiRouter.use("/certificates", certificateRouter);
 apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
+apiRouter.use("/queues", authenticatedOrgMiddleware, bullBoardRouter);
 apiRouter.use("/", submissionRouter); // submission routes carry their own full prefixes
 
 export { apiRouter };

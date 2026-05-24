@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { 
   Award, 
@@ -26,7 +25,7 @@ import {
   Trash2,
   Trophy
 } from 'lucide-react';
-import { certificatesApi, CertificateRecord } from '@/lib/api/results-certs.api';
+import { useParticipants } from '@/lib/hooks/useParticipantCertificate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -63,7 +62,6 @@ type CertificateTheme = 'royal' | 'midnight' | 'emerald';
 export default function CertificatesManagementPage() {
   const { id: contestId } = useParams() as { id: string };
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   // Dashboard state
   const [page, setPage] = useState(1);
@@ -80,76 +78,46 @@ export default function CertificatesManagementPage() {
   // Single Issuing form state
   const [issueParticipantId, setIssueParticipantId] = useState('');
 
-  // Queries
-  const { data: certsData, isLoading, refetch } = useQuery({
-    queryKey: ['certificates', contestId, { page }],
-    queryFn: () => certificatesApi.getContestCertificates(contestId, { 
-      page, 
-      limit: 20 
-    }),
-  });
-
-  // Mutations
-  const bulkIssueMutation = useMutation({
-    mutationFn: () => certificatesApi.bulkIssueCertificates({ contestId }),
-    onSuccess: () => {
-      toast.success('Bulk certificate generation successfully queued');
-      queryClient.invalidateQueries({ queryKey: ['certificates', contestId] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to trigger bulk issuance');
-    },
-  });
-
-  const singleIssueMutation = useMutation({
-    mutationFn: (participantId: string) => certificatesApi.issueCertificate({ participantId }),
-    onSuccess: () => {
-      toast.success('Certificate queued for participant');
-      setIssueParticipantId('');
-      queryClient.invalidateQueries({ queryKey: ['certificates', contestId] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to issue individual certificate');
-    },
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: (certId: string) => certificatesApi.retryCertificate(certId),
-    onSuccess: () => {
-      toast.success('Re-generation job successfully queued');
-      queryClient.invalidateQueries({ queryKey: ['certificates', contestId] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to retry generation');
-    },
-  });
-
-  const retryAllFailedMutation = useMutation({
-    mutationFn: () => certificatesApi.retryFailedCertificates({ contestId }),
-    onSuccess: (data: any) => {
-      toast.success(data?.message || 'All failed generation jobs re-queued successfully');
-      queryClient.invalidateQueries({ queryKey: ['certificates', contestId] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || 'Failed to retry all failed certificates');
-    },
-  });
+  // Custom hook for participant & certificate queries/mutations
+  const {
+    certsData,
+    participantsData,
+    isLoading,
+    refetch,
+    bulkIssueMutation,
+    singleIssueMutation,
+    retryMutation,
+    retryAllFailedMutation
+  } = useParticipants(contestId);
 
   const rawCertificates = certsData?.data?.data || [];
-  
-  // Filter client-side based on search query
-  const certificates = rawCertificates.filter((cert: any) => {
+  const rawParticipants = participantsData?.data?.participants || [];
+
+  // Merge in memory
+  const mergedRecords = rawParticipants.map((participant: any) => {
+    const cert = rawCertificates.find(
+      (c: any) => c.participantId === participant.id || c.participant?.registrationRef === participant.registrationRef
+    );
+    return {
+      participant,
+      certificate: cert,
+      certStatus: cert ? cert.status : 'NOT_GENERATED',
+    };
+  });
+
+  // Filter client-side based on search query and selected cert status
+  const filteredRecords = mergedRecords.filter((record: any) => {
     // Filter status
-    if (status !== 'all' && cert.status !== status) return false;
+    if (status !== 'all' && record.certStatus !== status) return false;
     
     // Filter search text
     if (search.trim()) {
       const query = search.toLowerCase();
-      const firstName = cert.participant?.contact?.firstName?.toLowerCase() || '';
-      const lastName = cert.participant?.contact?.lastName?.toLowerCase() || '';
-      const email = cert.participant?.contact?.email?.toLowerCase() || '';
-      const ref = cert.participant?.registrationRef?.toLowerCase() || '';
-      const id = cert.id?.toLowerCase() || '';
+      const firstName = record.participant?.contact?.firstName?.toLowerCase() || '';
+      const lastName = record.participant?.contact?.lastName?.toLowerCase() || '';
+      const email = record.participant?.contact?.email?.toLowerCase() || '';
+      const ref = record.participant?.registrationRef?.toLowerCase() || '';
+      const id = record.participant?.id?.toLowerCase() || '';
 
       return firstName.includes(query) || lastName.includes(query) || email.includes(query) || ref.includes(query) || id.includes(query);
     }
@@ -157,7 +125,11 @@ export default function CertificatesManagementPage() {
     return true;
   });
 
-  const pagination = certsData?.data?.pagination;
+  // Client-side pagination
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
+  const paginatedRecords = filteredRecords.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
   const summary = certsData?.data?.summary || { generated: 0, failed: 0, pending: 0 };
   const totalCerts = summary.generated + summary.failed + summary.pending;
   const progressPercent = totalCerts > 0 ? Math.round((summary.generated / totalCerts) * 100) : 0;
@@ -165,15 +137,30 @@ export default function CertificatesManagementPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'GENERATED':
-        return <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 gap-1.5"><CheckCircle2 className="h-3 w-3" /> Generated</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 gap-1.5 hover:bg-emerald-500/10"><CheckCircle2 className="h-3 w-3" /> Generated</Badge>;
       case 'FAILED':
         return <Badge variant="destructive" className="gap-1.5"><XCircle className="h-3 w-3" /> Failed</Badge>;
       case 'GENERATING':
-        return <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 gap-1.5"><RefreshCcw className="h-3 w-3 animate-spin" /> Generating</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 gap-1.5 hover:bg-blue-500/10"><RefreshCcw className="h-3 w-3 animate-spin" /> Generating</Badge>;
       case 'QUEUED':
-        return <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 gap-1.5"><Clock className="h-3 w-3 animate-pulse" /> Queued</Badge>;
+        return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 gap-1.5 hover:bg-amber-500/10"><Clock className="h-3 w-3 animate-pulse" /> Queued</Badge>;
+      case 'NOT_GENERATED':
+        return <Badge className="bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 border border-zinc-500/20 gap-1.5 hover:bg-zinc-500/10"><AlertCircle className="h-3 w-3" /> Not Issued</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getParticipantStatusBadge = (status: string) => {
+    switch (status) {
+      case 'SUBMITTED':
+        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/10 text-[9px] px-1.5 py-0 font-medium">Submitted</Badge>;
+      case 'REGISTERED':
+        return <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/10 text-[9px] px-1.5 py-0 font-medium">Registered</Badge>;
+      case 'DISQUALIFIED':
+        return <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-medium">Disqualified</Badge>;
+      default:
+        return <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-medium">{status}</Badge>;
     }
   };
 
@@ -187,7 +174,11 @@ export default function CertificatesManagementPage() {
       toast.error('Please provide a valid participant ID');
       return;
     }
-    singleIssueMutation.mutate(issueParticipantId);
+    singleIssueMutation.mutate(issueParticipantId, {
+      onSuccess: () => {
+        setIssueParticipantId('');
+      }
+    });
   };
 
   const handleRetryAllFailed = () => {
@@ -195,27 +186,27 @@ export default function CertificatesManagementPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500 text-neutral-200">
+    <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500 text-foreground">
       
       {/* Header controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-neutral-900 pb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-border pb-6">
         <div className="space-y-1">
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
             <Award className="text-amber-500 h-8 w-8" /> Certificate Management
           </h1>
-          <p className="text-neutral-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             Configure certificate visual styling, orchestrate the Puppeteer worker queues, and issue official credentials.
           </p>
         </div>
         
         {/* Toggle Designer and Dashboard View */}
         <div className="flex items-center gap-3">
-          <div className="flex border border-neutral-800 bg-neutral-950 p-1 rounded-xl">
+          <div className="flex border border-border bg-secondary/50 p-1 rounded-xl">
             <Button
               variant="ghost"
               className={cn(
                 "rounded-lg px-4 h-9 text-xs font-semibold cursor-pointer",
-                viewMode === 'dashboard' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'
+                viewMode === 'dashboard' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               onClick={() => setViewMode('dashboard')}
             >
@@ -225,7 +216,7 @@ export default function CertificatesManagementPage() {
               variant="ghost"
               className={cn(
                 "rounded-lg px-4 h-9 text-xs font-semibold cursor-pointer",
-                viewMode === 'designer' ? 'bg-neutral-800 text-white' : 'text-neutral-500 hover:text-neutral-300'
+                viewMode === 'designer' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               onClick={() => setViewMode('designer')}
             >
@@ -233,13 +224,13 @@ export default function CertificatesManagementPage() {
             </Button>
           </div>
 
-          <Button variant="outline" className="rounded-xl border-neutral-800 bg-neutral-900/40 text-neutral-300 hover:text-white" onClick={() => refetch()}>
+          <Button variant="outline" className="rounded-xl" onClick={() => refetch()}>
             <RefreshCcw className="h-4 w-4 mr-2" />
             Sync
           </Button>
           
           <Button 
-            className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-neutral-950 font-bold shadow-lg shadow-amber-500/10 cursor-pointer"
+            className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 dark:text-zinc-900 font-bold shadow-lg shadow-amber-500/10 cursor-pointer"
             onClick={handleBulkIssue}
             disabled={bulkIssueMutation.isPending}
           >
@@ -258,66 +249,66 @@ export default function CertificatesManagementPage() {
           {/* Summary statistics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            <Card className="bg-neutral-950/40 border-neutral-900 rounded-2xl relative overflow-hidden group">
+            <Card className="bg-card border-border/50 shadow-xs rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
               <CardContent className="p-6">
-                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Generated Credentials</p>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Generated Credentials</p>
                 <div className="flex items-end justify-between">
-                  <p className="text-3xl font-black text-white">{summary.generated}</p>
-                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <p className="text-3xl font-black text-foreground">{summary.generated}</p>
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-6 w-6" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-neutral-950/40 border-neutral-900 rounded-2xl relative overflow-hidden group">
+            <Card className="bg-card border-border/50 shadow-xs rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-red-500" />
               <CardContent className="p-6">
-                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Failed Jobs</p>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Failed Jobs</p>
                 <div className="flex items-end justify-between">
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-black text-white">{summary.failed}</p>
+                    <p className="text-3xl font-black text-foreground">{summary.failed}</p>
                     {summary.failed > 0 && (
                       <button 
                         onClick={handleRetryAllFailed}
                         disabled={retryAllFailedMutation.isPending}
-                        className="text-xs font-semibold text-red-400 underline cursor-pointer flex items-center gap-1 hover:text-red-300"
+                        className="text-xs font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline cursor-pointer flex items-center gap-1"
                       >
                         <RefreshCcw className="h-3 w-3" /> Retry All
                       </button>
                     )}
                   </div>
-                  <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400">
+                  <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-600 dark:text-red-400">
                     <AlertCircle className="h-6 w-6" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-neutral-950/40 border-neutral-900 rounded-2xl relative overflow-hidden group">
+            <Card className="bg-card border-border/50 shadow-xs rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
               <CardContent className="p-6">
-                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Queued / Processing</p>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Queued / Processing</p>
                 <div className="flex items-end justify-between">
-                  <p className="text-3xl font-black text-white">{summary.pending}</p>
-                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                  <p className="text-3xl font-black text-foreground">{summary.pending}</p>
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400">
                     <Clock className="h-6 w-6 animate-pulse" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-neutral-950/40 border-neutral-900 rounded-2xl relative overflow-hidden group">
+            <Card className="bg-card border-border/50 shadow-xs rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
               <CardContent className="p-6">
-                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Worker Progress</p>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Worker Progress</p>
                 <div className="space-y-2 mt-1">
-                  <div className="flex justify-between items-center text-xs font-bold text-neutral-400">
+                  <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
                     <span>{progressPercent}% Complete</span>
                     <span>{summary.generated}/{totalCerts}</span>
                   </div>
-                  <Progress value={progressPercent} className="h-2 bg-neutral-900 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-400" />
+                  <Progress value={progressPercent} className="h-2 bg-muted [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-blue-400" />
                 </div>
               </CardContent>
             </Card>
@@ -329,12 +320,12 @@ export default function CertificatesManagementPage() {
             {/* Left Column: Queue controls / Single Issue Form */}
             <div className="space-y-6">
               
-              <Card className="bg-neutral-950/20 border-neutral-900 rounded-2xl">
+              <Card className="bg-card border-border/50 shadow-xs rounded-2xl">
                 <CardHeader>
-                  <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                  <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                     <UserPlus className="h-4 w-4 text-amber-500" /> Issue Individual Certificate
                   </CardTitle>
-                  <CardDescription className="text-xs text-neutral-400">
+                  <CardDescription className="text-xs text-muted-foreground">
                     Directly queue a certificate generation job for a single participant by specifying their ID.
                   </CardDescription>
                 </CardHeader>
@@ -345,18 +336,18 @@ export default function CertificatesManagementPage() {
                         placeholder="Enter Participant ID..."
                         value={issueParticipantId}
                         onChange={(e) => setIssueParticipantId(e.target.value)}
-                        className="h-10 rounded-xl bg-neutral-950 border-neutral-800 text-sm focus:border-amber-500"
+                        className="h-10 rounded-xl bg-background border-border text-sm focus:border-amber-500"
                       />
                     </div>
                     <Button 
                       type="submit" 
-                      className="w-full h-10 bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                       disabled={singleIssueMutation.isPending}
                     >
                       {singleIssueMutation.isPending ? (
                         <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
                       )}
                       Trigger Generation
                     </Button>
@@ -364,17 +355,17 @@ export default function CertificatesManagementPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-neutral-950/20 border-neutral-900 rounded-2xl p-6 space-y-4">
-                <h4 className="text-xs font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-400" /> Worker Engine Logs
+              <Card className="bg-card border-border/50 shadow-xs rounded-2xl p-6 space-y-4">
+                <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" /> Worker Engine Logs
                 </h4>
-                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   The generation queue is driven by a BullMQ server offloading high-fidelity HTML parsing tasks to headless Chromium engines.
                 </p>
-                <div className="font-mono text-[9px] bg-neutral-950 p-3 rounded-lg border border-neutral-900 text-neutral-500 space-y-1">
+                <div className="font-mono text-[9px] bg-zinc-950 p-3 rounded-lg border border-zinc-900 text-zinc-400 space-y-1">
                   <div>[QUEUE] Ready & waiting for jobs...</div>
                   <div>[WORKER] Active concurrency set to 3.</div>
-                  {summary.pending > 0 && <div className="text-amber-500 animate-pulse">[PROCESSING] Rendering page inputs in Puppeteer sandbox...</div>}
+                  {summary.pending > 0 && <div className="text-amber-400 animate-pulse">[PROCESSING] Rendering page inputs in Puppeteer sandbox...</div>}
                 </div>
               </Card>
 
@@ -385,69 +376,73 @@ export default function CertificatesManagementPage() {
               
               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="relative w-full md:w-80">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     placeholder="Search name, ref, or ID..." 
-                    className="pl-10 h-10 rounded-xl bg-neutral-950 border-neutral-900 text-sm focus:border-amber-500 w-full"
+                    className="pl-10 h-10 rounded-xl bg-background border-border text-sm focus:border-amber-500 w-full"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
                 
                 <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="w-40 h-10 rounded-xl bg-neutral-950 border-neutral-900 text-xs">
+                  <SelectTrigger className="w-40 h-10 rounded-xl bg-background border-border text-xs">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-neutral-900 bg-neutral-950 text-neutral-200">
+                  <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
                     <SelectItem value="all" className="cursor-pointer">All Statuses</SelectItem>
                     <SelectItem value="GENERATED" className="cursor-pointer">Generated</SelectItem>
                     <SelectItem value="FAILED" className="cursor-pointer">Failed</SelectItem>
                     <SelectItem value="GENERATING" className="cursor-pointer">Generating</SelectItem>
                     <SelectItem value="QUEUED" className="cursor-pointer">Queued</SelectItem>
+                    <SelectItem value="NOT_GENERATED" className="cursor-pointer">Not Issued</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <Card className="bg-neutral-950/40 border-neutral-900 rounded-2xl overflow-hidden shadow-2xl">
+              <Card className="bg-card border-border/50 rounded-2xl overflow-hidden shadow-xs">
                 <WidgetErrorBoundary name="Certificates Table">
                   <Table>
-                    <TableHeader className="bg-neutral-950 border-b border-neutral-900">
-                      <TableRow className="hover:bg-transparent border-b-neutral-900">
-                        <TableHead className="font-bold text-neutral-400 text-xs py-4">Participant</TableHead>
-                        <TableHead className="font-bold text-neutral-400 text-xs py-4">Status</TableHead>
-                        <TableHead className="font-bold text-neutral-400 text-xs py-4">Generated At</TableHead>
-                        <TableHead className="font-bold text-neutral-400 text-xs py-4 text-right">Actions</TableHead>
+                    <TableHeader className="bg-muted/40 border-b border-border/50">
+                      <TableRow className="hover:bg-transparent border-b border-border/50">
+                        <TableHead className="font-bold text-muted-foreground text-xs py-4">Participant</TableHead>
+                        <TableHead className="font-bold text-muted-foreground text-xs py-4">Status</TableHead>
+                        <TableHead className="font-bold text-muted-foreground text-xs py-4">Generated At</TableHead>
+                        <TableHead className="font-bold text-muted-foreground text-xs py-4 text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {isLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
-                          <TableRow key={i} className="animate-pulse border-b-neutral-900/50">
-                            <TableCell colSpan={4} className="h-16 bg-neutral-950/20" />
+                          <TableRow key={i} className="animate-pulse border-b border-border/50">
+                            <TableCell colSpan={4} className="h-16 bg-muted/20" />
                           </TableRow>
                         ))
-                      ) : certificates.length === 0 ? (
+                      ) : paginatedRecords.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="h-36 text-center text-neutral-500 italic text-sm">
-                            No certificates matched the current criteria.
+                          <TableCell colSpan={4} className="h-36 text-center text-muted-foreground italic text-sm">
+                            No participants matched the current criteria.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        certificates.map((cert) => (
-                          <TableRow key={cert.id} className="hover:bg-neutral-900/30 transition-colors border-b-neutral-900/50 group">
+                        paginatedRecords.map((record) => (
+                          <TableRow key={record.participant.id} className="hover:bg-muted/40 transition-colors border-b border-border/50 group">
                             
                             {/* Participant Name & Ref */}
                             <TableCell className="py-4">
                               <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-lg bg-neutral-900 flex items-center justify-center text-neutral-400 border border-neutral-800">
+                                <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground border border-border/50">
                                   <Award className="h-4 w-4" />
                                 </div>
-                                <div>
-                                  <p className="font-bold text-xs text-white leading-none mb-1">
-                                    {cert.participant?.contact?.firstName ?? 'Participant'} {cert.participant?.contact?.lastName ?? ''}
-                                  </p>
-                                  <p className="text-[9px] text-neutral-500 font-mono">
-                                    {cert.participant?.registrationRef ?? 'N/A'}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-bold text-xs text-foreground leading-none">
+                                      {record.participant?.contact?.firstName ?? 'Participant'} {record.participant?.contact?.lastName ?? ''}
+                                    </p>
+                                    {getParticipantStatusBadge(record.participant?.status)}
+                                  </div>
+                                  <p className="text-[9px] text-muted-foreground font-mono leading-none">
+                                    Ref: {record.participant?.registrationRef ?? 'N/A'} • ID: {record.participant?.id ?? 'N/A'}
                                   </p>
                                 </div>
                               </div>
@@ -455,37 +450,48 @@ export default function CertificatesManagementPage() {
 
                             {/* Status Badge */}
                             <TableCell className="py-4">
-                              {getStatusBadge(cert.status)}
+                              {getStatusBadge(record.certStatus)}
                             </TableCell>
 
                             {/* Timestamp */}
-                            <TableCell className="text-xs text-neutral-400 py-4 font-mono">
-                              {cert.generatedAt ? format(new Date(cert.generatedAt), 'MMM dd, HH:mm') : '--'}
+                            <TableCell className="text-xs text-muted-foreground py-4 font-mono">
+                              {record.certificate?.generatedAt ? format(new Date(record.certificate.generatedAt), 'MMM dd, HH:mm') : '--'}
                             </TableCell>
 
                             {/* Actions dropdown */}
                             <TableCell className="text-right py-4">
                               <div className="flex items-center justify-end gap-1.5">
-                                {cert.fileUrl ? (
+                                {record.certificate?.fileUrl ? (
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="h-8 w-8 rounded-lg hover:bg-neutral-900 hover:text-white cursor-pointer"
+                                    className="h-8 w-8 rounded-lg hover:bg-muted hover:text-foreground cursor-pointer"
                                     asChild
                                   >
-                                    <a href={cert.fileUrl} target="_blank" rel="noopener noreferrer">
+                                    <a href={record.certificate.fileUrl} target="_blank" rel="noopener noreferrer">
                                       <Download className="h-4 w-4" />
                                     </a>
                                   </Button>
-                                ) : cert.status === 'FAILED' ? (
+                                ) : record.certStatus === 'FAILED' ? (
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="h-8 w-8 rounded-lg hover:bg-neutral-900 text-amber-500 cursor-pointer"
-                                    onClick={() => retryMutation.mutate(cert.id)}
+                                    className="h-8 w-8 rounded-lg hover:bg-muted text-amber-500 cursor-pointer"
+                                    onClick={() => record.certificate?.id && retryMutation.mutate(record.certificate.id)}
                                     disabled={retryMutation.isPending}
                                   >
                                     <RefreshCcw className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : record.certStatus === 'NOT_GENERATED' ? (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 px-2.5 rounded-lg border-amber-500/30 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-xs transition-all duration-200"
+                                    onClick={() => singleIssueMutation.mutate(record.participant.id)}
+                                    disabled={singleIssueMutation.isPending}
+                                  >
+                                    <Zap className="h-3 w-3 fill-current" />
+                                    Issue
                                   </Button>
                                 ) : null}
 
@@ -495,21 +501,29 @@ export default function CertificatesManagementPage() {
                                       <Settings2 className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48 rounded-xl border-neutral-900 bg-neutral-950 text-neutral-200">
-                                    {cert.fileUrl && (
+                                  <DropdownMenuContent align="end" className="w-48 rounded-xl border-border bg-popover text-popover-foreground">
+                                    {record.certificate?.fileUrl && (
                                       <DropdownMenuItem 
-                                        onClick={() => window.open(`/quiz/${contestId}/certificate/${cert.id}`)}
+                                        onClick={() => record.certificate?.id && window.open(`/quiz/${contestId}/certificate/${record.certificate.id}`)}
                                         className="cursor-pointer gap-2"
                                       >
                                         <ExternalLink className="h-4 w-4" /> View Public Page
                                       </DropdownMenuItem>
                                     )}
-                                    {cert.status === 'FAILED' && (
+                                    {record.certStatus === 'FAILED' && (
                                       <DropdownMenuItem 
-                                        onClick={() => retryMutation.mutate(cert.id)}
+                                        onClick={() => record.certificate?.id && retryMutation.mutate(record.certificate.id)}
                                         className="cursor-pointer gap-2"
                                       >
                                         <RefreshCcw className="h-4 w-4" /> Retry Generation
+                                      </DropdownMenuItem>
+                                    )}
+                                    {record.certStatus === 'NOT_GENERATED' && (
+                                      <DropdownMenuItem 
+                                        onClick={() => singleIssueMutation.mutate(record.participant.id)}
+                                        className="cursor-pointer gap-2 text-amber-500 hover:text-amber-400"
+                                      >
+                                        <Zap className="h-4 w-4 fill-current" /> Issue Certificate
                                       </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem className="text-red-500 cursor-pointer gap-2 hover:text-red-400">
@@ -529,16 +543,16 @@ export default function CertificatesManagementPage() {
               </Card>
 
               {/* Pagination controls */}
-              {pagination && pagination.totalPages > 1 && (
+              {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                  <p className="text-xs text-neutral-500">
-                    Showing <span className="text-neutral-300 font-bold">{certificates.length}</span> of <span className="text-neutral-300 font-bold">{pagination.total}</span> entries
+                  <p className="text-xs text-muted-foreground">
+                    Showing <span className="text-foreground font-bold">{paginatedRecords.length}</span> of <span className="text-foreground font-bold">{filteredRecords.length}</span> entries
                   </p>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-xl h-9 px-4 border-neutral-800 bg-neutral-900/40 text-xs"
+                      className="rounded-xl h-9 px-4 border-border bg-background text-xs"
                       onClick={() => setPage(p => Math.max(1, p - 1))}
                       disabled={page === 1}
                     >
@@ -547,9 +561,9 @@ export default function CertificatesManagementPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-xl h-9 px-4 border-neutral-800 bg-neutral-900/40 text-xs"
-                      onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-                      disabled={page === pagination.totalPages}
+                      className="rounded-xl h-9 px-4 border-border bg-background text-xs"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
                     >
                       Next <ChevronRight className="h-3.5 w-3.5 ml-1" />
                     </Button>
@@ -566,54 +580,54 @@ export default function CertificatesManagementPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
           {/* Configurator Controls */}
-          <Card className="bg-neutral-950/40 border-neutral-900 rounded-3xl p-6 space-y-6">
+          <Card className="bg-card border-border/50 shadow-xs rounded-3xl p-6 space-y-6">
             <div>
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <h3 className="text-lg font-black text-foreground flex items-center gap-2">
                 <Settings2 className="h-5 w-5 text-amber-500" /> Certificate Configurator
               </h3>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-muted-foreground">
                 Design the visual template that Puppeteer uses to render credentials. Changes apply dynamically to all generated PDFs.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <span className="text-xs font-bold text-neutral-400">Certificate Title text</span>
+                <span className="text-xs font-bold text-muted-foreground">Certificate Title text</span>
                 <Input
                   value={customTitle}
                   onChange={(e) => setCustomTitle(e.target.value)}
                   placeholder="Certificate of Accomplishment"
-                  className="h-11 rounded-xl bg-neutral-950 border-neutral-800 text-sm focus:border-amber-500"
+                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-xs font-bold text-neutral-400">Signature Author Name</span>
+                <span className="text-xs font-bold text-muted-foreground">Signature Author Name</span>
                 <Input
                   value={sigName}
                   onChange={(e) => setSigName(e.target.value)}
                   placeholder="Contest Director"
-                  className="h-11 rounded-xl bg-neutral-950 border-neutral-800 text-sm focus:border-amber-500"
+                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-xs font-bold text-neutral-400">Signature Title</span>
+                <span className="text-xs font-bold text-muted-foreground">Signature Title</span>
                 <Input
                   value={sigTitle}
                   onChange={(e) => setSigTitle(e.target.value)}
                   placeholder="Lead Evaluator"
-                  className="h-11 rounded-xl bg-neutral-950 border-neutral-800 text-sm focus:border-amber-500"
+                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-xs font-bold text-neutral-400">Theme Stylesheet Preview</span>
+                <span className="text-xs font-bold text-muted-foreground">Theme Stylesheet Preview</span>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { id: 'royal', label: 'Royal Gold', style: 'border-amber-500/30 text-amber-500' },
-                    { id: 'midnight', label: 'Midnight Blue', style: 'border-blue-500/30 text-blue-400' },
-                    { id: 'emerald', label: 'Emerald Merit', style: 'border-emerald-500/30 text-emerald-400' }
+                    { id: 'royal', label: 'Royal Gold' },
+                    { id: 'midnight', label: 'Midnight Blue' },
+                    { id: 'emerald', label: 'Emerald Merit' }
                   ].map((themeBtn) => (
                     <button
                       key={themeBtn.id}
@@ -621,8 +635,8 @@ export default function CertificatesManagementPage() {
                       className={cn(
                         "h-10 rounded-xl border text-xs font-semibold cursor-pointer transition-all",
                         previewTheme === themeBtn.id
-                          ? "bg-neutral-800 border-neutral-600 text-white"
-                          : "bg-neutral-950 border-neutral-900 text-neutral-500"
+                          ? "bg-primary border-primary text-primary-foreground shadow-xs"
+                          : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
                       {themeBtn.label}
@@ -632,10 +646,10 @@ export default function CertificatesManagementPage() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-neutral-900">
+            <div className="pt-4 border-t border-border/50">
               <Button 
                 onClick={() => toast.success('Certificate layout saved successfully')}
-                className="w-full h-11 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-neutral-950 font-bold rounded-xl text-xs cursor-pointer shadow-lg shadow-amber-500/10"
+                className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl text-xs cursor-pointer shadow-xs"
               >
                 Save Layout Configuration
               </Button>
@@ -645,10 +659,10 @@ export default function CertificatesManagementPage() {
           {/* Live Mock Preview Canvas */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
-              <h4 className="text-xs font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+              <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-amber-500" /> Live Canvas Render Mockup
               </h4>
-              <span className="text-[10px] text-neutral-500 italic">Preformatted for 8.5" x 11" aspect ratio</span>
+              <span className="text-[10px] text-muted-foreground italic">Preformatted for 8.5" x 11" aspect ratio</span>
             </div>
 
             <div 

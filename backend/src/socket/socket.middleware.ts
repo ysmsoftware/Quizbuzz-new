@@ -14,9 +14,9 @@ interface ExtendedError extends Error {
  */
 export const socketAuthMiddleware = (socket: Socket, next: (err?: ExtendedError) => void) => {
     try {
-        const token = 
-            socket.handshake.auth?.token || 
-            socket.handshake.auth?.sessionToken || 
+        const token =
+            socket.handshake.auth?.token ||
+            socket.handshake.auth?.sessionToken ||
             socket.handshake.headers?.authorization?.replace("Bearer ", "");
 
         if (!token) {
@@ -39,7 +39,7 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: ExtendedError)
         socket.data.role = payload.role || (payload.participantId ? "participant" : "admin");
 
         logger.debug(`[socket-auth] Authenticated ${socket.data.role}: ${socket.data.userId} (socket: ${socket.id})`);
-        
+
         next();
     } catch (error: any) {
         logger.error(`[socket-auth] Auth error: ${error.message}`);

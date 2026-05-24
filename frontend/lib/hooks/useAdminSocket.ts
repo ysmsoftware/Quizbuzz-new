@@ -21,6 +21,10 @@ interface UseAdminSocketProps {
 }
 
 /**
+ * @deprecated Use useAdminContestSocket instead — connects to /quiz-admin with
+ * cookie-based socket-token auth. This hook targets a non-existent /admin namespace.
+ */
+/**
  * Hook for managing the Admin real-time monitoring WebSocket connection
  */
 export function useAdminSocket({
@@ -47,7 +51,7 @@ export function useAdminSocket({
     const socket = io(`${process.env.NEXT_PUBLIC_WS_URL || 'wss://your-domain.com'}/admin`, {
       path: '/socket.io',
       auth: { token: accessToken },
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
     });

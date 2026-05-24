@@ -26,6 +26,7 @@ interface ScoredRow {
     participantId: string;
     score: Prisma.Decimal;
     percentage: Prisma.Decimal;
+    isPassed: boolean | null;
     timeTakenSecs: number | null;
 }
 

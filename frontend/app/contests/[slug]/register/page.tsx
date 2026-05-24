@@ -723,7 +723,7 @@ export default function RegisterPage() {
                       Browse More Contests
                     </Button>
                   </Link>
-                  <Link href={`/quiz/${contest.id}/entry`} className="flex-1">
+                  <Link href={`/quiz/${contest.slug}/join`} className="flex-1">
                     <Button className="w-full">Go to Quiz Entry</Button>
                   </Link>
                 </div>

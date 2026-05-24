@@ -70,4 +70,52 @@ export class ParticipantController {
             next(err);
         }
     };
+
+    getStatusSummary = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const contestId = req.params.contestId as string;
+
+            const result = await this.participantService.getStatusSummary(
+                user.organizationId,
+                contestId
+            );
+
+            res.json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    bulkStatusOverride = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const contestId = req.params.contestId as string;
+            const { participantIds, status } = req.body;
+
+            if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+                return res.status(400).json({ success: false, message: "Invalid or empty participantIds" });
+            }
+            if (!["REGISTERED", "DISQUALIFIED"].includes(status)) {
+                return res.status(400).json({ success: false, message: "Invalid status to override. Allowed: REGISTERED, DISQUALIFIED" });
+            }
+
+            const result = await this.participantService.bulkStatusOverride(
+                user.organizationId,
+                contestId,
+                participantIds,
+                status
+            );
+
+            res.json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
 }

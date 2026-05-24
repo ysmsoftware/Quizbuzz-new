@@ -42,3 +42,4 @@ adminAuthRouter.post("/logout", authenticatedOrgMiddleware, adminAuthController.
 adminAuthRouter.post("/logout-all", authenticatedOrgMiddleware, adminAuthController.logoutAll);
 adminAuthRouter.get("/me", authenticatedOrgMiddleware, adminAuthController.getMe);
 adminAuthRouter.post("/switch-org", authenticatedOrgMiddleware, adminAuthController.switchOrg);
+adminAuthRouter.get("/socket-token", authenticatedOrgMiddleware, adminAuthController.getSocketToken);

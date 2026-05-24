@@ -12,13 +12,20 @@ interface SubmissionSummary {
 interface SubmissionRecord {
   id: string;
   participantId: string;
+  registrationRef?: string;
+  contactName?: string;
+  contactEmail?: string;
   status: 'PENDING' | 'SUBMITTED' | 'EVALUATED' | 'INVALIDATED';
+  source?: string;
+  score: number | string;
+  percentage: number | string;
+  isPassed?: boolean | null;
+  timeTakenSecs?: number;
   submittedAt: string;
-  totalQuestions: number;
-  attempted: number;
-  score: string;
-  percentage: string;
-  participant: {
+  evaluatedAt?: string;
+  totalQuestions?: number;
+  attempted?: number;
+  participant?: {
     contact: {
       firstName: string;
       lastName: string;
@@ -43,16 +50,19 @@ interface SubmissionsResponse {
  */
 export const submissionsApi = {
   getContestSubmissions: (contestId: string, params?: { status?: string; page?: number; limit?: number }) =>
-    get<SubmissionsResponse>(`/submissions/contests/${contestId}`, { params }),
+    get<SubmissionsResponse>(`/admin/contests/${contestId}/submissions`, { params }),
+
+  getContestSubmissionsStats: (contestId: string) =>
+    get<any>(`/admin/contests/${contestId}/submissions/stats`),
 
   getSubmissionDetail: (submissionId: string) =>
-    get<any>(`/submissions/${submissionId}`),
+    get<any>(`/admin/submissions/${submissionId}`),
 
   invalidateSubmission: (submissionId: string, reason: string) =>
-    post<any>(`/submissions/${submissionId}/invalidate`, { reason }),
+    patch<any>(`/admin/submissions/${submissionId}/invalidate`, { reason }),
   
   bulkEvaluate: (contestId: string) =>
-    post<any>(`/submissions/contests/${contestId}/evaluate`),
+    post<any>(`/admin/contests/${contestId}/submissions/evaluate`),
 };
 
 /**
@@ -60,13 +70,13 @@ export const submissionsApi = {
  */
 export const analyticsApi = {
   getContestAnalytics: (contestId: string) =>
-    get<any>(`/analytics/contests/${contestId}`),
+    get<any>(`/analytics/${contestId}`),
 
   getScoreDistribution: (contestId: string) =>
-    get<any>(`/analytics/contests/${contestId}/distribution`),
+    get<any>(`/analytics/${contestId}/score-distribution`),
 
   refreshAnalytics: (contestId: string) =>
-    post<any>(`/analytics/contests/${contestId}/snapshot`),
+    post<any>(`/analytics/${contestId}/refresh`),
 };
 
 /**
@@ -82,6 +92,6 @@ export const proctoringApi = {
   getParticipantEvents: (contestId: string, participantId: string, params?: { page?: number; limit?: number }) =>
     get<any>(`/proctoring/contests/${contestId}/participants/${participantId}/events`, { params }),
 
-  dismissViolation: (eventId: string) =>
-    post<any>(`/proctoring/events/${eventId}/dismiss`),
+  dismissViolation: (scoreId: string) =>
+    patch<any>(`/proctoring/scores/${scoreId}/status`, { isDismissed: true }),
 };

@@ -57,6 +57,15 @@ export class AnalyticsService {
     }
 
     /**
+     * Gets the score distribution for the contest.
+     */
+    async getScoreDistribution(contestId: string) {
+        const data = await this.repository.getScoreDistribution(contestId);
+        const buckets = data.map(b => ({ range: b.score.toString(), count: b.count }));
+        return { buckets };
+    }
+
+    /**
      * Worker entry point: process all contests that need a snapshot update.
      * We typically snapshot LIVE, EVALUATION, and recently COMPLETED contests.
      */

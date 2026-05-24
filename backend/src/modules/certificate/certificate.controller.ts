@@ -7,7 +7,7 @@ import {
 } from "./certificate.validator";
 
 export class CertificateController {
-    constructor(private readonly certificateService: CertificateService) {}
+    constructor(private readonly certificateService: CertificateService) { }
 
     // ── GET /certificates/public/:id ──────────────────────────────────────────
 
@@ -79,6 +79,7 @@ export class CertificateController {
 
     issueCertificate = async (req: Request, res: Response, next: NextFunction) => {
         try {
+            console.log("Issue Certificate request:", req.body);
             const dto = issueCertificateSchema.parse(req.body);
             const cert = await this.certificateService.issueCertificate(
                 dto,

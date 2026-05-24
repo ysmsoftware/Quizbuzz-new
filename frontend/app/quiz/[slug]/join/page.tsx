@@ -64,6 +64,7 @@ export default function QuizJoinPage() {
     // OTP
     const [otpValues, setOtpValues] = useState<string[]>(["", "", "", "", "", ""]);
     const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const [joinCode, setJoinCode] = useState("");
 
     // Timers & state
     const [resendTimer, setResendTimer] = useState(0);
@@ -123,7 +124,7 @@ export default function QuizJoinPage() {
 
         try {
             // For slug-based join, we use the slug to identify the contest
-            const res = await authService.sendOTP(getFullIdentifier(), inputMode, contest?.id || slug);
+            const res = await authService.sendOTP(getFullIdentifier(), inputMode, slug);
             if (res.success && res.data) {
                 setMaskedIdentifier(res.data.maskedContact);
                 setResendTimer(res.data.expiresIn || 60);
@@ -147,7 +148,7 @@ export default function QuizJoinPage() {
         setError(null);
 
         try {
-            const res = await authService.verifyOTP(getFullIdentifier(), inputMode, otp, contest?.id || slug);
+            const res = await authService.verifyOTP(getFullIdentifier(), inputMode, otp, slug, joinCode || undefined, contest?.id || undefined);
             if (res.success && res.data) {
                 setSession({
                     sessionToken: res.data.sessionToken,
@@ -195,18 +196,30 @@ export default function QuizJoinPage() {
         setStep("REDIRECTING");
         setTimeout(() => {
             if (!contest) {
-                router.push(`/quiz/${slug}/waiting`);
+                router.push(`/quiz/${slug}/system-check`);
                 return;
             }
             const now = new Date();
-            const startTime = new Date(`${contest.contestDate}T${contest.contestStartTime}:00`);
-            const endTime = new Date(`${contest.contestDate}T${contest.contestEndTime}:00`);
+
+            // The real API returns startTime/endTime as full ISO 8601 timestamps.
+            // Legacy mock fields (contestDate/contestStartTime/contestEndTime) are NOT present.
+            const startTime = contest.startTime ? new Date(contest.startTime) : null;
+            const endTime = contest.endTime ? new Date(contest.endTime) : null;
+
+            if (!startTime || !endTime || isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                // Fallback: if we can't parse times, go to system-check → waiting room
+                router.push(`/quiz/${slug}/system-check`);
+                return;
+            }
 
             if (now < startTime) {
-                router.push(`/quiz/${slug}/waiting`);
+                // Quiz hasn't started yet → system-check → waiting room
+                router.push(`/quiz/${slug}/system-check`);
             } else if (now >= startTime && now < endTime) {
-                router.push(`/quiz/${slug}/play`);
+                // Quiz is live → system-check (it will forward to waiting/play)
+                router.push(`/quiz/${slug}/system-check`);
             } else {
+                // Quiz has ended
                 router.push(`/quiz/${slug}/submitted`);
             }
         }, 1500);
@@ -222,7 +235,9 @@ export default function QuizJoinPage() {
             otpRefs.current[index + 1]?.focus();
         }
         if (digit && index === 5 && newValues.join("").length === 6) {
-            handleVerifyOTP(newValues.join(""));
+            if (!contest?.joinCodeRequired) {
+                handleVerifyOTP(newValues.join(""));
+            }
         }
     };
 
@@ -324,8 +339,25 @@ export default function QuizJoinPage() {
                                                 />
                                             ))}
                                         </div>
+                                        {contest?.joinCodeRequired && (
+                                            <div className="mb-4">
+                                                <label className="text-sm font-medium mb-1.5 block text-muted-foreground">Join Code</label>
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Enter 5-character Join Code"
+                                                    value={joinCode}
+                                                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                                    maxLength={5}
+                                                    className="h-12 text-center text-lg font-semibold tracking-widest uppercase"
+                                                />
+                                            </div>
+                                        )}
                                         {error && <p className="text-sm text-destructive text-center mb-4">{error}</p>}
-                                        <Button onClick={() => handleVerifyOTP()} disabled={otpValues.join("").length < 6 || loading} className="w-full h-12 font-bold">
+                                        <Button 
+                                            onClick={() => handleVerifyOTP()} 
+                                            disabled={otpValues.join("").length < 6 || (contest?.joinCodeRequired && joinCode.length < 5) || loading} 
+                                            className="w-full h-12 font-bold"
+                                        >
                                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
                                         </Button>
                                     </motion.div>

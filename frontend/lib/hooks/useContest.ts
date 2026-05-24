@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 
 import * as contestsApi from '../api/contests.api';
 import { queryKeys } from '../api/queryClient';
-import { adaptServerContest } from '../utils/contest';
+import { adaptServerContest, deriveContestPhase } from '../utils/contest';
 
 /**
  * Single contest detail hook using TanStack Query
@@ -23,6 +23,8 @@ export function useContest(contestId: string) {
     queryKey: queryKeys.contests.detail(contestId),
     queryFn: () => contestsApi.getContest(contestId),
     enabled: !!contestId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   /**
@@ -43,7 +45,18 @@ export function useContest(contestId: string) {
     mutationFn: () => contestsApi.deleteContest(contestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
-      // Pages typically navigate away after delete
+      queryClient.invalidateQueries({ queryKey: ['archived-contests'] }); // invalidate archived list just in case
+    },
+  });
+
+  /**
+   * Archive contest mutation
+   */
+  const archiveContestMutation = useMutation({
+    mutationFn: () => contestsApi.archiveContest(contestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
+      queryClient.invalidateQueries({ queryKey: ['archived-contests'] });
     },
   });
 
@@ -52,8 +65,25 @@ export function useContest(contestId: string) {
    */
   const publishContestMutation = useMutation({
     mutationFn: () => contestsApi.publishContest(contestId),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const payload = res?.data as { status?: string; joinCode?: string } | undefined;
+      const newStatus = payload?.status ?? 'PUBLISHED';
+      queryClient.setQueryData(
+        queryKeys.contests.detail(contestId),
+        (old: { data?: Record<string, unknown> } | undefined) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: {
+              ...old.data,
+              status: newStatus,
+              joinCode: payload?.joinCode ?? old.data.joinCode,
+            },
+          };
+        },
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
     },
   });
 
@@ -64,6 +94,7 @@ export function useContest(contestId: string) {
     mutationFn: () => contestsApi.triggerEvaluation(contestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
     },
   });
 
@@ -74,12 +105,15 @@ export function useContest(contestId: string) {
     mutationFn: () => contestsApi.declareResults(contestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
     },
   });
 
   // Backward-compatible surface / Adapted contest
   const serverContest = contestQuery.data?.data;
-  const contest = serverContest ? adaptServerContest(serverContest) : undefined;
+  const contest = serverContest
+    ? { ...adaptServerContest(serverContest), phase: deriveContestPhase(serverContest) }
+    : undefined;
   const loading = contestQuery.isLoading;
   const error = contestQuery.error?.message ?? null;
 
@@ -117,6 +151,7 @@ export function useContest(contestId: string) {
     publishContestMutation,
     evaluateMutation,
     declareResultsMutation,
+    archiveContestMutation,
 
     // Helper functions
     isRegistrationOpen,

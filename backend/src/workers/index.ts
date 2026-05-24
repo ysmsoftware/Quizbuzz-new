@@ -6,9 +6,10 @@ import "./message.worker";
 import "./submission.worker";
 import "./certificate.worker";
 import "./evaluation.worker";
-import "./quiz-timer.worker";
+// quiz-timer.worker is imported via container.ts (worker.ts) for DI injection + registration
 import "./analytics.worker";
 import "./leaderboard.worker";
+import "./capture-metadata.worker";
 
 export function startWorkers() {
     logger.info("Starting background workers...");

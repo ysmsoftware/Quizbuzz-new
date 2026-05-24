@@ -18,11 +18,34 @@ interface UseQuizSocketProps {
   onProctoringAlert?: (data: any) => void;
   onDisqualified?: (data: any) => void;
   onError?: (data: any) => void;
+  onCaptureRequest?: (data: any) => void;
 }
 
-/**
- * Hook for managing the real-time WebSocket connection during a quiz
- */
+const mapViolationType = (type: string): string => {
+  const t = type.toUpperCase();
+  if (t.includes('NO_FACE') || t.includes('FACE_NOT_DETECTED') || t.includes('FACE_NOT_FOUND')) return 'FACE_NOT_DETECTED';
+  if (t.includes('MULTIPLE') || t.includes('MULTI_FACE')) return 'MULTIPLE_FACES';
+  if (t.includes('AUDIO')) return 'AUDIO_ANOMALY';
+  if (t.includes('LIGHT') || t.includes('POOR_LIGHTING')) return 'POOR_LIGHTING';
+  if (t.includes('GAZE') || t.includes('LOOKING_AWAY') || t.includes('LOOK_AWAY')) return 'GAZE_AWAY';
+  if (t.includes('TAB_SWITCH') || t.includes('TAB_CHANGE')) return 'TAB_SWITCH';
+  if (t.includes('BLUR') || t.includes('WINDOW_BLUR')) return 'WINDOW_BLUR';
+  if (t.includes('FULLSCREEN') || t.includes('EXIT_FULLSCREEN')) return 'FULLSCREEN_EXIT';
+  if (t.includes('RESIZE') || t.includes('SCREEN_RESIZE')) return 'SCREEN_RESIZE';
+  return 'TAB_SWITCH';
+};
+
+const mapViolationSeverity = (severity: number | string): 'LOW' | 'MEDIUM' | 'HIGH' => {
+  if (typeof severity === 'number') {
+    if (severity <= 1) return 'LOW';
+    if (severity === 2) return 'MEDIUM';
+    return 'HIGH';
+  }
+  const s = severity.toUpperCase();
+  if (s === 'LOW' || s === 'MEDIUM' || s === 'HIGH') return s as 'LOW' | 'MEDIUM' | 'HIGH';
+  return 'LOW';
+};
+
 export function useQuizSocket({
   contestId,
   participantId,
@@ -37,30 +60,69 @@ export function useQuizSocket({
   onProctoringAlert,
   onDisqualified,
   onError,
+  onCaptureRequest,
 }: UseQuizSocketProps) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+  // ── Store all callbacks in refs so they never appear in useEffect deps ──────
+  // This is the critical fix: inline arrow-function props recreate every render,
+  // so putting them in useCallback/useEffect deps causes an infinite reconnect loop.
+  const cbRef = useRef({
+    onJoinAck, onQuizStarted, onAnswerAck, onSubmitAck,
+    onAutoSubmit, onTimeWarning, onReadyAck, onProctoringAlert,
+    onDisqualified, onError, onCaptureRequest,
+  });
+  useEffect(() => {
+    cbRef.current = {
+      onJoinAck, onQuizStarted, onAnswerAck, onSubmitAck,
+      onAutoSubmit, onTimeWarning, onReadyAck, onProctoringAlert,
+      onDisqualified, onError, onCaptureRequest,
+    };
+  });
 
-    const socket = io(`${process.env.NEXT_PUBLIC_WS_URL || 'wss://your-domain.com'}/quiz`, {
-      path: '/socket.io',
-      auth: { token: socketToken },
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+  }, []);
+
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat();
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('quiz:v1:heartbeat');
+      }
+    }, 30_000);
+  }, [stopHeartbeat]);
+
+  // ── Single stable effect — only re-runs if connection params change ──────────
+  useEffect(() => {
+    // All three must be non-empty. contestId guards against the race where the
+    // auth store hydrates after first render and the effect runs with "".
+    if (!contestId || !participantId || !socketToken) return;
+
+    const socket = io(
+      `${process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000'}/participant`,
+      {
+        path: '/socket.io',
+        auth: { token: socketToken },
+        transports: ['polling', 'websocket'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 10_000,
+      },
+    );
+
+    socketRef.current = socket;
 
     socket.on('connect', () => {
       setIsConnected(true);
       console.log('Quiz connected:', socket.id);
-      
-      // Step 1: Join the quiz room
-      socket.emit('quiz:v1:join', { participantId, contestId });
-      
-      // Step 2: Start heartbeats
+      // Re-join on every (re)connect so the room membership survives reconnects
+      socket.emit('quiz:v1:join', { participantId });
       startHeartbeat();
     });
 
@@ -78,107 +140,67 @@ export function useQuizSocket({
       }
     });
 
-    // Event Listeners
-    socket.on('quiz:v1:join_ack', (data) => onJoinAck?.(data));
-    socket.on('quiz:v1:quiz_started', (data) => onQuizStarted?.(data));
-    socket.on('quiz:v1:answer_ack', (data) => onAnswerAck?.(data));
-    socket.on('quiz:v1:submit_ack', (data) => onSubmitAck?.(data));
-    socket.on('quiz:v1:auto_submit', (data) => onAutoSubmit?.(data));
-    socket.on('quiz:v1:time_warning', (data) => onTimeWarning?.(data));
-    socket.on('quiz:v1:ready_ack', (data) => onReadyAck?.(data));
-    socket.on('quiz:v1:proctoring_alert', (data) => onProctoringAlert?.(data));
-    socket.on('quiz:v1:disqualified', (data) => onDisqualified?.(data));
-    socket.on('quiz:v1:error', (data) => onError?.(data));
+    // ── Route all events through the ref — never stale ──────────────────────
+    socket.on('quiz:v1:waiting_room_status', (d) => cbRef.current.onJoinAck?.(d));
+    socket.on('quiz:v1:start',               (d) => cbRef.current.onQuizStarted?.(d));
+    socket.on('quiz:v1:answer_saved',        (d) => cbRef.current.onAnswerAck?.(d));
+    socket.on('quiz:v1:submit_success',      (d) => cbRef.current.onSubmitAck?.(d));
+    socket.on('quiz:v1:auto_submit',         (d) => cbRef.current.onAutoSubmit?.(d));
+    socket.on('quiz:v1:time_warning',        (d) => cbRef.current.onTimeWarning?.(d));
+    socket.on('quiz:v1:violation_update',    (d) => cbRef.current.onProctoringAlert?.(d));
+    socket.on('quiz:v1:capture_request',     (d) => cbRef.current.onCaptureRequest?.(d));
+    // Backward-compat aliases
+    socket.on('quiz:v1:join_ack',      (d) => cbRef.current.onJoinAck?.(d));
+    socket.on('quiz:v1:quiz_started',  (d) => cbRef.current.onQuizStarted?.(d));
+    socket.on('quiz:v1:answer_ack',    (d) => cbRef.current.onAnswerAck?.(d));
+    socket.on('quiz:v1:submit_ack',    (d) => cbRef.current.onSubmitAck?.(d));
+    socket.on('quiz:v1:ready_ack',     (d) => cbRef.current.onReadyAck?.(d));
+    socket.on('quiz:v1:proctoring_alert', (d) => cbRef.current.onProctoringAlert?.(d));
+    socket.on('quiz:v1:disqualified',  (d) => cbRef.current.onDisqualified?.(d));
+    socket.on('quiz:v1:error',         (d) => cbRef.current.onError?.(d));
 
-    socketRef.current = socket;
-  }, [socketToken, participantId, contestId, onJoinAck, onQuizStarted, onAnswerAck, onSubmitAck, onAutoSubmit, onTimeWarning, onProctoringAlert, onDisqualified, onError]);
+    return () => {
+      stopHeartbeat();
+      socket.disconnect();
+      socketRef.current = null;
+      setIsConnected(false);
+    };
+  // ⚠️  contestId / participantId / socketToken only — callbacks are in refs
+  }, [contestId, participantId, socketToken, startHeartbeat, stopHeartbeat]);
 
-  const disconnect = useCallback(() => {
-    stopHeartbeat();
-    socketRef.current?.disconnect();
-    socketRef.current = null;
-    setIsConnected(false);
-  }, []);
+  // ── Public API ───────────────────────────────────────────────────────────────
+  const submitAnswer = useCallback(
+    (questionId: string, selectedOptionId: string, answeredAt: string) => {
+      socketRef.current?.emit('quiz:v1:answer', { questionId, selectedOptionId, answeredAt });
+    },
+    [],
+  );
 
-  const startHeartbeat = () => {
-    stopHeartbeat();
-    heartbeatIntervalRef.current = setInterval(() => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('quiz:v1:heartbeat', { participantId, contestId });
-      }
-    }, 15000);
-  };
+  const submitQuiz = useCallback(
+    (answers: Record<string, string>, timeTakenSecs: number) => {
+      socketRef.current?.emit('quiz:v1:submit', { answers, timeTakenSecs });
+    },
+    [],
+  );
 
-  const stopHeartbeat = () => {
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
-    }
-  };
-
-  /**
-   * Submit an answer for a question
-   */
-  const submitAnswer = useCallback((questionId: string, selectedOptionId: string | null, questionIndex: number) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('quiz:v1:answer', {
-        participantId,
-        contestId,
-        questionId,
-        selectedOptionId,
-        questionIndex,
+  const sendProctoringEvent = useCallback(
+    (type: string, severity: number | string, metadata?: Record<string, unknown>) => {
+      socketRef.current?.emit('quiz:v1:violation', {
+        type: mapViolationType(type),
+        severity: mapViolationSeverity(severity),
+        metadata,
+        timestamp: new Date().toISOString(),
       });
-    }
-  }, [participantId, contestId]);
-
-  /**
-   * Final quiz submission
-   */
-  const submitQuiz = useCallback((reason?: string) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('quiz:v1:submit', { participantId, contestId, reason });
-    }
-  }, [participantId, contestId]);
-
-  /**
-   * Send proctoring violation event
-   */
-  const sendProctoringEvent = useCallback((type: string, severity: number, metadata?: object) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('quiz:v1:proctoring_event', {
-        participantId,
-        contestId,
-        type,
-        severity,
-        metadata: { ...metadata, timestamp: Date.now() },
-      });
-    }
-  }, [participantId, contestId]);
-
-  /**
-   * Mark as ready in waiting room
-   */
-  const markAsReady = useCallback((cameraGranted: boolean = false) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('quiz:v1:ready', {
-        participantId,
-        contestId,
-        cameraGranted,
-      });
-    }
-  }, [participantId, contestId]);
-
-  useEffect(() => {
-    connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
+    },
+    [],
+  );
 
   return {
     isConnected,
+    socket: socketRef.current,
     submitAnswer,
     submitQuiz,
     sendProctoringEvent,
-    markAsReady,
-    socket: socketRef.current,
   };
 }
+

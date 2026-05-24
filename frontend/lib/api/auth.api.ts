@@ -22,12 +22,34 @@ export async function registerAdmin(body: {
 
 /**
  * POST /auth/admin/login
+ * Uses raw fetch so a wrong password 401 is not treated as "session expired".
  */
 export async function loginAdmin(body: {
   email: string;
   password: string;
 }): Promise<ApiResponse> {
-  return post('/auth/admin/login', body);
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
+  const res = await fetch(`${API_BASE}/auth/admin/login`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || !data.success) {
+    const { ApiRequestError } = await import('./apiClient');
+    throw new ApiRequestError(
+      data.code ?? 'LOGIN_FAILED',
+      data.message ?? 'Incorrect email or password',
+      data.details,
+      data.requestId,
+      res.status,
+    );
+  }
+
+  return data;
 }
 
 /**
@@ -91,4 +113,13 @@ export async function getMe(): Promise<ApiResponse> {
  */
 export async function switchOrg(organizationId: string): Promise<ApiResponse> {
   return post('/auth/admin/switch-org', { organizationId });
+}
+
+/**
+ * GET /auth/admin/socket-token
+ * Returns a short-lived JWT for authenticating the admin WebSocket (/quiz-admin namespace).
+ * Must be called before connecting the admin socket — the token expires in 5 minutes.
+ */
+export async function getAdminSocketToken(): Promise<ApiResponse<{ socketToken: string; expiresIn: number }>> {
+  return get<{ socketToken: string; expiresIn: number }>('/auth/admin/socket-token');
 }

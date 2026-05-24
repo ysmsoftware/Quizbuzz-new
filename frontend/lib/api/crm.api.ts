@@ -24,16 +24,20 @@ export interface ContactHistoryItem {
   participantId: string;
   registrationRef: string;
   status: string;
-  joinedAt: string;
-  contest: {
-    id: string;
-    title: string;
-    startTime: string;
+  registeredAt: string;
+  contestId: string;
+  contestTitle: string;
+  contestSlug: string;
+  contestPrice?: number;
+  payment?: {
     status: string;
+    amount?: number;
   };
-  payment: {
-    status: string;
-    amount: number;
+  certificate?: {
+    id: string;
+    status: 'GENERATED' | 'FAILED' | 'QUEUED' | 'GENERATING';
+    generatedAt?: string;
+    fileUrl?: string;
   };
   submission?: {
     score: string;
@@ -60,6 +64,9 @@ export interface MessageRecord {
   channel: 'WHATSAPP' | 'EMAIL';
   template: string;
   recipient: string;
+  subject?: string;
+  body?: string;
+  parameters?: Record<string, string>;
   status: 'QUEUED' | 'PROCESSING' | 'SENT' | 'DELIVERED' | 'FAILED';
   sentAt?: string;
   deliveredAt?: string;

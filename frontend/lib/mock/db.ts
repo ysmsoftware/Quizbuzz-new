@@ -233,6 +233,7 @@ function generateRegistrations(contests: Contest[], contacts: Contact[]): Regist
         id: `reg-${String(regIndex).padStart(4, '0')}`,
         contestId,
         participantId: `part-${String(regIndex).padStart(4, '0')}`,
+        registrationRef: `QB-MOCK-${String(regIndex).padStart(4, '0')}`,
         status: contestId === 'contest-sim-001' ? 'confirmed' : (isPaid ? 'confirmed' : 'pending'),
         registeredAt: new Date(2024, 1, Math.floor(Math.random() * 20) + 1).toISOString(),
         paymentId: isPaid ? `pay-${String(regIndex).padStart(4, '0')}` : undefined,

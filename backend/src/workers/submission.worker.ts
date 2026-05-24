@@ -17,6 +17,7 @@ import { redis } from "../config/redis";
 import { config } from "../config";
 import { submissionService } from "../container";
 import { SubmissionJobPayload } from "../modules/submission/submission.types";
+import { messageQueue } from "../queues";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -30,7 +31,7 @@ import { Worker } from "./worker.interface";
  * Throws regular Error for transient issues — BullMQ WILL retry these.
  */
 function validatePayload(payload: SubmissionJobPayload): void {
-    if (!payload.organizationId || !payload.participantId || !payload.contestId) {
+    if (!payload.participantId || !payload.contestId) {
         throw new UnrecoverableError(
             `[submission-worker] Invalid payload: missing required IDs. ` +
             `participantId=${payload.participantId} contestId=${payload.contestId}`
@@ -77,7 +78,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     // ── Step 2: Persist to DB via SubmissionService ───────────────────────────
     // Service handles idempotency: if submission already exists, it returns
     // the existing ID without a duplicate insert.
-    const { submissionId } = await submissionService.persistSubmission({
+    const { submissionId, organizationId } = await submissionService.persistSubmission({
         organizationId: payload.organizationId,
         participantId:  payload.participantId,
         contestId:      payload.contestId,
@@ -98,7 +99,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     // jobId = submissionId → BullMQ deduplicates if evaluation was already
     // queued (e.g. admin triggered bulk evaluation first).
     await submissionService.enqueueEvaluation({
-        organizationId: payload.organizationId,
+        organizationId: organizationId,
         submissionId,
         participantId:  payload.participantId,
         contestId:      payload.contestId,
@@ -108,6 +109,25 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
         `[submission-worker] Job ${job.id} complete — evaluation enqueued for submission ${submissionId}`
     );
     await job.updateProgress(100);
+
+    // ── Step 4: Enqueue submission confirmation notification ──────────────────
+    // Fire-and-forget: if this fails it won't affect the submission.
+    try {
+        await messageQueue.add(
+            "send-message",
+            {
+                participantId: payload.participantId,
+                contestId: payload.contestId,
+                organizationId: payload.organizationId,
+                template: "REGISTRATION_SUCCESSFUL",
+                channel: "WHATSAPP",
+                params: { submissionRef: submissionId },
+            },
+            { jobId: `submission-confirm-${payload.participantId}` }
+        );
+    } catch (err) {
+        logger.warn(`[submission-worker] Could not enqueue submission notification: ${err}`);
+    }
 }
 
 // ─── Worker registration ──────────────────────────────────────────────────────

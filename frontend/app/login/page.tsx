@@ -40,11 +40,24 @@ export default function LoginPage() {
         try {
             await loginMutation.mutateAsync({ email, password });
         } catch (err: any) {
-            if (err.status === 403 || err.message?.toLowerCase().includes('verify your email')) {
+            const msg = err?.message ?? '';
+            if (
+                err.status === 403 ||
+                err.code === 'FORBIDDEN' ||
+                msg.toLowerCase().includes('verify')
+            ) {
                 router.push(`/verify-email?email=${encodeURIComponent(email)}`);
                 return;
             }
-            setError(err.message || 'Login failed. Please try again.');
+            if (err.status === 429) {
+                setError('Too many attempts. Please wait a few minutes and try again.');
+                return;
+            }
+            if (err.status === 401 || err.code === 'UNAUTHORIZED') {
+                setError(msg || 'Incorrect email or password.');
+                return;
+            }
+            setError(msg || 'Login failed. Please try again.');
         }
     };
 

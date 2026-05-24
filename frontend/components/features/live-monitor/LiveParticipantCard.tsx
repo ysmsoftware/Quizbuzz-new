@@ -45,11 +45,12 @@ export function LiveParticipantCard({
   const statusConfig = {
     active: { color: 'bg-green-500', label: 'Active' },
     submitted: { color: 'bg-blue-500', label: 'Submitted' },
+    waiting: { color: 'bg-yellow-500', label: 'Waiting' },
     flagged: { color: 'bg-red-500', label: 'Flagged' },
     disconnected: { color: 'bg-gray-400', label: 'Disconnected' }
   };
 
-  const statusStyle = statusConfig[participant.status];
+  const statusStyle = statusConfig[participant.status as keyof typeof statusConfig] || { color: 'bg-gray-400', label: participant.status };
   const showTimeWarning = participant.timeOnQuestion > 180; // 3 minutes
 
   const lastUpdatedMinutesAgo = Math.floor(

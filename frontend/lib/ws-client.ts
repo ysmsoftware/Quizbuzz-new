@@ -6,7 +6,7 @@ import { io, type Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000';
 
 /**
  * Get or create the singleton Socket.io client.
@@ -22,7 +22,7 @@ export function getSocket(): Socket {
       reconnectionDelayMax: 30000,
       randomizationFactor: 0.3,
       timeout: 10000,
-      transports: ['websocket'], // skip long-polling for performance
+      transports: ['polling', 'websocket'],
     });
   }
   return socket;

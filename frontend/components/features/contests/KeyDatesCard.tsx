@@ -1,6 +1,6 @@
 'use client';
 
-import { format } from 'date-fns';
+import { fmtDateTime } from '@/lib/formatDate';
 import { Check, Clock, Calendar, X, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Contest, ContestPhase } from '@/lib/types';
@@ -84,10 +84,7 @@ export function KeyDatesCard({ contest, phase, className }: KeyDatesCardProps) {
                                 </span>
                                 {item.date ? (
                                     <span className="text-sm font-medium">
-                                        {format(item.date, 'eee, d MMM yyyy')}
-                                        <span className="text-muted-foreground font-normal ml-1">
-                                            at {format(item.date, 'hh:mm a')}
-                                        </span>
+                                        {fmtDateTime(item.date)}
                                     </span>
                                 ) : (
                                     <span className="text-sm font-medium text-muted-foreground/50">

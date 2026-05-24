@@ -86,7 +86,7 @@ export const ListContestsQuerySchema = z.object({
 export const ListParticipantsQuerySchema = z.object({
     status: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    limit: z.coerce.number().int().min(1).max(10000).default(1000),
 });
 
 // ADMIN ACTIONS

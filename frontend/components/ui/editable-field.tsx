@@ -16,9 +16,10 @@ import {
 
 interface EditableFieldProps {
   value: string;
+  displayValue?: string;
   onSave: (value: string) => Promise<void>;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'date' | 'time';
+  type?: 'text' | 'textarea' | 'number' | 'date' | 'time' | 'datetime-local';
   disabled?: boolean;
   lockReason?: string;
   autoSave?: boolean;
@@ -28,6 +29,7 @@ interface EditableFieldProps {
 
 export function EditableField({
   value,
+  displayValue,
   onSave,
   label,
   type = 'text',
@@ -104,7 +106,7 @@ export function EditableField({
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-2 py-1 px-2 rounded-md border border-transparent bg-muted/30 cursor-not-allowed">
-                <span className="text-sm font-medium text-muted-foreground line-clamp-1">{value || '—'}</span>
+                <span className="text-sm font-medium text-muted-foreground line-clamp-1">{displayValue || value || '—'}</span>
               </div>
             </TooltipTrigger>
             {lockReason && <TooltipContent>{lockReason}</TooltipContent>}
@@ -184,7 +186,7 @@ export function EditableField({
               "text-sm font-medium transition-colors",
               !value && "text-muted-foreground italic"
             )}>
-              {value || `No ${label.toLowerCase()} set`}
+              {displayValue || value || `No ${label.toLowerCase()} set`}
             </span>
             <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/field:opacity-100 transition-opacity" />
           </motion.div>

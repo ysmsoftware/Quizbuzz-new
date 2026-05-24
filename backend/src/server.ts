@@ -27,6 +27,10 @@ async function bootstrap() {
         const { socketService } = await import("./container.js");
         const io = socketService.attach(server);
 
+        // Apply auth middleware to namespaces before attaching gateways
+        socketService.applyAuth("participant");
+        socketService.applyAuth("/quiz-admin");
+
         // Attach listeners for specific gateways
         quizGateway.attach(io);
         adminGateway.attach(io);

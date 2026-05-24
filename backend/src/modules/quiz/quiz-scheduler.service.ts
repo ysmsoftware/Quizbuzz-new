@@ -33,6 +33,7 @@ export class QuizSchedulerService {
         organizationId: string,
         startTime: Date,
         endTime: Date,
+        showResultsAfter: number = 24,
     ): Promise<void> {
         const now = Date.now();
 
@@ -74,6 +75,20 @@ export class QuizSchedulerService {
         logger.info(
             `[quiz-scheduler] Contest ${contestId} auto-submit scheduled in ${Math.round(endDelay / 1000)}s`,
         );
+
+        // 4. Schedule auto-declare results at endTime + showResultsAfter hours
+        if (showResultsAfter >= 0) {
+            const declareDelay = Math.max(0, endTime.getTime() + (showResultsAfter * 3600 * 1000) - now);
+            await this.scheduleJob({
+                contestId,
+                organizationId,
+                type: "AUTO_DECLARE_RESULTS",
+            }, `auto-declare-${contestId}`, declareDelay);
+
+            logger.info(
+                `[quiz-scheduler] Contest ${contestId} auto-declare scheduled in ${Math.round(declareDelay / 1000)}s (${showResultsAfter}h after end)`,
+            );
+        }
     }
 
     /**
@@ -126,6 +141,7 @@ export class QuizSchedulerService {
         const jobIds = [
             `start-${contestId}`,
             `autosubmit-${contestId}`,
+            `auto-declare-${contestId}`,
             ...TIME_WARNINGS.map((s) => `warning-${contestId}-${s}`),
         ];
 

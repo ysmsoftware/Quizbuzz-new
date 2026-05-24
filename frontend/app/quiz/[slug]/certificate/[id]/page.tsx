@@ -1,10 +1,10 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { useParticipantCertificate } from '@/lib/hooks/useParticipantCertificate';
 import { 
   Award, 
   Download, 
@@ -22,7 +22,6 @@ import {
   Sparkles,
   Palette
 } from 'lucide-react';
-import { certificatesApi } from '@/lib/api/results-certs.api';
 import { Button } from '@/components/ui/button';
 import { CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -53,13 +52,7 @@ export default function ParticipantCertificatePage() {
   const shineX = useSpring(useTransform(mouseX, [-0.5, 0.5], [0, 100]), springConfig);
   const shineY = useSpring(useTransform(mouseY, [-0.5, 0.5], [0, 100]), springConfig);
 
-  const { data: certData, isLoading, error } = useQuery({
-    queryKey: ['participant-certificate', participantId],
-    queryFn: () => certificatesApi.getParticipantCertificate(participantId),
-    retry: false,
-  });
-
-  const certificate = certData?.data;
+  const { certificate, loading: isLoading, error } = useParticipantCertificate(participantId);
 
   // Celebrate on load success
   useEffect(() => {

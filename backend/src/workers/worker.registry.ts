@@ -5,6 +5,10 @@ class WorkerRegistry {
     private workers: Worker[] = [];
 
     register(worker: Worker) {
+        if (this.workers.some((w) => w.name === worker.name)) {
+            logger.warn(`Worker already registered, skipping: ${worker.name}`);
+            return;
+        }
         this.workers.push(worker);
         logger.info(`Worker registered: ${worker.name}`);
     }

@@ -23,6 +23,7 @@ import { config } from "../config";
 import { submissionService } from "../container";
 import { questionRepository } from "../container";
 import { leaderboardRepository } from "../container";
+import { contestRepository } from "../container";
 import { EvaluationJobPayload } from "../modules/submission/submission.types";
 import { ApplyEvaluationInput } from "../modules/submission/submission.types";
 import logger from "../config/logger";
@@ -264,6 +265,13 @@ async function processEvaluation(job: Job<EvaluationJobPayload>): Promise<void> 
     // ── Step 6: Persist results via SubmissionService ─────────────────────────
     // Converts Decimal → Prisma.Decimal for DB write.
 
+    const contest = await contestRepository.findById(contestId, organizationId);
+    if (!contest) {
+        throw new UnrecoverableError(`[evaluation-worker] Contest not found: ${contestId}`);
+    }
+    const cutoffScore = contest.cutoffScore ?? 0;
+    const isPassed = result.percentage.toNumber() >= cutoffScore;
+
     const applyInput: ApplyEvaluationInput = {
         correct: result.correct,
         wrong: result.wrong,
@@ -271,6 +279,7 @@ async function processEvaluation(job: Job<EvaluationJobPayload>): Promise<void> 
         attempted: result.attempted,
         score: result.score,
         percentage: result.percentage,
+        isPassed: isPassed,
         evaluatedAt: new Date(),
         scoredAnswers: result.scoredAnswers.map((a) => ({
             questionId: a.questionId,

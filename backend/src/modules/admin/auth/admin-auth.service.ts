@@ -294,6 +294,20 @@ export class AdminAuthService {
         await redis.del(key);
     }
 
+    /**
+     * Issue a short-lived socket token for the admin WebSocket connection.
+     * Called from GET /auth/admin/socket-token (cookie-authenticated).
+     * The token is passed as socket.handshake.auth.token on the /quiz-admin namespace.
+     */
+    issueSocketToken(
+        adminId: string,
+        organizationId: string,
+    ): { socketToken: string; expiresIn: number } {
+        const SOCKET_TOKEN_TTL = 300; // 5 minutes
+        const socketToken = createAccessToken({ userId: adminId, organizationId });
+        return { socketToken, expiresIn: SOCKET_TOKEN_TTL };
+    }
+
 
 
     // helpers

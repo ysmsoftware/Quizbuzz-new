@@ -13,7 +13,7 @@ export const redis = new Redis({
 
 // For Socket.IO Redis Adapter
 export const pubClient = redis.duplicate();
-export const subClient = redis.duplicate();
+export const subClient = redis.duplicate({ enableReadyCheck: false });
 
 redis.on("connect", () => {
     logger.info("Redis connected");
