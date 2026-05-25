@@ -193,7 +193,7 @@ export class ContestService {
         const startMs = new Date(contest.startTime).getTime();
 
         const delay24h = startMs - 24 * 60 * 60 * 1000 - now;
-        const delay1h  = startMs - 60 * 60 * 1000 - now;
+        const delay1h = startMs - 60 * 60 * 1000 - now;
 
         if (delay24h > 0) {
             await messageQueue.add('bulk-notify', {
@@ -346,7 +346,7 @@ export class ContestService {
                     time: contest.startTime
                         ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short' })
                         : 'TBD',
-                    link: `${config.app.frontendUrl}/contests/${contest.slug}`,
+                    link: `${config.app.frontendUrl}/quiz/${contest.slug}/join`,
                     joinCode: contest.joinCode || 'N/A',
                 },
             }).catch((err) => {
