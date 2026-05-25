@@ -8,6 +8,7 @@ on:
       - "frontend/**"
       - "docker-compose.prod.yml"
       - ".github/workflows/deploy.yml"
+      - "prisma/**"
 
 env:
   REGISTRY: ghcr.io
