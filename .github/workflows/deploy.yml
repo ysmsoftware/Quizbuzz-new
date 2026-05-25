@@ -228,10 +228,10 @@ jobs:
             ENVEOF
 
             # ── Pull pre-built images ────────────
-            docker compose -f docker-compose.prod.yml --env-file .env.production pull backend frontend
+            docker compose -f docker-compose.prod.yml pull backend frontend
 
             # ── Zero-downtime rolling restart ────
-            docker compose -f docker-compose.prod.yml --env-file .env.production up -d \
+            docker compose -f docker-compose.prod.yml up -d \
               --no-build \
               --remove-orphans
 
@@ -257,12 +257,12 @@ jobs:
 
               # ── Rollback to previous images ──────
               if [ "$PREV_BACKEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml --env-file .env.production \
+                docker compose -f docker-compose.prod.yml \
                   up -d --no-build backend || true
               fi
               if [ "$PREV_FRONTEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml --env-file .env.production \
-                  up -d --no-build frontend || true
+                docker compose -f docker-compose.prod.yml \
+                  up -d --no-build backend || true
               fi
 
               echo "Rollback complete"
