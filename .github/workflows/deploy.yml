@@ -219,6 +219,14 @@ jobs:
             echo "$ENV_PRODUCTION" > ./backend/.env.production
             cp ./backend/.env.production ./.env.production
 
+            # ── Write root .env for docker-compose variable substitution ──
+            cat > ./.env << 'ENVEOF'
+            POSTGRES_USER=postgres
+            POSTGRES_PASSWORD=postgres
+            POSTGRES_DB=quizbuzz
+            REDIS_PASSWORD=austin_redis_pass
+            ENVEOF
+
             # ── Pull pre-built images ────────────
             docker compose -f docker-compose.prod.yml --env-file .env.production pull backend frontend
 
