@@ -302,41 +302,14 @@ export class QuizAuthService {
 
     async participantLogin(
         email: string,
-        otp: string,
+        otp?: string,
         contestSlug?: string,
         contestId?: string,
         joinCode?: string,
     ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string }> {
-        // 1. Verify OTP stored under the registration Redis key
-        const key = regOtpKey(email);
-        const stored = await redis.hgetall(key);
+        // OTP verification is bypassed/removed since the email identity is already verified during registration.
 
-        if (!stored.hash) {
-            throw new QuizAuthError("OTP_EXPIRED", "OTP has expired. Please request a new one.");
-        }
-
-        const attempts = parseInt(stored.attempts || "0", 10);
-        if (attempts >= MAX_OTP_ATTEMPTS) {
-            await redis.del(key);
-            throw new QuizAuthError("OTP_MAX_ATTEMPTS", "Too many incorrect attempts. Please request a new OTP.");
-        }
-
-        await redis.hincrby(key, "attempts", 1);
-
-        if (!compareOtp(otp, stored.hash)) {
-            const remaining = MAX_OTP_ATTEMPTS - attempts - 1;
-            throw new QuizAuthError(
-                "OTP_INVALID",
-                remaining > 0
-                    ? `Invalid OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
-                    : "Invalid OTP. No attempts remaining — please request a new code.",
-            );
-        }
-
-        // OTP verified — consume it immediately
-        await redis.del(key);
-
-        // 2. Resolve contest by slug/id (accept LIVE, PUBLISHED, REGISTRATION_CLOSED)
+        // 1. Resolve contest by slug/id (accept LIVE, PUBLISHED, REGISTRATION_CLOSED)
         const contest = await this.prisma.contest.findFirst({
             where: {
                 OR: [
@@ -353,7 +326,7 @@ export class QuizAuthService {
             throw new QuizAuthError("CONTEST_NOT_FOUND", "Contest not found or not currently accepting participants");
         }
 
-        // 3. Verify joinCode if contest requires one
+        // 2. Verify joinCode if contest requires one
         if (contest.joinCode) {
             if (!joinCode) {
                 throw new QuizAuthError("JOINCODE_REQUIRED", "Join code is required for this contest");

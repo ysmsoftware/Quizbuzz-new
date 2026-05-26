@@ -107,7 +107,7 @@ class AuthService {
     async verifyOTP(
         contact: string,
         contactType: 'phone' | 'email',
-        otp: string,
+        otp: string | undefined,
         contestSlug: string,
         joinCode?: string,
         contestId?: string

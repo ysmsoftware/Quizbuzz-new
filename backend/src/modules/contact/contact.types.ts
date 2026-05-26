@@ -85,6 +85,22 @@ export interface ContactContestSummary {
   contestSlug:      string;
   status:           string;   // ParticipantStatus enum value
   registeredAt:     Date;
+  contestPrice?:    number | undefined;
+  payment?: {
+    status:         string;
+    amount?:        number;
+  } | undefined;
+  certificate?: {
+    id:             string;
+    status:         string;
+    generatedAt?:   Date | null;
+    fileUrl?:       string | null;
+  } | undefined;
+  submission?: {
+    score:          string;
+    percentage:     string;
+    rank:           number;
+  } | undefined;
 }
 
 export interface ContactMessageItem {

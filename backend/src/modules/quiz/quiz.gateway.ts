@@ -3,11 +3,11 @@ import { QuizService } from "./quiz.service.js";
 import { ProctoringService } from "./proctoring.service.js";
 import logger from "../../config/logger.js";
 import { redis } from "../../config/redis.js";
-import { 
-    ViolationPayload, 
-    AnswerPayload, 
+import {
+    ViolationPayload,
+    AnswerPayload,
     SubmitPayload,
-    JoinPayload 
+    JoinPayload
 } from "./quiz.types.js";
 import { prisma } from "../../config/db.js";
 
@@ -18,21 +18,21 @@ export class QuizGateway {
     constructor(
         private quizService: QuizService,
         private proctoringService: ProctoringService
-    ) {}
+    ) { }
 
     attach(io: Server) {
         this.server = io;
         const participantNs = io.of("participant");
-        
+
         participantNs.on("connection", (socket: Socket) => {
             this.handleConnection(socket);
-            
+
             socket.on("quiz:v1:join", (payload) => this.handleJoin(socket, payload));
             socket.on("quiz:v1:heartbeat", () => this.handleHeartbeat(socket));
             socket.on("quiz:v1:answer", (payload) => this.handleAnswer(socket, payload));
             socket.on("quiz:v1:violation", (payload) => this.handleViolation(socket, payload));
             socket.on("quiz:v1:submit", (payload) => this.handleSubmit(socket, payload));
-            
+
             socket.on("disconnect", () => this.handleDisconnect(socket));
         });
 
@@ -43,7 +43,7 @@ export class QuizGateway {
     private setupRedisSubscriber() {
         try {
             this.subscriberClient = redis.duplicate({ enableReadyCheck: false });
-            
+
             this.subscriberClient.on("connect", () => {
                 logger.info("[QuizGateway] Cross-process Redis subscriber connected");
                 this.subscriberClient.subscribe("quizbuzz:socket-emit").catch((err: any) => {
@@ -56,12 +56,12 @@ export class QuizGateway {
                     try {
                         const { namespace, room, event, data } = JSON.parse(message);
                         logger.debug(`[QuizGateway] Received socket-emit from Redis: ${namespace} -> ${room} -> ${event}`);
-                        
+
                         let ns: any = this.server;
                         if (namespace && namespace !== "/") {
                             ns = this.server.of(namespace);
                         }
-                        
+
                         ns.to(room).emit(event, data);
                     } catch (err) {
                         logger.error("[QuizGateway] Cross-process socket-emit parsing/emitting failed:", err);
@@ -124,7 +124,7 @@ export class QuizGateway {
         if (participantId && contestId) {
             await this.quizService.handleDisconnect(contestId, participantId);
             // Push updated counts to admin
-            await this.emitAdminLiveStats(contestId, organizationId).catch(() => {});
+            await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
         }
     }
 
@@ -156,7 +156,7 @@ export class QuizGateway {
             if (rejoinData) {
                 socket.emit("quiz:v1:start", rejoinData);
             }
-            await this.emitAdminLiveStats(contestId, organizationId).catch(() => {});
+            await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
             return;
         }
 
@@ -185,8 +185,9 @@ export class QuizGateway {
         // ── Debug log: incoming answer event ────────────────────────────────
         logger.info(
             `[QuizGateway:answer] contestId=${contestId} | participantId=${participantId} | ` +
-            `questionId=${payload.questionId} | selectedOptionId=${payload.selectedOptionId ?? "(skipped)"} | ` +
-            `answeredAt=${payload.answeredAt}`
+            `questionId=${payload.questionId} |  answeredAt=${payload.answeredAt} | ` +
+            `selectedOptionId=${payload.selectedOptionId ?? "(skipped)"} | ` +
+            `selectedOptionText=${payload.selectedOptionText}`
         );
 
         const success = await this.quizService.saveAnswer(
@@ -194,6 +195,7 @@ export class QuizGateway {
             participantId,
             payload.questionId,
             payload.selectedOptionId,
+            payload.selectedOptionText,
             payload.answeredAt
         );
 

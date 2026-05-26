@@ -440,9 +440,9 @@ export default function QuestionBankModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-full max-w-[92vw] max-h-[92vh] min-h-[60vh] flex flex-col p-0 overflow-hidden border border-border/80 shadow-2xl bg-background/95 backdrop-blur-xl">
+            <DialogContent className="w-full max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[85vw] xl:max-w-[75vw] max-h-[92vh] min-h-[60vh] flex flex-col p-0 overflow-hidden border border-border/80 shadow-2xl bg-background/95 backdrop-blur-xl">
                 {/* Header Section */}
-                <div className="px-6 pt-5 pb-4 border-b bg-muted/20">
+                <div className="px-5 pt-4 pb-3 border-b bg-muted/20">
                     <DialogHeader>
                         <div className="flex items-center gap-2">
                             <div className="p-2 rounded-xl bg-primary/10 text-primary">
@@ -458,7 +458,7 @@ export default function QuestionBankModal({
                     </DialogHeader>
 
                     {/* Sliding Tab Selector */}
-                    <div className="flex p-1 mt-4 rounded-xl bg-muted/60 border border-muted/80 max-w-sm relative">
+                    <div className="flex p-1 mt-3 rounded-xl bg-muted/60 border border-muted/80 max-w-sm relative">
                         <button
                             type="button"
                             onClick={() => setActiveTab('manual')}
@@ -496,7 +496,7 @@ export default function QuestionBankModal({
                 </div>
 
                 {/* Content Body Container */}
-                <div className="flex-1 overflow-y-auto lg:overflow-hidden px-6 py-4 min-h-0">
+                <div className="flex-1 overflow-y-auto lg:overflow-hidden px-5 py-3 min-h-0 flex flex-col">
                     <AnimatePresence mode="wait">
                         {activeTab === 'manual' ? (
                             <motion.div
@@ -505,15 +505,15 @@ export default function QuestionBankModal({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -5 }}
                                 transition={{ duration: 0.15 }}
-                                className="space-y-4"
+                                className="space-y-3"
                             >
                                 {/* Filters */}
-                                <div className="flex flex-col sm:flex-row gap-3 pb-3 border-b border-border/40">
+                                <div className="flex flex-col sm:flex-row gap-2 pb-2.5 border-b border-border/40">
                                     <div className="relative flex-1">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             placeholder="Search by question text..."
-                                            className="pl-9 h-9"
+                                            className="pl-9 h-9 text-xs"
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
                                         />
@@ -535,25 +535,25 @@ export default function QuestionBankModal({
 
                                 {/* List */}
                                 {isLoading ? (
-                                    <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                    <div className="flex flex-col items-center justify-center py-16 gap-2">
                                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        <p className="text-sm text-muted-foreground font-medium animate-pulse">Loading unassigned questions...</p>
+                                        <p className="text-xs text-muted-foreground font-medium animate-pulse">Loading unassigned questions...</p>
                                     </div>
                                 ) : !questions || questions.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-                                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                                            <Search className="h-6 w-6 text-muted-foreground/30" />
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+                                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                            <Search className="h-5 w-5 text-muted-foreground/30" />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-base">No unassigned questions found</p>
-                                            <p className="text-sm text-muted-foreground mt-0.5">
+                                            <p className="font-bold text-sm">No unassigned questions found</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
                                                 All question bank items might already be in the contest, or try another search query.
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="divide-y border rounded-xl overflow-hidden bg-muted/10">
-                                        <div className="flex items-center px-4 py-3 bg-muted/40 font-semibold text-xs text-muted-foreground border-b">
+                                        <div className="flex items-center px-3 py-2 bg-muted/40 font-semibold text-[11px] text-muted-foreground border-b">
                                             <div className="w-10 flex justify-center">
                                                 <Checkbox
                                                     checked={selectedIds.length === questions.length && questions.length > 0}
@@ -564,13 +564,13 @@ export default function QuestionBankModal({
                                             <div className="w-28 text-center">DIFFICULTY</div>
                                             <div className="w-28 text-center">TAGS</div>
                                         </div>
-                                        <div className="divide-y">
+                                        <div className="divide-y max-h-[48vh] overflow-y-auto">
                                             {questions.map((q: any) => (
                                                 <div
                                                     key={q.id}
                                                     onClick={() => toggleSelect(q.id)}
                                                     className={cn(
-                                                        "flex items-center px-4 py-3 cursor-pointer transition-colors hover:bg-muted/30",
+                                                        "flex items-center px-3 py-2 cursor-pointer transition-colors hover:bg-muted/30",
                                                         selectedIds.includes(q.id) && "bg-primary/5 hover:bg-primary/10"
                                                     )}
                                                 >
@@ -580,12 +580,12 @@ export default function QuestionBankModal({
                                                             onCheckedChange={() => toggleSelect(q.id)}
                                                         />
                                                     </div>
-                                                    <div className="flex-1 min-w-0 font-medium text-sm ml-2 pr-4 truncate">
+                                                    <div className="flex-1 min-w-0 font-medium text-xs ml-2 pr-4 truncate">
                                                         {q.questionText}
                                                     </div>
                                                     <div className="w-28 text-center">
                                                         <Badge variant="outline" className={cn(
-                                                            "text-[10px] font-bold uppercase tracking-wider",
+                                                            "text-[9px] font-bold uppercase tracking-wider px-1.5 py-0",
                                                             q.difficulty === 'EASY' ? "text-green-600 border-green-500/20 bg-green-500/5" :
                                                                 q.difficulty === 'MEDIUM' ? "text-amber-600 border-amber-500/20 bg-amber-500/5" :
                                                                     "text-destructive border-destructive/20 bg-destructive/5"
@@ -594,8 +594,8 @@ export default function QuestionBankModal({
                                                         </Badge>
                                                     </div>
                                                     <div className="w-28 text-center truncate">
-                                                        <span className="text-xs text-muted-foreground">{q.tags?.slice(0, 1).join(', ') || '—'}</span>
-                                                        {q.tags?.length > 1 && <span className="text-[10px] text-muted-foreground/60 ml-1">+{q.tags.length - 1}</span>}
+                                                        <span className="text-[11px] text-muted-foreground">{q.tags?.slice(0, 1).join(', ') || '—'}</span>
+                                                        {q.tags?.length > 1 && <span className="text-[9px] text-muted-foreground/60 ml-1">+{q.tags.length - 1}</span>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -610,30 +610,30 @@ export default function QuestionBankModal({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -5 }}
                                 transition={{ duration: 0.15 }}
-                                className="h-full min-h-0 overflow-hidden"
+                                className="flex-1 flex flex-col min-h-0 h-full overflow-hidden"
                             >
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0 overflow-hidden">
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full min-h-0 overflow-hidden flex-1">
                                     {/* Left Column: General Configuration (5 cols) */}
-                                    <div className="lg:col-span-5 flex flex-col gap-4 overflow-y-auto pr-1 h-full pb-4">
+                                    <div className="lg:col-span-5 flex flex-col gap-3 overflow-y-auto pr-1 h-full pb-4">
                                         {/* Card 1: Configuration Fields */}
-                                        <div className="p-4 rounded-xl border bg-muted/10 space-y-4">
-                                            <div className="flex items-center gap-2 border-b pb-2">
-                                                <Sliders className="h-4 w-4 text-primary" />
-                                                <span className="font-bold text-sm tracking-tight">Global Parameters</span>
+                                        <div className="p-3 rounded-xl border bg-muted/10 space-y-3">
+                                            <div className="flex items-center gap-2 border-b pb-1.5">
+                                                <Sliders className="h-3.5 w-3.5 text-primary" />
+                                                <span className="font-bold text-xs tracking-tight text-foreground">Global Parameters</span>
                                             </div>
 
                                             {/* Total Questions Counter */}
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
-                                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Questions</Label>
-                                                    <span className="text-xs font-extrabold text-primary">{totalQuestions} questions</span>
+                                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Questions</Label>
+                                                    <span className="text-[11px] font-extrabold text-primary">{totalQuestions} questions</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-1">
+                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-0.5">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setTotalQuestions(prev => Math.max(1, prev - 1))}
                                                     >
                                                         -
@@ -642,7 +642,7 @@ export default function QuestionBankModal({
                                                         type="number"
                                                         min={1}
                                                         max={500}
-                                                        className="h-8 border-none text-center font-extrabold text-sm focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                                                        className="h-7 border-none text-center font-extrabold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                                                         value={totalQuestions}
                                                         onChange={(e) => setTotalQuestions(Math.max(1, parseInt(e.target.value) || 1))}
                                                     />
@@ -650,27 +650,27 @@ export default function QuestionBankModal({
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setTotalQuestions(prev => Math.min(500, prev + 1))}
                                                     >
                                                         +
                                                     </Button>
                                                 </div>
-                                                <p className="text-[9px] text-muted-foreground">Total pool size to dynamically auto-generate.</p>
+                                                <p className="text-[9px] text-muted-foreground leading-none">Total pool size to dynamically auto-generate.</p>
                                             </div>
 
                                             {/* Default Marks */}
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
-                                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Marks Per Question</Label>
-                                                    <span className="text-xs font-bold text-emerald-600">+{defaultMarks} pts</span>
+                                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Marks Per Question</Label>
+                                                    <span className="text-[11px] font-bold text-emerald-600">+{defaultMarks} pts</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-1">
+                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-0.5">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setDefaultMarks(prev => Math.max(1, prev - 1))}
                                                     >
                                                         -
@@ -678,7 +678,7 @@ export default function QuestionBankModal({
                                                     <Input
                                                         type="number"
                                                         min={1}
-                                                        className="h-8 border-none text-center font-bold text-sm focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                                                        className="h-7 border-none text-center font-bold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                                                         value={defaultMarks}
                                                         onChange={(e) => setDefaultMarks(Math.max(1, parseInt(e.target.value) || 1))}
                                                     />
@@ -686,27 +686,27 @@ export default function QuestionBankModal({
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setDefaultMarks(prev => prev + 1)}
                                                     >
                                                         +
                                                     </Button>
                                                 </div>
-                                                <p className="text-[9px] text-muted-foreground">Default marks value assigned for correct answer.</p>
+                                                <p className="text-[9px] text-muted-foreground leading-none">Default marks value assigned for correct answer.</p>
                                             </div>
 
-                                            {/* Negative Marks */}
-                                            <div className="space-y-1.5">
+                                            {/* Negative Penalty */}
+                                            <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
-                                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Negative Penalty</Label>
-                                                    <span className="text-xs font-bold text-destructive font-semibold">-{defaultNegativeMarks} pts</span>
+                                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Negative Penalty</Label>
+                                                    <span className="text-[11px] font-bold text-destructive">-{defaultNegativeMarks} pts</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-1">
+                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-0.5">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setDefaultNegativeMarks(prev => Math.max(0, prev - 1))}
                                                     >
                                                         -
@@ -714,7 +714,7 @@ export default function QuestionBankModal({
                                                     <Input
                                                         type="number"
                                                         min={0}
-                                                        className="h-8 border-none text-center font-bold text-sm focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                                                        className="h-7 border-none text-center font-bold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                                                         value={defaultNegativeMarks}
                                                         onChange={(e) => setDefaultNegativeMarks(Math.max(0, parseInt(e.target.value) || 0))}
                                                     />
@@ -722,28 +722,28 @@ export default function QuestionBankModal({
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 hover:bg-muted font-extrabold text-foreground"
+                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
                                                         onClick={() => setDefaultNegativeMarks(prev => prev + 1)}
                                                     >
                                                         +
                                                     </Button>
                                                 </div>
-                                                <p className="text-[9px] text-muted-foreground">Deducted marks for incorrect answers.</p>
+                                                <p className="text-[9px] text-muted-foreground leading-none">Deducted marks for incorrect answers.</p>
                                             </div>
                                         </div>
 
-                                        {/* Card 2: Target Topics / Modules */}
-                                        <div className="p-4 rounded-xl border bg-muted/10 space-y-4">
-                                            <div className="flex items-center gap-2 border-b pb-2">
-                                                <Filter className="h-4 w-4 text-primary" />
-                                                <span className="font-bold text-sm tracking-tight">Select Topics / Modules</span>
+                                        {/* Card 2: Select Topics / Modules */}
+                                        <div className="p-3 rounded-xl border bg-muted/10 space-y-3">
+                                            <div className="flex items-center gap-2 border-b pb-1.5">
+                                                <Filter className="h-3.5 w-3.5 text-primary" />
+                                                <span className="font-bold text-xs tracking-tight text-foreground">Select Topics / Modules</span>
                                             </div>
 
                                             {/* Checklist Badge Stream */}
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Library Question Topics</Label>
                                                 {availableTags.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1.5 p-2 border rounded-lg bg-background max-h-[120px] overflow-y-auto">
+                                                    <div className="flex flex-wrap gap-1 p-2 border rounded-lg bg-background max-h-[90px] overflow-y-auto">
                                                         {availableTags.map((tag: string) => {
                                                             const isSelected = selectedTags.includes(tag);
                                                             return (
@@ -752,7 +752,7 @@ export default function QuestionBankModal({
                                                                     type="button"
                                                                     onClick={() => handleToggleGlobalTag(tag)}
                                                                     className={cn(
-                                                                        "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold transition-all border select-none",
+                                                                        "px-2 py-0.5 rounded-full text-[10px] font-extrabold transition-all border select-none",
                                                                         isSelected
                                                                             ? "bg-primary border-primary text-primary-foreground shadow-sm shadow-primary/20 scale-95"
                                                                             : "bg-muted/30 border-border text-muted-foreground hover:text-foreground hover:bg-muted/70"
@@ -764,12 +764,12 @@ export default function QuestionBankModal({
                                                         })}
                                                     </div>
                                                 ) : (
-                                                    <p className="text-[10px] text-muted-foreground italic">No question tags found in library. Type custom modules below.</p>
+                                                    <p className="text-[9px] text-muted-foreground italic leading-none">No question tags found in library. Type custom modules below.</p>
                                                 )}
                                             </div>
 
                                             {/* Custom tag addition */}
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Add Custom Module Name</Label>
                                                 <div className="flex items-center gap-2">
                                                     <Input
@@ -797,17 +797,17 @@ export default function QuestionBankModal({
                                             </div>
                                         </div>
 
-                                        {/* Card 3: Visualizer and Validation warnings */}
-                                        <div className="p-4 rounded-xl border bg-muted/10 space-y-4">
-                                            <div className="flex items-center justify-between border-b pb-2">
+                                        {/* Card 3: Allocation Summary */}
+                                        <div className="p-3 rounded-xl border bg-muted/10 space-y-3">
+                                            <div className="flex items-center justify-between border-b pb-1.5">
                                                 <div className="flex items-center gap-2">
-                                                    <Layers className="h-4 w-4 text-primary" />
-                                                    <span className="font-bold text-sm tracking-tight">Allocation Summary</span>
+                                                    <Layers className="h-3.5 w-3.5 text-primary" />
+                                                    <span className="font-bold text-xs tracking-tight text-foreground">Allocation Summary</span>
                                                 </div>
                                                 <Badge
                                                     variant="outline"
                                                     className={cn(
-                                                        "font-extrabold text-[10px] px-2 py-0.5 tracking-wider",
+                                                        "font-extrabold text-[9px] px-1.5 py-0 tracking-wider",
                                                         isRulePercentageValid
                                                             ? "text-green-600 border-green-500/20 bg-green-500/5"
                                                             : "text-destructive border-destructive/20 bg-destructive/5"
@@ -818,9 +818,9 @@ export default function QuestionBankModal({
                                             </div>
 
                                             {/* Segmented Rule Distribution Visualizer */}
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Dynamic Rule Balance</span>
-                                                <div className="h-3 rounded-full overflow-hidden flex w-full bg-muted border">
+                                                <div className="h-2 rounded-full overflow-hidden flex w-full bg-muted border">
                                                     {rules.map((r, i) => (
                                                         <TooltipProvider key={i}>
                                                             <Tooltip delayDuration={100}>
@@ -843,9 +843,9 @@ export default function QuestionBankModal({
                                                         </TooltipProvider>
                                                     ))}
                                                 </div>
-                                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                                <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-0.5">
                                                     {rules.map((r, i) => (
-                                                        <div key={i} className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground">
+                                                        <div key={i} className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground">
                                                             <div className={cn("h-1.5 w-1.5 rounded-full",
                                                                 i === 0 ? "bg-primary" :
                                                                     i === 1 ? "bg-violet-500" :
@@ -859,20 +859,20 @@ export default function QuestionBankModal({
                                             </div>
 
                                             {/* Validation feedback block */}
-                                            <div className="space-y-2 pt-1">
+                                            <div className="space-y-1.5 pt-0.5">
                                                 {isRulePercentageValid ? (
-                                                    <div className="flex gap-2 p-2.5 rounded-lg border border-green-500/20 bg-green-500/5 text-green-700 text-xs items-start">
-                                                        <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-green-500/20 bg-green-500/5 text-green-700 text-[11px] items-start">
+                                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-600" />
                                                         <div>
                                                             <p className="font-bold">Allocations Balanced</p>
                                                             <p className="opacity-90 mt-0.5 font-semibold">Pool rules sum up to exactly 100%.</p>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex gap-2 p-2.5 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-xs items-start">
-                                                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] items-start">
+                                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-destructive" />
                                                         <div>
-                                                            <p className="font-bold">Invalid Allocation Weight</p>
+                                                            <p className="font-bold">Invalid Weight</p>
                                                             <p className="opacity-90 mt-0.5 font-semibold">
                                                                 Rules total {totalRulePercentage}%. Adjust sliders to sum to exactly 100%.
                                                             </p>
@@ -881,8 +881,8 @@ export default function QuestionBankModal({
                                                 )}
 
                                                 {!isDiffBreakdownValid && (
-                                                    <div className="flex gap-2 p-2.5 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-xs items-start">
-                                                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] items-start">
+                                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                                         <div>
                                                             <p className="font-bold">Difficulty Mismatch</p>
                                                             <p className="opacity-90 mt-0.5 font-semibold">Check that all individual rules' difficulty distributions sum to 100%.</p>
@@ -895,7 +895,7 @@ export default function QuestionBankModal({
 
                                     {/* Right Column: Rules Stack (7 cols) */}
                                     <div className="lg:col-span-7 flex flex-col h-full min-h-0 overflow-hidden">
-                                        <div className="flex-1 overflow-y-auto pr-2 space-y-4 pb-4">
+                                        <div className="flex-1 overflow-y-auto pr-2 space-y-3 pb-4">
                                             {rules.map((rule, idx) => {
                                                 const ruleQty = Math.round(totalQuestions * rule.percentage / 100);
                                                 const ruleDiffSum = rule.difficultyDistribution.EASY + rule.difficultyDistribution.MEDIUM + rule.difficultyDistribution.HARD;
@@ -905,12 +905,12 @@ export default function QuestionBankModal({
                                                 return (
                                                     <div
                                                         key={idx}
-                                                        className="p-4 rounded-xl border border-border/80 bg-card shadow-sm space-y-4 hover:border-primary/20 transition-all relative group"
+                                                        className="p-3 rounded-xl border border-border/80 bg-card shadow-sm space-y-3 hover:border-primary/20 transition-all relative group"
                                                     >
                                                         {/* Rule Header */}
-                                                        <div className="flex items-center justify-between border-b pb-2">
+                                                        <div className="flex items-center justify-between border-b pb-1.5">
                                                             <div className="flex items-center gap-2">
-                                                                <div className={cn("h-6 w-6 rounded-full font-bold text-xs flex items-center justify-center text-white",
+                                                                <div className={cn("h-5 w-5 rounded-full font-bold text-[10px] flex items-center justify-center text-white",
                                                                     idx === 0 ? "bg-primary" :
                                                                         idx === 1 ? "bg-violet-500" :
                                                                             idx === 2 ? "bg-indigo-500" :
@@ -918,10 +918,10 @@ export default function QuestionBankModal({
                                                                 )}>
                                                                     {idx + 1}
                                                                 </div>
-                                                                <span className="font-extrabold text-xs md:text-sm text-foreground capitalize">
+                                                                <span className="font-extrabold text-xs text-foreground capitalize">
                                                                     {ruleTopicName} Pool
                                                                 </span>
-                                                                <Badge variant="secondary" className="font-bold text-[9px] px-1.5 py-0 bg-primary/10 text-primary border-none">
+                                                                <Badge variant="secondary" className="font-bold text-[8px] px-1.5 py-0 bg-primary/10 text-primary border-none">
                                                                     {ruleQty} Question(s)
                                                                 </Badge>
                                                             </div>
@@ -930,23 +930,23 @@ export default function QuestionBankModal({
                                                                     type="button"
                                                                     variant="ghost"
                                                                     size="icon"
-                                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
                                                                     onClick={() => handleRemoveRule(idx)}
                                                                 >
-                                                                    <Trash2 className="h-4 w-4" />
+                                                                    <Trash2 className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             )}
                                                         </div>
 
                                                         {/* Space-efficient two-column layout for Allocation and Difficulty */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-3">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-2.5">
                                                             {/* Left column: Allocation Pool Share */}
-                                                            <div className="space-y-3 flex flex-col justify-center">
+                                                            <div className="space-y-2 flex flex-col justify-center">
                                                                 <div className="flex items-center justify-between text-xs font-bold text-foreground">
-                                                                    <span>Allocation Pool Share</span>
+                                                                    <span>Allocation Share</span>
                                                                     <span className="text-primary font-extrabold">{rule.percentage}% of total</span>
                                                                 </div>
-                                                                <div className="flex items-center gap-3">
+                                                                <div className="flex items-center gap-2.5">
                                                                     <Slider
                                                                         value={[rule.percentage]}
                                                                         onValueChange={([val]) => handleUpdateRulePercentage(idx, val)}
@@ -954,41 +954,41 @@ export default function QuestionBankModal({
                                                                         max={100}
                                                                         className="flex-1"
                                                                     />
-                                                                    <div className="flex items-center bg-background border rounded-lg px-2 py-0.5 shrink-0">
+                                                                    <div className="flex items-center bg-background border rounded-lg px-1.5 py-0.5 shrink-0">
                                                                         <Input
                                                                             type="number"
                                                                             min={0}
                                                                             max={100}
-                                                                            className="w-10 h-7 p-0 border-none text-center text-xs font-extrabold focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                                                                            className="w-8 h-6 p-0 border-none text-center text-xs font-extrabold focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                                                                             value={rule.percentage}
                                                                             onChange={(e) => handleUpdateRulePercentage(idx, Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                                                                         />
                                                                         <span className="text-xs font-bold text-muted-foreground">%</span>
                                                                     </div>
                                                                 </div>
-                                                                <p className="text-[10px] text-muted-foreground/80 leading-relaxed italic">
+                                                                <p className="text-[9px] text-muted-foreground/80 leading-relaxed italic">
                                                                     This pool contributes approximately <strong>{ruleQty}</strong> of the <strong>{totalQuestions}</strong> total questions.
                                                                 </p>
                                                             </div>
 
                                                             {/* Right column: Difficulty distribution */}
-                                                            <div className="space-y-3 md:border-l md:pl-6">
+                                                            <div className="space-y-2 md:border-l md:pl-4">
                                                                 <div className="flex items-center justify-between">
-                                                                    <Label className="text-xs font-bold text-foreground">Difficulty distribution (%)</Label>
-                                                                    <div className="flex items-center gap-2">
+                                                                    <Label className="text-[11px] font-bold text-foreground">Difficulty distribution (%)</Label>
+                                                                    <div className="flex items-center gap-1.5">
                                                                         <button
                                                                             type="button"
-                                                                            className="text-[10px] text-primary font-extrabold hover:underline"
+                                                                            className="text-[9px] text-primary font-extrabold hover:underline"
                                                                             onClick={() => handleUpdateRule(idx, {
                                                                                 difficultyDistribution: { EASY: 34, MEDIUM: 33, HARD: 33 }
                                                                             })}
                                                                         >
                                                                             Equalize
                                                                         </button>
-                                                                        <span className="text-[10px] text-muted-foreground">|</span>
+                                                                        <span className="text-[9px] text-muted-foreground">|</span>
                                                                         <button
                                                                             type="button"
-                                                                            className="text-[10px] text-primary font-extrabold hover:underline"
+                                                                            className="text-[9px] text-primary font-extrabold hover:underline"
                                                                             onClick={() => handleUpdateRule(idx, {
                                                                                 difficultyDistribution: { EASY: 40, MEDIUM: 40, HARD: 20 }
                                                                             })}
@@ -999,21 +999,21 @@ export default function QuestionBankModal({
                                                                 </div>
 
                                                                 {/* Segmented difficulty visual preview bar */}
-                                                                <div className="h-2 rounded-full overflow-hidden flex w-full bg-muted border">
+                                                                <div className="h-1.5 rounded-full overflow-hidden flex w-full bg-muted border">
                                                                     <div style={{ width: `${rule.difficultyDistribution.EASY}%` }} className="bg-green-500 transition-all duration-150" />
                                                                     <div style={{ width: `${rule.difficultyDistribution.MEDIUM}%` }} className="bg-amber-500 transition-all duration-150" />
                                                                     <div style={{ width: `${rule.difficultyDistribution.HARD}%` }} className="bg-red-500 transition-all duration-150" />
                                                                 </div>
 
                                                                 {/* Linked Difficulty Sliders & Inputs */}
-                                                                <div className="space-y-2">
+                                                                <div className="space-y-1.5">
                                                                     {(['EASY', 'MEDIUM', 'HARD'] as const).map((level) => {
                                                                         const val = rule.difficultyDistribution[level];
                                                                         const labelColor = level === 'EASY' ? 'text-green-600' : level === 'MEDIUM' ? 'text-amber-600' : 'text-red-600';
 
                                                                         return (
-                                                                            <div key={level} className="flex items-center gap-3">
-                                                                                <span className={cn("text-[9px] font-extrabold w-12 uppercase", labelColor)}>{level}</span>
+                                                                            <div key={level} className="flex items-center gap-2">
+                                                                                <span className={cn("text-[9px] font-extrabold w-11 uppercase", labelColor)}>{level}</span>
                                                                                 <Slider
                                                                                     value={[val]}
                                                                                     onValueChange={([newVal]) => handleUpdateDifficulty(idx, level, newVal)}
@@ -1021,30 +1021,30 @@ export default function QuestionBankModal({
                                                                                     max={100}
                                                                                     className="flex-1"
                                                                                 />
-                                                                                <div className="flex items-center bg-background border rounded-lg px-1.5 py-0.5 shrink-0">
+                                                                                <div className="flex items-center bg-background border rounded-lg px-1 py-0.5 shrink-0">
                                                                                     <Input
                                                                                         type="number"
                                                                                         min={0}
                                                                                         max={100}
-                                                                                        className={cn("w-8 h-6 p-0 border-none text-center text-xs font-extrabold focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", labelColor)}
+                                                                                        className={cn("w-6 h-5 p-0 border-none text-center text-[10px] font-extrabold focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none", labelColor)}
                                                                                         value={val}
                                                                                         onChange={(e) => handleUpdateDifficulty(idx, level, Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                                                                                     />
-                                                                                    <span className="text-[10px] font-bold text-muted-foreground">%</span>
+                                                                                    <span className="text-[9px] font-bold text-muted-foreground">%</span>
                                                                                 </div>
                                                                             </div>
                                                                         );
                                                                     })}
                                                                 </div>
-                                                             </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
 
-                                        <div className="pt-2 border-t text-center">
-                                            <p className="text-[10px] text-muted-foreground italic flex items-center justify-center gap-1">
+                                        <div className="pt-1.5 border-t text-center">
+                                            <p className="text-[9px] text-muted-foreground italic flex items-center justify-center gap-1">
                                                 <span>💡 Tip: Select tags from the left panel to spawn matching allocation pools. Customize percentages to balance them to exactly 100%.</span>
                                             </p>
                                         </div>
@@ -1056,13 +1056,13 @@ export default function QuestionBankModal({
                 </div>
 
                 {/* Shared Action Dialog Footer */}
-                <div className="px-6 py-4 border-t bg-muted/10 flex items-center justify-end gap-2 shrink-0">
+                <div className="px-5 py-3 border-t bg-muted/10 flex items-center justify-end gap-2 shrink-0">
                     <Button variant="ghost" onClick={onClose} disabled={isAssigning}>Cancel</Button>
                     {activeTab === 'manual' ? (
                         <Button
                             onClick={handleAssign}
                             disabled={selectedIds.length === 0 || isAssigning}
-                            className="px-6 font-bold"
+                            className="px-5 h-9 font-bold"
                         >
                             {isAssigning ? (
                                 <>
@@ -1078,7 +1078,7 @@ export default function QuestionBankModal({
                             onClick={handleAutoGenerate}
                             disabled={!isAutoFormValid || isAssigning}
                             className={cn(
-                                "px-6 font-bold relative overflow-hidden group shadow-md transition-all active:scale-95",
+                                "px-5 h-9 font-bold relative overflow-hidden group shadow-md transition-all active:scale-95",
                                 isAutoFormValid ? "bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 text-white" : ""
                             )}
                         >

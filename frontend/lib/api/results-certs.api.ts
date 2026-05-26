@@ -104,6 +104,9 @@ export const certificatesApi = {
     getParticipantCertificate: (id: string) =>
         get<any>(`/certificates/public/${id}`),
 
+    getCertificatesByContact: (contactId: string, params?: { page?: number; limit?: number }) =>
+        get<any>(`/certificates/contact/${contactId}`, { params }),
+
     getCertificateByContactAndContest: (contactId: string, contestId: string) =>
         get<any>(`/certificates/contact/${contactId}/contest/${contestId}`),
 

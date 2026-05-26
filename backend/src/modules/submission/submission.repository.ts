@@ -93,6 +93,12 @@ export class SubmissionRepository {
                 });
             }
 
+            // Eagerly update participant status to SUBMITTED in the DB
+            await tx.participant.update({
+                where: { id: input.participantId },
+                data: { status: "SUBMITTED" },
+            });
+
             return submission;
         });
     }

@@ -19,6 +19,7 @@ import type { Worker } from "./worker.interface";
 import { quizTimerQueue } from "../queues";
 import type { QuizTimerJobPayload } from "../queues";
 import type { PrismaClient } from "@prisma/client";
+import { QuizSession } from "../modules/quiz/quiz.session";
 
 // ─── Late-bound references ────────────────────────────────────────────────────
 // The gateway and services are initialized in container.ts and injected at
@@ -204,7 +205,7 @@ async function handleAutoSubmit(contestId: string, organizationId: string): Prom
         `[quiz-timer] Auto-submit for contest ${contestId}: ${submitted.length} submitted, ${errors.length} errors`,
     );
 
-    // Enqueue MARK_ABSENT delayed job
+    // Enqueue MARK_ABSENT delayed job (delay of 10 minutes to allow workers to flush and persist submissions)
     try {
         await quizTimerQueue.add(
             "mark-absent",
@@ -215,9 +216,10 @@ async function handleAutoSubmit(contestId: string, organizationId: string): Prom
             },
             {
                 jobId: `MARK_ABSENT-${contestId}`,
+                delay: 600000, // 10 minutes in ms
             }
         );
-        logger.info(`[quiz-timer] Enqueued MARK_ABSENT job for contest ${contestId}`);
+        logger.info(`[quiz-timer] Enqueued MARK_ABSENT job for contest ${contestId} with 10-minute delay`);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(`[quiz-timer] Failed to enqueue MARK_ABSENT job for contest ${contestId}: ${msg}`);
@@ -239,7 +241,21 @@ async function handleMarkAbsent(contestId: string, organizationId: string): Prom
     logger.info(`[quiz-timer] Starting MARK_ABSENT processing for contest ${contestId}`);
 
     try {
-        // 1. Query participants
+        // Fetch participant IDs currently in live Redis sets (waiting, active, submitted)
+        const session = new QuizSession();
+        const [waitingIds, activeIds, submittedIds] = await Promise.all([
+            session.getSetMembers(contestId, "waiting"),
+            session.getSetMembers(contestId, "active"),
+            session.getSetMembers(contestId, "submitted"),
+        ]);
+        
+        const activeOrSubmittedIds = new Set([
+            ...waitingIds,
+            ...activeIds,
+            ...submittedIds
+        ]);
+
+        // 1. Query database participants who are still in pre-quiz status AND DO NOT have any submission record
         const participants = await prisma.participant.findMany({
             where: {
                 contestId,
@@ -247,12 +263,19 @@ async function handleMarkAbsent(contestId: string, organizationId: string): Prom
                 status: {
                     in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"],
                 },
+                submission: {
+                    is: null,
+                },
             },
             select: { id: true },
         });
 
-        const participantIds = participants.map((p) => p.id);
-        logger.info(`[quiz-timer] Found ${participantIds.length} absent participants to transition`);
+        // Filter out any participants who are active/submitted in Redis or have a submission record
+        const filteredParticipants = participants.filter(
+            (p) => !activeOrSubmittedIds.has(p.id)
+        );
+        const participantIds = filteredParticipants.map((p) => p.id);
+        logger.info(`[quiz-timer] Found ${participants.length} candidates, narrowed to ${participantIds.length} truly absent participants after Redis & DB submission exclusion.`);
 
         if (participantIds.length === 0) {
             logger.info(`[quiz-timer] No absent participants to process for contest ${contestId}`);

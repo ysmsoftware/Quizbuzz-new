@@ -35,504 +35,504 @@ import { submissionService } from "@/lib/services/submission-service";
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 
 export default function QuizPlayPage() {
-  const params = useParams();
-  const router = useRouter();
-  const slug = params.slug as string;
+    const params = useParams();
+    const router = useRouter();
+    const slug = params.slug as string;
 
-  const sessionToken  = useAuthStore((s) => s.sessionToken)  || "";
-  const participantId = useAuthStore((s) => s.participantId) || "";
-  const authContestId = useAuthStore((s) => s.contestId)     || "";
+    const sessionToken = useAuthStore((s) => s.sessionToken) || "";
+    const participantId = useAuthStore((s) => s.participantId) || "";
+    const authContestId = useAuthStore((s) => s.contestId) || "";
 
-  const videoRef            = useRef<HTMLVideoElement>(null);
-  const isFirstRender       = useRef(true);
-  const quizInitialisedRef  = useRef(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const isFirstRender = useRef(true);
+    const quizInitialisedRef = useRef(false);
 
-  // Quiz store
-  const questions        = useQuizStore((s) => s.questions);
-  const currentIndex     = useQuizStore((s) => s.currentQuestionIndex);
-  const answers          = useQuizStore((s) => s.answers);
-  const quizState        = useQuizStore((s) => s.quizState);
-  const setCurrentQuestion = useQuizStore((s) => s.setCurrentQuestion);
-  const visitQuestion    = useQuizStore((s) => s.visitQuestion);
-  const setContestContext = useQuizStore((s) => s.setContestContext);
+    // Quiz store
+    const questions = useQuizStore((s) => s.questions);
+    const currentIndex = useQuizStore((s) => s.currentQuestionIndex);
+    const answers = useQuizStore((s) => s.answers);
+    const quizState = useQuizStore((s) => s.quizState);
+    const setCurrentQuestion = useQuizStore((s) => s.setCurrentQuestion);
+    const visitQuestion = useQuizStore((s) => s.visitQuestion);
+    const setContestContext = useQuizStore((s) => s.setContestContext);
 
-  const { isFullscreen, setFullscreen } = useProctoringStore();
+    const { isFullscreen, setFullscreen } = useProctoringStore();
 
-  const [contest, setContest]               = useState<any>(null);
-  const [contestId, setContestId]           = useState<string>(authContestId);
-  const [showSubmitModal, setShowSubmitModal]     = useState(false);
-  const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
+    const [contest, setContest] = useState<any>(null);
+    const [contestId, setContestId] = useState<string>(authContestId);
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
 
-  // ─── Question-mapping helper ─────────────────────────────────────────────
-  const applyQuizStartPayload = useCallback((data: any) => {
-    if (quizInitialisedRef.current) return;
-    quizInitialisedRef.current = true;
+    // ─── Question-mapping helper ─────────────────────────────────────────────
+    const applyQuizStartPayload = useCallback((data: any) => {
+        if (quizInitialisedRef.current) return;
+        quizInitialisedRef.current = true;
 
-    let rawQuestions: any[] = [];
-    if (Array.isArray(data)) {
-      rawQuestions = data;
-    } else if (data && Array.isArray(data.questions)) {
-      rawQuestions = data.questions;
-    } else if (data && typeof data === "object") {
-      const numericKeys = Object.keys(data).filter(k => !isNaN(Number(k)));
-      if (numericKeys.length > 0) {
-        rawQuestions = numericKeys.sort((a, b) => Number(a) - Number(b)).map(k => data[k]);
-      }
-    }
+        let rawQuestions: any[] = [];
+        if (Array.isArray(data)) {
+            rawQuestions = data;
+        } else if (data && Array.isArray(data.questions)) {
+            rawQuestions = data.questions;
+        } else if (data && typeof data === "object") {
+            const numericKeys = Object.keys(data).filter(k => !isNaN(Number(k)));
+            if (numericKeys.length > 0) {
+                rawQuestions = numericKeys.sort((a, b) => Number(a) - Number(b)).map(k => data[k]);
+            }
+        }
 
-    if (!rawQuestions.length) {
-      console.warn("[QuizPlay] applyQuizStartPayload: no questions found", data);
-      quizInitialisedRef.current = false;
-      return;
-    }
+        if (!rawQuestions.length) {
+            console.warn("[QuizPlay] applyQuizStartPayload: no questions found", data);
+            quizInitialisedRef.current = false;
+            return;
+        }
 
-    const mappedQuestions = rawQuestions.map((q: any, idx: number): QuizQuestion => ({
-      id: q.id,
-      index: idx,
-      text: q.questionText ?? q.text ?? "",
-      imageUrl: q.imageUrl || undefined,
-      difficulty: q.difficulty || "MEDIUM",
-      hint: q.hint || undefined,
-      marks: q.marks ?? 1,
-      negativeMarks: q.negativeMark ?? q.negativeMarks ?? 0,
-      options: (q.options || []).map((opt: any, optIdx: number) => ({
-        id: opt.id,
-        index: optIdx,
-        text: opt.text,
-        imageUrl: opt.imageUrl || undefined,
-      })),
-    }));
+        const mappedQuestions = rawQuestions.map((q: any, idx: number): QuizQuestion => ({
+            id: q.id,
+            index: idx,
+            text: q.questionText ?? q.text ?? "",
+            imageUrl: q.imageUrl || undefined,
+            difficulty: q.difficulty || "MEDIUM",
+            hint: q.hint || undefined,
+            marks: q.marks ?? 1,
+            negativeMarks: q.negativeMark ?? q.negativeMarks ?? 0,
+            options: (q.options || []).map((opt: any, optIdx: number) => ({
+                id: opt.id,
+                index: optIdx,
+                text: opt.text,
+                imageUrl: opt.imageUrl || undefined,
+            })),
+        }));
 
-    const savedAnswers = data?.savedAnswers ?? {};
-    const mappedAnswers: Record<number, number> = {};
-    mappedQuestions.forEach((q: QuizQuestion) => {
-      const saved = savedAnswers[q.id];
-      if (saved?.selectedOptionId) {
-        const option = q.options.find((opt: any) => opt.id === saved.selectedOptionId);
-        if (option) mappedAnswers[q.index] = option.index;
-      }
-    });
+        const savedAnswers = data?.savedAnswers ?? {};
+        const mappedAnswers: Record<number, number> = {};
+        mappedQuestions.forEach((q: QuizQuestion) => {
+            const saved = savedAnswers[q.id];
+            if (saved?.selectedOptionId) {
+                const option = q.options.find((opt: any) => opt.id === saved.selectedOptionId);
+                if (option) mappedAnswers[q.index] = option.index;
+            }
+        });
 
-    let remainingMs: number;
-    if (typeof data?.remainingTimeMs === "number") {
-      remainingMs = data.remainingTimeMs;
-    } else if (typeof data?.totalTimeMs === "number" && data?.serverTimestamp) {
-      const elapsed = Date.now() - new Date(data.serverTimestamp).getTime();
-      remainingMs = Math.max(0, data.totalTimeMs - elapsed);
-    } else {
-      remainingMs = 0;
-    }
+        let remainingMs: number;
+        if (typeof data?.remainingTimeMs === "number") {
+            remainingMs = data.remainingTimeMs;
+        } else if (typeof data?.totalTimeMs === "number" && data?.serverTimestamp) {
+            const elapsed = Date.now() - new Date(data.serverTimestamp).getTime();
+            remainingMs = Math.max(0, data.totalTimeMs - elapsed);
+        } else {
+            remainingMs = 0;
+        }
 
-    useQuizStore.setState({
-      questions: mappedQuestions,
-      answers: mappedAnswers,
-      currentQuestionIndex: data?.currentQuestionIndex ?? 0,
-      timeRemaining: remainingMs > 0
-        ? Math.floor(remainingMs / 1000)
-        : useQuizStore.getState().timeRemaining,
-      quizState: "ACTIVE",
-      visitedQuestions: Object.keys(mappedAnswers).map(Number),
-    });
+        useQuizStore.setState({
+            questions: mappedQuestions,
+            answers: mappedAnswers,
+            currentQuestionIndex: data?.currentQuestionIndex ?? 0,
+            timeRemaining: remainingMs > 0
+                ? Math.floor(remainingMs / 1000)
+                : useQuizStore.getState().timeRemaining,
+            quizState: "ACTIVE",
+            visitedQuestions: Object.keys(mappedAnswers).map(Number),
+        });
 
-    console.log(`[QuizPlay] Initialised: ${mappedQuestions.length} questions`);
-  }, []);
+        console.log(`[QuizPlay] Initialised: ${mappedQuestions.length} questions`);
+    }, []);
 
-  // Zustand hydration guard
-  useEffect(() => {
-    const unsub = useQuizStore.persist.onFinishHydration((state) => {
-      if ((state as any).questions?.length === 0) {
-        quizInitialisedRef.current = false;
+    // Zustand hydration guard
+    useEffect(() => {
+        const unsub = useQuizStore.persist.onFinishHydration((state) => {
+            if ((state as any).questions?.length === 0) {
+                quizInitialisedRef.current = false;
+                try {
+                    const raw = sessionStorage.getItem("quizStartPayload");
+                    if (raw) applyQuizStartPayload(JSON.parse(raw));
+                } catch { /* ignore */ }
+            }
+        });
+        return () => unsub();
+    }, [applyQuizStartPayload]);
+
+    // Step 1: Read from sessionStorage on mount
+    useEffect(() => {
+        if (quizInitialisedRef.current) return;
         try {
-          const raw = sessionStorage.getItem("quizStartPayload");
-          if (raw) applyQuizStartPayload(JSON.parse(raw));
+            const raw = sessionStorage.getItem("quizStartPayload");
+            if (raw) applyQuizStartPayload(JSON.parse(raw));
         } catch { /* ignore */ }
-      }
-    });
-    return () => unsub();
-  }, [applyQuizStartPayload]);
+    }, [applyQuizStartPayload]);
 
-  // Step 1: Read from sessionStorage on mount
-  useEffect(() => {
-    if (quizInitialisedRef.current) return;
-    try {
-      const raw = sessionStorage.getItem("quizStartPayload");
-      if (raw) applyQuizStartPayload(JSON.parse(raw));
-    } catch { /* ignore */ }
-  }, [applyQuizStartPayload]);
+    // Step 2: Fetch contest metadata in parallel
+    useEffect(() => {
+        contestService.getContestBySlug(slug).then((res) => {
+            if (res.success && res.data) {
+                setContest(res.data);
+                setContestContext(res.data.title, res.data.slug, res.data.id, participantId);
+                if (!authContestId && res.data.id) setContestId(res.data.id);
+            }
+        });
+        visitQuestion(0);
+    }, [slug, participantId, authContestId, setContestContext, visitQuestion]);
 
-  // Step 2: Fetch contest metadata in parallel
-  useEffect(() => {
-    contestService.getContestBySlug(slug).then((res) => {
-      if (res.success && res.data) {
-        setContest(res.data);
-        setContestContext(res.data.title, res.data.slug, res.data.id, participantId);
-        if (!authContestId && res.data.id) setContestId(res.data.id);
-      }
-    });
-    visitQuestion(0);
-  }, [slug, participantId, authContestId, setContestContext, visitQuestion]);
-
-  // ─── WebSocket ───────────────────────────────────────────────────────────
-  const {
-    submitAnswer: emitAnswer,
-    submitQuiz: emitSubmit,
-    sendProctoringEvent,
-    isConnected,
-    socket,
-  } = useQuizSocket({
-    contestId,
-    participantId,
-    socketToken: sessionToken,
-    onJoinAck: (data) => {
-      if (data.status === "SUBMITTED")   { router.push(`/quiz/${slug}/submitted`);   return; }
-      if (data.status === "DISQUALIFIED"){ router.push(`/quiz/${slug}/disqualified`); return; }
-      if (data.status === "WAITING") {
-        toast.info("Reconnecting to your quiz session...", { id: "quiz-reconnect" });
-      }
-    },
-    onQuizStarted: (data) => {
-      quizInitialisedRef.current = false;
-      applyQuizStartPayload(data);
-      toast.success(
-        data.savedAnswers && Object.keys(data.savedAnswers).length > 0
-          ? "Welcome back! Restored your progress."
-          : "Quiz started!"
-      );
-    },
-    onSubmitAck: () => {
-      toast.success("Quiz submitted successfully!");
-      useQuizStore.getState().resetQuiz();
-      router.push(`/quiz/${slug}/submitted`);
-    },
-    onAutoSubmit: () => {
-      toast.info("Time is up! Your quiz was automatically submitted.");
-      useQuizStore.getState().resetQuiz();
-      router.push(`/quiz/${slug}/submitted?reason=timeout`);
-    },
-    onDisqualified: () => {
-      toast.error("You have been disqualified from this contest.");
-      useQuizStore.getState().resetQuiz();
-      router.push(`/quiz/${slug}/disqualified`);
-    },
-  });
-
-  // ─── Proctoring warnings → toast (side position) ─────────────────────────
-  const emitProctoringWarning = useCallback((type: string) => {
-    sendProctoringEvent(type, 1);
-    const msgs: Record<string, string> = {
-      TAB_SWITCH:      "You left the quiz window!",
-      FULLSCREEN_EXIT: "Fullscreen exited!",
-      MULTIPLE_FACES:  "Multiple faces detected!",
-      NO_FACE:         "No face detected — please stay in frame.",
-      AUDIO_ANOMALY:   "High background noise detected.",
-    };
-    toast.warning(msgs[type] ?? "Unusual activity detected.", {
-      position: "top-right",
-      duration: 4000,
-      id: `proc-${type}`,
-    });
-  }, [sendProctoringEvent]);
-
-  // Connection status toasts
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-    if (!isConnected) {
-      toast.error("Connection lost — reconnecting. Your answers are safe.", {
-        duration: 5000,
-        id: "socket-status",
-        position: "top-right",
-      });
-    } else {
-      toast.success("Connected.", { duration: 2000, id: "socket-status", position: "top-right" });
-    }
-  }, [isConnected]);
-
-  // ─── Answer Handler ────────────────────────────────────────────────────
-  const { handleAnswer, confirmAnswer } = useAnswerHandler((qId, optId) => {
-    emitAnswer(qId, optId ?? "", new Date().toISOString());
-  });
-
-  // ─── Timer ────────────────────────────────────────────────────────────
-  const { timeRemaining } = useQuizTimer(
-    () => setShowAutoSubmitModal(true),
-    () => {}
-  );
-
-  // ─── Navigation ───────────────────────────────────────────────────────
-  // Next: confirm current answer → move forward
-  const handleNext = useCallback(() => {
-    if (currentIndex < questions.length - 1) {
-      confirmAnswer(currentIndex);
-      const next = currentIndex + 1;
-      setCurrentQuestion(next);
-      visitQuestion(next);
-    }
-  }, [currentIndex, questions.length, confirmAnswer, setCurrentQuestion, visitQuestion]);
-
-  // Skip: emit null for current question → move forward
-  const handleSkip = useCallback(() => {
-    if (currentIndex < questions.length - 1) {
-      // Always emit a null answer so the backend tracks the skip
-      const question = questions[currentIndex];
-      if (question) emitAnswer(question.id, "", new Date().toISOString());
-      const next = currentIndex + 1;
-      setCurrentQuestion(next);
-      visitQuestion(next);
-    }
-  }, [currentIndex, questions, questions.length, emitAnswer, setCurrentQuestion, visitQuestion]);
-
-  const handleReturnFullscreen = async () => {
-    try {
-      await document.documentElement.requestFullscreen();
-      setFullscreen(true);
-    } catch { /* ignore */ }
-  };
-
-  // ─── Submission ────────────────────────────────────────────────────────
-  const handleSubmission = useCallback(async (reason: "MANUAL" | "AUTO") => {
-    useQuizStore.setState({ quizState: "SUBMITTING" });
-    const toastId = toast.loading("Submitting your quiz...");
-
-    try {
-      if (typeof window !== "undefined" && (window as any).__triggerProctoringCapture) {
-        await (window as any).__triggerProctoringCapture("SNAPSHOT_PRE_SUBMIT");
-      }
-    } catch { /* ignore */ }
-
-    try {
-      // Always confirm the currently visible question first
-      confirmAnswer(currentIndex);
-
-      const answersRecord: Record<string, string> = {};
-      Object.entries(answers).forEach(([qIdxStr, optIdx]) => {
-        const question = questions[parseInt(qIdxStr)];
-        if (question) {
-          const opt = question.options.find(o => o.index === optIdx);
-          if (opt) answersRecord[question.id] = opt.id || String(opt.index);
-        }
-      });
-
-      const timeTaken = contest?.durationMinutes
-        ? contest.durationMinutes * 60 - timeRemaining
-        : 0;
-
-      if (isConnected) {
-        emitSubmit(answersRecord, timeTaken);
-        await new Promise(resolve => setTimeout(resolve, 4000));
-        if (useQuizStore.getState().quizState !== "SUBMITTING") {
-          toast.dismiss(toastId);
-          return;
-        }
-      }
-
-      // REST fallback
-      toast.loading("Finalising submission...", { id: toastId });
-      const answersList = Object.entries(answersRecord).map(([qId, optId]) => ({
-        questionId: qId,
-        selectedOptionId: optId,
-        answeredAt: new Date().toISOString(),
-      }));
-      const res = await submissionService.submitQuizREST(
-        contest?.id || slug,
+    // ─── WebSocket ───────────────────────────────────────────────────────────
+    const {
+        submitAnswer: emitAnswer,
+        submitQuiz: emitSubmit,
+        sendProctoringEvent,
+        isConnected,
+        socket,
+    } = useQuizSocket({
+        contestId,
         participantId,
-        answersList,
-        sessionToken,
-      );
+        socketToken: sessionToken,
+        onJoinAck: (data) => {
+            if (data.status === "SUBMITTED") { router.push(`/quiz/${slug}/submitted`); return; }
+            if (data.status === "DISQUALIFIED") { router.push(`/quiz/${slug}/disqualified`); return; }
+            if (data.status === "WAITING") {
+                toast.info("Reconnecting to your quiz session...", { id: "quiz-reconnect" });
+            }
+        },
+        onQuizStarted: (data) => {
+            quizInitialisedRef.current = false;
+            applyQuizStartPayload(data);
+            toast.success(
+                data.savedAnswers && Object.keys(data.savedAnswers).length > 0
+                    ? "Welcome back! Restored your progress."
+                    : "Quiz started!"
+            );
+        },
+        onSubmitAck: () => {
+            toast.success("Quiz submitted successfully!");
+            useQuizStore.getState().resetQuiz();
+            router.push(`/quiz/${slug}/submitted`);
+        },
+        onAutoSubmit: () => {
+            toast.info("Time is up! Your quiz was automatically submitted.");
+            useQuizStore.getState().resetQuiz();
+            router.push(`/quiz/${slug}/submitted?reason=timeout`);
+        },
+        onDisqualified: () => {
+            toast.error("You have been disqualified from this contest.");
+            useQuizStore.getState().resetQuiz();
+            router.push(`/quiz/${slug}/disqualified`);
+        },
+    });
 
-      if (res.success) {
-        toast.success("Submitted!", { id: toastId });
-        useQuizStore.setState({ quizState: "IDLE" });
-        router.push(`/quiz/${slug}/submitted${reason === "AUTO" ? "?reason=timeout" : ""}`);
-      } else {
-        toast.error(res.error || "Submission failed. Please retry.", { id: toastId });
-        useQuizStore.setState({ quizState: "ACTIVE" });
-      }
-    } catch (err) {
-      console.error("Submission error:", err);
-      toast.error("Submission failed. Check your connection and retry.", { id: toastId });
-      useQuizStore.setState({ quizState: "ACTIVE" });
+    // ─── Proctoring warnings → toast (side position) ─────────────────────────
+    const emitProctoringWarning = useCallback((type: string) => {
+        sendProctoringEvent(type, 1);
+        const msgs: Record<string, string> = {
+            TAB_SWITCH: "You left the quiz window!",
+            FULLSCREEN_EXIT: "Fullscreen exited!",
+            MULTIPLE_FACES: "Multiple faces detected!",
+            NO_FACE: "No face detected — please stay in frame.",
+            AUDIO_ANOMALY: "High background noise detected.",
+        };
+        toast.warning(msgs[type] ?? "Unusual activity detected.", {
+            position: "top-right",
+            duration: 4000,
+            id: `proc-${type}`,
+        });
+    }, [sendProctoringEvent]);
+
+    // Connection status toasts
+    useEffect(() => {
+        if (isFirstRender.current) { isFirstRender.current = false; return; }
+        if (!isConnected) {
+            toast.error("Connection lost — reconnecting. Your answers are safe.", {
+                duration: 5000,
+                id: "socket-status",
+                position: "top-right",
+            });
+        } else {
+            toast.success("Connected.", { duration: 2000, id: "socket-status", position: "top-right" });
+        }
+    }, [isConnected]);
+
+    // ─── Answer Handler ────────────────────────────────────────────────────
+    const { handleAnswer, confirmAnswer } = useAnswerHandler((qId, optId, optText) => {
+        emitAnswer(qId, optId ?? "", optText, new Date().toISOString());
+    });
+
+    // ─── Timer ────────────────────────────────────────────────────────────
+    const { timeRemaining } = useQuizTimer(
+        () => setShowAutoSubmitModal(true),
+        () => { }
+    );
+
+    // ─── Navigation ───────────────────────────────────────────────────────
+    // Next: confirm current answer → move forward
+    const handleNext = useCallback(() => {
+        if (currentIndex < questions.length - 1) {
+            confirmAnswer(currentIndex);
+            const next = currentIndex + 1;
+            setCurrentQuestion(next);
+            visitQuestion(next);
+        }
+    }, [currentIndex, questions.length, confirmAnswer, setCurrentQuestion, visitQuestion]);
+
+    // Skip: emit null for current question → move forward
+    const handleSkip = useCallback(() => {
+        if (currentIndex < questions.length - 1) {
+            // Always emit a null answer so the backend tracks the skip
+            const question = questions[currentIndex];
+            if (question) emitAnswer(question.id, "", "", new Date().toISOString());
+            const next = currentIndex + 1;
+            setCurrentQuestion(next);
+            visitQuestion(next);
+        }
+    }, [currentIndex, questions, questions.length, emitAnswer, setCurrentQuestion, visitQuestion]);
+
+    const handleReturnFullscreen = async () => {
+        try {
+            await document.documentElement.requestFullscreen();
+            setFullscreen(true);
+        } catch { /* ignore */ }
+    };
+
+    // ─── Submission ────────────────────────────────────────────────────────
+    const handleSubmission = useCallback(async (reason: "MANUAL" | "AUTO") => {
+        useQuizStore.setState({ quizState: "SUBMITTING" });
+        const toastId = toast.loading("Submitting your quiz...");
+
+        try {
+            if (typeof window !== "undefined" && (window as any).__triggerProctoringCapture) {
+                await (window as any).__triggerProctoringCapture("SNAPSHOT_PRE_SUBMIT");
+            }
+        } catch { /* ignore */ }
+
+        try {
+            // Always confirm the currently visible question first
+            confirmAnswer(currentIndex);
+
+            const answersRecord: Record<string, string> = {};
+            Object.entries(answers).forEach(([qIdxStr, optIdx]) => {
+                const question = questions[parseInt(qIdxStr)];
+                if (question) {
+                    const opt = question.options.find(o => o.index === optIdx);
+                    if (opt) answersRecord[question.id] = opt.id || String(opt.index);
+                }
+            });
+
+            const timeTaken = contest?.durationMinutes
+                ? contest.durationMinutes * 60 - timeRemaining
+                : 0;
+
+            if (isConnected) {
+                emitSubmit(answersRecord, timeTaken);
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                if (useQuizStore.getState().quizState !== "SUBMITTING") {
+                    toast.dismiss(toastId);
+                    return;
+                }
+            }
+
+            // REST fallback
+            toast.loading("Finalising submission...", { id: toastId });
+            const answersList = Object.entries(answersRecord).map(([qId, optId]) => ({
+                questionId: qId,
+                selectedOptionId: optId,
+                answeredAt: new Date().toISOString(),
+            }));
+            const res = await submissionService.submitQuizREST(
+                contest?.id || slug,
+                participantId,
+                answersList,
+                sessionToken,
+            );
+
+            if (res.success) {
+                toast.success("Submitted!", { id: toastId });
+                useQuizStore.setState({ quizState: "IDLE" });
+                router.push(`/quiz/${slug}/submitted${reason === "AUTO" ? "?reason=timeout" : ""}`);
+            } else {
+                toast.error(res.error || "Submission failed. Please retry.", { id: toastId });
+                useQuizStore.setState({ quizState: "ACTIVE" });
+            }
+        } catch (err) {
+            console.error("Submission error:", err);
+            toast.error("Submission failed. Check your connection and retry.", { id: toastId });
+            useQuizStore.setState({ quizState: "ACTIVE" });
+        }
+    }, [isConnected, emitSubmit, confirmAnswer, answers, questions, currentIndex, contest, timeRemaining, slug, participantId, sessionToken, router]);
+
+    const handleManualSubmit = () => handleSubmission("MANUAL");
+    const handleAutoSubmit = () => handleSubmission("AUTO");
+
+    const formatTime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        return h > 0
+            ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+            : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    };
+
+    // ─── Guards ───────────────────────────────────────────────────────────
+    if (quizState === "LOADING" || quizState === "IDLE" || questions.length === 0) {
+        return <QuizLoadingScreen />;
     }
-  }, [isConnected, emitSubmit, confirmAnswer, answers, questions, currentIndex, contest, timeRemaining, slug, participantId, sessionToken, router]);
+    if (quizState === "SUBMITTING") {
+        return <QuizSubmittingScreen />;
+    }
 
-  const handleManualSubmit = () => handleSubmission("MANUAL");
-  const handleAutoSubmit   = () => handleSubmission("AUTO");
+    const currentQuestion = questions[currentIndex];
+    const isLastQuestion = currentIndex === questions.length - 1;
+    const hasAnswer = answers[currentIndex] !== undefined;
+    // Progress: questions confirmed so far = currentIndex (each Next locks one in)
+    const progressPct = Math.round((currentIndex / questions.length) * 100);
 
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return h > 0
-      ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  };
+    return (
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-white">
+            {/* Proctoring Engine — invisible, no DOM output */}
+            <ProctoringManager
+                emitProctoringWarning={emitProctoringWarning}
+                videoRef={videoRef}
+                socket={socket}
+                contestId={contest?.id || slug}
+                participantId={participantId}
+                sessionToken={sessionToken}
+            />
 
-  // ─── Guards ───────────────────────────────────────────────────────────
-  if (quizState === "LOADING" || quizState === "IDLE" || questions.length === 0) {
-    return <QuizLoadingScreen />;
-  }
-  if (quizState === "SUBMITTING") {
-    return <QuizSubmittingScreen />;
-  }
+            {/* Overlays & modals */}
+            <FlaggedBanner />
+            <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
+            <SubmitConfirmModal
+                isOpen={showSubmitModal}
+                onClose={() => setShowSubmitModal(false)}
+                onConfirm={handleManualSubmit}
+            />
+            <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
 
-  const currentQuestion  = questions[currentIndex];
-  const isLastQuestion   = currentIndex === questions.length - 1;
-  const hasAnswer        = answers[currentIndex] !== undefined;
-  // Progress: questions confirmed so far = currentIndex (each Next locks one in)
-  const progressPct      = Math.round((currentIndex / questions.length) * 100);
+            {/* ── Header ──────────────────────────────────────────────────────── */}
+            <header className="flex-none h-16 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-slate-950/90 backdrop-blur-xl z-40">
+                {/* Contest title */}
+                <div className="min-w-0 flex-1 mr-4">
+                    <p className="text-xs text-white/40 uppercase tracking-widest font-semibold truncate">
+                        {contest?.title || "Quiz"}
+                    </p>
+                </div>
 
-  return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-white">
-      {/* Proctoring Engine — invisible, no DOM output */}
-      <ProctoringManager
-        emitProctoringWarning={emitProctoringWarning}
-        videoRef={videoRef}
-        socket={socket}
-        contestId={contest?.id || slug}
-        participantId={participantId}
-        sessionToken={sessionToken}
-      />
+                {/* Timer */}
+                <div className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl border tabular-nums transition-all duration-300 flex-none",
+                    timeRemaining < 300
+                        ? "bg-red-500/10 border-red-500/30 text-red-400 animate-pulse"
+                        : "bg-white/5 border-white/10 text-white",
+                )}>
+                    <Clock className="h-4 w-4 shrink-0" />
+                    <span className="font-mono text-lg font-bold">{formatTime(timeRemaining)}</span>
+                </div>
 
-      {/* Overlays & modals */}
-      <FlaggedBanner />
-      <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
-      <SubmitConfirmModal
-        isOpen={showSubmitModal}
-        onClose={() => setShowSubmitModal(false)}
-        onConfirm={handleManualSubmit}
-      />
-      <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
+                {/* Submit */}
+                <Button
+                    className="ml-3 rounded-xl font-bold px-5 h-10 bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20 flex-none"
+                    onClick={() => setShowSubmitModal(true)}
+                >
+                    <Send className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Submit</span>
+                </Button>
+            </header>
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="flex-none h-16 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-slate-950/90 backdrop-blur-xl z-40">
-        {/* Contest title */}
-        <div className="min-w-0 flex-1 mr-4">
-          <p className="text-xs text-white/40 uppercase tracking-widest font-semibold truncate">
-            {contest?.title || "Quiz"}
-          </p>
-        </div>
-
-        {/* Timer */}
-        <div className={cn(
-          "flex items-center gap-2 px-4 py-2 rounded-xl border tabular-nums transition-all duration-300 flex-none",
-          timeRemaining < 300
-            ? "bg-red-500/10 border-red-500/30 text-red-400 animate-pulse"
-            : "bg-white/5 border-white/10 text-white",
-        )}>
-          <Clock className="h-4 w-4 shrink-0" />
-          <span className="font-mono text-lg font-bold">{formatTime(timeRemaining)}</span>
-        </div>
-
-        {/* Submit */}
-        <Button
-          className="ml-3 rounded-xl font-bold px-5 h-10 bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20 flex-none"
-          onClick={() => setShowSubmitModal(true)}
-        >
-          <Send className="h-4 w-4 mr-2" />
-          <span className="hidden sm:inline">Submit</span>
-        </Button>
-      </header>
-
-      {/* ── Progress bar + question counter ─────────────────────────────── */}
-      <div className="flex-none px-4 md:px-8 pt-3 pb-2 space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-white/40 font-medium">
-          <span>Question {currentIndex + 1} of {questions.length}</span>
-          <span>{progressPct}% done</span>
-        </div>
-        <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-          <motion.div
-            className="h-full rounded-full bg-orange-500"
-            initial={false}
-            animate={{ width: `${progressPct}%` }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          />
-        </div>
-      </div>
-
-      {/* ── Main scrollable area ─────────────────────────────────────────── */}
-      <WidgetErrorBoundary name="Question Player">
-        <main className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-28">
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* Camera feed */}
-            <div className="flex justify-center">
-              <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden bg-slate-800/50 border-2 border-slate-700 shadow-xl">
-                <video
-                  ref={videoRef}
-                  autoPlay playsInline muted
-                  className="w-full h-full object-cover scale-x-[-1]"
-                />
-              </div>
+            {/* ── Progress bar + question counter ─────────────────────────────── */}
+            <div className="flex-none px-4 md:px-8 pt-3 pb-2 space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-white/40 font-medium">
+                    <span>Question {currentIndex + 1} of {questions.length}</span>
+                    <span>{progressPct}% done</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                        className="h-full rounded-full bg-orange-500"
+                        initial={false}
+                        animate={{ width: `${progressPct}%` }}
+                        transition={{ duration: 0.35, ease: "easeOut" }}
+                    />
+                </div>
             </div>
 
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentIndex}
-                initial={{ opacity: 0, x: 18 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -18 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-4"
-              >
-                <QuestionCard question={currentQuestion} questionNumber={currentIndex + 1} />
+            {/* ── Main scrollable area ─────────────────────────────────────────── */}
+            <WidgetErrorBoundary name="Question Player">
+                <main className="flex-1 overflow-y-auto px-4 md:px-8 pt-4 pb-28">
+                    <div className="max-w-2xl mx-auto space-y-6">
+                        {/* Camera feed */}
+                        <div className="flex justify-center">
+                            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden bg-slate-800/50 border-2 border-slate-700 shadow-xl">
+                                <video
+                                    ref={videoRef}
+                                    autoPlay playsInline muted
+                                    className="w-full h-full object-cover scale-x-[-1]"
+                                />
+                            </div>
+                        </div>
 
-                <div className="grid gap-3">
-                  {currentQuestion.options.map((option, i) => (
-                    <OptionButton
-                      key={option.index}
-                      option={option}
-                      optionLabel={OPTION_LABELS[i] ?? String(i)}
-                      isSelected={answers[currentIndex] === option.index}
-                      onClick={() => handleAnswer(currentIndex, option.index)}
-                    />
-                  ))}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={currentIndex}
+                                initial={{ opacity: 0, x: 18 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -18 }}
+                                transition={{ duration: 0.18 }}
+                                className="space-y-4"
+                            >
+                                <QuestionCard question={currentQuestion} questionNumber={currentIndex + 1} />
+
+                                <div className="grid gap-3">
+                                    {currentQuestion.options.map((option, i) => (
+                                        <OptionButton
+                                            key={option.index}
+                                            option={option}
+                                            optionLabel={OPTION_LABELS[i] ?? String(i)}
+                                            isSelected={answers[currentIndex] === option.index}
+                                            onClick={() => handleAnswer(currentIndex, option.index)}
+                                        />
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                </main>
+
+                {/* ── Bottom navigation bar ─────────────────────────────────────── */}
+                <div className="absolute bottom-0 left-0 right-0 h-20 border-t border-white/5 bg-slate-950/90 backdrop-blur-xl flex items-center justify-end gap-3 px-4 sm:px-8 z-40">
+                    {isLastQuestion ? (
+                        /* Last question — only Submit */
+                        <Button
+                            size="lg"
+                            className="rounded-2xl h-12 px-8 bg-orange-500 hover:bg-orange-600 text-white border-0 font-bold gap-2"
+                            onClick={() => setShowSubmitModal(true)}
+                        >
+                            <Send className="h-4 w-4" />
+                            Submit Quiz
+                        </Button>
+                    ) : (
+                        <>
+                            {/* Skip: move forward without answering */}
+                            <Button
+                                size="lg"
+                                variant="ghost"
+                                className="rounded-2xl h-12 px-5 text-white/50 hover:text-white hover:bg-white/5 gap-2"
+                                onClick={handleSkip}
+                            >
+                                <SkipForward className="h-4 w-4" />
+                                <span className="hidden sm:inline">Skip</span>
+                            </Button>
+
+                            {/* Next: confirm answer + move forward */}
+                            <Button
+                                size="lg"
+                                className={cn(
+                                    "rounded-2xl h-12 px-8 font-bold gap-2 border-0 transition-all",
+                                    hasAnswer
+                                        ? "bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20"
+                                        : "bg-white/10 hover:bg-white/15 text-white",
+                                )}
+                                onClick={handleNext}
+                            >
+                                Next
+                                <ChevronRight className="h-5 w-5" />
+                            </Button>
+                        </>
+                    )}
                 </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </main>
-
-        {/* ── Bottom navigation bar ─────────────────────────────────────── */}
-        <div className="absolute bottom-0 left-0 right-0 h-20 border-t border-white/5 bg-slate-950/90 backdrop-blur-xl flex items-center justify-end gap-3 px-4 sm:px-8 z-40">
-          {isLastQuestion ? (
-            /* Last question — only Submit */
-            <Button
-              size="lg"
-              className="rounded-2xl h-12 px-8 bg-orange-500 hover:bg-orange-600 text-white border-0 font-bold gap-2"
-              onClick={() => setShowSubmitModal(true)}
-            >
-              <Send className="h-4 w-4" />
-              Submit Quiz
-            </Button>
-          ) : (
-            <>
-              {/* Skip: move forward without answering */}
-              <Button
-                size="lg"
-                variant="ghost"
-                className="rounded-2xl h-12 px-5 text-white/50 hover:text-white hover:bg-white/5 gap-2"
-                onClick={handleSkip}
-              >
-                <SkipForward className="h-4 w-4" />
-                <span className="hidden sm:inline">Skip</span>
-              </Button>
-
-              {/* Next: confirm answer + move forward */}
-              <Button
-                size="lg"
-                className={cn(
-                  "rounded-2xl h-12 px-8 font-bold gap-2 border-0 transition-all",
-                  hasAnswer
-                    ? "bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20"
-                    : "bg-white/10 hover:bg-white/15 text-white",
-                )}
-                onClick={handleNext}
-              >
-                Next
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            </>
-          )}
+            </WidgetErrorBoundary>
         </div>
-      </WidgetErrorBoundary>
-    </div>
-  );
+    );
 }
