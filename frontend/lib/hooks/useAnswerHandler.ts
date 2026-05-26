@@ -21,7 +21,12 @@ import { useQuizStore } from '@/lib/stores/quiz-store';
  * @param emitAnswer - Socket emit function from useQuizSocket
  */
 export function useAnswerHandler(
-    emitAnswer: (questionId: string, selectedOptionId: string | null, questionIndex: number) => void
+    emitAnswer: (
+        questionId: string,
+        selectedOptionId: string | null,
+        selectedOptionText: string,
+        questionIndex: number
+    ) => void
 ) {
     const setAnswer = useQuizStore((s) => s.setAnswer);
     const questions = useQuizStore((s) => s.questions);
@@ -49,13 +54,15 @@ export function useAnswerHandler(
 
         const optionIndex = answers[questionIndex];
         let selectedOptionId: string | null = null;
+        let selectedOptionText: string = "";
 
         if (optionIndex !== undefined) {
             const selectedOption = question.options.find(opt => opt.index === optionIndex);
             selectedOptionId = selectedOption ? (selectedOption.id || String(selectedOption.index)) : null;
+            selectedOptionText = selectedOption ? (selectedOption.text || "") : "";
         }
         // null = participant skipped this question (no option selected)
-        emitAnswer(question.id, selectedOptionId, questionIndex);
+        emitAnswer(question.id, selectedOptionId, selectedOptionText, questionIndex);
     }, [questions, answers, emitAnswer]);
 
     return {

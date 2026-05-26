@@ -31,7 +31,7 @@ export class QuizService {
         private proctoring: ProctoringService,
         private submissionService: SubmissionService,
         private scheduler: QuizSchedulerService,
-    ) {}
+    ) { }
 
     // ─────────────────────────────────────────────────────────────────────────
     // WAITING ROOM
@@ -43,10 +43,10 @@ export class QuizService {
      * No DB writes — Redis only.
      */
     async joinWaitingRoom(
-        contestId:     string,
+        contestId: string,
         participantId: string,
         participantName?: string,
-        contactId?:    string,
+        contactId?: string,
     ): Promise<{ participantCount: number; status: string }> {
         logger.info(`[QuizService] Participant ${participantId} joining waiting room for contest ${contestId}`);
 
@@ -70,8 +70,8 @@ export class QuizService {
         // IMPORTANT: markDisconnected moves participants from `active` → `disconnected`.
         // We MUST check BOTH sets, not just `active`.
         const [inActive, inSubmitted, inDisconnected] = await Promise.all([
-            redis.sismember(`quiz:${contestId}:active`,       participantId),
-            redis.sismember(`quiz:${contestId}:submitted`,    participantId),
+            redis.sismember(`quiz:${contestId}:active`, participantId),
+            redis.sismember(`quiz:${contestId}:submitted`, participantId),
             redis.sismember(`quiz:${contestId}:disconnected`, participantId),
         ]);
 
@@ -101,7 +101,7 @@ export class QuizService {
         // The participant DB record is the authoritative source of truth.
         try {
             const dbParticipant = await prisma.participant.findUnique({
-                where:  { id: participantId },
+                where: { id: participantId },
                 select: { status: true, contactId: true, organizationId: true },
             });
             if (dbParticipant?.status === "IN_QUIZ") {
@@ -126,8 +126,8 @@ export class QuizService {
         // ── Normal path: first join or clean waiting-room rejoin ────────────────────────
         if (participantName || contactId) {
             await this.session.setParticipantMeta(contestId, participantId, {
-                name:      participantName ?? "Participant",
-                contactId: contactId       ?? "",
+                name: participantName ?? "Participant",
+                contactId: contactId ?? "",
             });
         }
 
@@ -144,20 +144,20 @@ export class QuizService {
      * The full question shuffle is deterministic from the seed, so no answers are lost.
      */
     private async rebuildExpiredSession(
-        contestId:     string,
+        contestId: string,
         participantId: string,
-        contactId:     string,
-        name:          string,
+        contactId: string,
+        name: string,
     ): Promise<void> {
         // Fetch the minimal DB context needed to reconstruct the session
         const participant = await prisma.participant.findUnique({
-            where:  { id: participantId },
+            where: { id: participantId },
             select: {
                 organizationId: true,
-                contactId:      true,
+                contactId: true,
                 contest: {
                     select: {
-                        endTime:  true,
+                        endTime: true,
                         duration: true,
                     },
                 },
@@ -169,27 +169,27 @@ export class QuizService {
             return;
         }
 
-        const sessionSeed  = buildSessionSeed(participantId, contestId);
+        const sessionSeed = buildSessionSeed(participantId, contestId);
         const resolvedContactId = participant.contactId || contactId;
 
         await Promise.all([
             this.session.createSession({
                 contestId,
                 participantId,
-                organizationId:  participant.organizationId,
-                contactId:       resolvedContactId,
-                socketId:        "reconnected",
-                phase:           "IN_QUIZ",
-                seed:            sessionSeed,
-                startedAt:       new Date().toISOString(), // approximate — answers are preserved in Redis
+                organizationId: participant.organizationId,
+                contactId: resolvedContactId,
+                socketId: "reconnected",
+                phase: "IN_QUIZ",
+                seed: sessionSeed,
+                startedAt: new Date().toISOString(), // approximate — answers are preserved in Redis
                 currentQuestion: 0,                        // handleRejoin will use savedAnswers count
-                totalQuestions:  0,                        // filled by handleRejoin from DB
-                contestEndTime:  participant.contest?.endTime?.toISOString() ?? "",
-                violationCount:  0,
+                totalQuestions: 0,                        // filled by handleRejoin from DB
+                contestEndTime: participant.contest?.endTime?.toISOString() ?? "",
+                violationCount: 0,
                 lastHeartbeatAt: new Date().toISOString(),
             }),
             this.session.setParticipantMeta(contestId, participantId, {
-                name:      name,
+                name: name,
                 contactId: resolvedContactId,
             }),
         ]);
@@ -216,11 +216,11 @@ export class QuizService {
      * All subsequent operations are Redis-only.
      */
     async startQuiz(
-        contestId:      string,
+        contestId: string,
         organizationId: string,
-        participantId:  string,
-        contactId:      string,
-        socketId:       string,
+        participantId: string,
+        contactId: string,
+        socketId: string,
         participantName?: string,
     ): Promise<{ questions: any[]; totalTimeMs: number; serverTimestamp: string }> {
         // Transition Redis sets (no DB)
@@ -232,7 +232,7 @@ export class QuizService {
         // Ensure meta exists (may already be set from joinWaitingRoom)
         if (participantName) {
             await this.session.setParticipantMeta(contestId, participantId, {
-                name:      participantName,
+                name: participantName,
                 contactId: contactId,
             });
         }
@@ -242,9 +242,9 @@ export class QuizService {
             where: { id: contestId },
             select: {
                 shuffleQuestions: true,
-                shuffleOptions:   true,
-                duration:         true,
-                endTime:          true,
+                shuffleOptions: true,
+                duration: true,
+                endTime: true,
                 questions: {
                     orderBy: { position: "asc" },
                     include: {
@@ -279,13 +279,13 @@ export class QuizService {
             organizationId,
             contactId,
             socketId,
-            phase:           "IN_QUIZ",
-            seed:            sessionSeed,
-            startedAt:       new Date().toISOString(),
+            phase: "IN_QUIZ",
+            seed: sessionSeed,
+            startedAt: new Date().toISOString(),
             currentQuestion: 0,
-            totalQuestions:  shuffled.questions.length,
-            contestEndTime:  contest.endTime.toISOString(),
-            violationCount:  0,
+            totalQuestions: shuffled.questions.length,
+            contestEndTime: contest.endTime.toISOString(),
+            violationCount: 0,
             lastHeartbeatAt: new Date().toISOString(),
         });
 
@@ -296,7 +296,7 @@ export class QuizService {
             .catch(err => logger.error(`[QuizService] Failed to schedule snapshots for ${participantId}:`, err));
 
         return {
-            questions:       shuffled.questions,
+            questions: shuffled.questions,
             totalTimeMs,
             serverTimestamp: new Date().toISOString(),
         };
@@ -307,17 +307,19 @@ export class QuizService {
     // ─────────────────────────────────────────────────────────────────────────
 
     async saveAnswer(
-        contestId:        string,
-        participantId:    string,
-        questionId:       string,
+        contestId: string,
+        participantId: string,
+        questionId: string,
         selectedOptionId: string | null,
-        answeredAt:       string,
+        selectedOptionText: string | null,
+        answeredAt: string,
     ): Promise<boolean> {
         const state = await this.session.getSession(contestId, participantId);
         if (state?.phase !== "IN_QUIZ") return false;
 
         await this.session.saveAnswer(contestId, participantId, questionId, {
             selectedOptionId,
+            selectedOptionText,
             answeredAt,
         });
         return true;
@@ -336,9 +338,9 @@ export class QuizService {
      * flush, or via the submission worker which has full context.
      */
     async submitQuiz(
-        contestId:     string,
+        contestId: string,
         participantId: string,
-        reason:        "MANUAL" | "AUTO" | "TIMEOUT",
+        reason: "MANUAL" | "AUTO" | "TIMEOUT",
     ): Promise<QuizSubmitResult> {
         const [answers, state] = await Promise.all([
             this.session.getAllAnswers(contestId, participantId),
@@ -357,12 +359,12 @@ export class QuizService {
                     organizationId: "",   // resolved by submission service from DB
                     participantId,
                     contestId,
-                    submittedAt:    new Date().toISOString(),
-                    timeTakenSecs:  0,
-                    source:         reason === "MANUAL" ? "MANUAL" : "AUTO",
+                    submittedAt: new Date().toISOString(),
+                    timeTakenSecs: 0,
+                    source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                     totalQuestions: 0,
-                    attempted:      0,
-                    answers:        [],
+                    attempted: 0,
+                    answers: [],
                 },
                 { jobId: fallbackJobId }
             );
@@ -380,9 +382,9 @@ export class QuizService {
             selectedOptionId: (answer as SavedAnswer).selectedOptionId ?? null,
         }));
 
-        const timeTakenSecs   = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
-        const attemptedCount  = answersArray.filter(a => a.selectedOptionId !== null).length;
-        const jobId           = `${participantId}-${contestId}`;
+        const timeTakenSecs = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
+        const attemptedCount = answersArray.filter(a => a.selectedOptionId !== null).length;
+        const jobId = `${participantId}-${contestId}`;
 
         await submissionQueue.add(
             "persist-submission",
@@ -390,12 +392,12 @@ export class QuizService {
                 organizationId: state.organizationId,
                 participantId,
                 contestId,
-                submittedAt:    new Date().toISOString(),
+                submittedAt: new Date().toISOString(),
                 timeTakenSecs,
-                source:         reason === "MANUAL" ? "MANUAL" : "AUTO",
+                source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                 totalQuestions: state.totalQuestions,
-                attempted:      attemptedCount,
-                answers:        answersArray,
+                attempted: attemptedCount,
+                answers: answersArray,
             },
             { jobId }
         );
@@ -406,7 +408,7 @@ export class QuizService {
             submissionRef: jobId,
             timeTakenSecs,
             totalQuestions: state.totalQuestions,
-            attempted:      attemptedCount,
+            attempted: attemptedCount,
         };
     }
 
@@ -433,9 +435,9 @@ export class QuizService {
             where: { id: contestId },
             select: {
                 shuffleQuestions: true,
-                shuffleOptions:   true,
-                duration:         true,
-                endTime:          true,
+                shuffleOptions: true,
+                duration: true,
+                endTime: true,
                 questions: {
                     orderBy: { position: "asc" },
                     include: {
@@ -454,7 +456,7 @@ export class QuizService {
         if (!contest) return null;
 
         const sessionSeed = buildSessionSeed(participantId, contestId);
-        const shuffled    = shuffleQuestionsForParticipant(
+        const shuffled = shuffleQuestionsForParticipant(
             contest.questions, sessionSeed, contest.shuffleQuestions, contest.shuffleOptions,
         );
 
@@ -470,9 +472,9 @@ export class QuizService {
         const answeredCount = Object.keys(answers).length;
 
         return {
-            phase:          state.phase,
-            questions:      shuffled.questions,
-            savedAnswers:   answers,
+            phase: state.phase,
+            questions: shuffled.questions,
+            savedAnswers: answers,
             // Use contestEndTime for accurate remaining time; fall back to duration
             remainingTimeMs: state.contestEndTime
                 ? Math.max(0, new Date(state.contestEndTime).getTime() - Date.now())
@@ -494,7 +496,7 @@ export class QuizService {
     async handleTimeExpiry(contestId: string): Promise<{ submitted: string[]; errors: any[] }> {
         const activeIds = await this.session.getSetMembers(contestId, "active");
         const submitted: string[] = [];
-        const errors:    any[]    = [];
+        const errors: any[] = [];
 
         // Process concurrently in batches of 50 to avoid overwhelming Redis
         const BATCH = 50;
@@ -525,8 +527,8 @@ export class QuizService {
         ]);
         return {
             currentQuestionIndex: state?.currentQuestion ?? 0,
-            answeredCount:        Object.keys(answers).length,
-            totalQuestions:       state?.totalQuestions ?? 0,
+            answeredCount: Object.keys(answers).length,
+            totalQuestions: state?.totalQuestions ?? 0,
         };
     }
 
@@ -552,33 +554,33 @@ export class QuizService {
         );
 
         const totalViolations = participants.reduce((sum, p) => sum + p.violationCount, 0);
-        const totalFlagged    = participants.filter(p => p.isFlagged).length;
+        const totalFlagged = participants.filter(p => p.isFlagged).length;
 
         return {
             contestId,
-            timestamp:        new Date().toISOString(),
+            timestamp: new Date().toISOString(),
             // Set-level counts (directly from Redis SCARD)
-            waiting:          counts.waiting,
-            active:           counts.active,
-            totalWaiting:     counts.waiting,
-            totalInQuiz:      counts.active,
-            totalSubmitted:   counts.submitted,
+            waiting: counts.waiting,
+            active: counts.active,
+            totalWaiting: counts.waiting,
+            totalInQuiz: counts.active,
+            totalSubmitted: counts.submitted,
             totalDisconnected: counts.disconnected,
             totalFlagged,
             totalViolations,
             // Per-participant rows (from pipelined HGETALL)
-            participants:     participants.map(p => ({
-                participantId:        p.participantId,
-                name:                 p.name,
-                status:               p.phase,           // phase is the live truth
+            participants: participants.map(p => ({
+                participantId: p.participantId,
+                name: p.name,
+                status: p.phase,           // phase is the live truth
                 currentQuestionIndex: p.currentQuestionIndex,
-                totalQuestions:       p.totalQuestions,
-                answeredCount:        p.answeredCount,
-                violationCount:       p.violationCount,
-                trustScore:           p.trustScore,
-                isFlagged:            p.isFlagged,
-                lastActivityAt:       p.lastActivityAt,
-                isAlive:              p.isAlive,
+                totalQuestions: p.totalQuestions,
+                answeredCount: p.answeredCount,
+                violationCount: p.violationCount,
+                trustScore: p.trustScore,
+                isFlagged: p.isFlagged,
+                lastActivityAt: p.lastActivityAt,
+                isAlive: p.isAlive,
             })),
         };
     }

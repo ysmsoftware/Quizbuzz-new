@@ -164,8 +164,38 @@ export class ContactRepository {
                                 id: true,
                                 title: true,
                                 slug: true,
+                                paymentConfig: {
+                                    select: {
+                                        amount: true
+                                    }
+                                }
                             },
                         },
+                        payment: {
+                            select: {
+                                status: true,
+                                amount: true
+                            }
+                        },
+                        certificate: {
+                            select: {
+                                id: true,
+                                status: true,
+                                generatedAt: true,
+                                fileUrl: true
+                            }
+                        },
+                        submission: {
+                            select: {
+                                score: true,
+                                percentage: true
+                            }
+                        },
+                        leaderboard: {
+                            select: {
+                                rank: true
+                            }
+                        }
                     },
                 },
             },

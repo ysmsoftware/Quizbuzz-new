@@ -125,6 +125,7 @@ export interface ReadyCheckPayload {
 export interface AnswerPayload {
     questionId: string;
     selectedOptionId: string | null;   // null = skip / clear selection
+    selectedOptionText: string | null;
     answeredAt: string;                // ISO string — client timestamp
 }
 
@@ -200,7 +201,7 @@ export interface ViolationWarningPayload {
 export interface ReconnectedPayload {
     phase: QuizPhase;
     questions: unknown[];
-    savedAnswers: Record<string, { selectedOptionId: string | null; answeredAt: string }>;
+    savedAnswers: Record<string, SavedAnswer>;
     remainingTimeMs: number;
     serverTimestamp: string;
 }
@@ -273,6 +274,7 @@ export interface QuizAuthResult {
 
 export interface SavedAnswer {
     selectedOptionId: string | null;
+    selectedOptionText?: string | null;
     answeredAt: string;
 }
 

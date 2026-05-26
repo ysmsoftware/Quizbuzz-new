@@ -132,7 +132,7 @@ export class MessageWorkerService {
                             : 'TBD',
                         // Results: link to public leaderboard. Reminder/confirmation: link to contest page.
                         link: isResultsTemplate
-                            ? `${appUrl}/contests/${contest.slug}/results`
+                            ? `${appUrl}/quiz/${contest.slug}/results`
                             : `${appUrl}/contests/${contest.slug}`,
                         joinCode: contest.joinCode ?? 'To be revealed on contest day',
                     },

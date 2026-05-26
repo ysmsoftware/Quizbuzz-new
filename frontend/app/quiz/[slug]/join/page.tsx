@@ -26,12 +26,11 @@ import type { Contest } from "@/lib/types";
 // ═══════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════
-type Step = "IDENTIFY" | "OTP" | "CAMERA" | "REDIRECTING";
-type InputMode = "phone" | "email";
+type Step = "IDENTIFY" | "JOIN_CODE" | "CAMERA" | "REDIRECTING";
 
 const STEP_INDEX: Record<Step, number> = {
     IDENTIFY: 0,
-    OTP: 1,
+    JOIN_CODE: 1,
     CAMERA: 2,
     REDIRECTING: 2,
 };
@@ -54,25 +53,16 @@ export default function QuizJoinPage() {
 
     // Step machine
     const [step, setStep] = useState<Step>("IDENTIFY");
-    const [inputMode, setInputMode] = useState<InputMode>("email"); // Default to email for QuizBuzz
 
     // Identity
     const [identifier, setIdentifier] = useState("");
-    const [maskedIdentifier, setMaskedIdentifier] = useState("");
-    const [countryCode] = useState("+91");
 
-    // OTP
-    const [otpValues, setOtpValues] = useState<string[]>(["", "", "", "", "", ""]);
-    const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+    // Join Code
     const [joinCode, setJoinCode] = useState("");
 
-    // Timers & state
-    const [resendTimer, setResendTimer] = useState(0);
+    // State
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [errorCode, setErrorCode] = useState<string | null>(null);
-    const [attemptsLeft, setAttemptsLeft] = useState(3);
-    const [shakeOtp, setShakeOtp] = useState(false);
 
     // Device conflict
     const [showConflict, setShowConflict] = useState(false);
@@ -94,68 +84,32 @@ export default function QuizJoinPage() {
     }, [slug]);
 
     useEffect(() => {
-        if (resendTimer <= 0) return;
-        const t = setInterval(() => setResendTimer((v) => Math.max(0, v - 1)), 1000);
-        return () => clearInterval(t);
-    }, [resendTimer]);
-
-    useEffect(() => {
-        if (step === "OTP") {
-            setTimeout(() => otpRefs.current[0]?.focus(), 300);
-        }
-    }, [step]);
-
-    useEffect(() => {
         if (step === "CAMERA") {
             requestCameraPermission();
         }
     }, [step, requestCameraPermission]);
 
-    const getFullIdentifier = useCallback(() => {
-        if (inputMode === "phone") return countryCode + identifier;
-        return identifier;
-    }, [inputMode, identifier, countryCode]);
-
-    const handleSendOTP = async () => {
+    const handleJoinContest = async (codeToUse?: string) => {
         if (!identifier.trim()) return;
         setLoading(true);
         setError(null);
-        setErrorCode(null);
 
         try {
-            // For slug-based join, we use the slug to identify the contest
-            const res = await authService.sendOTP(getFullIdentifier(), inputMode, slug);
-            if (res.success && res.data) {
-                setMaskedIdentifier(res.data.maskedContact);
-                setResendTimer(res.data.expiresIn || 60);
-                setStep("OTP");
-                setOtpValues(["", "", "", "", "", ""]);
-            }
-        } catch (err: any) {
-            setErrorCode(err?.code || "UNKNOWN");
-            setError(err?.message || "Could not send OTP. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleVerifyOTP = async (otpString?: string) => {
-        if (loading) return;
-        const otp = otpString || otpValues.join("");
-        if (otp.length !== 6) return;
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            const res = await authService.verifyOTP(getFullIdentifier(), inputMode, otp, slug, joinCode || undefined, contest?.id || undefined);
+            const res = await authService.verifyOTP(
+                identifier,
+                "email",
+                undefined,
+                slug,
+                codeToUse || joinCode || undefined,
+                contest?.id || undefined
+            );
             if (res.success && res.data) {
                 setSession({
                     sessionToken: res.data.sessionToken,
                     participantId: res.data.registration.participantId,
                     contestId: contest?.id || "",
-                    identifier: getFullIdentifier(),
-                    identifierType: inputMode,
+                    identifier: identifier,
+                    identifierType: "email",
                     deviceId: res.data.deviceId,
                 });
 
@@ -165,30 +119,21 @@ export default function QuizJoinPage() {
                     handleRedirect();
                 }
             } else {
-                handleOTPError(res.error || "UNKNOWN", res.message);
+                setError(res.message || "Failed to join quiz. Please try again.");
             }
         } catch (err: any) {
-            handleOTPError(err?.code || "UNKNOWN", err?.message);
+            setError(err?.message || "Failed to join quiz. Please try again.");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleOTPError = (code: string, message?: string) => {
-        if (code === "SESSION_CONFLICT") {
-            setShowConflict(true);
-            return;
-        }
-        setShakeOtp(true);
-        setTimeout(() => setShakeOtp(false), 400);
-
-        if (code === "INCORRECT_OTP" || code === "WRONG_OTP") {
-            setAttemptsLeft((v) => Math.max(0, v - 1));
-            setError(message || `Incorrect OTP. ${attemptsLeft - 1} attempts remaining.`);
-            setOtpValues(["", "", "", "", "", ""]);
-            setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    const handleProceedIdentify = async () => {
+        if (!identifier.trim()) return;
+        if (contest?.joinCodeRequired) {
+            setStep("JOIN_CODE");
         } else {
-            setError(message || "Verification failed. Please try again.");
+            await handleJoinContest();
         }
     };
 
@@ -201,44 +146,22 @@ export default function QuizJoinPage() {
             }
             const now = new Date();
 
-            // The real API returns startTime/endTime as full ISO 8601 timestamps.
-            // Legacy mock fields (contestDate/contestStartTime/contestEndTime) are NOT present.
             const startTime = contest.startTime ? new Date(contest.startTime) : null;
             const endTime = contest.endTime ? new Date(contest.endTime) : null;
 
             if (!startTime || !endTime || isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-                // Fallback: if we can't parse times, go to system-check → waiting room
                 router.push(`/quiz/${slug}/system-check`);
                 return;
             }
 
             if (now < startTime) {
-                // Quiz hasn't started yet → system-check → waiting room
                 router.push(`/quiz/${slug}/system-check`);
             } else if (now >= startTime && now < endTime) {
-                // Quiz is live → system-check (it will forward to waiting/play)
                 router.push(`/quiz/${slug}/system-check`);
             } else {
-                // Quiz has ended
                 router.push(`/quiz/${slug}/submitted`);
             }
         }, 1500);
-    };
-
-    const handleOtpChange = (index: number, value: string) => {
-        const digit = value.replace(/\D/g, "").slice(-1);
-        const newValues = [...otpValues];
-        newValues[index] = digit;
-        setOtpValues(newValues);
-
-        if (digit && index < 5) {
-            otpRefs.current[index + 1]?.focus();
-        }
-        if (digit && index === 5 && newValues.join("").length === 6) {
-            if (!contest?.joinCodeRequired) {
-                handleVerifyOTP(newValues.join(""));
-            }
-        }
     };
 
     const handleForceSession = async () => {
@@ -269,8 +192,12 @@ export default function QuizJoinPage() {
         );
     }
 
-    const totalDots = contest?.proctoringEnabled && contest?.webcamRequired ? 3 : 2;
-    const currentDot = STEP_INDEX[step];
+    const totalSteps: Step[] = ["IDENTIFY"];
+    if (contest?.joinCodeRequired) totalSteps.push("JOIN_CODE");
+    if (contest?.proctoringEnabled && contest?.webcamRequired) totalSteps.push("CAMERA");
+
+    const totalDots = totalSteps.length;
+    const currentDot = totalSteps.indexOf(step) === -1 ? totalSteps.length - 1 : totalSteps.indexOf(step);
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #0F2040 0%, #0D1117 100%)" }}>
@@ -306,59 +233,44 @@ export default function QuizJoinPage() {
                             <AnimatePresence mode="wait">
                                 {step === "IDENTIFY" && (
                                     <motion.div key="identify" variants={stepVariants} initial="enter" animate="center" exit="exit">
-                                        <div className="flex border-b mb-5">
-                                            <button onClick={() => setInputMode("email")} className={`flex-1 py-2 text-sm font-medium border-b-2 ${inputMode === "email" ? "border-primary text-primary" : "border-transparent"}`}>Email</button>
-                                            <button onClick={() => setInputMode("phone")} className={`flex-1 py-2 text-sm font-medium border-b-2 ${inputMode === "phone" ? "border-primary text-primary" : "border-transparent"}`}>Phone</button>
+                                        <div className="mb-5">
+                                            <label className="text-sm font-semibold mb-2 block text-muted-foreground">Email Address</label>
+                                            <Input
+                                                type="email"
+                                                placeholder="you@example.com"
+                                                value={identifier}
+                                                onChange={(e) => setIdentifier(e.target.value)}
+                                                className="h-12 mb-4"
+                                            />
                                         </div>
-                                        <Input
-                                            type={inputMode === "email" ? "email" : "tel"}
-                                            placeholder={inputMode === "email" ? "you@example.com" : "9876543210"}
-                                            value={identifier}
-                                            onChange={(e) => setIdentifier(e.target.value)}
-                                            className="h-12 mb-4"
-                                        />
                                         {error && <p className="text-sm text-destructive mb-4">{error}</p>}
-                                        <Button onClick={handleSendOTP} disabled={!identifier.trim() || loading} className="w-full h-12 font-bold">
-                                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
+                                        <Button onClick={handleProceedIdentify} disabled={!identifier.trim() || loading} className="w-full h-12 font-bold">
+                                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continue"}
                                         </Button>
                                     </motion.div>
                                 )}
 
-                                {step === "OTP" && (
-                                    <motion.div key="otp" variants={stepVariants} initial="enter" animate="center" exit="exit">
-                                        <button onClick={() => setStep("IDENTIFY")} className="flex items-center gap-1 text-sm mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
-                                        <div className="flex justify-center gap-2 mb-4">
-                                            {otpValues.map((digit, i) => (
-                                                <input
-                                                    key={i}
-                                                    ref={(el) => { otpRefs.current[i] = el; }}
-                                                    maxLength={1}
-                                                    value={digit}
-                                                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                                                    className="w-12 h-14 text-center text-xl font-bold rounded-lg border-2"
-                                                />
-                                            ))}
+                                {step === "JOIN_CODE" && (
+                                    <motion.div key="join_code" variants={stepVariants} initial="enter" animate="center" exit="exit">
+                                        <button onClick={() => setStep("IDENTIFY")} className="flex items-center gap-1 text-sm mb-4 text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Back</button>
+                                        <div className="mb-6">
+                                            <label className="text-sm font-semibold mb-2 block text-muted-foreground">Join Code</label>
+                                            <Input
+                                                type="text"
+                                                placeholder="Enter 5-character Join Code"
+                                                value={joinCode}
+                                                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                                maxLength={5}
+                                                className="h-12 text-center text-lg font-semibold tracking-widest uppercase mb-4"
+                                            />
                                         </div>
-                                        {contest?.joinCodeRequired && (
-                                            <div className="mb-4">
-                                                <label className="text-sm font-medium mb-1.5 block text-muted-foreground">Join Code</label>
-                                                <Input
-                                                    type="text"
-                                                    placeholder="Enter 5-character Join Code"
-                                                    value={joinCode}
-                                                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                                                    maxLength={5}
-                                                    className="h-12 text-center text-lg font-semibold tracking-widest uppercase"
-                                                />
-                                            </div>
-                                        )}
                                         {error && <p className="text-sm text-destructive text-center mb-4">{error}</p>}
                                         <Button 
-                                            onClick={() => handleVerifyOTP()} 
-                                            disabled={otpValues.join("").length < 6 || (contest?.joinCodeRequired && joinCode.length < 5) || loading} 
+                                            onClick={() => handleJoinContest()} 
+                                            disabled={joinCode.length < 5 || loading} 
                                             className="w-full h-12 font-bold"
                                         >
-                                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
+                                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Join"}
                                         </Button>
                                     </motion.div>
                                 )}
@@ -377,7 +289,7 @@ export default function QuizJoinPage() {
                                 )}
                             </AnimatePresence>
 
-                            {step !== "REDIRECTING" && (
+                            {step !== "REDIRECTING" && totalDots > 1 && (
                                 <div className="flex justify-center gap-2 mt-6">
                                     {Array.from({ length: totalDots }).map((_, i) => (
                                         <div key={i} className={`w-2 h-2 rounded-full ${i <= currentDot ? "bg-primary" : "bg-border"}`} />

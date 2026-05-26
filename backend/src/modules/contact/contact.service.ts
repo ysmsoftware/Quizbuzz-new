@@ -158,15 +158,34 @@ export class ContactService {
             throw new NotFoundError("Contact not found.");
         }
 
-        return result.participants.map((p) => ({
-            participantId: p.id,
-            registrationRef: p.registrationRef,
-            contestId: p.contest.id,
-            contestTitle: p.contest.title,
-            contestSlug: p.contest.slug,
-            status: p.status,
-            registeredAt: p.createdAt,
-        }));
+        return result.participants.map((p) => {
+            const contestPrice = p.contest.paymentConfig?.amount ? p.contest.paymentConfig.amount / 100 : 0;
+            return {
+                participantId: p.id,
+                registrationRef: p.registrationRef,
+                contestId: p.contest.id,
+                contestTitle: p.contest.title,
+                contestSlug: p.contest.slug,
+                status: p.status,
+                registeredAt: p.createdAt,
+                contestPrice,
+                payment: p.payment ? {
+                    status: p.payment.status,
+                    amount: p.payment.amount / 100,
+                } : undefined,
+                certificate: p.certificate ? {
+                    id: p.certificate.id,
+                    status: p.certificate.status,
+                    generatedAt: p.certificate.generatedAt,
+                    fileUrl: p.certificate.fileUrl,
+                } : undefined,
+                submission: p.submission ? {
+                    score: p.submission.score ? p.submission.score.toString() : '0',
+                    percentage: p.submission.percentage ? p.submission.percentage.toString() : '0',
+                    rank: p.leaderboard ? p.leaderboard.rank : 0,
+                } : undefined,
+            };
+        });
     }
 
     async getMessages(id: string, organizationId: string, page: number, limit: number): Promise<{ data: ContactMessageItem[]; total: number; totalPages: number }> {

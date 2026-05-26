@@ -16,7 +16,7 @@ const VerifyOtpSchema = z.object({
 
 const ParticipantLoginSchema = z.object({
     email: z.string().email("Please provide a valid email address").toLowerCase(),
-    otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d{6}$/, "OTP must be numeric"),
+    otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d{6}$/, "OTP must be numeric").optional(),
     contestSlug: z.string().min(1).optional(),
     contestId: z.string().min(1).optional(),
     joinCode: z.string().min(1).optional(),

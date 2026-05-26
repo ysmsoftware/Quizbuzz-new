@@ -147,9 +147,9 @@ export default function ContestsPage() {
                           <TableCell>
                             <Badge
                               variant={
-                                contest.status === 'active'
+                                contest.status?.toLowerCase() === 'active'
                                   ? 'default'
-                                  : contest.status === 'published'
+                                  : contest.status?.toLowerCase() === 'published'
                                   ? 'secondary'
                                   : 'outline'
                               }

@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { crmApi, Contact, ContactHistoryItem } from '@/lib/api/crm.api';
+import { toast } from 'sonner';
 
 export type UseContactOptions = {
   enabled?: boolean;
@@ -9,6 +10,7 @@ export type UseContactOptions = {
 };
 
 export function useContact(contactId: string, options: UseContactOptions = {}) {
+  const queryClient = useQueryClient();
   const {
     enabled = true,
     loadHistory = false,
@@ -70,6 +72,29 @@ export function useContact(contactId: string, options: UseContactOptions = {}) {
     gcTime: 10 * 60 * 1000,
   });
 
+  const updateContactMutation = useMutation({
+    mutationFn: (body: Partial<Contact>) => crmApi.updateContact(contactId, body).then(res => res.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contact', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success('Contact successfully updated');
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to update contact');
+    }
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: () => crmApi.deleteContact(contactId).then(res => res.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success('Contact successfully deleted');
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to delete contact');
+    }
+  });
+
   return {
     contact,
     isLoadingContact,
@@ -87,6 +112,10 @@ export function useContact(contactId: string, options: UseContactOptions = {}) {
     isLoadingCertificates,
     certificatesError,
     refetchCertificates,
+    updateContact: updateContactMutation.mutateAsync,
+    isUpdating: updateContactMutation.isPending,
+    deleteContact: deleteContactMutation.mutateAsync,
+    isDeleting: deleteContactMutation.isPending,
     isLoading: isLoadingContact || isLoadingHistory || isLoadingMessages || isLoadingCertificates,
     hasError: !!contactError || !!historyError || !!messagesError || !!certificatesError,
   };
