@@ -67,7 +67,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":x: *Tests/Lint failed* on `${{ github.ref_name }}` — deploy blocked.\n*Commit:* ${{ github.event.head_commit.message }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":x: *Tests/Lint failed* on `${{ github.ref_name }}` — deploy blocked.\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -192,7 +192,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":rocket: *Deploy started* for `${{ github.ref_name }}`\n*Commit:* ${{ github.event.head_commit.message }}\n*By:* ${{ github.actor }}"
+              "text": ":rocket: *Deploy started* for `${{ github.ref_name }}`\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -287,7 +287,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":white_check_mark: *Deploy succeeded!* `quiz.ysminfosolution.com` is live.\n*Commit:* ${{ github.event.head_commit.message }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":white_check_mark: *Deploy succeeded!* `quiz.ysminfosolution.com` is live.\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -300,7 +300,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":fire: *Deploy FAILED & rolled back!* `quiz.ysminfosolution.com`\n*Commit:* ${{ github.event.head_commit.message }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":fire: *Deploy FAILED & rolled back!* `quiz.ysminfosolution.com`\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
