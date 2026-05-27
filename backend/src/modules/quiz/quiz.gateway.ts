@@ -10,6 +10,7 @@ import {
     JoinPayload
 } from "./quiz.types.js";
 import { prisma } from "../../config/db.js";
+import { getStorageProvider } from "../../providers/storage.provider.js";
 
 export class QuizGateway {
     server!: Server;
@@ -295,10 +296,24 @@ export class QuizGateway {
     }
 
     async emitCaptureRequest(pid: string, captureType: string, captureId?: string) {
-        this.emitSocket("participant", `participant:${pid}`, "quiz:v1:capture_request", {
-            captureType,
-            captureId: captureId ?? `cap_${pid}_${Date.now()}`,
-        });
+        try {
+            const provider = getStorageProvider();
+            const { url: presignedUrl, storageKey } = await provider.getPresignedPutUrl({
+                filename:         `${captureType}_${Date.now()}.webp`,
+                folder:           `proctoring/${pid}`,
+                mimeType:         "image/webp",
+                expiresInSeconds: 300,
+            });
+
+            this.emitSocket("participant", `participant:${pid}`, "quiz:v1:capture_request", {
+                captureType,
+                captureId:    captureId ?? `cap_${pid}_${Date.now()}`,
+                presignedUrl,
+                storageKey,
+            });
+        } catch (err) {
+            logger.error(`[QuizGateway] Failed to generate presigned URL for capture request (${pid}): ${err}`);
+        }
     }
 
     broadcastAdminEvent(cid: string, event: string, data: unknown) {

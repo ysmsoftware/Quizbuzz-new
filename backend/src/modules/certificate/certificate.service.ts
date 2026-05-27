@@ -69,20 +69,33 @@ export class CertificateService {
 
     /** All certificates for a contest — admin contest-level view */
     async getCertificatesByContest(
-        contestId: string,
+        contestId:      string,
         organizationId: string,
-        page: number,
-        limit: number
-    ): Promise<PaginatedCertificatesResult> {
+        page:           number,
+        limit:          number,
+        search?:        string,
+        status?:        string
+    ): Promise<any> {
         const skip = (page - 1) * limit;
 
-        const [rows, total] = await Promise.all([
-            this.certificateRepo.findByContestId(contestId, organizationId, skip, limit),
-            this.certificateRepo.countByContestId(contestId, organizationId),
+        const [rows, total, summary] = await Promise.all([
+            this.certificateRepo.findMergedParticipantsWithCertificates(contestId, organizationId, skip, limit, search, status),
+            this.certificateRepo.countMergedParticipantsWithCertificates(contestId, organizationId, search, status),
+            this.certificateRepo.getStatusSummary(contestId, organizationId),
         ]);
 
-        return { data: rows, total, page, limit, totalPages: Math.ceil(total / limit) };
+        return {
+            data: rows,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+            summary,
+        };
     }
+
 
     /** Single certificate for a specific contact in a specific contest */
     async getCertificateByContactAndContest(
@@ -282,7 +295,7 @@ export class CertificateService {
 
     // ── Retry ─────────────────────────────────────────────────────────────────
 
-    /** Retry a single FAILED certificate */
+    /** Retry/Re-run any certificate generation job */
     async retryCertificate(
         id: string,
         organizationId: string
@@ -290,13 +303,7 @@ export class CertificateService {
         const cert = await this.certificateRepo.findById(id, organizationId);
         if (!cert) throw new NotFoundError("Certificate not found");
 
-        if (cert.status !== "FAILED" && cert.status !== "PENDING") {
-            throw new ConflictError(
-                `Cannot retry a certificate with status "${cert.status}". ` +
-                `Only FAILED or PENDING certificates can be retried.`
-            );
-        }
-
+        // Allow retrying/re-running certificates in any status (FAILED, QUEUED, GENERATING, or GENERATED)
         return this._requeueCertificate(id, organizationId, cert);
     }
 

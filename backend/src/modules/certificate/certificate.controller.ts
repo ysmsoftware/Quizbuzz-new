@@ -51,16 +51,19 @@ export class CertificateController {
 
     getCertificatesByContest = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { page, limit } = certificatePaginationSchema.parse(req.query);
+            const { page, limit, search, status } = certificatePaginationSchema.parse(req.query);
             const result = await this.certificateService.getCertificatesByContest(
                 req.params.contestId as string,
                 req.user!.organizationId as string,
                 page,
-                limit
+                limit,
+                search,
+                status
             );
-            res.status(200).json({ success: true, ...result });
+            res.status(200).json({ success: true, data: result });
         } catch (err) { next(err); }
     };
+
 
     // ── GET /certificates/contact/:contactId/contest/:contestId ───────────────
 

@@ -268,4 +268,148 @@ export class CertificateRepository {
         });
         return result.count;
     }
+
+    async getStatusSummary(
+        contestId:      string,
+        organizationId: string
+    ): Promise<{ generated: number; failed: number; pending: number }> {
+        const counts = await prisma.certificate.groupBy({
+            by: ["status"],
+            where: { contestId, organizationId },
+            _count: { status: true },
+        });
+
+        const summary = {
+            generated: 0,
+            failed: 0,
+            pending: 0,
+        };
+
+        for (const item of counts) {
+            const status = item.status;
+            const count = item._count.status;
+            if (status === "GENERATED" || status === "DELIVERED") {
+                summary.generated += count;
+            } else if (status === "FAILED") {
+                summary.failed += count;
+            } else if (status === "PENDING" || status === "QUEUED" || status === "GENERATING") {
+                summary.pending += count;
+            }
+        }
+
+        return summary;
+    }
+
+    async findMergedParticipantsWithCertificates(
+        contestId:      string,
+        organizationId: string,
+        skip:           number,
+        take:           number,
+        search?:        string,
+        status?:        string
+    ): Promise<any[]> {
+        const where: Prisma.ParticipantWhereInput = {
+            contestId,
+            organizationId,
+        };
+
+        if (search && search.trim()) {
+            const query = search.trim();
+            where.OR = [
+                { id: { contains: query, mode: "insensitive" } },
+                { registrationRef: { contains: query, mode: "insensitive" } },
+                { contact: { email: { contains: query, mode: "insensitive" } } },
+                { contact: { firstName: { contains: query, mode: "insensitive" } } },
+                { contact: { lastName: { contains: query, mode: "insensitive" } } },
+            ];
+        }
+
+        if (status && status !== "all") {
+            if (status === "NOT_GENERATED") {
+                where.certificate = null;
+            } else {
+                where.certificate = {
+                    status: status as CertificateStatus,
+                };
+            }
+        }
+
+        const participants = await prisma.participant.findMany({
+            where,
+            skip,
+            take,
+            orderBy: { createdAt: "asc" },
+            include: {
+                contact: {
+                    select: { id: true, firstName: true, lastName: true, email: true },
+                },
+                certificate: {
+                    select: {
+                        id: true,
+                        status: true,
+                        fileUrl: true,
+                        generatedAt: true,
+                        deliveredAt: true,
+                    },
+                },
+            },
+        });
+
+        return participants.map((p) => ({
+            participant: {
+                id: p.id,
+                registrationRef: p.registrationRef,
+                status: p.status,
+                contact: {
+                    firstName: p.contact.firstName,
+                    lastName: p.contact.lastName,
+                    email: p.contact.email,
+                },
+            },
+            certificate: p.certificate ? {
+                id: p.certificate.id,
+                status: p.certificate.status,
+                fileUrl: p.certificate.fileUrl,
+                generatedAt: p.certificate.generatedAt,
+                deliveredAt: p.certificate.deliveredAt,
+            } : null,
+            certStatus: p.certificate ? p.certificate.status : "NOT_GENERATED",
+        }));
+    }
+
+    async countMergedParticipantsWithCertificates(
+        contestId:      string,
+        organizationId: string,
+        search?:        string,
+        status?:        string
+    ): Promise<number> {
+        const where: Prisma.ParticipantWhereInput = {
+            contestId,
+            organizationId,
+        };
+
+        if (search && search.trim()) {
+            const query = search.trim();
+            where.OR = [
+                { id: { contains: query, mode: "insensitive" } },
+                { registrationRef: { contains: query, mode: "insensitive" } },
+                { contact: { email: { contains: query, mode: "insensitive" } } },
+                { contact: { firstName: { contains: query, mode: "insensitive" } } },
+                { contact: { lastName: { contains: query, mode: "insensitive" } } },
+            ];
+        }
+
+        if (status && status !== "all") {
+            if (status === "NOT_GENERATED") {
+                where.certificate = null;
+            } else {
+                where.certificate = {
+                    status: status as CertificateStatus,
+                };
+            }
+        }
+
+        return prisma.participant.count({ where });
+    }
 }
+

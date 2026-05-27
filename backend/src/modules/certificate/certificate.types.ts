@@ -115,3 +115,44 @@ export interface CertificateJobPayload {
     participantId:  string;
     metadata:       CertificateMetadata;
 }
+
+// ─── Dashboard specific types ──────────────────────────────────────────────────
+
+export interface CertificateDashboardRecord {
+    participant: {
+        id:              string;
+        registrationRef: string;
+        status:          string;
+        contact: {
+            firstName: string;
+            lastName:  string | null;
+            email:     string;
+        };
+    };
+    certificate: {
+        id:          string;
+        status:      CertificateStatus;
+        fileUrl:     string | null;
+        generatedAt: Date | null;
+        deliveredAt: Date | null;
+    } | null;
+    certStatus: string;
+}
+
+export interface CertificateDashboardSummary {
+    generated: number;
+    failed:    number;
+    pending:   number;
+}
+
+export interface PaginatedCertificateDashboardResult {
+    data:       CertificateDashboardRecord[];
+    pagination: {
+        total:      number;
+        page:       number;
+        limit:      number;
+        totalPages: number;
+    };
+    summary:    CertificateDashboardSummary;
+}
+

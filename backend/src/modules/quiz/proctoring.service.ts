@@ -13,8 +13,6 @@ import type { PrismaClient } from "@prisma/client";
 import type {
     ViolationEvent,
     ViolationSummary,
-    CaptureType,
-    SnapshotMetadata,
 } from "./quiz.types";
 
 const VIOLATION_THRESHOLD = config.proctoring.threshold;
@@ -70,40 +68,6 @@ export class ProctoringService {
         }
 
         return { totalViolations, threshold: VIOLATION_THRESHOLD, flagged };
-    }
-
-    /**
-     * Stores identity audit snapshot metadata
-     */
-    async storeSnapshot(
-        participantId: string,
-        contestId: string,
-        organizationId: string,
-        captureType: CaptureType,
-        imageBase64: string,
-        timestamp: string,
-    ): Promise<SnapshotMetadata> {
-        const s3Key = `proctoring/${contestId}/${participantId}/${captureType}_${Date.now()}.webp`;
-
-        const event = await this.prisma.proctoringEvent.create({
-            data: {
-                participantId,
-                contestId,
-                organizationId,
-                type: `SNAPSHOT_${captureType}` as any,
-                severity: severityMap["LOW"],
-                metadata: { s3Key, captureType, timestamp } as any,
-            },
-        });
-
-        return {
-            id: event.id,
-            participantId,
-            contestId,
-            captureType,
-            s3Key,
-            capturedAt: event.occurredAt,
-        };
     }
 
     /**
