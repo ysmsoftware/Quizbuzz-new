@@ -69,6 +69,9 @@ app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
 // Routes
 app.use('/api/v1', apiRouter);
 
+
+
+
 app.get('/health', async (req, res) => {
     const [db, cache] = await Promise.allSettled([
         prisma.$queryRaw`SELECT 1`,
