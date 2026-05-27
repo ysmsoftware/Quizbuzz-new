@@ -238,7 +238,7 @@ jobs:
               if [ "$PREV_BACKEND" != "none" ]; then
                 docker compose -f docker-compose.prod.yml up -d --no-build backend || true
               fi
-              if [ "$PREV_FRONTEND" != "none" ]; do
+              if [ "$PREV_FRONTEND" != "none" ]; then
                 docker compose -f docker-compose.prod.yml up -d --no-build frontend || true
               fi
               echo "Rollback complete"
