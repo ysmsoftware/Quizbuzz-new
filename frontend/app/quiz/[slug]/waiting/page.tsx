@@ -53,6 +53,7 @@ export default function WaitingRoomPage() {
     // Countdown
     const [timeToStart, setTimeToStart] = useState<TimeDiff>({ d: 0, h: 0, m: 0, s: 0 });
     const [showAllRules, setShowAllRules] = useState(false);
+    const [startCountdown, setStartCountdown] = useState<number | null>(null);
 
     // WS hook
     const {
@@ -95,17 +96,37 @@ export default function WaitingRoomPage() {
 
     // ─── Redirect to play, submitted, or disqualified screen based on status ───
     useEffect(() => {
-        if (wsStatus === "starting") {
-            const timer = setTimeout(() => {
-                router.push(`/quiz/${slug}/play`);
-            }, 1500);
-            return () => clearTimeout(timer);
-        } else if (wsStatus === "submitted") {
+        if (wsStatus === "submitted") {
             router.push(`/quiz/${slug}/submitted`);
         } else if (wsStatus === "disqualified") {
             router.push(`/quiz/${slug}/disqualified`);
         }
     }, [wsStatus, router, slug]);
+
+    // ─── Trigger Starting Countdown ───
+    useEffect(() => {
+        if (wsStatus === "starting") {
+            if (startCountdown === null) {
+                setStartCountdown(5);
+            }
+        }
+    }, [wsStatus, startCountdown]);
+
+    // ─── Starting Countdown Ticker ───
+    useEffect(() => {
+        if (startCountdown === null) return;
+
+        if (startCountdown <= 0) {
+            router.push(`/quiz/${slug}/play`);
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setStartCountdown((prev) => (prev !== null ? prev - 1 : null));
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [startCountdown, router, slug]);
 
     // ─── Require system check ─────────────────────
     useEffect(() => {
@@ -231,17 +252,38 @@ export default function WaitingRoomPage() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
                         className="fixed inset-0 z-50 flex items-center justify-center"
-                        style={{ background: "rgba(249,115,22,0.95)", backdropFilter: "blur(8px)" }}
+                        style={{ background: "rgba(249,115,22,0.98)", backdropFilter: "blur(12px)" }}
                     >
-                        <div className="text-center">
+                        <div className="text-center space-y-6">
                             <motion.div
                                 initial={{ scale: 0.5 }}
                                 animate={{ scale: 1 }}
                                 transition={{ type: "spring", damping: 15 }}
                             >
-                                <Play className="w-20 h-20 text-white mx-auto mb-4" fill="white" />
+                                <Play className="w-16 h-16 text-white mx-auto mb-2" fill="white" />
                             </motion.div>
-                            <h2 className="text-3xl sm:text-4xl font-bold text-white">Contest is starting!</h2>
+                            <h2 className="text-2xl sm:text-3xl font-extrabold text-white uppercase tracking-widest">
+                                Contest is starting!
+                            </h2>
+                            {startCountdown !== null && (
+                                <div className="h-32 flex items-center justify-center">
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={startCountdown}
+                                            initial={{ opacity: 0, scale: 0.3, rotate: -15 }}
+                                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                            exit={{ opacity: 0, scale: 1.5, rotate: 15 }}
+                                            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                            className="text-7xl sm:text-9xl font-black text-white font-mono drop-shadow-[0_10px_10px_rgba(0,0,0,0.2)]"
+                                        >
+                                            {startCountdown > 0 ? startCountdown : "GO!"}
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </div>
+                            )}
+                            <p className="text-white/80 text-sm font-medium animate-pulse">
+                                Initializing secure proctoring environment...
+                            </p>
                         </div>
                     </motion.div>
                 )}

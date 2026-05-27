@@ -6,6 +6,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import logger, { morganStream } from "./config/logger";
 import { prisma } from './config/db';
+import path from "path";
 
 import { redis } from './config/redis';
 import { globalErrorHandler } from "./middlewares/error.middleware";
@@ -56,6 +57,9 @@ app.use(morgan(
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static upload files
+app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Rate Limiting
 // app.use('/api/v1', globalLimiter);
