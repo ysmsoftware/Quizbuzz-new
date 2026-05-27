@@ -188,28 +188,20 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ENV_PRODUCTION
+          envs: ENV_PRODUCTION,ENV_COMPOSE
           script: |
             set -e
-
             cd /home/ubuntu/quizbuzz
 
-            PREV_BACKEND=$(docker inspect --format='{{index .RepoTags 0}}' $(docker compose -f docker-compose.prod.yml ps -q backend) 2>/dev/null || echo "none")
-            PREV_FRONTEND=$(docker inspect --format='{{index .RepoTags 0}}' $(docker compose -f docker-compose.prod.yml ps -q frontend) 2>/dev/null || echo "none")
-            echo "Previous backend image: $PREV_BACKEND"
-            echo "Previous frontend image: $PREV_FRONTEND"
+            PREV_BACKEND=$(docker inspect --format='{{index .RepoDigests 0}}' $(docker compose -f docker-compose.prod.yml ps -q backend 2>/dev/null) 2>/dev/null || echo "none")
+            PREV_FRONTEND=$(docker inspect --format='{{index .RepoDigests 0}}' $(docker compose -f docker-compose.prod.yml ps -q frontend 2>/dev/null) 2>/dev/null || echo "none")
+            echo "Previous backend: $PREV_BACKEND"
+            echo "Previous frontend: $PREV_FRONTEND"
 
             git pull origin main
 
             echo "$ENV_PRODUCTION" > ./backend/.env.production
-            cp ./backend/.env.production ./.env.production
-
-            cat > ./.env << 'ENVEOF'
-            POSTGRES_USER=postgres
-            POSTGRES_PASSWORD=postgres
-            POSTGRES_DB=quizbuzz
-            REDIS_PASSWORD=austin_redis_pass
-            ENVEOF
+            echo "$ENV_COMPOSE"    > ./.env
 
             docker compose -f docker-compose.prod.yml pull backend frontend
 
@@ -236,20 +228,23 @@ jobs:
             if [ "$HEALTHY" = "false" ]; then
               echo "Health check FAILED — rolling back..."
               if [ "$PREV_BACKEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml up -d --no-build backend || true
+                docker pull "$PREV_BACKEND"
+                docker tag "$PREV_BACKEND" ghcr.io/ysmsoftware/quizbuzz-backend:latest
               fi
               if [ "$PREV_FRONTEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml up -d --no-build frontend || true
+                docker pull "$PREV_FRONTEND"
+                docker tag "$PREV_FRONTEND" ghcr.io/ysmsoftware/quizbuzz-frontend:latest
               fi
+              docker compose -f docker-compose.prod.yml up -d --no-build
               echo "Rollback complete"
               exit 1
             fi
 
             docker image prune -f
-
             echo "Deploy complete — $(date)"
         env:
           ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+          ENV_COMPOSE: ${{ secrets.ENV_COMPOSE }}
 
       - name: Notify Slack — Deploy Succeeded
         if: success()
