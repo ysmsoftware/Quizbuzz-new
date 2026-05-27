@@ -27,8 +27,12 @@ import {
   Mail,
   Zap,
   Check,
-  X
+  X,
+  Camera,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
+
 import { 
   useContestSubmissions, 
   useContestSubmissionsStats, 
@@ -36,6 +40,8 @@ import {
   useInvalidateSubmission, 
   useBulkEvaluateSubmissions 
 } from '@/lib/hooks/useSubmissions';
+import { useParticipantCaptures } from '@/lib/hooks/useProctoring';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -69,6 +75,8 @@ import {
   DialogDescription, 
   DialogFooter 
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -109,6 +117,17 @@ export default function ContestSubmissionsPage() {
 
   // Details modal state
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const [modalTab, setModalTab] = useState<'responses' | 'proctoring'>('responses');
+
+  // Consolidated react-query hooks for modal detail
+  const { data: detailData, isLoading: isDetailLoading, error: detailError } = useSubmissionDetail(selectedSubId);
+  const submissionDetail = detailData?.data;
+
+  // Proctoring captures — only fires when modal is open and participantId is known
+  const { captures, loading: capturesLoading } = useParticipantCaptures(
+    contestId,
+    submissionDetail?.participantId,
+  );
 
   // Check URL parameters to pre-open modal (from redirection)
   useEffect(() => {
@@ -134,13 +153,11 @@ export default function ContestSubmissionsPage() {
   const { data: statsData } = useContestSubmissionsStats(contestId);
   const invalidateMutation = useInvalidateSubmission(contestId);
   const bulkEvaluateMutation = useBulkEvaluateSubmissions(contestId);
-  const { data: detailData, isLoading: isDetailLoading, error: detailError } = useSubmissionDetail(selectedSubId);
 
   // Mapped constants
   const submissions = (submissionsData?.data?.data || (submissionsData as any)?.data || []) as SubmissionRecord[];
   const pagination = submissionsData?.data?.pagination || (submissionsData as any)?.pagination;
   const stats = statsData?.data;
-  const submissionDetail = detailData?.data;
 
   // Filtered submissions based on search bar (fallback client filter)
   const filteredSubmissions = submissions.filter(sub => {
@@ -406,7 +423,7 @@ export default function ContestSubmissionsPage() {
       </WidgetErrorBoundary>
 
       {/* Premium Response Sheet Details Modal */}
-      <Dialog open={!!selectedSubId} onOpenChange={(open) => { if (!open) setSelectedSubId(null); }}>
+      <Dialog open={!!selectedSubId} onOpenChange={(open) => { if (!open) { setSelectedSubId(null); setModalTab('responses'); } }}>
         <DialogContent className="w-full max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[85vw] xl:max-w-[75vw] max-h-[92vh] flex flex-col p-0 overflow-hidden border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl rounded-2xl">
           {isDetailLoading ? (
             <div className="p-5 space-y-4 animate-pulse flex flex-col h-[500px]">
@@ -473,7 +490,35 @@ export default function ContestSubmissionsPage() {
               </div>
 
               {/* Modal Body */}
-              <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+                <Tabs value={modalTab} onValueChange={(v) => setModalTab(v as any)} className="flex flex-col h-full">
+                  <div className="px-5 pt-3 border-b border-border/30 bg-secondary/5 shrink-0">
+                    <TabsList className="h-8 bg-transparent gap-1 p-0">
+                      <TabsTrigger
+                        value="responses"
+                        className="h-8 px-3 text-xs font-bold rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary bg-transparent shadow-none"
+                      >
+                        <FileText className="h-3.5 w-3.5 mr-1.5" />
+                        Responses
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="proctoring"
+                        className="h-8 px-3 text-xs font-bold rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary bg-transparent shadow-none"
+                      >
+                        <Camera className="h-3.5 w-3.5 mr-1.5" />
+                        Proctoring
+                        {captures.length > 0 && (
+                          <span className="ml-1.5 bg-primary/10 text-primary text-[9px] font-extrabold px-1.5 py-0.5 rounded">
+                            {captures.length}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  {/* Responses tab */}
+                  <TabsContent value="responses" className="flex-1 overflow-y-auto px-5 py-4 space-y-4 m-0">
+
                 {/* Stats Dashboard Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Score & Accuracy Card */}
@@ -667,6 +712,60 @@ export default function ContestSubmissionsPage() {
                     })}
                   </div>
                 </div>
+              </TabsContent>
+
+                  {/* Proctoring tab */}
+                  <TabsContent value="proctoring" className="flex-1 overflow-y-auto px-5 py-4 m-0">
+                    {capturesLoading ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="aspect-video rounded-xl bg-secondary/30 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : captures.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+                        <div className="h-16 w-16 rounded-full bg-muted/40 flex items-center justify-center">
+                          <Camera className="h-8 w-8 text-muted-foreground/30" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">No snapshots captured</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Snapshot captures are only taken when violation thresholds are exceeded (5+ tab switches, 5+ fullscreen exits, 3+ multiple faces).
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground font-semibold">
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                          <span>{captures.length} admin capture{captures.length !== 1 ? 's' : ''} — visible to admins only</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {captures.map((capture) => (
+                            <div key={capture.id} className="space-y-1.5">
+                              <div className="relative rounded-xl overflow-hidden border border-border/40 bg-secondary/10 aspect-video">
+                                <img
+                                  src={capture.presignedGetUrl}
+                                  alt={capture.captureType}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                                <div className="absolute top-1.5 left-1.5">
+                                  <span className="bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                    {capture.captureType.replace('SNAPSHOT_', '').replace('_', ' ')}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground text-center font-medium">
+                                {new Date(capture.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
 
               {/* Modal Footer */}

@@ -1,8 +1,15 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FileStorageProvider } from "./storage.provider";
 import crypto from "crypto";
 import { config } from "../config";
+
+function validateFolder(folder: string) {
+    const parts = folder.split("/");
+    if (parts.length !== 3 || parts[0] !== "proctoring" || !parts[1] || !parts[2]) {
+        throw new Error("Access Denied: Invalid folder structure. Expected 'proctoring/{contestSlug}/{participantSlug}'");
+    }
+}
 
 export class S3StorageProvider implements FileStorageProvider {
     private client: S3Client;
@@ -28,6 +35,7 @@ export class S3StorageProvider implements FileStorageProvider {
         filename: string;
         folder: string;
     }): Promise<{ url: string; storageKey: string }> {
+        validateFolder(params.folder);
         const extension = params.filename.split(".").pop();
         const key = `${params.folder}/${crypto.randomUUID()}.${extension}`;
 
@@ -62,6 +70,7 @@ export class S3StorageProvider implements FileStorageProvider {
         mimeType: string;
         expiresInSeconds?: number;
     }): Promise<{ url: string; storageKey: string }> {
+        validateFolder(params.folder);
         const extension = params.filename.split(".").pop() || "webp";
         const key = `${params.folder}/${crypto.randomUUID()}.${extension}`;
 
@@ -79,5 +88,20 @@ export class S3StorageProvider implements FileStorageProvider {
             storageKey: key,
             url,
         };
+    }
+    async getPresignedGetUrl(params: {
+        storageKey: string;
+        expiresInSeconds?: number;
+    }): Promise<{ url: string }> {
+        const command = new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: params.storageKey,
+        });
+
+        const url = await getSignedUrl(this.client, command, {
+            expiresIn: params.expiresInSeconds || 3600,
+        });
+
+        return { url };
     }
 }

@@ -56,4 +56,21 @@ export class ProctoringController {
             next(error);
         }
     };
+
+    /**
+     * GET /proctoring/contests/:contestId/participants/:participantId/captures
+     * Returns admin-only snapshot evidence with time-limited presigned read URLs.
+     */
+    getParticipantCaptures = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { contestId, participantId } = req.params;
+            const captures = await this.proctoringService.getParticipantCaptures(
+                contestId as string,
+                participantId as string,
+            );
+            res.json({ success: true, data: { captures } });
+        } catch (error) {
+            next(error);
+        }
+    };
 }

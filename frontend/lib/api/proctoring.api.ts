@@ -107,3 +107,14 @@ export async function reviewViolations(
     isDismissed: body.dismiss
   });
 }
+
+/**
+ * GET /proctoring/contests/:contestId/participants/:participantId/captures
+ * Admin-only: returns snapshot evidence with presigned read URLs
+ */
+export async function getParticipantCaptures(
+  contestId: string,
+  participantId: string,
+): Promise<ApiResponse<{ captures: Array<{ id: string; captureType: string; capturedAt: string; presignedGetUrl: string }> }>> {
+  return get(`/proctoring/contests/${contestId}/participants/${participantId}/captures`);
+}

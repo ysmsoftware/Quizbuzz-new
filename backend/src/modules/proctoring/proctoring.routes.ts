@@ -30,3 +30,9 @@ proctoringRouter.patch(
     "/scores/:scoreId/status", 
     proctoringController.updateViolationStatus
 );
+
+// Admin-only: get snapshot captures (presigned read URLs) for a participant
+proctoringRouter.get(
+    "/contests/:contestId/participants/:participantId/captures",
+    proctoringController.getParticipantCaptures
+);

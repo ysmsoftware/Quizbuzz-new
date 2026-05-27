@@ -30,6 +30,133 @@ export function ProctoringManager({
     const store = useProctoringStore();
     const entryCaptureRun = useRef(false);
 
+    // Refs to track cumulative counts for silent threshold triggers
+    const tabSwitchesCountRef = useRef(0);
+    const fullscreenExitsCountRef = useRef(0);
+    const multipleFacesCountRef = useRef(0);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 8. DIRECT S3/LOCAL UPLOAD & CONFIRMATION FLOW
+    // NOTE: Defined first so it can be referenced by all event handlers below.
+    // The backend ignores the client-sent 'folder' field and constructs the
+    // path securely as proctoring/{contestSlug}/{participantSlug}/ from the JWT.
+    // ─────────────────────────────────────────────────────────────────────
+    const handleCaptureAndUpload = useCallback(async (captureType: string): Promise<void> => {
+        if (!videoRef.current || !sessionToken) return;
+        const video = videoRef.current;
+
+        // Ensure video is playing and ready to capture
+        if (video.readyState < 2) {
+            console.warn('[QuizPro] Video stream not ready for capture');
+            return;
+        }
+
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 240;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                resolve();
+                return;
+            }
+            ctx.drawImage(video, 0, 0, 320, 240);
+
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    resolve();
+                    return;
+                }
+
+                try {
+                    // A. Fetch Presigned URL
+                    // The 'folder' field is kept for schema compatibility but overridden server-side.
+                    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1').replace(/\/+$/, '');
+                    const response = await fetch(`${baseUrl}/quiz-proctoring/presigned-url`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${sessionToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filename: `snapshot_${Date.now()}.webp`,
+                            folder: 'proctoring', // Overridden server-side; kept for schema
+                            mimeType: 'image/webp'
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch presigned URL: ${response.statusText}`);
+                    }
+
+                    const resData = await response.json();
+                    if (!resData.success || !resData.data) {
+                        throw new Error('Invalid presigned URL response structure');
+                    }
+
+                    const { url, storageKey } = resData.data;
+
+                    // B. Direct PUT (bypassing node backend server entirely)
+                    const uploadRes = await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'image/webp'
+                        },
+                        body: blob
+                    });
+
+                    if (!uploadRes.ok) {
+                        throw new Error(`Direct image upload failed: ${uploadRes.statusText}`);
+                    }
+
+                    // C. Post Confirmed Metadata asynchronously to BullMQ queue
+                    const confirmRes = await fetch(`${baseUrl}/quiz-proctoring/confirm`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${sessionToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            type: captureType,
+                            storageKey,
+                            severity: 1, // Snapshot captures are Low (1) severity
+                            metadata: {
+                                source: 'client-capture',
+                                quality: 0.7,
+                                dimensions: '320x240'
+                            },
+                            occurredAt: new Date().toISOString()
+                        })
+                    });
+
+                    if (!confirmRes.ok) {
+                        throw new Error(`Failed to confirm upload: ${confirmRes.statusText}`);
+                    }
+
+                    console.log(`[QuizPro] Successful snapshot upload & confirmation for ${captureType}`);
+                } catch (err) {
+                    console.error('[QuizPro] Snapshot capture/upload process failed:', err);
+                } finally {
+                    resolve();
+                }
+            }, 'image/webp', 0.7);
+        });
+    }, [sessionToken, videoRef]);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Shared helper: fire a silent admin-only evidence capture + socket event.
+    // Does NOT show any toast, modal, or warning to the participant.
+    // ─────────────────────────────────────────────────────────────────────
+    const fireSilentCapture = useCallback((type: string, count: number) => {
+        handleCaptureAndUpload(type);
+        socket?.emit('quiz:v1:violation', {
+            type,
+            severity: 'LOW',
+            metadata: { silent: true, thresholdExceeded: true, count },
+            timestamp: new Date().toISOString()
+        });
+    }, [handleCaptureAndUpload, socket]);
+
     // 1. REQUEST + ENFORCE FULLSCREEN
     useEffect(() => {
         const requestFullscreen = async () => {
@@ -49,27 +176,39 @@ export function ProctoringManager({
         const handleFullscreenChange = () => {
             const isCurrentlyFullscreen = !!document.fullscreenElement;
             if (!isCurrentlyFullscreen && store.isFullscreen) {
-                store.addWarning({ type: 'FULLSCREEN_EXIT', timestamp: Date.now() });
-                emitProctoringWarning('FULLSCREEN_EXIT');
+                fullscreenExitsCountRef.current += 1;
+                if (fullscreenExitsCountRef.current > 5) {
+                    // > 5 exits: silent evidence capture — admin only, no user notification
+                    fireSilentCapture('FULLSCREEN_EXIT', fullscreenExitsCountRef.current);
+                } else {
+                    store.addWarning({ type: 'FULLSCREEN_EXIT', timestamp: Date.now() });
+                    emitProctoringWarning('FULLSCREEN_EXIT');
+                }
             }
             store.setFullscreen(isCurrentlyFullscreen);
         };
 
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }, [emitProctoringWarning, store]);
+    }, [emitProctoringWarning, store, fireSilentCapture]);
 
     // 2. TAB SWITCH DETECTION
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'hidden') {
-                store.addWarning({ type: 'TAB_SWITCH', timestamp: Date.now() });
-                emitProctoringWarning('TAB_SWITCH');
+                tabSwitchesCountRef.current += 1;
+                if (tabSwitchesCountRef.current > 5) {
+                    // > 5 switches: silent evidence capture — admin only, no user notification
+                    fireSilentCapture('TAB_SWITCH', tabSwitchesCountRef.current);
+                } else {
+                    store.addWarning({ type: 'TAB_SWITCH', timestamp: Date.now() });
+                    emitProctoringWarning('TAB_SWITCH');
+                }
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [emitProctoringWarning, store]);
+    }, [emitProctoringWarning, store, fireSilentCapture]);
 
     // 3. COPY / PASTE PREVENTION
     useEffect(() => {
@@ -150,120 +289,27 @@ export function ProctoringManager({
     }, [videoRef]);
 
     // 7. FACE DETECTION
-    // We wrap the emit to match the expected signature in useFaceDetection
-    const wrappedEmit = (event: string, data: Record<string, unknown>) => {
+    // Wrap emit so MULTIPLE_FACES events apply the >3 threshold before notifying.
+    const wrappedEmit = useCallback((event: string, data: Record<string, unknown>) => {
         if (event === 'PROCTOR_WARNING' && typeof data.warningType === 'string') {
-            emitProctoringWarning(data.warningType);
+            const type = data.warningType;
+            if (type === 'MULTIPLE_FACES') {
+                multipleFacesCountRef.current += 1;
+                if (multipleFacesCountRef.current > 3) {
+                    // > 3 occurrences: silent evidence capture — admin only, no user notification
+                    fireSilentCapture('MULTIPLE_FACES', multipleFacesCountRef.current);
+                    return; // Skip standard user warning
+                }
+            }
+            emitProctoringWarning(type);
         }
-    };
+    }, [emitProctoringWarning, fireSilentCapture]);
 
     useFaceDetection({
         videoRef,
         active: true,
         wsEmit: wrappedEmit
     });
-
-    // 8. DIRECT S3/LOCAL UPLOAD & CONFIRMATION FLOW
-    const handleCaptureAndUpload = useCallback(async (captureType: string): Promise<void> => {
-        if (!videoRef.current || !sessionToken) return;
-        const video = videoRef.current;
-
-        // Ensure video is playing and ready to capture
-        if (video.readyState < 2) {
-            console.warn('[QuizPro] Video stream not ready for capture');
-            return;
-        }
-
-        return new Promise((resolve) => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 320;
-            canvas.height = 240;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                resolve();
-                return;
-            }
-            ctx.drawImage(video, 0, 0, 320, 240);
-
-            canvas.toBlob(async (blob) => {
-                if (!blob) {
-                    resolve();
-                    return;
-                }
-
-                try {
-                    // A. Fetch Presigned URL
-                    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1').replace(/\/+$/, '');
-                    const response = await fetch(`${baseUrl}/quiz-proctoring/presigned-url`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${sessionToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            filename: `snapshot_${Date.now()}.webp`,
-                            folder: 'proctoring',
-                            mimeType: 'image/webp'
-                        })
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch presigned URL: ${response.statusText}`);
-                    }
-
-                    const resData = await response.json();
-                    if (!resData.success || !resData.data) {
-                        throw new Error('Invalid presigned URL response structure');
-                    }
-
-                    const { url, storageKey } = resData.data;
-
-                    // B. Direct PUT (bypassing node backend server entirely)
-                    const uploadRes = await fetch(url, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'image/webp'
-                        },
-                        body: blob
-                    });
-
-                    if (!uploadRes.ok) {
-                        throw new Error(`Direct image upload failed: ${uploadRes.statusText}`);
-                    }
-
-                    // C. Post Confirmed Metadata asynchronously to BullMQ queue
-                    const confirmRes = await fetch(`${baseUrl}/quiz-proctoring/confirm`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${sessionToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            type: captureType,
-                            storageKey,
-                            severity: 1, // Snapshot captures are Low (1) severity
-                            metadata: {
-                                source: 'client-capture',
-                                quality: 0.7,
-                                dimensions: '320x240'
-                            },
-                            occurredAt: new Date().toISOString()
-                        })
-                    });
-
-                    if (!confirmRes.ok) {
-                        throw new Error(`Failed to confirm upload: ${confirmRes.statusText}`);
-                    }
-
-                    console.log(`[QuizPro] Successful snapshot upload & confirmation for ${captureType}`);
-                } catch (err) {
-                    console.error('[QuizPro] Snapshot capture/upload process failed:', err);
-                } finally {
-                    resolve();
-                }
-            }, 'image/webp', 0.7);
-        });
-    }, [sessionToken]);
 
     // 9. WEB AUDIO API - ENVIRONMENTAL VOLUME CHECKS (FFT size 256, 500ms loop, threshold 80, 2s anomalous state)
     useEffect(() => {
@@ -390,4 +436,3 @@ export function ProctoringManager({
 
     return null;
 }
-

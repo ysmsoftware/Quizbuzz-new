@@ -18,10 +18,14 @@ import {
     Share2,
     Loader2,
     Search,
-    Calendar,
     Sparkles,
     FileText,
-    AlertCircle
+    AlertCircle,
+    Award,
+    ExternalLink,
+    Link2,
+    Linkedin,
+    Twitter,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -43,6 +47,7 @@ import { Footer } from '@/components/layout/footer';
 import { toast } from 'sonner';
 import { useResults } from '@/lib/hooks/useResults';
 import { useParticipantSubmission } from '@/lib/hooks/useParticipantSubmission';
+import { useParticipantCertificate } from '@/lib/hooks/useParticipantCertificate';
 import { contestService } from '@/lib/services/contest-service';
 import { cn } from '@/lib/utils';
 import type { QuizResult } from '@/lib/types';
@@ -67,9 +72,11 @@ export default function QuizResultsPage() {
     const contest = contestRes?.success ? contestRes.data : null;
     const contestId = contest?.id;
 
-    // Hooks for results and submissions
+    // Hooks for results, submissions, and certificate
     const { results, loading: isResultsLoading, getLeaderboard } = useResults(contestId || '', verifiedId);
     const { fetchParticipantSubmission } = useParticipantSubmission();
+    // Certificate hook — must be called unconditionally; it auto-disables when verifiedId is empty
+    const { certificate, loading: isCertLoading } = useParticipantCertificate(verifiedId);
 
     const leaderboard = getLeaderboard() || [];
     const participantResult = results.find(r => r.participantId === verifiedId);
@@ -437,13 +444,47 @@ export default function QuizResultsPage() {
                                             </div>
 
                                             {!isAbsent && (
-                                                <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                                                    <Button variant="outline" className="flex-1 rounded-xl h-11 border-border/50 text-xs font-bold uppercase tracking-widest">
-                                                        <Download className="h-3.5 w-3.5 mr-2" /> Cert
-                                                    </Button>
-                                                    <Button variant="outline" className="flex-1 rounded-xl h-11 border-border/50 text-xs font-bold uppercase tracking-widest">
-                                                        <Share2 className="h-3.5 w-3.5 mr-2" /> Share
-                                                    </Button>
+                                                <div className="mt-8 flex flex-col gap-2">
+                                                    {isCertLoading ? (
+                                                        <Button variant="outline" className="w-full rounded-xl h-11 border-border/50" disabled>
+                                                            <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Loading Certificate...
+                                                        </Button>
+                                                    ) : certificate?.fileUrl ? (
+                                                        <>
+                                                            <Button
+                                                                className="w-full rounded-xl h-11 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs uppercase tracking-widest shadow-lg shadow-amber-500/10"
+                                                                asChild
+                                                            >
+                                                                <a href={certificate.fileUrl} download target="_blank" rel="noopener noreferrer">
+                                                                    <Download className="h-3.5 w-3.5 mr-2" /> Download Certificate
+                                                                </a>
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                className="w-full rounded-xl h-11 border-border/50 text-xs font-bold uppercase tracking-widest"
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(
+                                                                        `${window.location.origin}/quiz/${slug}/certificate/${verifiedId}`
+                                                                    );
+                                                                    toast.success('Certificate link copied!');
+                                                                }}
+                                                            >
+                                                                <Share2 className="h-3.5 w-3.5 mr-2" /> Share Certificate
+                                                            </Button>
+                                                        </>
+                                                    ) : certificate ? (
+                                                        <div className="text-center text-xs text-muted-foreground py-2 px-3 rounded-xl bg-secondary/30 border border-border/30">
+                                                            {(certificate.status === 'PENDING' || certificate.status === 'QUEUED' || certificate.status === 'GENERATING') ? (
+                                                                <span className="flex items-center justify-center gap-2">
+                                                                    <Loader2 className="h-3 w-3 animate-spin" /> Certificate generating...
+                                                                </span>
+                                                            ) : certificate.status === 'FAILED' ? (
+                                                                <span className="text-destructive">Certificate generation failed — contact admin</span>
+                                                            ) : (
+                                                                <span>Certificate not yet available</span>
+                                                            )}
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                             )}
                                         </Card>

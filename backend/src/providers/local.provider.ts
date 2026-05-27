@@ -4,6 +4,13 @@ import crypto from "crypto";
 import { FileStorageProvider } from "./storage.provider";
 import { config } from "../config";
 
+function validateFolder(folder: string) {
+    const parts = folder.split("/");
+    if (parts.length !== 3 || parts[0] !== "proctoring" || !parts[1] || !parts[2]) {
+        throw new Error("Access Denied: Invalid folder structure. Expected 'proctoring/{contestSlug}/{participantSlug}'");
+    }
+}
+
 export class LocalStorageProvider implements FileStorageProvider {
     private baseDir: string;
     private publicBaseUrl: string;
@@ -21,7 +28,7 @@ export class LocalStorageProvider implements FileStorageProvider {
     async upload(params: { buffer: Buffer; mimeType: string; filename: string; folder: string; 
 
     }): Promise<{ url: string; storageKey: string; }> {
-        
+        validateFolder(params.folder);
         const extension = path.extname(params.filename);
         const filename = `${crypto.randomUUID()}${extension}`;
 
@@ -57,6 +64,7 @@ export class LocalStorageProvider implements FileStorageProvider {
         mimeType: string;
         expiresInSeconds?: number;
     }): Promise<{ url: string; storageKey: string }> {
+        validateFolder(params.folder);
         const extension = params.filename.split(".").pop() || "webp";
         const key = `${params.folder}/${crypto.randomUUID()}.${extension}`;
         
@@ -68,5 +76,14 @@ export class LocalStorageProvider implements FileStorageProvider {
             storageKey: key,
             url,
         };
+    }
+
+    async getPresignedGetUrl(params: {
+        storageKey: string;
+        expiresInSeconds?: number;
+    }): Promise<{ url: string }> {
+        // Local storage is served as static files — just return the direct URL
+        const appUrl = config.app.baseUrl || `http://localhost:${config.app.port}`;
+        return { url: `${appUrl}/storage/${params.storageKey}` };
     }
 }
