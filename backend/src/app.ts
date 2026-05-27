@@ -60,6 +60,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static upload files
 app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Serve local proctoring captures (dev only — in prod these go directly to S3)
+app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
 
 // Rate Limiting
 // app.use('/api/v1', globalLimiter);

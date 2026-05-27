@@ -94,8 +94,7 @@ export class StorageService {
                 Key:         key,
                 Body:        buffer,
                 ContentType: contentType,
-                // Public read — certificates are served directly to participants
-                ACL:         "public-read",
+                // Public reads handled by bucket policy — no ACL needed
             })
         );
 

@@ -81,54 +81,17 @@ export default function CertificatesManagementPage() {
   // Custom hook for participant & certificate queries/mutations
   const {
     certsData,
-    participantsData,
     isLoading,
     refetch,
     bulkIssueMutation,
     singleIssueMutation,
     retryMutation,
     retryAllFailedMutation
-  } = useParticipants(contestId);
+  } = useParticipants(contestId, { page, limit: 10, search, status });
 
-  const rawCertificates = certsData?.data?.data || [];
-  const rawParticipants = participantsData?.data?.participants || [];
+  const paginatedRecords = certsData?.data?.data || [];
+  const totalPages = certsData?.data?.pagination?.totalPages || 1;
 
-  // Merge in memory
-  const mergedRecords = rawParticipants.map((participant: any) => {
-    const cert = rawCertificates.find(
-      (c: any) => c.participantId === participant.id || c.participant?.registrationRef === participant.registrationRef
-    );
-    return {
-      participant,
-      certificate: cert,
-      certStatus: cert ? cert.status : 'NOT_GENERATED',
-    };
-  });
-
-  // Filter client-side based on search query and selected cert status
-  const filteredRecords = mergedRecords.filter((record: any) => {
-    // Filter status
-    if (status !== 'all' && record.certStatus !== status) return false;
-    
-    // Filter search text
-    if (search.trim()) {
-      const query = search.toLowerCase();
-      const firstName = record.participant?.contact?.firstName?.toLowerCase() || '';
-      const lastName = record.participant?.contact?.lastName?.toLowerCase() || '';
-      const email = record.participant?.contact?.email?.toLowerCase() || '';
-      const ref = record.participant?.registrationRef?.toLowerCase() || '';
-      const id = record.participant?.id?.toLowerCase() || '';
-
-      return firstName.includes(query) || lastName.includes(query) || email.includes(query) || ref.includes(query) || id.includes(query);
-    }
-
-    return true;
-  });
-
-  // Client-side pagination
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
-  const paginatedRecords = filteredRecords.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const summary = certsData?.data?.summary || { generated: 0, failed: 0, pending: 0 };
   const totalCerts = summary.generated + summary.failed + summary.pending;
@@ -314,65 +277,8 @@ export default function CertificatesManagementPage() {
             </Card>
           </div>
 
-          {/* Single Issue & Search Filters Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Left Column: Queue controls / Single Issue Form */}
-            <div className="space-y-6">
-              
-              <Card className="bg-card border-border/50 shadow-xs rounded-2xl">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <UserPlus className="h-4 w-4 text-amber-500" /> Issue Individual Certificate
-                  </CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground">
-                    Directly queue a certificate generation job for a single participant by specifying their ID.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSingleIssueSubmit} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Input
-                        placeholder="Enter Participant ID..."
-                        value={issueParticipantId}
-                        onChange={(e) => setIssueParticipantId(e.target.value)}
-                        className="h-10 rounded-xl bg-background border-border text-sm focus:border-amber-500"
-                      />
-                    </div>
-                    <Button 
-                      type="submit" 
-                      className="w-full h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                      disabled={singleIssueMutation.isPending}
-                    >
-                      {singleIssueMutation.isPending ? (
-                        <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                      )}
-                      Trigger Generation
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card border-border/50 shadow-xs rounded-2xl p-6 space-y-4">
-                <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500" /> Worker Engine Logs
-                </h4>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  The generation queue is driven by a BullMQ server offloading high-fidelity HTML parsing tasks to headless Chromium engines.
-                </p>
-                <div className="font-mono text-[9px] bg-zinc-950 p-3 rounded-lg border border-zinc-900 text-zinc-400 space-y-1">
-                  <div>[QUEUE] Ready & waiting for jobs...</div>
-                  <div>[WORKER] Active concurrency set to 3.</div>
-                  {summary.pending > 0 && <div className="text-amber-400 animate-pulse">[PROCESSING] Rendering page inputs in Puppeteer sandbox...</div>}
-                </div>
-              </Card>
-
-            </div>
-
-            {/* Right Column: Searchable Table of Certificates */}
-            <div className="lg:col-span-2 space-y-4">
+          {/* Searchable Table of Certificates */}
+          <div className="space-y-4">
               
               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="relative w-full md:w-80">
@@ -381,11 +287,20 @@ export default function CertificatesManagementPage() {
                     placeholder="Search name, ref, or ID..." 
                     className="pl-10 h-10 rounded-xl bg-background border-border text-sm focus:border-amber-500 w-full"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
                   />
                 </div>
                 
-                <Select value={status} onValueChange={setStatus}>
+                <Select 
+                  value={status} 
+                  onValueChange={(val) => {
+                    setStatus(val);
+                    setPage(1);
+                  }}
+                >
                   <SelectTrigger className="w-40 h-10 rounded-xl bg-background border-border text-xs">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -467,26 +382,32 @@ export default function CertificatesManagementPage() {
                                     size="icon" 
                                     className="h-8 w-8 rounded-lg hover:bg-muted hover:text-foreground cursor-pointer"
                                     asChild
+                                    title="Download Certificate"
                                   >
                                     <a href={record.certificate.fileUrl} target="_blank" rel="noopener noreferrer">
                                       <Download className="h-4 w-4" />
                                     </a>
                                   </Button>
-                                ) : record.certStatus === 'FAILED' ? (
+                                ) : null}
+
+                                {(record.certStatus === 'FAILED' || record.certStatus === 'QUEUED' || record.certStatus === 'GENERATING') && record.certificate?.id ? (
                                   <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="h-8 w-8 rounded-lg hover:bg-muted text-amber-500 cursor-pointer"
+                                    className="h-8 w-8 rounded-lg hover:bg-muted text-amber-500 cursor-pointer animate-in fade-in duration-200"
                                     onClick={() => record.certificate?.id && retryMutation.mutate(record.certificate.id)}
                                     disabled={retryMutation.isPending}
+                                    title={record.certStatus === 'FAILED' ? "Retry failed generation" : "Rerun/re-queue stuck job"}
                                   >
-                                    <RefreshCcw className="h-3.5 w-3.5" />
+                                    <RefreshCcw className={cn("h-3.5 w-3.5", retryMutation.isPending && "animate-spin")} />
                                   </Button>
-                                ) : record.certStatus === 'NOT_GENERATED' ? (
+                                ) : null}
+
+                                {record.certStatus === 'NOT_GENERATED' ? (
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
-                                    className="h-7 px-2.5 rounded-lg border-amber-500/30 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-xs transition-all duration-200"
+                                    className="h-7 px-2.5 rounded-lg border-amber-500/30 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-xs transition-all duration-200 animate-in fade-in duration-200"
                                     onClick={() => singleIssueMutation.mutate(record.participant.id)}
                                     disabled={singleIssueMutation.isPending}
                                   >
@@ -510,18 +431,21 @@ export default function CertificatesManagementPage() {
                                         <ExternalLink className="h-4 w-4" /> View Public Page
                                       </DropdownMenuItem>
                                     )}
-                                    {record.certStatus === 'FAILED' && (
+                                    {record.certificate?.id && (
                                       <DropdownMenuItem 
                                         onClick={() => record.certificate?.id && retryMutation.mutate(record.certificate.id)}
                                         className="cursor-pointer gap-2"
+                                        disabled={retryMutation.isPending}
                                       >
-                                        <RefreshCcw className="h-4 w-4" /> Retry Generation
+                                        <RefreshCcw className="h-4 w-4" /> 
+                                        {record.certStatus === 'GENERATED' ? 'Regenerate PDF' : 'Rerun / Retry Job'}
                                       </DropdownMenuItem>
                                     )}
                                     {record.certStatus === 'NOT_GENERATED' && (
                                       <DropdownMenuItem 
                                         onClick={() => singleIssueMutation.mutate(record.participant.id)}
                                         className="cursor-pointer gap-2 text-amber-500 hover:text-amber-400"
+                                        disabled={singleIssueMutation.isPending}
                                       >
                                         <Zap className="h-4 w-4 fill-current" /> Issue Certificate
                                       </DropdownMenuItem>
@@ -546,7 +470,7 @@ export default function CertificatesManagementPage() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-xs text-muted-foreground">
-                    Showing <span className="text-foreground font-bold">{paginatedRecords.length}</span> of <span className="text-foreground font-bold">{filteredRecords.length}</span> entries
+                    Showing <span className="text-foreground font-bold">{paginatedRecords.length}</span> of <span className="text-foreground font-bold">{certsData?.data?.pagination?.total || 0}</span> entries
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -572,8 +496,6 @@ export default function CertificatesManagementPage() {
               )}
 
             </div>
-
-          </div>
         </>
       ) : (
         /* Designer Template Configurator split-screen */

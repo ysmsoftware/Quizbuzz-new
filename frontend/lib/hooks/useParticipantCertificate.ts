@@ -2,7 +2,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { certificatesApi } from '@/lib/api/results-certs.api';
-import { listParticipants } from '@/lib/api/contests.api';
 import { toast } from 'sonner';
 
 /**
@@ -29,33 +28,21 @@ export function useParticipantCertificate(participantId: string) {
 /**
  * Hook to manage participants and their certificates inside the Contest Admin Dashboard.
  */
-export function useParticipants(contestId: string) {
+export function useParticipants(contestId: string, options: { page: number; limit: number; search: string; status: string }) {
   const queryClient = useQueryClient();
 
-  // Query all certificates for the contest (high limit to support in-memory merging)
+  // Query paginated certificates/participants for the contest
   const certsQuery = useQuery({
-    queryKey: ['certificates-all', contestId],
-    queryFn: () => certificatesApi.getContestCertificates(contestId, { 
-      page: 1, 
-      limit: 1000 
-    }),
+    queryKey: ['certificates-paginated', contestId, options],
+    queryFn: () => certificatesApi.getContestCertificates(contestId, options),
     enabled: !!contestId,
+    placeholderData: (previousData) => previousData, // Silk-smooth transition between pages
   });
 
-  // Query all participants for the contest (high limit to support in-memory merging)
-  const participantsQuery = useQuery({
-    queryKey: ['contest-participants', contestId],
-    queryFn: () => listParticipants(contestId, { limit: 1000 }),
-    enabled: !!contestId,
-  });
-
-  const isLoading = certsQuery.isLoading || participantsQuery.isLoading;
+  const isLoading = certsQuery.isLoading;
 
   const refetch = async () => {
-    await Promise.all([
-      certsQuery.refetch(),
-      participantsQuery.refetch()
-    ]);
+    await certsQuery.refetch();
   };
 
   // Bulk issue certificates mutation
@@ -63,8 +50,7 @@ export function useParticipants(contestId: string) {
     mutationFn: () => certificatesApi.bulkIssueCertificates(contestId),
     onSuccess: () => {
       toast.success('Bulk certificate generation successfully queued');
-      queryClient.invalidateQueries({ queryKey: ['certificates-all', contestId] });
-      queryClient.invalidateQueries({ queryKey: ['contest-participants', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to trigger bulk issuance');
@@ -76,8 +62,7 @@ export function useParticipants(contestId: string) {
     mutationFn: (participantId: string) => certificatesApi.issueCertificate(contestId, { participantId }),
     onSuccess: () => {
       toast.success('Certificate queued for participant');
-      queryClient.invalidateQueries({ queryKey: ['certificates-all', contestId] });
-      queryClient.invalidateQueries({ queryKey: ['contest-participants', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to issue individual certificate');
@@ -89,8 +74,7 @@ export function useParticipants(contestId: string) {
     mutationFn: (certId: string) => certificatesApi.retryCertificate(certId),
     onSuccess: () => {
       toast.success('Re-generation job successfully queued');
-      queryClient.invalidateQueries({ queryKey: ['certificates-all', contestId] });
-      queryClient.invalidateQueries({ queryKey: ['contest-participants', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to retry generation');
@@ -102,8 +86,7 @@ export function useParticipants(contestId: string) {
     mutationFn: () => certificatesApi.retryFailedCertificates({ contestId }),
     onSuccess: (data: any) => {
       toast.success(data?.message || 'All failed generation jobs re-queued successfully');
-      queryClient.invalidateQueries({ queryKey: ['certificates-all', contestId] });
-      queryClient.invalidateQueries({ queryKey: ['contest-participants', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to retry all failed certificates');
@@ -112,7 +95,6 @@ export function useParticipants(contestId: string) {
 
   return {
     certsData: certsQuery.data,
-    participantsData: participantsQuery.data,
     isLoading,
     refetch,
     bulkIssueMutation,
@@ -121,3 +103,4 @@ export function useParticipants(contestId: string) {
     retryAllFailedMutation,
   };
 }
+

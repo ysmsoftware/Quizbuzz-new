@@ -43,19 +43,24 @@ export interface ScoreDistributionResponse {
  * Certificate Types
  */
 export interface CertificateRecord {
-    id: string;
-    status: 'PENDING' | 'QUEUED' | 'GENERATING' | 'GENERATED' | 'FAILED' | 'DELIVERED';
-    fileUrl?: string;
-    generatedAt?: string;
-    deliveredAt?: string;
     participant: {
+        id: string;
         registrationRef: string;
+        status: string;
         contact: {
             firstName: string;
-            lastName: string;
+            lastName: string | null;
             email: string;
-        }
-    }
+        };
+    };
+    certificate: {
+        id: string;
+        status: 'PENDING' | 'QUEUED' | 'GENERATING' | 'GENERATED' | 'FAILED' | 'DELIVERED';
+        fileUrl: string | null;
+        generatedAt: string | null;
+        deliveredAt: string | null;
+    } | null;
+    certStatus: string;
 }
 
 export interface CertificatesListResponse {
@@ -98,7 +103,7 @@ export const resultsApi = {
 };
 
 export const certificatesApi = {
-    getContestCertificates: (contestId: string, params?: { page?: number; limit?: number }) =>
+    getContestCertificates: (contestId: string, params?: { page?: number; limit?: number; search?: string; status?: string }) =>
         get<CertificatesListResponse>(`/certificates/contest/${contestId}`, { params }),
 
     getParticipantCertificate: (id: string) =>

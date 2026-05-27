@@ -36,8 +36,18 @@ export function useContests(filters?: {
     },
   });
 
-  // Extract nested data structure
-  const contests = contestsQuery.data?.data?.data;
+  // Extract nested data structure and adapt backend shapes to frontend types
+  const rawContests = contestsQuery.data?.data?.data;
+  const contests = rawContests ? rawContests.map((c: any) => ({
+    ...c,
+    currentParticipants: c.registrationCount ?? c.currentParticipants ?? 0,
+    contestDate: c.startTime ? (typeof c.startTime === 'string' ? c.startTime.split('T')[0] : new Date(c.startTime).toISOString().split('T')[0]) : '',
+    _count: {
+      ...c._count,
+      participants: c.registrationCount ?? c._count?.participants ?? 0,
+    }
+  })) : undefined;
+  
   const pagination = contestsQuery.data?.data?.pagination;
   const isLoading = contestsQuery.isLoading;
 
@@ -69,7 +79,17 @@ export function useArchivedContests(filters?: {
     queryFn: () => contestsApi.listArchivedContests(filters),
   });
 
-  const contests = contestsQuery.data?.data?.data;
+  const rawContests = contestsQuery.data?.data?.data;
+  const contests = rawContests ? rawContests.map((c: any) => ({
+    ...c,
+    currentParticipants: c.registrationCount ?? c.currentParticipants ?? 0,
+    contestDate: c.startTime ? (typeof c.startTime === 'string' ? c.startTime.split('T')[0] : new Date(c.startTime).toISOString().split('T')[0]) : '',
+    _count: {
+      ...c._count,
+      participants: c.registrationCount ?? c._count?.participants ?? 0,
+    }
+  })) : undefined;
+
   const pagination = contestsQuery.data?.data?.pagination;
   const isLoading = contestsQuery.isLoading;
 
