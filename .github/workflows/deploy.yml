@@ -14,9 +14,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/quizbuzz
 
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 1 — Lint & Test (must pass before anything builds)
-# ─────────────────────────────────────────────────────────────────────────────
 jobs:
   test:
     name: Lint & Test
@@ -26,7 +23,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── Backend ──────────────────────────────────────────────────────────
       - name: Setup Node (Backend)
         uses: actions/setup-node@v4
         with:
@@ -44,7 +40,6 @@ jobs:
         env:
           NODE_ENV: test
 
-      # ── Frontend ─────────────────────────────────────────────────────────
       - name: Setup Node (Frontend)
         uses: actions/setup-node@v4
         with:
@@ -60,22 +55,18 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # ── Notify Slack on test failure ──────────────────────────────────────
       - name: Notify Slack — Tests Failed
         if: failure()
         uses: slackapi/slack-github-action@v1.27.0
         with:
           payload: |
             {
-              "text": ":x: *Tests/Lint failed* on `${{ github.ref_name }}` — deploy blocked.\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":x: *Tests/Lint failed* on `${{ github.ref_name }}` — deploy blocked.\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # JOB 2 — Build backend image and push to GHCR
-  # ─────────────────────────────────────────────────────────────────────────
   build-backend:
     name: Build Backend
     runs-on: ubuntu-latest
@@ -122,9 +113,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # JOB 3 — Build frontend image and push to GHCR
-  # ─────────────────────────────────────────────────────────────────────────
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
@@ -177,10 +165,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # JOB 4 — SSH into EC2, pull new images, restart containers
-  # Runs only after BOTH builds succeed
-  # ─────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
@@ -192,7 +176,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":rocket: *Deploy started* for `${{ github.ref_name }}`\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}"
+              "text": ":rocket: *Deploy started* for `${{ github.ref_name }}`\n*By:* ${{ github.actor }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -210,20 +194,16 @@ jobs:
 
             cd /home/ubuntu/quizbuzz
 
-            # ── Save current image tags for rollback ──
             PREV_BACKEND=$(docker inspect --format='{{index .RepoTags 0}}' $(docker compose -f docker-compose.prod.yml ps -q backend) 2>/dev/null || echo "none")
             PREV_FRONTEND=$(docker inspect --format='{{index .RepoTags 0}}' $(docker compose -f docker-compose.prod.yml ps -q frontend) 2>/dev/null || echo "none")
             echo "Previous backend image: $PREV_BACKEND"
             echo "Previous frontend image: $PREV_FRONTEND"
 
-            # ── Pull latest docker-compose file ──
             git pull origin main
 
-            # ── Write env file from GitHub Secret ──
             echo "$ENV_PRODUCTION" > ./backend/.env.production
             cp ./backend/.env.production ./.env.production
 
-            # ── Write root .env for docker-compose variable substitution ──
             cat > ./.env << 'ENVEOF'
             POSTGRES_USER=postgres
             POSTGRES_PASSWORD=postgres
@@ -231,15 +211,12 @@ jobs:
             REDIS_PASSWORD=austin_redis_pass
             ENVEOF
 
-            # ── Pull pre-built images ────────────
             docker compose -f docker-compose.prod.yml pull backend frontend
 
-            # ── Zero-downtime rolling restart ────
             docker compose -f docker-compose.prod.yml up -d \
               --no-build \
               --remove-orphans
 
-            # ── Health check (retry for 60s) ─────
             echo "Waiting for health check..."
             HEALTH_URL="https://quiz.ysminfosolution.com/health"
             MAX_RETRIES=12
@@ -258,51 +235,42 @@ jobs:
 
             if [ "$HEALTHY" = "false" ]; then
               echo "Health check FAILED — rolling back..."
-
-              # ── Rollback to previous images ──────
               if [ "$PREV_BACKEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml \
-                  up -d --no-build backend || true
+                docker compose -f docker-compose.prod.yml up -d --no-build backend || true
               fi
-              if [ "$PREV_FRONTEND" != "none" ]; then
-                docker compose -f docker-compose.prod.yml \
-                  up -d --no-build backend || true
+              if [ "$PREV_FRONTEND" != "none" ]; do
+                docker compose -f docker-compose.prod.yml up -d --no-build frontend || true
               fi
-
               echo "Rollback complete"
               exit 1
             fi
 
-            # ── Prune dangling images ────────────
             docker image prune -f
 
             echo "Deploy complete — $(date)"
         env:
           ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
 
-      # ── Notify Slack — Success ──────────────────────────────────────────
       - name: Notify Slack — Deploy Succeeded
         if: success()
         uses: slackapi/slack-github-action@v1.27.0
         with:
           payload: |
             {
-              "text": ":white_check_mark: *Deploy succeeded!* `quiz.ysminfosolution.com` is live.\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":white_check_mark: *Deploy succeeded!* `quiz.ysminfosolution.com` is live.\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-      # ── Notify Slack — Failure / Rollback ──────────────────────────────
       - name: Notify Slack — Deploy Failed (Rolled Back)
         if: failure()
         uses: slackapi/slack-github-action@v1.27.0
         with:
           payload: |
             {
-              "text": ":fire: *Deploy FAILED & rolled back!* `quiz.ysminfosolution.com`\n*Commit:* ${{ toJSON(github.event.head_commit.message) }}\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":fire: *Deploy FAILED & rolled back!* `quiz.ysminfosolution.com`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
- 
