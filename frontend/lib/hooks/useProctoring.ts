@@ -6,7 +6,8 @@ import {
   listFlaggedParticipants, 
   listProctoringEvents, 
   getParticipantProctoringDetail,
-  reviewViolations
+  reviewViolations,
+  getParticipantCaptures,
 } from '../api/proctoring.api';
 import { toast } from 'sonner';
 
@@ -63,5 +64,24 @@ export function useParticipantProctoring(contestId: string, participantId: strin
     detail: data?.data || null,
     loading: isLoading,
     error
+  };
+}
+
+/**
+ * Admin-only hook to fetch snapshot evidence captures for a participant.
+ * Only fires when contestId and participantId are both provided.
+ */
+export function useParticipantCaptures(contestId: string, participantId: string | null | undefined) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['proctoring-captures', contestId, participantId],
+    queryFn: () => getParticipantCaptures(contestId, participantId!),
+    enabled: !!contestId && !!participantId,
+    staleTime: 30_000, // presigned URLs valid for 1h, refresh every 30s is fine
+  });
+
+  return {
+    captures: data?.data?.captures || [],
+    loading: isLoading,
+    error,
   };
 }

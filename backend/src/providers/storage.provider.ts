@@ -24,6 +24,11 @@ export interface FileStorageProvider {
         url: string;
         storageKey: string;
     }>;
+
+    getPresignedGetUrl(params: {
+        storageKey: string;
+        expiresInSeconds?: number;
+    }): Promise<{ url: string }>;
 }
 
 

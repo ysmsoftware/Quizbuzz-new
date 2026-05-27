@@ -12,6 +12,7 @@ export interface IProctoringRepository {
     updateScoreStatus(scoreId: string, organizationId: string, isDismissed: boolean): Promise<ProctoringScore>;
     getContestStats(contestId: string): Promise<{ totalEvents: number, flaggedParticipants: number, eventsByType: any }>;
     findScoreById(scoreId: string, organizationId: string): Promise<ProctoringScore | null>;
+    findCaptures(contestId: string, participantId: string): Promise<{ id: string; type: string; occurredAt: Date; metadata: any }[]>;
 }
 
 export class ProctoringRepository implements IProctoringRepository {
@@ -96,5 +97,31 @@ export class ProctoringRepository implements IProctoringRepository {
         });
 
         return { totalEvents, flaggedParticipants, eventsByType };
+    }
+
+    /**
+     * Returns all SNAPSHOT_* proctoring events for a participant that have a storage key.
+     * Used by the admin captures endpoint to generate presigned GET URLs.
+     */
+    async findCaptures(
+        contestId: string,
+        participantId: string,
+    ): Promise<{ id: string; type: string; occurredAt: Date; metadata: any }[]> {
+        return prisma.proctoringEvent.findMany({
+            where: {
+                contestId,
+                participantId,
+                type: {
+                    in: ['SNAPSHOT_START', 'SNAPSHOT_MID_POINT', 'SNAPSHOT_RANDOM', 'SNAPSHOT_PRE_SUBMIT'] as any[],
+                },
+            },
+            select: {
+                id: true,
+                type: true,
+                occurredAt: true,
+                metadata: true,
+            },
+            orderBy: { occurredAt: 'asc' },
+        }) as any;
     }
 }

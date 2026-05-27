@@ -84,11 +84,11 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
         multiFaceStartRef.current = null;
       }
  
-      // GAZE AWAY for > 4 continuous seconds
+      // GAZE AWAY for > 6 continuous seconds
       if (result.gazeAway) {
         if (!gazeAwayStartRef.current) {
           gazeAwayStartRef.current = Date.now();
-        } else if (Date.now() - gazeAwayStartRef.current > 4000) {
+        } else if (Date.now() - gazeAwayStartRef.current > 6000) {
           store.addWarning({ type: 'GAZE_AWAY', timestamp: Date.now() });
           wsEmit?.('PROCTOR_WARNING', {
             warningType: 'GAZE_AWAY',

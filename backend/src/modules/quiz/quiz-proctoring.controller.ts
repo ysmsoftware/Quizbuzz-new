@@ -7,9 +7,13 @@ import logger from "../../config/logger";
 import { captureMetadataQueue, CaptureMetadataJobPayload } from "../../queues";
 import { ViolationType } from "@prisma/client";
 
+import { prisma } from "../../config/db";
+
 const PresignedUrlSchema = z.object({
     filename: z.string().min(1, "filename is required"),
-    folder: z.string().min(1, "folder is required"),
+    // 'folder' is accepted for schema compatibility but IGNORED server-side.
+    // The storage path is derived from the authenticated participant's JWT.
+    folder: z.string().optional(),
     mimeType: z.string().min(1, "mimeType is required"),
 });
 
@@ -28,12 +32,42 @@ export class QuizProctoringController {
      */
     getPresignedUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { filename, folder, mimeType } = PresignedUrlSchema.parse(req.body);
+            const participant = req.participant;
+            if (!participant) {
+                res.status(401).json({ success: false, message: "Unauthorized participant context" });
+                return;
+            }
+
+            const { filename, mimeType } = PresignedUrlSchema.parse(req.body);
+
+            // Fetch contest and participant details to resolve slugs
+            const dbParticipant = await prisma.participant.findUnique({
+                where: { id: participant.id },
+                include: {
+                    contest: true,
+                    contact: true,
+                },
+            });
+
+            if (!dbParticipant) {
+                res.status(404).json({ success: false, message: "Participant not found" });
+                return;
+            }
+
+            const contestSlug = dbParticipant.contest.slug;
+            const participantSlug = (dbParticipant.contact.email || dbParticipant.id)
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, "-")
+                .replace(/-+/g, "-");
+
+            // Enforce strict, secure hierarchical path proctoring/{contestSlug}/{participantSlug}
+            const secureFolder = `proctoring/${contestSlug}/${participantSlug}`;
+
             const provider = getStorageProvider();
             
             const result = await provider.getPresignedPutUrl({
                 filename,
-                folder,
+                folder: secureFolder,
                 mimeType,
                 expiresInSeconds: 300,
             });
@@ -61,14 +95,15 @@ export class QuizProctoringController {
                 return;
             }
 
-            const baseDir = path.resolve(process.cwd(), "storage");
-            const filePath = path.join(baseDir, storageKey);
-
-            // Enforce proctoring prefix to prevent arbitrary file upload outside proctoring context
-            if (!storageKey.startsWith("proctoring/")) {
-                res.status(403).json({ success: false, message: "Access Denied: Invalid upload path." });
+            // Enforce strict proctoring path pattern proctoring/{contestSlug}/{participantSlug}/{filename}
+            const parts = storageKey.split("/");
+            if (parts.length !== 4 || parts[0] !== "proctoring" || !parts[1] || !parts[2] || !parts[3]) {
+                res.status(403).json({ success: false, message: "Access Denied: Invalid upload path structure." });
                 return;
             }
+
+            const baseDir = path.resolve(process.cwd(), "storage");
+            const filePath = path.join(baseDir, storageKey);
 
             // Prevent path traversal
             if (!filePath.startsWith(baseDir)) {

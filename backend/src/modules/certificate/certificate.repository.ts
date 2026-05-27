@@ -30,8 +30,15 @@ export class CertificateRepository {
     async findByIdPublic(
         id: string
     ): Promise<CertificateResult | null> {
+        // Accept either the certificate's own `id` or the `participantId` so that
+        // sharing links work regardless of which identifier was embedded in the URL.
         const row = await prisma.certificate.findFirst({
-            where: { id },
+            where: {
+                OR: [
+                    { id },
+                    { participantId: id },
+                ],
+            },
             include: CERT_INCLUDE,
         });
         return row as CertificateResult | null;
