@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Users,
@@ -43,6 +43,8 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { cn } from '@/lib/utils';
+import { getContest } from '@/lib/api/contests.api';
+import type { ServerContest } from '@/lib/types';
 
 const STATUS_LABEL: Record<string, string> = {
   waiting: 'Waiting room',
@@ -57,6 +59,43 @@ export default function AdminLiveDashboard() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const { admin, activeOrg } = useAuth();
+  const [contest, setContest] = useState<ServerContest | null>(null);
+  const [timeLeftStr, setTimeLeftStr] = useState<string>('Loading timer...');
+
+  useEffect(() => {
+    getContest(contestId).then((res) => {
+      if (res.success && res.data) {
+        setContest(res.data);
+      }
+    });
+  }, [contestId]);
+
+  useEffect(() => {
+    if (!contest) return;
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const start = new Date(contest.startTime).getTime();
+      const end = new Date(contest.endTime).getTime();
+
+      if (now < start) {
+        const diff = start - now;
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeftStr(`Starts in ${hrs > 0 ? hrs + 'h ' : ''}${mins}m ${secs}s`);
+      } else if (now < end) {
+        const diff = end - now;
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeftStr(`Ends in ${hrs > 0 ? hrs + 'h ' : ''}${mins}m ${secs}s`);
+      } else {
+        setTimeLeftStr('Contest Ended');
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [contest]);
 
   const {
     connected,
@@ -112,6 +151,18 @@ export default function AdminLiveDashboard() {
               <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
               Live
             </Badge>
+            {contest && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "px-3 py-1 gap-1.5 font-mono font-bold text-[11px] border-border/50 rounded-lg",
+                  timeLeftStr.startsWith("Ends") ? "bg-primary/10 text-primary border-primary/20" : "bg-muted text-muted-foreground"
+                )}
+              >
+                <Clock className="h-3 w-3 animate-pulse" />
+                {timeLeftStr}
+              </Badge>
+            )}
           </div>
           <p className="text-muted-foreground">
             Real-time WebSocket feed — contest{' '}
