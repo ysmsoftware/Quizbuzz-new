@@ -21,22 +21,33 @@ export class ProctoringService {
 
     async getParticipantEvents(contestId: string, participantId: string) {
         const events = await this.proctoringRepo.findEvents(contestId, participantId);
+        const provider = getStorageProvider();
 
-        // Construct full public URL for snapshot events so the admin dashboard
-        // can render the captured image directly without knowing S3 internals.
-        const s3Base = config.storage.provider === "s3"
-            ? `https://${config.storage.s3.bucket}.s3.${config.storage.s3.region ?? "ap-south-1"}.amazonaws.com`
-            : `${config.app.baseUrl}/api/storage`;
+        const processedEvents = await Promise.all(
+            events.map(async (event) => {
+                const s3Key = (event.metadata as any)?.s3Key as string | undefined;
+                let snapshotUrl: string | null = null;
 
-        return events.map((event) => {
-            const s3Key = event.metadata?.s3Key as string | undefined;
-            const isSnapshot = event.type.startsWith("SNAPSHOT_");
+                if (s3Key) {
+                    try {
+                        const { url } = await provider.getPresignedGetUrl({
+                            storageKey: s3Key,
+                            expiresInSeconds: 3600 * 24, // 24 hours
+                        });
+                        snapshotUrl = url;
+                    } catch (err) {
+                        snapshotUrl = null;
+                    }
+                }
 
-            return {
-                ...event,
-                snapshotUrl: isSnapshot && s3Key ? `${s3Base}/${s3Key}` : null,
-            };
-        });
+                return {
+                    ...event,
+                    snapshotUrl,
+                };
+            })
+        );
+
+        return processedEvents;
     }
 
     /**
