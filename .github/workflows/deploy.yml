@@ -200,8 +200,8 @@ jobs:
 
             git pull origin main
 
-            echo "$ENV_PRODUCTION" > ./backend/.env.production
-            echo "$ENV_COMPOSE"    > ./.env
+            printf '%s' "$ENV_PRODUCTION" > ./backend/.env.production
+            printf '%s' "$ENV_COMPOSE"    > ./.env
 
             docker compose -f docker-compose.prod.yml pull backend frontend
 
