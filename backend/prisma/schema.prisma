@@ -276,6 +276,7 @@ model Contest {
   messageLog            MessageLog[]
   scheduledJobs         ScheduledJob[]
   payments              Payment[]
+  proctoringScores      ProctoringScore[]
 
   @@index([organizationId, status])
   @@index([slug])
@@ -442,6 +443,7 @@ model Participant {
   sessions        QuizSession[]
   proctoring      ProctoringEvent[]
   messages        MessageLog[]
+  proctoringScores ProctoringScore[]
 
   @@unique([contactId, contestId])        // one registration per contact per contest
   @@index([organizationId])
@@ -680,6 +682,8 @@ model ProctoringScore {
 
   // Relations
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant         Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  contest             Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([participantId, contestId])
   @@index([organizationId])

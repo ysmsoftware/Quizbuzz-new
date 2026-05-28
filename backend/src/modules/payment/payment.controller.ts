@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { PaymentService } from "./payment.service";
 import logger from "../../config/logger";
 import { PaymentStatus } from "@prisma/client";
-import { createOrderSchema, verifyPaymentSchema, retryPaymentSchema, listPaymentsSchema } from "./payment.validator";
+import { createOrderSchema, retryPaymentSchema, listPaymentsSchema, verifyPaymentSchema } from "./payment.validator";
 
 export class PaymentController {
 
@@ -45,6 +45,24 @@ export class PaymentController {
             next(err);
         }
     }
+
+    getPaymentStatus = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const participantId = req.params.participantId as string;
+            if (!participantId) {
+                return res.status(400).json({ success: false, message: "participantId is required" });
+            }
+
+            const result = await this.paymentService.checkPaymentStatus(participantId);
+
+            return res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
 
 
     handleWebhook = async (req: Request, res: Response, next: NextFunction) => {
@@ -108,10 +126,10 @@ export class PaymentController {
 
             logger.info("Fetch event payments request", { contestId, requestId: req.id });
 
-            const result = await this.paymentService.getPaymentsByContest({ 
-                organizationId, 
-                contestId: contestId!, 
-                limit, 
+            const result = await this.paymentService.getPaymentsByContest({
+                organizationId,
+                contestId: contestId!,
+                limit,
                 ...(status && { status }),
                 ...(cursor && { cursor })
             })

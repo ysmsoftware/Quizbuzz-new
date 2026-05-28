@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   getProctoringOverview, 
-  listFlaggedParticipants, 
+  listProctoringParticipants, 
   listProctoringEvents, 
   getParticipantProctoringDetail,
   reviewViolations,
@@ -21,10 +21,10 @@ export function useProctoring(contestId: string) {
     enabled: !!contestId,
   });
 
-  // Get flagged participants
+  // Get all participants for proctoring
   const { data: flagged, isLoading: loadingFlagged } = useQuery({
     queryKey: ['proctoring-flagged', contestId],
-    queryFn: () => listFlaggedParticipants(contestId),
+    queryFn: () => listProctoringParticipants(contestId, { isFlagged: undefined }),
     enabled: !!contestId,
   });
 

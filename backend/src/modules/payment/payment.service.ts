@@ -13,7 +13,7 @@ import { PaymentListResult, PaymentDetailResult } from "./payment.types";
 
 
 export class PaymentService {
-    
+
     constructor(
         private paymentRepo: IPaymentRepository,
         private razorpay: RazorpayProvider,
@@ -21,7 +21,7 @@ export class PaymentService {
         private participantService: ParticipantService,
         private messagingService: MessagingService,
 
-    ) {}
+    ) { }
 
 
     async createOrder(params: { contestId: string, participantId: string }): Promise<{
@@ -32,31 +32,31 @@ export class PaymentService {
         paymentId: string,
     }> {
         const participant = await this.participantService.getParticipantById(params.contestId, params.participantId,);
-        if(!participant) {
+        if (!participant) {
             throw new NotFoundError("No participant found");
         }
 
-        const  contest = await this.contestService.getContest(participant.contestId, participant.organizationId);
-        if(!contest) {
+        const contest = await this.contestService.getContest(participant.contestId, participant.organizationId);
+        if (!contest) {
             throw new NotFoundError("No contest found");
         }
 
-        if(!contest.paymentEnabled) {
+        if (!contest.paymentEnabled) {
             throw new BadRequestError("This contest is not payable");
         }
 
 
         const config = contest.paymentConfig;
-        if(!config || !config.amount) {
+        if (!config || !config.amount) {
             throw new BadRequestError("Invalid payment configuration for this contest");
         }
 
         const amount = config.amount * 100 // paise
-        const currency = (config.currency || 'INR' ).toUpperCase();
+        const currency = (config.currency || 'INR').toUpperCase();
 
         const existingOrder = await this.paymentRepo.findByParticipantId(params.participantId);
 
-        if(existingOrder?.status === "SUCCESS") {
+        if (existingOrder?.status === "SUCCESS") {
             throw new BadRequestError("Payment already completed");
         }
 
@@ -109,25 +109,25 @@ export class PaymentService {
         try {
 
             const isVerified = await this.razorpay.verifyPaymentSignature(params);
-            if(!isVerified) {
+            if (!isVerified) {
                 throw new BadRequestError("Payment signature does not match");
             }
 
             const payment = await this.paymentRepo.findByRazorpayPaymentId(params.razorpayPaymentId);
-            if(!payment) {
+            if (!payment) {
                 throw new NotFoundError("Payment not found");
             }
 
-            if(payment.status === PaymentStatus.SUCCESS) {
+            if (payment.status === PaymentStatus.SUCCESS) {
                 return
             }
-            if(payment.status === PaymentStatus.FAILED) {
+            if (payment.status === PaymentStatus.FAILED) {
                 return
             }
 
             await this.paymentRepo.markPending(params.razorpayOrderId);
 
-        } catch(error){
+        } catch (error) {
             logger.error("Failed to verify Payment:", error);
             throw error instanceof BadRequestError
                 ? error
@@ -135,14 +135,43 @@ export class PaymentService {
         }
     }
 
+
+    /**
+     * Webhook-as-source-of-truth polling endpoint.
+     * The frontend calls this repeatedly after the Razorpay modal closes
+     * (on all devices — including mobile UPI redirects and iOS where deep-link
+     * return is not guaranteed). The webhook has already written the real
+     * status to the DB; this just reflects it.
+     *
+     * Returns:
+     *   status: SUCCESS | FAILED | PENDING | CREATED
+     *   webhookConfirmed: boolean  — true only when webhook has fired
+     */
+    async checkPaymentStatus(participantId: string): Promise<{
+        status: PaymentStatus;
+        webhookConfirmed: boolean;
+        failureReason: string | null;
+    }> {
+        const payment = await this.paymentRepo.findByParticipantId(participantId);
+        if (!payment) {
+            throw new NotFoundError("Payment record not found for this participant");
+        }
+        return {
+            status: payment.status,
+            webhookConfirmed: payment.webhookConfirmed,
+            failureReason: payment.failureReason,
+        };
+    }
+
     async handleWebhook(
         signature: string,
         payload: any
     ): Promise<void> {
 
-        const isVaild = await this.razorpay.verifyWebhookSignature(payload, signature);    
-        if(!isVaild) {
-            throw new BadRequestError("Invaild webhook signature");
+        const isValid = this.razorpay.verifyWebhookSignature(payload, signature);
+
+        if (!isValid) {
+            throw new BadRequestError("Invalid webhook signature");
         }
 
         const parsed = Buffer.isBuffer(payload)
@@ -153,27 +182,29 @@ export class PaymentService {
 
         const event = parsed.event;
 
-        if(!event?.startsWith("payment.")) {
+        // only handle payment events
+        if (!event?.startsWith("payment.")) {
             return;
         }
 
         const paymentEntity = parsed.payload?.payment?.entity;
-        if(!paymentEntity) {
+        if (!paymentEntity) {
             return;
         }
 
         const razorpayOrderId = paymentEntity.order_id;
-        if(!razorpayOrderId) {
+        if (!razorpayOrderId) {
             return;
         }
+
 
         const payment = await this.paymentRepo.findByRazorpayOrderId(razorpayOrderId);
-        if(!payment){
+        if (!payment) {
             logger.warn("Webhook received for unknown order:", { razorpayOrderId });
-            return;
+            return; // order not found in our sys 
         }
 
-        if(payment.amount !== paymentEntity.amount) {
+        if (payment.amount !== paymentEntity.amount) {
             logger.error("Amounr mismatch in webhook", {
                 dbAmount: payment.amount,
                 razorpayAmount: paymentEntity.amount,
@@ -182,12 +213,12 @@ export class PaymentService {
             return;
         }
 
-        switch(event) {
+        switch (event) {
             case "payment.captured":
-                if(payment.status === "SUCCESS") { // idempotent
+                if (payment.status === "SUCCESS") { // idempotent
                     return;
                 }
-                if(payment.status === "FAILED") { //  no downgrade from failed
+                if (payment.status === "FAILED") { //  no downgrade from failed
                     return;
                 }
 
@@ -221,9 +252,9 @@ export class PaymentService {
                         logger.error(`[payment] Failed to enqueue payment confirmation: ${(err as Error).message}`);
                     });
                 }
-            break;
+                break;
 
-             case "payment.failed":
+            case "payment.failed":
                 if (payment.status === "SUCCESS") {
                     return;
                 }
@@ -249,25 +280,25 @@ export class PaymentService {
     }> {
 
         const participant = await this.participantService.getParticipantById(contestId, participantId, organizationId);
-        if(!participant) {
+        if (!participant) {
             throw new NotFoundError("Participant not found");
         }
 
         const contest = await this.contestService.getContest(participant.contestId, organizationId);
-        if(!contest) {
+        if (!contest) {
             throw new NotFoundError("Contest not found");
         }
 
-        if(!contest.paymentEnabled) {
+        if (!contest.paymentEnabled) {
             throw new BadRequestError("Payment not enabled for this contest");
         }
 
         const payment = await this.paymentRepo.findByParticipantId(participantId);
-        if(!payment) {
+        if (!payment) {
             throw new NotFoundError("Payment not found");
         }
 
-         // Retry only if FAILED
+        // Retry only if FAILED
         if (payment.status !== "FAILED") {
             throw new BadRequestError("Payment retry allowed only for failed payments");
         }
@@ -294,7 +325,7 @@ export class PaymentService {
             }
         });
 
-         // update existing record
+        // update existing record
         await this.paymentRepo.updateForRetry({
             participantId,
             razorpayOrderId: order.id
@@ -309,7 +340,7 @@ export class PaymentService {
 
 
     }
-    
+
 
     async cancelPayment(paymentId: string, organizationId?: string): Promise<void> {
 
@@ -366,8 +397,8 @@ export class PaymentService {
 
         const contest = await this.contestService.getContest(params.contestId, params.organizationId);
         if (!contest) throw new NotFoundError("contest not found");
-         
-        if(contest.organizationId !== params.organizationId) {
+
+        if (contest.organizationId !== params.organizationId) {
             throw new ForbiddenError("UnAuthorized");
         }
 
@@ -391,11 +422,11 @@ export class PaymentService {
         razorpayPaymentId?: string,
         limit: number,
         cursor?: string;
-        status?: PaymentStatus  | undefined
+        status?: PaymentStatus | undefined
     }): Promise<PaymentListResult> {
 
         const limit = Math.min(params.limit ?? 50, 100);
-        
+
         const payments = await this.paymentRepo.allPayments({
             organizationId: params.organizationId,
             ...(params.contestId && { contestId: params.contestId }),

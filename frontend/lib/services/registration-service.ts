@@ -1,13 +1,33 @@
 // lib/services/registration-service.ts
 // ────────────────────────────────────────────────────────────────
-// Real 3-step OTP registration flow.
+// Registration + payment flow.
 //
-// Step 1: POST /auth/quiz/request-otp   → sends OTP to email
-// Step 2: POST /auth/quiz/verify-otp    → returns contactToken
-// Step 3: POST /contests/register/:slug → registers participant
+// Step 1: POST /auth/quiz/request-otp     → sends OTP to email
+// Step 2: POST /auth/quiz/verify-otp      → returns contactToken
+// Step 3: POST /contests/register/:slug   → registers participant
+// Step 4: POST /payments/create-order     → creates Razorpay order
+// Step 5: (Razorpay SDK opens checkout — UPI redirects to payment app)
+// Step 6: GET  /payments/status/:pid      → poll until SUCCESS or FAILED
+//             (webhook is the source of truth; this just reads DB status)
 // ────────────────────────────────────────────────────────────────
 
 import type { RegistrationResult } from '@/lib/types/public-contest';
+
+export interface RazorpayOrderResult {
+  orderId: string;
+  amount: number;    // in paise
+  currency: string;
+  keyId: string;
+  paymentId: string; // our DB payment record id
+}
+
+export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+
+export interface PaymentStatusResult {
+  status: PaymentStatus;
+  webhookConfirmed: boolean;
+  failureReason: string | null;
+}
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
@@ -62,6 +82,34 @@ class RegistrationService {
       `/contests/register/${contestSlug}`,
       payload
     );
+  }
+
+  /**
+   * Step 4: Create a Razorpay order for a pending participant.
+   * Returns orderId, amount (paise), currency, keyId, and our DB paymentId.
+   */
+  async createPaymentOrder(
+    contestId: string,
+    participantId: string
+  ): Promise<RazorpayOrderResult> {
+    const res = await publicPost<{ success: boolean; data: RazorpayOrderResult }>(
+      '/payments/create-order',
+      { contestId, participantId }
+    );
+    return res.data;
+  }
+
+  /**
+   * Step 6: Poll payment status.
+   * Called repeatedly after the Razorpay modal closes on ANY device.
+   * The webhook is the source of truth — this endpoint just reads the DB.
+   * Poll until status is SUCCESS or FAILED (or timeout).
+   */
+  async checkPaymentStatus(participantId: string): Promise<PaymentStatusResult> {
+    const res = await fetch(`${BASE}/payments/status/${participantId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to check payment status');
+    return data.data as PaymentStatusResult;
   }
 }
 

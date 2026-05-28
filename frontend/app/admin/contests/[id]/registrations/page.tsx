@@ -53,7 +53,6 @@ import {
 
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
 import { useRegistrations } from '@/lib/hooks/useRegistrations';
-import { useParticipantProctoring } from '@/lib/hooks/useProctoring';
 import { useContestSubmissions } from '@/lib/hooks/useSubmissions';
 import { deriveContestPhase } from '@/lib/utils/contest';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -1013,14 +1012,6 @@ function ParticipantDrawer({
 }) {
     if (!registration) return null;
 
-    const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
-
-    const { detail: proctoringDetail, loading: proctoringLoading } = useParticipantProctoring(
-        contest?.id || '',
-        registration?.participantId || ''
-    );
-    const proctoringEvents = (proctoringDetail as any)?.events || [];
-
     const registeredAtDate = toDateOrNull(registration.registeredAt);
     const joinedAtDate = toDateOrNull(registration.joinedAt);
     const lastActivityDate = toDateOrNull(registration.lastActivityAt);
@@ -1055,10 +1046,9 @@ function ParticipantDrawer({
                     </div>
 
                     <Tabs defaultValue="overview" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 h-9 bg-muted/50 p-1">
+                        <TabsList className="grid w-full grid-cols-2 h-9 bg-muted/50 p-1">
                             <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
                             <TabsTrigger value="payment" className="text-xs">Payment</TabsTrigger>
-                            <TabsTrigger value="activity" className="text-xs">Activity</TabsTrigger>
                         </TabsList>
 
                         <div className="flex-1 overflow-auto mt-6 space-y-8 pb-20 px-1">
@@ -1149,136 +1139,6 @@ function ParticipantDrawer({
                                 )}
                             </TabsContent>
 
-                            <TabsContent value="activity" className="space-y-8 m-0">
-                                {['not_joined', 'REGISTERED'].includes(registration.quizStatus || '') ? (
-                                    <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-                                        <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-                                            <User className="h-8 w-8 text-muted-foreground/30" />
-                                        </div>
-                                        <p className="text-muted-foreground font-medium">This participant has not joined the quiz yet.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        <DetailSection title="Activity Timeline" icon={<Clock className="h-4 w-4" />}>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <DetailItem label="Joined at" value={joinedAtDate ? format(joinedAtDate, 'HH:mm:ss') : '—'} />
-                                                <DetailItem label="Current Question" value={`Question ${registration.currentQuestionIndex || 0} of ${registration.totalQuestions || 50}`} />
-                                                <DetailItem label="Last Activity" value={lastActivityDate ? formatDistanceToNow(lastActivityDate) + ' ago' : '—'} />
-                                                <DetailItem label="Status" value={<QuizStatusBadge status={registration.quizStatus || 'not_joined'} progress={registration.currentQuestionIndex} total={registration.totalQuestions} />} />
-                                            </div>
-                                        </DetailSection>
-
-                                        <DetailSection title="Proctoring System" icon={<ShieldAlert className="h-4 w-4" />}>
-                                            <div className="space-y-4">
-                                                {proctoringLoading ? (
-                                                    <div className="flex items-center justify-center py-8">
-                                                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                                    </div>
-                                                ) : proctoringEvents.length === 0 ? (
-                                                    <div className="p-6 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center justify-center text-center gap-3">
-                                                        <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                                                            <ShieldCheck className="h-5 w-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Perfect Integrity</h4>
-                                                            <p className="text-xs text-muted-foreground mt-0.5">No proctoring violations recorded for this session.</p>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        {/* Summary Grid */}
-                                                        {(() => {
-                                                            const lowCount = proctoringEvents.filter((e: any) => e.severity === 1 || !e.severity).length;
-                                                            const mediumCount = proctoringEvents.filter((e: any) => e.severity === 2).length;
-                                                            const severeCount = proctoringEvents.filter((e: any) => e.severity === 3).length;
-                                                            const totalCount = proctoringEvents.length;
-
-                                                            return (
-                                                                <div className="grid grid-cols-4 gap-2">
-                                                                    <div className="p-2 rounded-lg border bg-muted/30 flex flex-col items-center justify-center text-center">
-                                                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Total</span>
-                                                                        <span className="text-base font-extrabold text-foreground mt-0.5">{totalCount}</span>
-                                                                    </div>
-                                                                    <div className="p-2 rounded-lg border border-red-500/10 bg-red-500/5 flex flex-col items-center justify-center text-center">
-                                                                        <span className="text-[9px] font-bold text-red-500/80 uppercase tracking-wider block">Severe</span>
-                                                                        <span className="text-base font-extrabold text-red-600 dark:text-red-400 mt-0.5">{severeCount}</span>
-                                                                    </div>
-                                                                    <div className="p-2 rounded-lg border border-amber-500/10 bg-amber-500/5 flex flex-col items-center justify-center text-center">
-                                                                        <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-wider block">Medium</span>
-                                                                        <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{mediumCount}</span>
-                                                                    </div>
-                                                                    <div className="p-2 rounded-lg border border-yellow-500/10 bg-yellow-500/5 flex flex-col items-center justify-center text-center">
-                                                                        <span className="text-[9px] font-bold text-yellow-500/80 uppercase tracking-wider block">Low</span>
-                                                                        <span className="text-base font-extrabold text-yellow-600 dark:text-yellow-400 mt-0.5">{lowCount}</span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-
-                                                        {/* Scrollable Timeline */}
-                                                        <div className="max-h-[320px] overflow-y-auto pr-2 py-1 scrollbar-thin scrollbar-thumb-muted">
-                                                            <div className="relative border-l border-border/80 pl-4 ml-2.5 mr-0.5 space-y-5">
-                                                                {[...proctoringEvents]
-                                                                    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
-                                                                    .map((event, idx) => {
-                                                                        const eventTypeClean = event.type.replace("SNAPSHOT_", "").replace(/_/g, " ");
-                                                                        
-                                                                        let severityColor = "bg-yellow-500";
-                                                                        let borderColor = "border-yellow-500/20";
-                                                                        if (event.severity === 2) {
-                                                                            severityColor = "bg-amber-500";
-                                                                            borderColor = "border-amber-500/20";
-                                                                        } else if (event.severity === 3) {
-                                                                            severityColor = "bg-red-500";
-                                                                            borderColor = "border-red-500/20";
-                                                                        }
-
-                                                                        return (
-                                                                            <div key={event.id || idx} className="relative group">
-                                                                                {/* Timeline Node */}
-                                                                                <div className={`absolute -left-[22px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background ${severityColor} flex items-center justify-center`} />
-                                                                                
-                                                                                <div className={`p-3 rounded-lg border bg-card hover:bg-muted/10 transition-colors ${borderColor}`}>
-                                                                                    <div className="flex items-start justify-between gap-2">
-                                                                                        <div>
-                                                                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 block">
-                                                                                                {eventTypeClean}
-                                                                                            </span>
-                                                                                            <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                                                                                                {isValidDate(event.occurredAt) ? format(new Date(event.occurredAt), 'hh:mm:ss a') : '—'}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                        <Badge variant="outline" className={`text-[10px] py-0 h-5 font-normal capitalize ${
-                                                                                            event.severity === 3 ? 'text-red-500 border-red-500/30' :
-                                                                                            event.severity === 2 ? 'text-amber-500 border-amber-500/30' :
-                                                                                            'text-yellow-500 border-yellow-500/30'
-                                                                                        }`}>
-                                                                                            {event.severity === 3 ? 'high' : event.severity === 2 ? 'medium' : 'low'}
-                                                                                        </Badge>
-                                                                                    </div>
-
-                                                                                    {/* If snapshot exists, display thumbnail */}
-                                                                                    {event.snapshotUrl && (
-                                                                                        <div className="mt-2.5 relative w-24 h-16 rounded border border-border/60 overflow-hidden cursor-pointer hover:opacity-85 transition-opacity group-hover:scale-102 duration-200" onClick={() => setPreviewPhotoUrl(event.snapshotUrl)}>
-                                                                                            <img src={event.snapshotUrl} alt="Violation" className="w-full h-full object-cover" />
-                                                                                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                                                                                <Eye className="h-4 w-4" />
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </DetailSection>
-                                    </div>
-                                )}
-                            </TabsContent>
                         </div>
                     </Tabs>
                 </SheetHeader>
@@ -1317,27 +1177,6 @@ function ParticipantDrawer({
                 </SheetFooter>
             </SheetContent>
         </Sheet>
-
-        <Dialog open={!!previewPhotoUrl} onOpenChange={(open) => !open && setPreviewPhotoUrl(null)}>
-            <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-800 text-white p-2">
-                <DialogHeader className="hidden">
-                    <DialogTitle>Snapshot Preview</DialogTitle>
-                </DialogHeader>
-                {previewPhotoUrl && (
-                    <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-slate-950 flex flex-col items-center justify-center">
-                        <img src={previewPhotoUrl} alt="Violation Snapshot" className="max-w-full max-h-full object-contain" />
-                        <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="absolute top-4 right-4 bg-slate-900/80 border-slate-700 text-white hover:bg-slate-800 hover:text-white"
-                            onClick={() => setPreviewPhotoUrl(null)}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </div>
-                )}
-            </DialogContent>
-        </Dialog>
         </>
     );
 }

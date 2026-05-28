@@ -71,7 +71,6 @@ export class RazorpayProvider {
     }
 
     // Verify webhook authenticity
-    
     verifyWebhookSignature(
         payload: string,
         signature: string

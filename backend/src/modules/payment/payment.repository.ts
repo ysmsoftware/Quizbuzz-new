@@ -3,27 +3,27 @@ import { prisma } from "../../config/db";
 
 
 export interface IPaymentRepository {
-    create(params: { 
-        organizationId: string; 
-        contestId: string; 
-        participantId: string; 
+    create(params: {
+        organizationId: string;
+        contestId: string;
+        participantId: string;
         contactId: string;
-        amount: number; 
-        currency: string; 
+        amount: number;
+        currency: string;
         razorpayOrderId: string;
     }): Promise<Payment>;
-    
+
     findByParticipantId(participantId: string): Promise<Payment | null>;
     findById(id: string): Promise<Payment | null>;
     findByRazorpayOrderId(orderId: string): Promise<Payment | null>;
     findByRazorpayPaymentId(orderId: string): Promise<Payment | null>;
-    
+
     markPending(orderId: string): Promise<Payment>;
     markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment>;
     markFailed(razorpayOrderId: string, reason?: string): Promise<Payment>;
     markCancelled(paymentId: string): Promise<Payment>;
 
-    
+
     findByEventIdPaginated(params: {
         organizationId: string;
         contestId: string;
@@ -39,24 +39,24 @@ export interface IPaymentRepository {
         razorpayPaymentId?: string,
         limit: number,
         cursor?: string;
-        status?: PaymentStatus; 
-    }): Promise<{ items: Payment[]; nextCursor: string | null}>;
-    
-    updateForRetry(data: {participantId: string; razorpayOrderId: string; }): Promise<Payment>;
+        status?: PaymentStatus;
+    }): Promise<{ items: Payment[]; nextCursor: string | null }>;
+
+    updateForRetry(data: { participantId: string; razorpayOrderId: string; }): Promise<Payment>;
 
 }
 
 
 export class PaymentRepository implements IPaymentRepository {
 
-    
-    async create(params: { 
-        organizationId: string; 
-        contestId: string; 
-        participantId: string; 
+
+    async create(params: {
+        organizationId: string;
+        contestId: string;
+        participantId: string;
         contactId: string;
-        amount: number; 
-        currency: string; 
+        amount: number;
+        currency: string;
         razorpayOrderId: string;
     }): Promise<Payment> {
         return await prisma.payment.create({
@@ -111,13 +111,13 @@ export class PaymentRepository implements IPaymentRepository {
     async markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment> {
         return await prisma.payment.update({
             where: { razorpayOrderId: data.razorpayOrderId },
-            data: { 
+            data: {
                 razorpayPaymentId: data.razorpayPaymentId,
                 paidAt: data.paidAt,
                 status: PaymentStatus.SUCCESS,
                 webhookConfirmed: true,
                 ...(data.metadata && { metadata: data.metadata })
-                
+
             }
         });
     }
@@ -127,12 +127,12 @@ export class PaymentRepository implements IPaymentRepository {
             where: {
                 razorpayOrderId,
                 status: {
-                    in: [ PaymentStatus.CREATED, PaymentStatus.PENDING ]
+                    in: [PaymentStatus.CREATED, PaymentStatus.PENDING]
                 }
             },
             data: {
                 status: PaymentStatus.FAILED,
-                ...(reason && {failureReason: reason} )
+                ...(reason && { failureReason: reason })
             }
         });
     }
@@ -174,12 +174,12 @@ export class PaymentRepository implements IPaymentRepository {
     }
 
 
-     async updateForRetry(data: {
+    async updateForRetry(data: {
         participantId: string;
-        razorpayOrderId: string;        
+        razorpayOrderId: string;
     }): Promise<Payment> {
         return prisma.payment.update({
-            where: { participantId: data.participantId},
+            where: { participantId: data.participantId },
             data: {
                 razorpayOrderId: data.razorpayOrderId,
                 status: PaymentStatus.CREATED,
@@ -196,8 +196,8 @@ export class PaymentRepository implements IPaymentRepository {
         razorpayPaymentId?: string,
         limit: number,
         cursor?: string;
-        status?: PaymentStatus; 
-    }): Promise<{ items: Payment[]; nextCursor: string | null}> {
+        status?: PaymentStatus;
+    }): Promise<{ items: Payment[]; nextCursor: string | null }> {
 
         const items = await prisma.payment.findMany({
             where: {
@@ -214,12 +214,12 @@ export class PaymentRepository implements IPaymentRepository {
         });
 
         let nextCursor: string | null = null;
-        if(items.length > params.limit) {
+        if (items.length > params.limit) {
             const nextItem = items.pop();
             nextCursor = nextItem!.id;
         }
 
-        return { items, nextCursor } 
+        return { items, nextCursor }
     }
 
 

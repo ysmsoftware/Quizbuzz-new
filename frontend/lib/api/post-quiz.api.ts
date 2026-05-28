@@ -86,7 +86,7 @@ export const proctoringApi = {
   getOverview: (contestId: string) =>
     get<any>(`/proctoring/contests/${contestId}/overview`),
 
-  getFlaggedParticipants: (contestId: string, params?: { page?: number; limit?: number }) =>
+  getFlaggedParticipants: (contestId: string, params?: { page?: number; limit?: number; isFlagged?: boolean }) =>
     get<any>(`/proctoring/contests/${contestId}/flagged`, { params }),
 
   getParticipantEvents: (contestId: string, participantId: string, params?: { page?: number; limit?: number }) =>
