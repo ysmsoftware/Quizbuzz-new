@@ -1,12 +1,11 @@
 import type { Question, QuizAttempt, Answer, QuizResult, LeaderboardEntry, ApiResponse } from '@/lib/types';
-import { MockDB } from '@/lib/mock/db';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 class QuizService {
   private get questions(): Question[] {
-    return MockDB.questions;
+    return [];
   }
   private attempts: QuizAttempt[] = [];
   private leaderboards: Map<string, LeaderboardEntry[]> = new Map();

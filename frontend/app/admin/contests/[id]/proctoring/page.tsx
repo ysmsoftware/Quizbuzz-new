@@ -21,9 +21,32 @@ import {
   TrendingDown,
   Activity,
   UserCheck,
-  Ban
+  Ban,
+  Loader2
 } from 'lucide-react';
 import { proctoringApi } from '@/lib/api/post-quiz.api';
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetDescription, 
+  SheetFooter 
+} from '@/components/ui/sheet';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription, 
+  DialogFooter 
+} from '@/components/ui/dialog';
+import { useParticipantProctoring } from '@/lib/hooks/useProctoring';
+
+const isValidDate = (date: any) => {
+    const d = new Date(date);
+    return d instanceof Date && !isNaN(d.getTime());
+};
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -86,6 +109,12 @@ export default function ProctoringControlPanel() {
   // State
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  
+  const [disqualifyParticipantId, setDisqualifyParticipantId] = useState<string | null>(null);
+  const [disqualifyInput, setDisqualifyInput] = useState('');
 
   // Queries
   const { data: overviewData, isLoading: isOverviewLoading } = useQuery({
@@ -95,8 +124,14 @@ export default function ProctoringControlPanel() {
 
   const { data: flaggedData, isLoading: isFlaggedLoading } = useQuery({
     queryKey: ['proctoring-flagged', contestId, { page }],
-    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20 }),
+    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20, isFlagged: undefined }),
   });
+
+  const { detail: proctoringDetail, loading: proctoringLoading } = useParticipantProctoring(
+      contestId,
+      selectedParticipantId || ''
+  );
+  const proctoringEvents = (proctoringDetail as any)?.events || [];
 
   const overview = overviewData?.data as ProctoringOverview | undefined;
   const flaggedParticipants = (flaggedData?.data?.data || []) as FlaggedParticipant[];
@@ -246,10 +281,14 @@ export default function ProctoringControlPanel() {
                     </TableRow>
                   ) : (
                     flaggedParticipants.map((p: any) => (
-                      <TableRow key={p.participantId} className="hover:bg-secondary/20 transition-colors group">
+                      <TableRow 
+                        key={p.participantId} 
+                        className={cn("hover:bg-secondary/20 transition-colors group cursor-pointer", p.isFlagged && "bg-destructive/5")}
+                        onClick={() => setSelectedParticipantId(p.participantId)}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
+                            <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", p.isFlagged ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>
                               <Users className="h-5 w-5" />
                             </div>
                             <div>
@@ -293,25 +332,25 @@ export default function ProctoringControlPanel() {
                               variant="ghost" 
                               size="icon" 
                               className="h-9 w-9 rounded-lg hover:bg-primary/10 hover:text-primary transition-all opacity-0 group-hover:opacity-100"
-                              onClick={() => router.push(`/admin/contests/${contestId}/proctoring/${p.participantId}`)}
+                              onClick={(e) => { e.stopPropagation(); setSelectedParticipantId(p.participantId); }}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg">
+                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={(e) => e.stopPropagation()}>
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48 rounded-xl border-border/50">
-                                <DropdownMenuItem onClick={() => router.push(`/admin/contests/${contestId}/proctoring/${p.participantId}`)}>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedParticipantId(p.participantId); }}>
                                   <ShieldAlert className="h-4 w-4 mr-2" />
                                   Review Evidence
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive" onClick={() => {
-                                  if (window.confirm('Are you sure you want to disqualify this participant?')) {
-                                    toast.success('Participant disqualified');
-                                  }
+                                <DropdownMenuItem className="text-destructive" onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDisqualifyParticipantId(p.participantId);
+                                  setDisqualifyInput('');
                                 }}>
                                   <Ban className="h-4 w-4 mr-2" />
                                   Disqualify
@@ -379,6 +418,206 @@ export default function ProctoringControlPanel() {
           </Card>
         </div>
       </div>
+
+      {/* Participant Proctoring Drawer */}
+      <Sheet open={!!selectedParticipantId} onOpenChange={(open) => !open && setSelectedParticipantId(null)}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto bg-background/95 backdrop-blur-xl border-l-border/50">
+          <SheetHeader className="mb-6">
+            <SheetTitle className="text-2xl font-bold flex items-center gap-2">
+              <ShieldAlert className="h-6 w-6 text-primary" />
+              Proctoring Timeline
+            </SheetTitle>
+            <SheetDescription>
+              Review the detailed proctoring activity and violations for this participant.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-4">
+                {proctoringLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                ) : proctoringEvents.length === 0 ? (
+                    <div className="p-6 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center justify-center text-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                            <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Perfect Integrity</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">No proctoring violations recorded for this session.</p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {/* Summary Grid */}
+                        {(() => {
+                            const lowCount = proctoringEvents.filter((e: any) => e.severity === 1 || !e.severity).length;
+                            const mediumCount = proctoringEvents.filter((e: any) => e.severity === 2).length;
+                            const severeCount = proctoringEvents.filter((e: any) => e.severity === 3).length;
+                            const totalCount = proctoringEvents.length;
+
+                            return (
+                                <div className="grid grid-cols-4 gap-2">
+                                    <div className="p-2 rounded-lg border bg-muted/30 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Total</span>
+                                        <span className="text-base font-extrabold text-foreground mt-0.5">{totalCount}</span>
+                                    </div>
+                                    <div className="p-2 rounded-lg border border-red-500/10 bg-red-500/5 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-red-500/80 uppercase tracking-wider block">Severe</span>
+                                        <span className="text-base font-extrabold text-red-600 dark:text-red-400 mt-0.5">{severeCount}</span>
+                                    </div>
+                                    <div className="p-2 rounded-lg border border-amber-500/10 bg-amber-500/5 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-wider block">Medium</span>
+                                        <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{mediumCount}</span>
+                                    </div>
+                                    <div className="p-2 rounded-lg border border-yellow-500/10 bg-yellow-500/5 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-yellow-500/80 uppercase tracking-wider block">Low</span>
+                                        <span className="text-base font-extrabold text-yellow-600 dark:text-yellow-400 mt-0.5">{lowCount}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Scrollable Timeline */}
+                        <div className="max-h-[500px] overflow-y-auto pr-2 py-1 scrollbar-thin scrollbar-thumb-muted">
+                            <div className="relative border-l border-border/80 pl-4 ml-2.5 mr-0.5 space-y-5">
+                                {[...proctoringEvents]
+                                    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+                                    .map((event, idx) => {
+                                        const eventTypeClean = event.type.replace("SNAPSHOT_", "").replace(/_/g, " ");
+                                        
+                                        let severityColor = "bg-yellow-500";
+                                        let borderColor = "border-yellow-500/20";
+                                        if (event.severity === 2) {
+                                            severityColor = "bg-amber-500";
+                                            borderColor = "border-amber-500/20";
+                                        } else if (event.severity === 3) {
+                                            severityColor = "bg-red-500";
+                                            borderColor = "border-red-500/20";
+                                        }
+
+                                        return (
+                                            <div key={event.id || idx} className="relative group">
+                                                {/* Timeline Node */}
+                                                <div className={`absolute -left-[22px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background ${severityColor} flex items-center justify-center`} />
+                                                
+                                                <div className={`p-3 rounded-lg border bg-card hover:bg-muted/10 transition-colors ${borderColor}`}>
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div>
+                                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 block">
+                                                                {eventTypeClean}
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                                                                {isValidDate(event.occurredAt) ? format(new Date(event.occurredAt), 'hh:mm:ss a') : '—'}
+                                                            </span>
+                                                        </div>
+                                                        <Badge variant="outline" className={`text-[10px] py-0 h-5 font-normal capitalize ${
+                                                            event.severity === 3 ? 'text-red-500 border-red-500/30' :
+                                                            event.severity === 2 ? 'text-amber-500 border-amber-500/30' :
+                                                            'text-yellow-500 border-yellow-500/30'
+                                                        }`}>
+                                                            {event.severity === 3 ? 'high' : event.severity === 2 ? 'medium' : 'low'}
+                                                        </Badge>
+                                                    </div>
+
+                                                    {/* If snapshot exists, display thumbnail */}
+                                                    {event.snapshotUrl && (
+                                                        <div className="mt-2.5 relative w-24 h-16 rounded border border-border/60 overflow-hidden cursor-pointer hover:opacity-85 transition-opacity group-hover:scale-102 duration-200" onClick={() => setPreviewPhotoUrl(event.snapshotUrl)}>
+                                                            <img src={event.snapshotUrl} alt="Violation" className="w-full h-full object-cover" />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                <Eye className="h-4 w-4" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+          </div>
+          <SheetFooter className="mt-6 flex gap-2">
+            <Button variant="outline" onClick={() => setSelectedParticipantId(null)}>Close</Button>
+            <Button variant="destructive" onClick={() => {
+              setDisqualifyParticipantId(selectedParticipantId);
+              setDisqualifyInput('');
+              setSelectedParticipantId(null);
+            }}>
+              Disqualify Participant
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Snapshot Preview Dialog */}
+      <Dialog open={!!previewPhotoUrl} onOpenChange={(open) => !open && setPreviewPhotoUrl(null)}>
+        <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-800 text-white p-2">
+          <DialogHeader className="hidden">
+            <DialogTitle>Snapshot Preview</DialogTitle>
+          </DialogHeader>
+          {previewPhotoUrl && (
+            <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-slate-950 flex flex-col items-center justify-center">
+              <img src={previewPhotoUrl} alt="Violation Snapshot" className="max-w-full max-h-full object-contain" />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="absolute top-4 right-4 bg-slate-900/80 border-slate-700 text-white hover:bg-slate-800 hover:text-white"
+                onClick={() => setPreviewPhotoUrl(null)}
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Disqualify Confirmation Dialog */}
+      <Dialog open={!!disqualifyParticipantId} onOpenChange={(open) => !open && setDisqualifyParticipantId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Disqualify Participant
+            </DialogTitle>
+            <DialogDescription>
+              This action is permanent and cannot be undone. The participant's score will be invalidated and they will be marked as disqualified.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Type <strong>confirm</strong> to proceed
+              </label>
+              <Input 
+                value={disqualifyInput}
+                onChange={(e) => setDisqualifyInput(e.target.value)}
+                placeholder="confirm"
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisqualifyParticipantId(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              disabled={disqualifyInput !== 'confirm'}
+              onClick={() => {
+                toast.success('Participant disqualified successfully.');
+                setDisqualifyParticipantId(null);
+                setDisqualifyInput('');
+              }}
+            >
+              Confirm Disqualification
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

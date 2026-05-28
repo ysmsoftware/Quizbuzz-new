@@ -30,11 +30,12 @@ export async function getProctoringOverview(contestId: string): Promise<ApiRespo
  * GET /proctoring/contests/:contestId/flagged
  * List flagged participants
  */
-export async function listFlaggedParticipants(
+export async function listProctoringParticipants(
   contestId: string,
   params?: {
     page?: number;
     limit?: number;
+    isFlagged?: boolean;
   }
 ): Promise<ApiResponse<{ data: any[]; pagination?: any }>> {
   const res = await get<{ scores: any[]; total: number }>(`/proctoring/contests/${contestId}/flagged`, { params });

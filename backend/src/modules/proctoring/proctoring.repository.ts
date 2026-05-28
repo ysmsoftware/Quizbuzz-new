@@ -42,6 +42,11 @@ export class ProctoringRepository implements IProctoringRepository {
                         select: {
                             name: true
                         }
+                    },
+                    participant: {
+                        include: {
+                            contact: true
+                        }
                     }
                 },
                 orderBy: { violationScore: "desc" },

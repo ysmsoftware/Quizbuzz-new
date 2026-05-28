@@ -8,6 +8,18 @@ export interface ProctoringScoreRecord extends ProctoringScore {
     organization: {
         name: string;
     };
+    participant?: {
+        id: string;
+        status: string;
+        registrationRef: string;
+        contact: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            email: string;
+            phone?: string | null;
+        }
+    };
 }
 
 export interface ProctoringOverview {

@@ -5,7 +5,12 @@ export const ProctoringPaginationSchema = z.object({
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(20),
     type: z.nativeEnum(ViolationType).optional(),
-    isFlagged: z.preprocess((val) => val === "true", z.boolean()).optional(),
+    isFlagged: z.preprocess((val) => {
+        if (val === undefined || val === null || val === '') return undefined;
+        if (val === "true" || val === true) return true;
+        if (val === "false" || val === false) return false;
+        return undefined;
+    }, z.boolean().optional()).optional(),
 });
 
 export const UpdateViolationStatusSchema = z.object({

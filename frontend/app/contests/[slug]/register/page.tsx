@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
+import Script from "next/script";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { contestService } from "@/lib/services/contest-service";
 import { registrationService } from "@/lib/services/registration-service";
+import { useRazorpay } from "@/lib/hooks/usePayment";
 import type { PublicContestDetail } from "@/lib/types/public-contest";
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
@@ -67,12 +69,22 @@ export default function RegisterPage() {
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [registrationRef, setRegistrationRef] = useState("");
+  const [participantId, setParticipantId] = useState("");
   const [apiError, setApiError] = useState("");
   const [razorpayOrder, setRazorpayOrder] = useState<{
     amount: number;
     currency: string;
     description: string;
   } | null>(null);
+
+  const { state: paymentState, error: paymentError, initiatePayment, retryPayment } = useRazorpay();
+
+  // Auto-transition to success step when payment is successful
+  useEffect(() => {
+    if (paymentState === "success" && step === "payment") {
+      setStep("success");
+    }
+  }, [paymentState, step]);
 
   // OTP input refs
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -167,12 +179,13 @@ export default function RegisterPage() {
         state: formData.state || undefined,
       });
 
+      setRegistrationRef(result.data.registrationRef);
+      setParticipantId(result.data.participantId);
+
       if (result.data.paymentRequired && result.data.payment) {
         setRazorpayOrder(result.data.payment);
-        setRegistrationRef(result.data.registrationRef);
         setStep("payment");
       } else {
-        setRegistrationRef(result.data.registrationRef);
         setStep("success");
       }
     } catch (err: any) {
@@ -182,10 +195,29 @@ export default function RegisterPage() {
   };
 
   const handlePayment = async () => {
-    // Online payment coming soon (full Razorpay integration is Wave 5)
-    setSubmitting(true);
-    setApiError("Online payment coming soon. Please contact the organizer for payment instructions.");
-    setSubmitting(false);
+    if (!contest || !participantId) return;
+    await initiatePayment(contest.id, participantId, {
+      amount: razorpayOrder?.amount || 0,
+      currency: razorpayOrder?.currency || "INR",
+      eventTitle: contest.title,
+      contactName: `${detailsForm.getValues("firstName")} ${detailsForm.getValues("lastName") ?? ""}`.trim(),
+      contactEmail: email,
+      contactPhone: detailsForm.getValues("phone") ?? "",
+      callbackQueryParams: { ref: registrationRef }
+    });
+  };
+
+  const handleRetryPayment = async () => {
+    if (!contest || !participantId) return;
+    await retryPayment(participantId, {
+      amount: razorpayOrder?.amount || 0,
+      currency: razorpayOrder?.currency || "INR",
+      eventTitle: contest.title,
+      contactName: `${detailsForm.getValues("firstName")} ${detailsForm.getValues("lastName") ?? ""}`.trim(),
+      contactEmail: email,
+      contactPhone: detailsForm.getValues("phone") ?? "",
+      callbackQueryParams: { ref: registrationRef }
+    });
   };
 
   // ─── OTP Input Helpers ──────────────────────────────────────────────────────
@@ -257,6 +289,11 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background py-8 px-4">
+      {/* Razorpay checkout SDK — loaded once, needed only on the payment step */}
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        strategy="lazyOnload"
+      />
       <div className="max-w-2xl mx-auto">
         {/* Back Navigation */}
         <Link
@@ -594,47 +631,95 @@ export default function RegisterPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+
                 {/* Order Summary */}
                 <div className="rounded-lg border p-4 space-y-3">
                   <h3 className="font-medium text-foreground">Order Summary</h3>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{contest.title}</span>
-                    <span className="text-foreground">
-                      ₹{razorpayOrder.amount}
-                    </span>
+                    <span className="text-foreground">₹{razorpayOrder.amount}</span>
                   </div>
                   <div className="border-t pt-3 flex justify-between font-semibold">
                     <span>Total</span>
-                    <span className="text-primary">
-                      ₹{razorpayOrder.amount}
-                    </span>
+                    <span className="text-primary">₹{razorpayOrder.amount}</span>
                   </div>
                 </div>
 
+                {/* ── Polling states ───────────────────────── */}
+                {(paymentState === "verifying" || paymentState === "polling") && (
+                  <div className="rounded-lg bg-muted/50 border p-4 flex flex-col items-center gap-3 text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="font-medium text-foreground">Confirming your payment…</p>
+                    <p className="text-sm text-muted-foreground">
+                      This may take a moment. If you paid via UPI, please return to this page — we’ll detect it automatically.
+                    </p>
+                  </div>
+                )}
+
+                {paymentState === "failed" && (
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 space-y-3">
+                    <p className="font-medium text-destructive">Payment failed</p>
+                    <p className="text-sm text-muted-foreground">
+                      {paymentError || "Your payment was not completed."}
+                    </p>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={handleRetryPayment}
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+
+                {paymentState === "timeout" && (
+                  <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4 space-y-3">
+                    <p className="font-medium text-yellow-800">Taking longer than expected</p>
+                    <p className="text-sm text-yellow-700">
+                      Your payment may still be processing. If the amount was debited from your account, it will be confirmed automatically within a few minutes. You can safely close this page.
+                    </p>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={handleRetryPayment}
+                    >
+                      Check Again
+                    </Button>
+                  </div>
+                )}
+
+                {apiError && (
+                  <p className="text-sm text-destructive text-center">{apiError}</p>
+                )}
+
                 <p className="text-xs text-muted-foreground text-center">
-                  Razorpay payment gateway will open for secure payment processing.
+                  Razorpay secure checkout • UPI, Cards, Netbanking accepted
                 </p>
 
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setStep("details")}
-                    disabled={submitting}
-                    className="flex-1"
-                  >
-                    Back
-                  </Button>
-                  <Button onClick={handlePayment} disabled={submitting} className="flex-1">
-                    {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      `Pay ₹${razorpayOrder.amount}`
-                    )}
-                  </Button>
-                </div>
+                {/* Only show action buttons when idle or after failure reset */}
+                {(paymentState === "idle" || paymentState === "creating_order" || paymentState === "checkout_open") && (
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep("details")}
+                      disabled={paymentState !== "idle"}
+                      className="flex-1"
+                    >
+                      Back
+                    </Button>
+                    <Button onClick={handlePayment} disabled={paymentState !== "idle"} className="flex-1">
+                      {paymentState !== "idle" ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Opening...
+                        </>
+                      ) : (
+                        `Pay ₹${razorpayOrder.amount}`
+                      )}
+                    </Button>
+                  </div>
+                )}
+
               </CardContent>
             </Card>
           </motion.div>
