@@ -297,10 +297,31 @@ export class QuizGateway {
 
     async emitCaptureRequest(pid: string, captureType: string, captureId?: string) {
         try {
+            const dbParticipant = await prisma.participant.findUnique({
+                where: { id: pid },
+                include: {
+                    contest: true,
+                    contact: true,
+                },
+            });
+
+            if (!dbParticipant) {
+                logger.warn(`[QuizGateway] Cannot generate capture request, participant not found: ${pid}`);
+                return;
+            }
+
+            const contestSlug = dbParticipant.contest.slug;
+            const participantSlug = (dbParticipant.contact.email || dbParticipant.id)
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, "-",)
+                .replace(/-+/g, "-",);
+
+            const secureFolder = `proctoring/${contestSlug}/${participantSlug}`;
+
             const provider = getStorageProvider();
             const { url: presignedUrl, storageKey } = await provider.getPresignedPutUrl({
                 filename:         `${captureType}_${Date.now()}.webp`,
-                folder:           `proctoring/${pid}`,
+                folder:           secureFolder,
                 mimeType:         "image/webp",
                 expiresInSeconds: 300,
             });

@@ -31,6 +31,7 @@ import {
   Camera,
   ShieldAlert,
   ShieldCheck,
+  Activity,
 } from 'lucide-react';
 
 import { 
@@ -40,7 +41,12 @@ import {
   useInvalidateSubmission, 
   useBulkEvaluateSubmissions 
 } from '@/lib/hooks/useSubmissions';
-import { useParticipantCaptures } from '@/lib/hooks/useProctoring';
+import { useParticipantCaptures, useParticipantProctoring } from '@/lib/hooks/useProctoring';
+
+const isValidDate = (date: any) => {
+    const d = new Date(date);
+    return d instanceof Date && !isNaN(d.getTime());
+};
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -128,6 +134,12 @@ export default function ContestSubmissionsPage() {
     contestId,
     submissionDetail?.participantId,
   );
+
+  const { detail: proctoringDetail, loading: proctoringLoading } = useParticipantProctoring(
+      contestId,
+      submissionDetail?.participantId || ''
+  );
+  const proctoringEvents = (proctoringDetail as any)?.events || [];
 
   // Check URL parameters to pre-open modal (from redirection)
   useEffect(() => {
@@ -735,32 +747,133 @@ export default function ContestSubmissionsPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground font-semibold">
-                          <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                          <span>{captures.length} admin capture{captures.length !== 1 ? 's' : ''} — visible to admins only</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {captures.map((capture) => (
-                            <div key={capture.id} className="space-y-1.5">
-                              <div className="relative rounded-xl overflow-hidden border border-border/40 bg-secondary/10 aspect-video">
-                                <img
-                                  src={capture.presignedGetUrl}
-                                  alt={capture.captureType}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                />
-                                <div className="absolute top-1.5 left-1.5">
-                                  <span className="bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
-                                    {capture.captureType.replace('SNAPSHOT_', '').replace('_', ' ')}
-                                  </span>
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-semibold">
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                            <span>{captures.length} admin capture{captures.length !== 1 ? 's' : ''} — visible to admins only</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {captures.map((capture) => (
+                              <div key={capture.id} className="space-y-1.5">
+                                <div className="relative rounded-xl overflow-hidden border border-border/40 bg-secondary/10 aspect-video">
+                                  <img
+                                    src={capture.presignedGetUrl}
+                                    alt={capture.captureType}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute top-1.5 left-1.5">
+                                    <span className="bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                      {capture.captureType.replace('SNAPSHOT_', '').replace('_', ' ')}
+                                    </span>
+                                  </div>
                                 </div>
+                                <p className="text-[10px] text-muted-foreground text-center font-medium">
+                                  {new Date(capture.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </p>
                               </div>
-                              <p className="text-[10px] text-muted-foreground text-center font-medium">
-                                {new Date(capture.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                              </p>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Proctoring Events Timeline */}
+                        <div className="space-y-4 pt-4 border-t border-border/40">
+                          <h3 className="text-sm font-bold flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-primary" />
+                            Violation Feed
+                          </h3>
+                          {proctoringLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
                             </div>
-                          ))}
+                          ) : proctoringEvents.length === 0 ? (
+                            <div className="p-6 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center justify-center text-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                    <ShieldCheck className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Perfect Integrity</h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">No proctoring violations recorded for this session.</p>
+                                </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              {(() => {
+                                  const lowCount = proctoringEvents.filter((e: any) => e.severity === 1 || !e.severity).length;
+                                  const mediumCount = proctoringEvents.filter((e: any) => e.severity === 2).length;
+                                  const severeCount = proctoringEvents.filter((e: any) => e.severity === 3).length;
+                                  const totalCount = proctoringEvents.length;
+
+                                  return (
+                                      <div className="grid grid-cols-4 gap-2">
+                                          <div className="p-2 rounded-lg border bg-muted/30 flex flex-col items-center justify-center text-center">
+                                              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Total</span>
+                                              <span className="text-base font-extrabold text-foreground mt-0.5">{totalCount}</span>
+                                          </div>
+                                          <div className="p-2 rounded-lg border border-red-500/10 bg-red-500/5 flex flex-col items-center justify-center text-center">
+                                              <span className="text-[9px] font-bold text-red-500/80 uppercase tracking-wider block">Severe</span>
+                                              <span className="text-base font-extrabold text-red-600 dark:text-red-400 mt-0.5">{severeCount}</span>
+                                          </div>
+                                          <div className="p-2 rounded-lg border border-amber-500/10 bg-amber-500/5 flex flex-col items-center justify-center text-center">
+                                              <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-wider block">Medium</span>
+                                              <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{mediumCount}</span>
+                                          </div>
+                                          <div className="p-2 rounded-lg border border-yellow-500/10 bg-yellow-500/5 flex flex-col items-center justify-center text-center">
+                                              <span className="text-[9px] font-bold text-yellow-500/80 uppercase tracking-wider block">Low</span>
+                                              <span className="text-base font-extrabold text-yellow-600 dark:text-yellow-400 mt-0.5">{lowCount}</span>
+                                          </div>
+                                      </div>
+                                  );
+                              })()}
+
+                              <div className="max-h-[300px] overflow-y-auto pr-2 py-1 scrollbar-thin scrollbar-thumb-muted">
+                                  <div className="relative border-l border-border/80 pl-4 ml-2.5 mr-0.5 space-y-5">
+                                      {[...proctoringEvents]
+                                          .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+                                          .map((event, idx) => {
+                                              const eventTypeClean = event.type.replace("SNAPSHOT_", "").replace(/_/g, " ");
+                                              
+                                              let severityColor = "bg-yellow-500";
+                                              let borderColor = "border-yellow-500/20";
+                                              if (event.severity === 2) {
+                                                  severityColor = "bg-amber-500";
+                                                  borderColor = "border-amber-500/20";
+                                              } else if (event.severity === 3) {
+                                                  severityColor = "bg-red-500";
+                                                  borderColor = "border-red-500/20";
+                                              }
+
+                                              return (
+                                                  <div key={event.id || idx} className="relative group">
+                                                      <div className={`absolute -left-[22px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-background ${severityColor} flex items-center justify-center`} />
+                                                      
+                                                      <div className={`p-3 rounded-lg border bg-card hover:bg-muted/10 transition-colors ${borderColor}`}>
+                                                          <div className="flex items-start justify-between gap-2">
+                                                              <div>
+                                                                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 block">
+                                                                      {eventTypeClean}
+                                                                  </span>
+                                                                  <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                                                                      {isValidDate(event.occurredAt) ? format(new Date(event.occurredAt), 'hh:mm:ss a') : '—'}
+                                                                  </span>
+                                                              </div>
+                                                              <Badge variant="outline" className={`text-[10px] py-0 h-5 font-normal capitalize ${
+                                                                  event.severity === 3 ? 'text-red-500 border-red-500/30' :
+                                                                  event.severity === 2 ? 'text-amber-500 border-amber-500/30' :
+                                                                  'text-yellow-500 border-yellow-500/30'
+                                                              }`}>
+                                                                  {event.severity === 3 ? 'high' : event.severity === 2 ? 'medium' : 'low'}
+                                                              </Badge>
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              );
+                                          })}
+                                  </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

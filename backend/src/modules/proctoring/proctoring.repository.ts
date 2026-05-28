@@ -116,9 +116,6 @@ export class ProctoringRepository implements IProctoringRepository {
             where: {
                 contestId,
                 participantId,
-                type: {
-                    in: ['SNAPSHOT_START', 'SNAPSHOT_MID_POINT', 'SNAPSHOT_RANDOM', 'SNAPSHOT_PRE_SUBMIT'] as any[],
-                },
             },
             select: {
                 id: true,
