@@ -31,6 +31,7 @@ export class QuizGateway {
             socket.on("quiz:v1:join", (payload) => this.handleJoin(socket, payload));
             socket.on("quiz:v1:heartbeat", () => this.handleHeartbeat(socket));
             socket.on("quiz:v1:answer", (payload) => this.handleAnswer(socket, payload));
+            socket.on("quiz:v1:skip", (payload) => this.handleSkip(socket, payload));
             socket.on("quiz:v1:violation", (payload) => this.handleViolation(socket, payload));
             socket.on("quiz:v1:submit", (payload) => this.handleSubmit(socket, payload));
 
@@ -339,5 +340,36 @@ export class QuizGateway {
 
     broadcastAdminEvent(cid: string, event: string, data: unknown) {
         this.emitSocket("/quiz-admin", `admin:${cid}`, event, data);
+    }
+
+    /**
+     * Explicit skip handler — records null answer in Redis immediately.
+     * Registered on: socket.on("quiz:v1:skip")
+     *
+     * Without this, untouched questions have no Redis entry and are only
+     * filled at submit time from the question order array. That works for
+     * correctness, but firing this event early means:
+     *  - Admin live view answeredCount is accurate in real-time
+     *  - savedAnswers on reconnect restores the "skipped" badge on the question
+     *
+     * Frontend: emit quiz:v1:skip when the user clicks Skip (fire-and-forget).
+     */
+    async handleSkip(socket: Socket, payload: { questionId: string; skippedAt: string }) {
+        const { participantId, contestId } = socket.data;
+
+        logger.info(
+            `[QuizGateway:skip] contestId=${contestId} | participantId=${participantId} | questionId=${payload.questionId}`
+        );
+
+        // selectedOptionId = null → stored as skipped in Redis answers hash
+        await this.quizService.saveAnswer(
+            contestId,
+            participantId,
+            payload.questionId,
+            null,
+            null,
+            payload.skippedAt,
+        );
+        // No ack emitted — client moves to next question immediately without waiting
     }
 }

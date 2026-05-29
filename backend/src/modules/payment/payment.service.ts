@@ -235,6 +235,13 @@ export class PaymentService {
                     }
                 });
 
+                // Confirm the participant's seat: PENDING_PAYMENT → REGISTERED
+                // This is the source-of-truth gate for paid contests.
+                if (payment.participantId) {
+                    await this.participantService.confirmPaymentRegistration(payment.participantId);
+                    logger.info(`[payment] Confirmed registration for participant ${payment.participantId} after payment captured`);
+                }
+
                 // Send payment confirmation email
                 if (payment.participantId) {
                     this.messagingService.enqueueMessage(payment.organizationId, {
