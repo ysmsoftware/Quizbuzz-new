@@ -1,4 +1,3 @@
-version: "3.9"
 
 x-backend-env: &backend-env
   env_file:
@@ -118,4 +117,4 @@ networks:
   internal:
     driver: bridge
   external:
-    driver: bridge
+    driver: bridge 
