@@ -36,4 +36,6 @@ export interface CreateParticipantInput {
     contestId: string;
     contactId: string;
     registrationRef: string;
+    /** Initial status. Defaults to REGISTERED if omitted. Pass PENDING_PAYMENT for paid contests. */
+    status?: ParticipantStatus;
 }

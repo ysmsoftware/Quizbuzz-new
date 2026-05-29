@@ -27,6 +27,8 @@ export interface IParticipantRepository {
 
     create(input: CreateParticipantInput): Promise<Participant>;
 
+    updateStatus(participantId: string, status: ParticipantStatus): Promise<Participant>;
+
     findByContactId(
         organizationId: string,
         contestId: string,
@@ -134,8 +136,15 @@ export class ParticipantRepository implements IParticipantRepository {
                 contactId: input.contactId,
                 contestId: input.contestId,
                 registrationRef: input.registrationRef,
-                status: ParticipantStatus.REGISTERED,
+                status: input.status ?? ParticipantStatus.REGISTERED,
             },
+        });
+    }
+
+    async updateStatus(participantId: string, status: ParticipantStatus): Promise<Participant> {
+        return prisma.participant.update({
+            where: { id: participantId },
+            data: { status },
         });
     }
 
@@ -213,6 +222,7 @@ export class ParticipantRepository implements IParticipantRepository {
         });
 
         const summary: Record<ParticipantStatus, number> = {
+            PENDING_PAYMENT: 0,
             REGISTERED: 0,
             CHECKED_IN: 0,
             IN_WAITING: 0,

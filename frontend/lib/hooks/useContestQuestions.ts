@@ -81,8 +81,12 @@ export function useContestQuestions(contestId: string) {
     hint: q.question?.hint || '',
     explanation: q.question?.explanation || '',
     tags: q.question?.tags || [],
-    marks: q.marks ?? 4,
-    negativeMark: q.negativeMark ?? 1,
+    marks: Number(q.marks) ?? 4,
+    // negativeMark comes from Prisma as a Decimal serialised to a string ("1.00").
+    // Number() converts it correctly. Fall back to 0 (no deduction) if absent.
+    negativeMark: q.negativeMark !== null && q.negativeMark !== undefined
+      ? Number(q.negativeMark)
+      : 0,
     position: q.position ?? 0,
   }));
   const isLoading = questionsQuery.isLoading;

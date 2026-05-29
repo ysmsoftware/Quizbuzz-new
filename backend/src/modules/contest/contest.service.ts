@@ -320,6 +320,11 @@ export class ContestService {
                 contestId: contest.id,
                 contactId,
                 registrationRef,
+                // Paid contests: hold the seat as PENDING_PAYMENT until the
+                // Razorpay webhook confirms the payment was captured.
+                status: contest.paymentEnabled
+                    ? ParticipantStatus.PENDING_PAYMENT
+                    : ParticipantStatus.REGISTERED,
             });
         } catch (err: any) {
             if (err?.code === "P2002") {

@@ -70,6 +70,7 @@ export class ParticipantService {
         contestId: string;
         contactId: string;
         registrationRef: string;
+        status?: ParticipantStatus;
     }) {
         const contest = await this.contestRepo.findById(input.contestId, input.organizationId);
         if (!contest) {
@@ -88,6 +89,23 @@ export class ParticipantService {
         }
 
         return this.participantRepo.create(input);
+    }
+
+    /**
+     * Called by the payment webhook after a successful payment.captured event.
+     * Transitions the participant from PENDING_PAYMENT → REGISTERED,
+     * confirming their seat in the contest.
+     */
+    async confirmPaymentRegistration(participantId: string): Promise<void> {
+        try {
+            await this.participantRepo.updateStatus(participantId, ParticipantStatus.REGISTERED);
+        } catch (err) {
+            // Log but don't throw — the payment is already captured; a status-update
+            // failure should not cause the webhook to return an error (which would
+            // trigger Razorpay retries).
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[participant] Failed to confirm payment registration for ${participantId}: ${msg}`);
+        }
     }
 
     async getEligibleForCertificate(contestId: string, organizationId: string) {

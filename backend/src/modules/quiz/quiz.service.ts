@@ -331,24 +331,24 @@ export class QuizService {
 
     /**
      * Final submission.
-     * 1. Transition Redis state → SUBMITTED (no DB write)
-     * 2. Enqueue BullMQ job → submission worker handles DB persistence
-     *
-     * The DB write of participant.status happens later in the analytics worker
-     * flush, or via the submission worker which has full context.
+     * 1. Read answers + question order from Redis
+     * 2. Fill in null entries for every question NOT in the answers hash
+     *    (these are skipped questions — the participant never touched them)
+     * 3. Transition Redis state → SUBMITTED
+     * 4. Enqueue BullMQ job → submission worker handles DB persistence
      */
     async submitQuiz(
         contestId: string,
         participantId: string,
         reason: "MANUAL" | "AUTO" | "TIMEOUT",
     ): Promise<QuizSubmitResult> {
-        const [answers, state] = await Promise.all([
+        const [answers, state, questionOrder] = await Promise.all([
             this.session.getAllAnswers(contestId, participantId),
             this.session.getSession(contestId, participantId),
+            this.session.getQuestionOrder(contestId, participantId),
         ]);
 
         if (!state) {
-            // Session expired (Redis TTL) — graceful fallback, no server crash
             logger.warn(
                 `[quiz-service] Session expired for participant ${participantId} in contest ${contestId} — enqueueing zero-answer submission`
             );
@@ -356,7 +356,7 @@ export class QuizService {
             await submissionQueue.add(
                 "persist-submission",
                 {
-                    organizationId: "",   // resolved by submission service from DB
+                    organizationId: "",
                     participantId,
                     contestId,
                     submittedAt: new Date().toISOString(),
@@ -368,18 +368,30 @@ export class QuizService {
                 },
                 { jobId: fallbackJobId }
             );
-            // Move to submitted set in Redis even on fallback
             await this.session.addToSubmitted(contestId, participantId);
             return { submissionRef: fallbackJobId, timeTakenSecs: 0, totalQuestions: 0, attempted: 0 };
         }
 
         // Transition Redis sets (no DB write)
-        await this.session.addToSubmitted(contestId, participantId);   // also removes from active
+        await this.session.addToSubmitted(contestId, participantId);
         await this.session.updatePhase(contestId, participantId, "SUBMITTED");
 
-        const answersArray = Object.entries(answers).map(([questionId, answer]) => ({
+        // Build a complete answer array covering EVERY question in the participant's
+        // shuffled order. Questions the participant never touched get selectedOptionId=null
+        // so the submission worker writes them as Answer rows and the evaluation worker
+        // counts them as skipped rather than ignoring them.
+        const answeredMap: Record<string, string | null> = {};
+        for (const [questionId, answer] of Object.entries(answers)) {
+            answeredMap[questionId] = (answer as SavedAnswer).selectedOptionId ?? null;
+        }
+
+        // Use question order from Redis if available; fall back to just the answered keys
+        const orderedQuestionIds = questionOrder ?? Object.keys(answeredMap);
+
+        const answersArray = orderedQuestionIds.map((questionId) => ({
             questionId,
-            selectedOptionId: (answer as SavedAnswer).selectedOptionId ?? null,
+            // null here means skipped — participant never selected an option for this question
+            selectedOptionId: answeredMap[questionId] ?? null,
         }));
 
         const timeTakenSecs = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
@@ -395,19 +407,19 @@ export class QuizService {
                 submittedAt: new Date().toISOString(),
                 timeTakenSecs,
                 source: reason === "MANUAL" ? "MANUAL" : "AUTO",
-                totalQuestions: state.totalQuestions,
+                totalQuestions: orderedQuestionIds.length,
                 attempted: attemptedCount,
                 answers: answersArray,
             },
             { jobId }
         );
 
-        logger.info(`[quiz-service] Submission enqueued for participant ${participantId}`);
+        logger.info(`[quiz-service] Submission enqueued for participant ${participantId} — total=${orderedQuestionIds.length} attempted=${attemptedCount} skipped=${orderedQuestionIds.length - attemptedCount}`);
 
         return {
             submissionRef: jobId,
             timeTakenSecs,
-            totalQuestions: state.totalQuestions,
+            totalQuestions: orderedQuestionIds.length,
             attempted: attemptedCount,
         };
     }

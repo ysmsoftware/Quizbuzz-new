@@ -99,6 +99,10 @@ export const AssignQuestionsSchema = z.object({
                 questionId: z.string().min(1),
                 position: z.number().int().positive(),
                 marks: z.number().int().min(1).default(1),
+                // negativeMark is the MAGNITUDE of the deduction (always positive).
+                // e.g. negativeMark=1 means -1 mark for a wrong answer.
+                // The frontend must send 1, NOT -1. Sending -1 will be rejected here
+                // and silently fall back to 0 (no deduction).
                 negativeMark: z.number().min(0).max(10).default(0),
             })
         )

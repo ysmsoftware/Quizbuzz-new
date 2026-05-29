@@ -32,7 +32,8 @@ enum QuestionDifficulty {
 }
 
 enum ParticipantStatus {
-  REGISTERED    // Paid, confirmed
+  PENDING_PAYMENT // Paid contest — seat held, awaiting payment confirmation
+  REGISTERED    // Confirmed (free contest) or payment captured (paid contest)
   CHECKED_IN    // Entered OTP/ID at quiz join time
   IN_WAITING    // In waiting room
   IN_QUIZ       // Actively answering questions
