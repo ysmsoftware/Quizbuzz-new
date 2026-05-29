@@ -117,4 +117,4 @@ networks:
   internal:
     driver: bridge
   external:
-    driver: bridge
+    driver: bridge 
