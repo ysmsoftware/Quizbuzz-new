@@ -31,7 +31,7 @@ apiRouter.use("/contests", contestRouter);
 apiRouter.use("/contests", participantRouter);
 apiRouter.use("/questions", questionRouter);
 apiRouter.use("/messaging", messagingRouter);
-apiRouter.use("/payment", paymentRouter);
+apiRouter.use("/payments", paymentRouter);
 apiRouter.use("/certificates", certificateRouter);
 apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
