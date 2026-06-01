@@ -27,6 +27,77 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
+// ────────────────────────────────────────────────────────────────
+// NegativeMarkPicker
+// Presets: None / −0.25 / −0.5 / −0.75 / −1 / −2 + Custom free input.
+// Convention: value is always the positive magnitude (0.25 = deduct 0.25).
+// ────────────────────────────────────────────────────────────────
+
+const NEGATIVE_MARK_PRESETS = [0, 0.25, 0.5, 0.75, 1, 2] as const;
+type NegativeMarkPreset = typeof NEGATIVE_MARK_PRESETS[number];
+
+function NegativeMarkPicker({
+    value,
+    onChange,
+}: {
+    value: number;
+    onChange: (v: number) => void;
+}) {
+    const isPreset = (NEGATIVE_MARK_PRESETS as readonly number[]).includes(value);
+    const [showCustom, setShowCustom] = useState(!isPreset);
+
+    const handlePreset = (v: NegativeMarkPreset) => {
+        setShowCustom(false);
+        onChange(v);
+    };
+
+    return (
+        <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+                {NEGATIVE_MARK_PRESETS.map((preset) => (
+                    <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handlePreset(preset)}
+                        className={cn(
+                            "px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all duration-150 select-none",
+                            value === preset && !showCustom
+                                ? "bg-destructive/10 border-destructive text-destructive ring-1 ring-destructive/20"
+                                : "border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground hover:border-border"
+                        )}
+                    >
+                        {preset === 0 ? "None" : `−${preset}`}
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => setShowCustom(true)}
+                    className={cn(
+                        "px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all duration-150 select-none",
+                        showCustom
+                            ? "bg-primary/10 border-primary text-primary ring-1 ring-primary/20"
+                            : "border-border/50 bg-muted/20 text-muted-foreground hover:text-foreground hover:border-border"
+                    )}
+                >
+                    Custom
+                </button>
+            </div>
+            {showCustom && (
+                <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 0.33"
+                    className="bg-muted/20 h-8 rounded-lg border-border/40 text-xs font-semibold w-28"
+                    value={value}
+                    onChange={(e) => onChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                    autoFocus
+                />
+            )}
+        </div>
+    );
+}
+
 // Helper utility for proportional percentage adjustments
 function adjustPercentages(
     values: number[],
@@ -699,35 +770,14 @@ export default function QuestionBankModal({
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center">
                                                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Negative Penalty</Label>
-                                                    <span className="text-[11px] font-bold text-destructive">-{defaultNegativeMarks} pts</span>
+                                                    <span className="text-[11px] font-bold text-destructive">
+                                                        {defaultNegativeMarks > 0 ? `-${defaultNegativeMarks} pts` : 'None'}
+                                                    </span>
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-background border rounded-lg p-0.5">
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
-                                                        onClick={() => setDefaultNegativeMarks(prev => Math.max(0, prev - 1))}
-                                                    >
-                                                        -
-                                                    </Button>
-                                                    <Input
-                                                        type="number"
-                                                        min={0}
-                                                        className="h-7 border-none text-center font-bold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
-                                                        value={defaultNegativeMarks}
-                                                        onChange={(e) => setDefaultNegativeMarks(Math.max(0, parseInt(e.target.value) || 0))}
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
-                                                        onClick={() => setDefaultNegativeMarks(prev => prev + 1)}
-                                                    >
-                                                        +
-                                                    </Button>
-                                                </div>
+                                                <NegativeMarkPicker
+                                                    value={defaultNegativeMarks}
+                                                    onChange={setDefaultNegativeMarks}
+                                                />
                                                 <p className="text-[9px] text-muted-foreground leading-none">Deducted marks for incorrect answers.</p>
                                             </div>
                                         </div>

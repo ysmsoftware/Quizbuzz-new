@@ -26,12 +26,12 @@ export const triggerEvaluationSchema = z.object({
 
 // ─── Manual Submit (Participant) ──────────────────────────────────────────────
 export const submitSubmissionSchema = z.object({
-    participantId: z.string().uuid("Invalid participant ID"),
+    participantId: z.string().min(1, "Invalid participant ID"),
     timeTakenSecs: z.number().int().min(0),
     answers: z.array(
         z.object({
-            questionId: z.string().uuid(),
-            selectedOptionId: z.string().uuid().nullable(),
+            questionId: z.string().min(1),
+            selectedOptionId: z.string().nullable(),
         })
     ),
 });

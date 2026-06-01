@@ -1,6 +1,6 @@
 "use client";
  
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -35,6 +35,16 @@ export default function SystemCheckPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const { setCameraStream, setFullscreenEnabled, setCameraEnabled } = useProctoringStore();
+
+  // iOS detection — iOS Safari and Chrome on iOS do NOT support the Fullscreen API
+  const isIOS = useRef(
+    typeof navigator !== "undefined" &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+    !(window as any).MSStream
+  );
+
+  // Whether the user has tapped the button (needed to satisfy iOS gesture requirement)
+  const [checksStarted, setChecksStarted] = useState(false);
  
   const [checks, setChecks] = useState<SystemCheck[]>([
     {
@@ -134,7 +144,16 @@ export default function SystemCheckPage() {
  
   const checkFullscreen = async () => {
     updateCheckStatus("fullscreen", "checking");
-    
+    await new Promise((r) => setTimeout(r, 400));
+
+    // iOS Safari / Chrome on iOS do NOT support the Fullscreen API.
+    // We skip the check and mark it as passed (fullscreen will be simulated via CSS).
+    if (isIOS.current) {
+      setFullscreenEnabled(true);
+      updateCheckStatus("fullscreen", "passed");
+      return true;
+    }
+
     try {
       if (!document.fullscreenEnabled) {
         updateCheckStatus(
@@ -144,7 +163,7 @@ export default function SystemCheckPage() {
         );
         return false;
       }
-      
+
       setFullscreenEnabled(true);
       updateCheckStatus("fullscreen", "passed");
       return true;
@@ -183,10 +202,11 @@ export default function SystemCheckPage() {
     }
   };
 
-  const runAllChecks = async () => {
+  const runAllChecks = useCallback(async () => {
     setIsRetrying(true);
     setHasFailedChecks(false);
     setDeviceCheckFailed(false);
+    setChecksStarted(true);
     try {
       const [devOk, fsOk, netOk] = await Promise.all([
         checkDevices(),
@@ -200,7 +220,8 @@ export default function SystemCheckPage() {
     } finally {
       setIsRetrying(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const retryCheck = async (id: string) => {
     setIsRetrying(true);
@@ -235,9 +256,13 @@ export default function SystemCheckPage() {
     }
   };
 
-  // Run checks automatically on first mount
+  // On non-iOS browsers, auto-start checks immediately.
+  // On iOS, we MUST wait for a user gesture (button tap) before calling getUserMedia,
+  // otherwise Safari silently ignores / denies the permission request.
   useEffect(() => {
-    runAllChecks();
+    if (!isIOS.current) {
+      runAllChecks();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
  
@@ -395,6 +420,19 @@ export default function SystemCheckPage() {
                 </Alert>
               )}
  
+              {/* iOS: show a prominent call-to-action before checks start */}
+              {isIOS.current && !checksStarted && (
+                <Alert className="border-primary/50 bg-primary/5">
+                  <AlertTriangle className="h-4 w-4 text-primary" />
+                  <AlertTitle className="text-primary">Tap the button below to start</AlertTitle>
+                  <AlertDescription>
+                    On iPhone/iPad, your browser requires you to <strong>tap a button</strong> before
+                    it can request camera &amp; microphone access. Please tap&nbsp;
+                    <strong>&ldquo;Start System Checks&rdquo;</strong> below.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -404,8 +442,10 @@ export default function SystemCheckPage() {
                 >
                   {isRetrying ? (
                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Checking...</>
-                  ) : (
+                  ) : checksStarted ? (
                     "Run All Checks Again"
+                  ) : (
+                    "Start System Checks"
                   )}
                 </Button>
                 <Button
@@ -422,8 +462,8 @@ export default function SystemCheckPage() {
               </div>
  
               <p className="text-xs text-center text-muted-foreground">
-                By continuing, you agree to keep your camera on and remain in
-                fullscreen mode during the entire quiz session.
+                By continuing, you agree to keep your camera on
+                {isIOS.current ? "." : " and remain in fullscreen mode during the entire quiz session."}
               </p>
             </CardContent>
           </Card>

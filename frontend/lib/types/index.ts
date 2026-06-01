@@ -136,9 +136,11 @@ export interface Registration {
     registrationRef: string;
     status: RegistrationStatus;
     registeredAt: string;
-    paymentId?: string;
+    paymentId?: string | null;
     paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded';
     amount?: number;
+    /** ISO timestamp of when payment was confirmed by Razorpay webhook */
+    paidAt?: string | null;
     paymentMethod?: string;
     participantDetails: ParticipantDetails;
 

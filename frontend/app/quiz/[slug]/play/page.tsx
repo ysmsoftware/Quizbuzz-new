@@ -249,7 +249,7 @@ export default function QuizPlayPage() {
 
     // ─── Answer Handler ────────────────────────────────────────────────────
     const { handleAnswer, confirmAnswer } = useAnswerHandler((qId, optId, optText) => {
-        emitAnswer(qId, optId ?? "", optText, new Date().toISOString());
+        emitAnswer(qId, optId, optText || null, new Date().toISOString());
     });
 
     // ─── Timer ────────────────────────────────────────────────────────────
@@ -274,12 +274,12 @@ export default function QuizPlayPage() {
         if (currentIndex < questions.length - 1) {
             // Always emit a null answer so the backend tracks the skip
             const question = questions[currentIndex];
-            if (question) emitAnswer(question.id, "", "", new Date().toISOString());
+            if (question) emitAnswer(question.id, null, null, new Date().toISOString());
             const next = currentIndex + 1;
             setCurrentQuestion(next);
             visitQuestion(next);
         }
-    }, [currentIndex, questions, questions.length, emitAnswer, setCurrentQuestion, visitQuestion]);
+    }, [currentIndex, questions, emitAnswer, setCurrentQuestion, visitQuestion]);
 
     const handleReturnFullscreen = async () => {
         try {

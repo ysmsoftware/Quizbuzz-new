@@ -371,7 +371,7 @@ export default function QuestionsTabPage() {
                                                         +{q.marks}
                                                     </td>
                                                     <td className="px-4 py-4 text-center font-mono font-bold text-xs text-destructive bg-destructive/[0.02]">
-                                                        -{q.negativeMark}
+                                                        {q.negativeMark > 0 ? `-${q.negativeMark}` : <span className="text-muted-foreground/40">—</span>}
                                                     </td>
                                                     <td className="px-4 py-4 text-center text-muted-foreground">
                                                         {q.options.length} options

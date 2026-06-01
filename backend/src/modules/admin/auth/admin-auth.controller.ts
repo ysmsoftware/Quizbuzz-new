@@ -37,9 +37,20 @@ export class AdminAuthController {
         });
     }
 
-    private  clearCookies(res: Response): void {
-        res.clearCookie("accessToken");
-        res.clearCookie("refreshToken", { path: "/api/v1/auth/admin/refresh" });
+    private clearCookies(res: Response): void {
+        const { domain, secure, sameSite } = config.auth.cookie;
+        const cookieOpts = {
+            httpOnly: true,
+            secure,
+            sameSite: sameSite as any,
+            domain: domain || undefined,
+        };
+        // IMPORTANT: clearCookie must pass the exact same options (domain, secure, sameSite)
+        // that were used in setCookies(). Without matching attributes the browser treats the
+        // incoming Set-Cookie as a different cookie and ignores the expiry, leaving the session
+        // alive in production (where domain/secure differ from localhost).
+        res.clearCookie("accessToken", cookieOpts);
+        res.clearCookie("refreshToken", { ...cookieOpts, path: "/api/v1/auth/admin/refresh" });
     }
 
     register = async (req: Request, res: Response, next: NextFunction) => {

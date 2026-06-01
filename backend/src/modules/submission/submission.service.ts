@@ -502,16 +502,38 @@ export class SubmissionService {
             throw new ConflictError("You have already submitted for this contest");
         }
 
-        // 3. Calculate metrics
-        const totalQuestions = await this.contestRepo.countQuestions(contestId);
-        const attempted = input.answers.filter(a => a.selectedOptionId !== null).length;
+        // 3. Reconstruct a complete answer record by matching against all contest questions
+        const contestQuestions = await prisma.contestQuestion.findMany({
+            where: { contestId },
+            select: { questionId: true },
+        });
+
+        const totalQuestions = contestQuestions.length;
+
+        const answerMap = new Map<string, string | null>();
+        for (const ans of input.answers) {
+            const normalizedOptionId = (ans.selectedOptionId === "" || ans.selectedOptionId === undefined || ans.selectedOptionId === null)
+                ? null
+                : ans.selectedOptionId;
+            answerMap.set(ans.questionId, normalizedOptionId);
+        }
+
+        const completeAnswers = contestQuestions.map(cq => {
+            const selectedOptionId = answerMap.get(cq.questionId) ?? null;
+            return {
+                questionId: cq.questionId,
+                selectedOptionId,
+            };
+        });
+
+        const attempted = completeAnswers.filter(a => a.selectedOptionId !== null).length;
 
         // 4. Persist the submission and answers
         const submission = await this.submissionRepo.createWithAnswers({
             organizationId,
             contestId,
             participantId: input.participantId,
-            answers: input.answers,
+            answers: completeAnswers,
             timeTakenSecs: input.timeTakenSecs,
             submittedAt: new Date(),
             source: "MANUAL",

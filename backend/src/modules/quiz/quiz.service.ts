@@ -317,9 +317,12 @@ export class QuizService {
         const state = await this.session.getSession(contestId, participantId);
         if (state?.phase !== "IN_QUIZ") return false;
 
+        const normalizedOptionId = (selectedOptionId === "" || selectedOptionId === null || selectedOptionId === undefined) ? null : selectedOptionId;
+        const normalizedOptionText = (normalizedOptionId === null) ? null : selectedOptionText;
+
         await this.session.saveAnswer(contestId, participantId, questionId, {
-            selectedOptionId,
-            selectedOptionText,
+            selectedOptionId: normalizedOptionId,
+            selectedOptionText: normalizedOptionText,
             answeredAt,
         });
         return true;
@@ -382,7 +385,8 @@ export class QuizService {
         // counts them as skipped rather than ignoring them.
         const answeredMap: Record<string, string | null> = {};
         for (const [questionId, answer] of Object.entries(answers)) {
-            answeredMap[questionId] = (answer as SavedAnswer).selectedOptionId ?? null;
+            const optId = (answer as SavedAnswer).selectedOptionId;
+            answeredMap[questionId] = (optId === "" || optId === null || optId === undefined) ? null : optId;
         }
 
         // Use question order from Redis if available; fall back to just the answered keys

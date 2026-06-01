@@ -168,13 +168,13 @@ export default function RegistrationsTabPage() {
 
         return {
             total: contest?._count?.participants || 0,
-            confirmed: confirmedCount || contest?._count?.participants || 0,
-            paid: paidCount || contest?._count?.payments || 0,
+            confirmed: confirmedCount,
+            paid: paidCount,
             pending: pendingCount,
             failed: failedCount,
             free: freeCount,
             submitted: contest?._count?.submissions || 0,
-            revenue: registrations.reduce((sum: number, r: Registration) => sum + (r.paymentStatus === 'completed' ? (r.amount || fee) : 0), 0)
+            revenue: registrations.reduce((sum: number, r: Registration) => sum + (r.paymentStatus === 'completed' ? (r.amount || 0) : 0), 0)
         };
     }, [contest, registrations]);
 
@@ -1015,6 +1015,7 @@ function ParticipantDrawer({
     const registeredAtDate = toDateOrNull(registration.registeredAt);
     const joinedAtDate = toDateOrNull(registration.joinedAt);
     const lastActivityDate = toDateOrNull(registration.lastActivityAt);
+    const paidAtDate = toDateOrNull(registration.paidAt);
 
     return (
         <>
@@ -1111,7 +1112,7 @@ function ParticipantDrawer({
                                         <DetailSection title="Transaction History" icon={<CreditCard className="h-4 w-4" />}>
                                             <div className="space-y-4">
                                                 <DetailItem label="Payment ID" value={registration.paymentId || '—'} mono copyable />
-                                                <DetailItem label="Transaction Date" value={registration.paymentId && registeredAtDate ? format(registeredAtDate, 'PPP p') : '—'} />
+                                                <DetailItem label="Transaction Date" value={paidAtDate ? format(paidAtDate, 'PPP p') : '—'} />
                                             </div>
                                         </DetailSection>
 
