@@ -40,7 +40,7 @@ async function getBrowser(): Promise<Browser> {
     if (browser && browser.connected) return browser;
 
     logger.info("[certificate-worker] Launching Puppeteer browser...");
-    browser = await puppeteer.launch({
+    const launchOptions: any = {
         headless: true,
         args: [
             "--no-sandbox",                    // required in Docker / Linux
@@ -49,7 +49,13 @@ async function getBrowser(): Promise<Browser> {
             "--disable-gpu",
             "--font-render-hinting=none",      // consistent font rendering
         ],
-    });
+    };
+
+    if (config.puppeteer.executablePath) {
+        launchOptions.executablePath = config.puppeteer.executablePath;
+    }
+
+    browser = await puppeteer.launch(launchOptions);
 
     browser.on("disconnected", () => {
         logger.warn("[certificate-worker] Browser disconnected — will relaunch on next job");
