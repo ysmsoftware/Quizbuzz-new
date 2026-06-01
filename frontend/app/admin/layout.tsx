@@ -83,10 +83,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const handleLogout = async () => {
         try {
             await logoutMutation.mutateAsync();
+            // onSuccess / onError in useAuth handles cache clearing + redirect.
         } catch (err) {
             console.error('Logout error:', err);
-            // Still redirect even if logout fails
-            router.push('/');
+            // Last-resort: hard redirect to /login in case the mutation error handler didn't fire.
+            window.location.replace('/login');
         }
     };
 

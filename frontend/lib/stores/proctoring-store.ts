@@ -181,6 +181,17 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
 
     enterFullscreen: async () => {
       try {
+        // iOS Safari and Chrome on iOS do not support the Fullscreen API.
+        // We simulate fullscreen state so the rest of the app works normally.
+        const isIOS = typeof navigator !== 'undefined' &&
+          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+          !(window as any).MSStream;
+
+        if (isIOS) {
+          set({ isFullscreen: true });
+          return true;
+        }
+
         if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
           set({ isFullscreen: true });
@@ -194,6 +205,15 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
 
     exitFullscreen: async () => {
       try {
+        const isIOS = typeof navigator !== 'undefined' &&
+          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+          !(window as any).MSStream;
+
+        if (isIOS) {
+          set({ isFullscreen: false });
+          return;
+        }
+
         if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
           await document.exitFullscreen();
           set({ isFullscreen: false });

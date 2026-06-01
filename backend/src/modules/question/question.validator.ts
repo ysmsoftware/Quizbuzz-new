@@ -139,6 +139,12 @@ export const UpdateContestQuestionSchema = z.object({
 
 export const AutoGenerateQuestionsSchema = z.object({
     totalQuestions: z.number().int().min(1).max(500),
+    // defaultMarks and defaultNegativeMarks apply to every question assigned
+    // by this auto-generate run. They mirror the "Global Parameters" inputs
+    // in the frontend modal.  negativeMark is the positive magnitude of the
+    // deduction (0.25 = deduct 0.25 marks for a wrong answer).
+    defaultMarks: z.number().int().min(1).default(1),
+    defaultNegativeMarks: z.number().min(0).max(10).default(0),
     rules: z.array(
         z.object({
             tags: z.array(z.string().min(1).max(50)),

@@ -73,8 +73,21 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: authApi.logoutAdmin,
     onSuccess: () => {
-      // Clear all cache and redirect
-      queryClient.clear();
+      // Immediately mark the user as logged-out in the cache before navigating.
+      // queryClient.clear() alone is not synchronous enough — the layout's useEffect
+      // can fire a redirect to /admin before the cache flush completes.
+      queryClient.setQueryData(queryKeys.auth.me, null);
+      queryClient.resetQueries();
+      if (typeof window !== 'undefined') {
+        // Hard navigation (not router.push) so Next.js re-evaluates auth from scratch
+        // and doesn't restore the previous admin page from the router cache.
+        window.location.replace('/login');
+      }
+    },
+    onError: () => {
+      // Even if the API call fails (e.g. expired token), clear local state and redirect.
+      queryClient.setQueryData(queryKeys.auth.me, null);
+      queryClient.resetQueries();
       if (typeof window !== 'undefined') {
         window.location.replace('/login');
       }

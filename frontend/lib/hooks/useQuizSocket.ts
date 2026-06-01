@@ -170,7 +170,7 @@ export function useQuizSocket({
 
     // ── Public API ───────────────────────────────────────────────────────────────
     const submitAnswer = useCallback(
-        (questionId: string, selectedOptionId: string, selectedOptionText: string, answeredAt: string) => {
+        (questionId: string, selectedOptionId: string | null, selectedOptionText: string | null, answeredAt: string) => {
             socketRef.current?.emit('quiz:v1:answer', { questionId, selectedOptionId, selectedOptionText, answeredAt });
         },
         [],

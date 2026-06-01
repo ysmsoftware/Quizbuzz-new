@@ -44,11 +44,18 @@ function normalizeRegistration(raw: any): Registration {
     status === 'REVOKED' ? 'revoked' : 'pending';
 
   const paymentStatusRaw = String(raw.payment?.status || raw.paymentStatus || '').toUpperCase();
+  // Backend uses PaymentStatus enum: CREATED | PENDING | SUCCESS | FAILED | CANCELLED | REFUNDED
+  // Map to frontend's simplified statuses:
   const normalizedPaymentStatus: Registration['paymentStatus'] =
-    paymentStatusRaw === 'COMPLETED' ? 'completed' :
-    paymentStatusRaw === 'PENDING' ? 'pending' :
+    (paymentStatusRaw === 'SUCCESS' || paymentStatusRaw === 'COMPLETED') ? 'completed' :
+    (paymentStatusRaw === 'PENDING' || paymentStatusRaw === 'CREATED') ? 'pending' :
     paymentStatusRaw === 'FAILED' ? 'failed' :
-    paymentStatusRaw === 'REFUNDED' ? 'refunded' : 'pending';
+    paymentStatusRaw === 'REFUNDED' ? 'refunded' :
+    paymentStatusRaw === 'CANCELLED' ? 'failed' : 'pending';
+
+  // Amount in DB is stored in paise (smallest unit). Divide by 100 to get rupees.
+  const amountInPaise = raw.payment?.amount ?? raw.amount ?? 0;
+  const amountInRupees = amountInPaise > 0 ? amountInPaise / 100 : 0;
 
   return {
     id: raw.id,
@@ -59,10 +66,13 @@ function normalizeRegistration(raw: any): Registration {
     registrationRef: raw.registrationRef,
     status: normalizedStatus,
     registeredAt: raw.registeredAt || raw.createdAt || raw.updatedAt || '',
-    paymentId: raw.payment?.id || raw.paymentId,
+    // paymentId here is the Razorpay transaction ID (for display in the drawer)
+    paymentId: raw.payment?.razorpayPaymentId || raw.paymentId || null,
     paymentStatus: normalizedPaymentStatus,
-    amount: raw.payment?.amount || raw.amount,
-    paymentMethod: raw.payment?.method || raw.paymentMethod,
+    amount: amountInRupees,
+    // paidAt is the actual payment confirmation timestamp
+    paidAt: raw.payment?.paidAt || null,
+    paymentMethod: raw.payment?.method || raw.payment?.provider || raw.paymentMethod,
     participantDetails,
     whatsappOptIn: raw.whatsappOptIn,
     customFields: raw.customFields || {},

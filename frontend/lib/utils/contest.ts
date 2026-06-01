@@ -84,10 +84,10 @@ export function adaptServerContest(server: ServerContest): Contest {
     webcamRequired: false,
     tabSwitchLimit: 3,
 
-    // Registration & Fees
-    fee: server.paymentConfig?.amount || 0,
+    // paymentConfig.amount is stored in paise (smallest unit) — divide by 100 for rupees
+    fee: server.paymentConfig?.amount ? server.paymentConfig.amount / 100 : 0,
     currency: server.paymentConfig?.currency || 'INR',
-    registrationFee: server.paymentConfig?.amount || 0,
+    registrationFee: server.paymentConfig?.amount ? server.paymentConfig.amount / 100 : 0,
     maxParticipants: server.maxParticipants || 0,
     currentParticipants: _count.participants || 0,
 

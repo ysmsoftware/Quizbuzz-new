@@ -88,7 +88,7 @@ export class ParticipantRepository implements IParticipantRepository {
                     contact: {
                         select: { firstName: true, lastName: true, email: true, phone: true },
                     },
-                    payment: { select: { status: true, amount: true } },
+                    payment: { select: { id: true, status: true, amount: true, razorpayPaymentId: true, paidAt: true, provider: true } },
                 },
             }),
             prisma.participant.count({ where }),

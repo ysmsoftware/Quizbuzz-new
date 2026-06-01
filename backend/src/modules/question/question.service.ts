@@ -372,8 +372,8 @@ export class QuestionService {
         const assignments = Array.from(selectedQuestionIds).map((qId, idx) => ({
             questionId: qId,
             position: nextPosition + idx,
-            marks: 1,
-            negativeMark: 0,
+            marks: dto.defaultMarks,
+            negativeMark: dto.defaultNegativeMarks,
         }));
 
         const assignResult = await this.questionRepo.assignToContest(
