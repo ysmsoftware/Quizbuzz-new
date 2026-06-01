@@ -174,6 +174,9 @@ const envSchema = z.object({
   MAX_SLUG_RETRIES: z.coerce.number().default(5),
   JOIN_CODE_LENGTH: z.coerce.number().default(6),
   BULK_IMPORT_LIMIT: z.coerce.number().default(500),
+
+  // PUPPETEER
+  PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
 });
 
 // PARSE ENV
@@ -399,6 +402,9 @@ export const config = {
   },
   idempotency: {
     enabled: env.IDEMPOTENCY_ENABLED,
+  },
+  puppeteer: {
+    executablePath: env.PUPPETEER_EXECUTABLE_PATH,
   },
 } as const;
 
