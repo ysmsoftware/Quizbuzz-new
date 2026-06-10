@@ -1,20 +1,15 @@
+// app/layout.tsx
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { ThemeProvider } from '@/components/theme-provider'
+import { PostHogProvider } from '@/components/providers/posthog-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { Suspense } from 'react'
 import './globals.css'
 
-const geistSans = Geist({
-    subsets: ["latin"],
-    variable: '--font-geist-sans'
-});
-
-const geistMono = Geist_Mono({
-    subsets: ["latin"],
-    variable: '--font-geist-mono'
-});
+const geistSans = Geist({ subsets: ["latin"], variable: '--font-geist-sans' });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: '--font-geist-mono' });
 
 export const metadata: Metadata = {
     title: {
@@ -34,39 +29,27 @@ export const viewport: Viewport = {
     initialScale: 1,
 }
 
-export default function RootLayout({
-    children,
-}: Readonly<{
-    children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
             <head>
                 <script
                     dangerouslySetInnerHTML={{
-                        __html: `
-              (function() {
-                try {
-                  const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                  if (theme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (e) {}
-              })()
-            `,
+                        __html: `(function(){try{const t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){}})()`,
                     }}
                 />
             </head>
             <body className="font-sans antialiased bg-background text-foreground">
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
                     <QueryProvider>
-                        {children}
+                        <Suspense>
+                            <PostHogProvider>
+                                {children}
+                            </PostHogProvider>
+                        </Suspense>
                     </QueryProvider>
                     <Toaster />
                 </ThemeProvider>
-                {process.env.NODE_ENV === 'production' && <Analytics />}
             </body>
         </html>
     )

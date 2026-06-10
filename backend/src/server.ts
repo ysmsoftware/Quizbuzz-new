@@ -1,5 +1,8 @@
+import "./instrument";
+import * as Sentry from "@sentry/node";
 import logger from "./config/logger";
 import dotenv from "dotenv";
+import { analyticsTracker } from "./services/analytics.service";
 dotenv.config();
 
 import app from "./app";
@@ -43,6 +46,7 @@ async function bootstrap() {
         process.on("SIGINT", shutdown);
 
     } catch (error) {
+        Sentry.captureException(error);
         logger.error("Failed to start server", error);
         process.exit(1);
     }
@@ -68,6 +72,7 @@ async function shutdown() {
         await socketService.shutdown();
         logger.warn("Socket.IO server closed");
     } catch (err: any) {
+        Sentry.captureException(err);
         logger.error("Socket.IO shutdown error", err);
     }
 
@@ -81,6 +86,11 @@ async function shutdown() {
     await Promise.allSettled([
         prisma.$disconnect().then(() => logger.warn("Prisma disconnected")),
         redis.quit().then(() => logger.warn("Redis disconnected")),
+    ]);
+
+    await Promise.allSettled([
+        Sentry.close(2000),
+        analyticsTracker.shutdown(),
     ]);
 
     logger.warn("Shutdown complete");

@@ -16,14 +16,9 @@ import {
   ChevronRight,
   Send,
   Zap,
-  ShieldCheck,
   AlertCircle,
-  Sparkles,
   Settings2,
-  Brush,
-  UserPlus,
-  Trash2,
-  Trophy
+  Trash2
 } from 'lucide-react';
 import { useParticipants } from '@/lib/hooks/useParticipantCertificate';
 import { Button } from '@/components/ui/button';
@@ -57,8 +52,6 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 
-type CertificateTheme = 'royal' | 'midnight' | 'emerald';
-
 export default function CertificatesManagementPage() {
   const { id: contestId } = useParams() as { id: string };
   const router = useRouter();
@@ -67,13 +60,6 @@ export default function CertificatesManagementPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'dashboard' | 'designer'>('dashboard');
-
-  // Designer Configurator state
-  const [customTitle, setCustomTitle] = useState('Certificate of Accomplishment');
-  const [previewTheme, setPreviewTheme] = useState<CertificateTheme>('royal');
-  const [sigName, setSigName] = useState('Contest Director');
-  const [sigTitle, setSigTitle] = useState('Lead Evaluator');
 
   // Single Issuing form state
   const [issueParticipantId, setIssueParticipantId] = useState('');
@@ -162,30 +148,7 @@ export default function CertificatesManagementPage() {
           </p>
         </div>
         
-        {/* Toggle Designer and Dashboard View */}
         <div className="flex items-center gap-3">
-          <div className="flex border border-border bg-secondary/50 p-1 rounded-xl">
-            <Button
-              variant="ghost"
-              className={cn(
-                "rounded-lg px-4 h-9 text-xs font-semibold cursor-pointer",
-                viewMode === 'dashboard' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-              onClick={() => setViewMode('dashboard')}
-            >
-              Queue Monitor
-            </Button>
-            <Button
-              variant="ghost"
-              className={cn(
-                "rounded-lg px-4 h-9 text-xs font-semibold cursor-pointer",
-                viewMode === 'designer' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-              onClick={() => setViewMode('designer')}
-            >
-              <Brush className="h-3.5 w-3.5 mr-1" /> Template Studio
-            </Button>
-          </div>
 
           <Button variant="outline" className="rounded-xl" onClick={() => refetch()}>
             <RefreshCcw className="h-4 w-4 mr-2" />
@@ -207,8 +170,7 @@ export default function CertificatesManagementPage() {
         </div>
       </div>
 
-      {viewMode === 'dashboard' ? (
-        <>
+
           {/* Summary statistics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
@@ -496,231 +458,7 @@ export default function CertificatesManagementPage() {
               )}
 
             </div>
-        </>
-      ) : (
-        /* Designer Template Configurator split-screen */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
-          {/* Configurator Controls */}
-          <Card className="bg-card border-border/50 shadow-xs rounded-3xl p-6 space-y-6">
-            <div>
-              <h3 className="text-lg font-black text-foreground flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-amber-500" /> Certificate Configurator
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Design the visual template that Puppeteer uses to render credentials. Changes apply dynamically to all generated PDFs.
-              </p>
-            </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-muted-foreground">Certificate Title text</span>
-                <Input
-                  value={customTitle}
-                  onChange={(e) => setCustomTitle(e.target.value)}
-                  placeholder="Certificate of Accomplishment"
-                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-muted-foreground">Signature Author Name</span>
-                <Input
-                  value={sigName}
-                  onChange={(e) => setSigName(e.target.value)}
-                  placeholder="Contest Director"
-                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-muted-foreground">Signature Title</span>
-                <Input
-                  value={sigTitle}
-                  onChange={(e) => setSigTitle(e.target.value)}
-                  placeholder="Lead Evaluator"
-                  className="h-11 rounded-xl bg-background border-border text-sm focus:border-amber-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-muted-foreground">Theme Stylesheet Preview</span>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'royal', label: 'Royal Gold' },
-                    { id: 'midnight', label: 'Midnight Blue' },
-                    { id: 'emerald', label: 'Emerald Merit' }
-                  ].map((themeBtn) => (
-                    <button
-                      key={themeBtn.id}
-                      onClick={() => setPreviewTheme(themeBtn.id as CertificateTheme)}
-                      className={cn(
-                        "h-10 rounded-xl border text-xs font-semibold cursor-pointer transition-all",
-                        previewTheme === themeBtn.id
-                          ? "bg-primary border-primary text-primary-foreground shadow-xs"
-                          : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      {themeBtn.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-border/50">
-              <Button 
-                onClick={() => toast.success('Certificate layout saved successfully')}
-                className="w-full h-11 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-xl text-xs cursor-pointer shadow-xs"
-              >
-                Save Layout Configuration
-              </Button>
-            </div>
-          </Card>
-
-          {/* Live Mock Preview Canvas */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center px-1">
-              <h4 className="text-xs font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-amber-500" /> Live Canvas Render Mockup
-              </h4>
-              <span className="text-[10px] text-muted-foreground italic">Preformatted for 8.5" x 11" aspect ratio</span>
-            </div>
-
-            <div 
-              style={{
-                borderColor: 
-                  previewTheme === 'royal' ? 'rgba(212, 175, 55, 0.3)' : 
-                  previewTheme === 'midnight' ? 'rgba(37, 99, 235, 0.3)' : 
-                  'rgba(16, 185, 129, 0.3)',
-                background: 
-                  previewTheme === 'royal' ? 'linear-gradient(135deg, #110e08 0%, #1a160d 100%)' : 
-                  previewTheme === 'midnight' ? 'linear-gradient(135deg, #0b0f19 0%, #0d1527 100%)' : 
-                  'linear-gradient(135deg, #08110e 0%, #0c1c16 100%)'
-              }}
-              className="w-full aspect-[1.414/1] rounded-3xl border relative overflow-hidden select-none p-10 flex flex-col justify-between items-center text-center transition-all duration-300"
-            >
-              {/* Inner ornaments */}
-              <div className="absolute inset-3 rounded-2xl border border-dashed pointer-events-none opacity-40 border-neutral-700" />
-              <div className={`absolute inset-4 rounded-2xl border-2 pointer-events-none transition-all duration-300 ${
-                previewTheme === 'royal' ? 'border-amber-500/10' : 
-                previewTheme === 'midnight' ? 'border-blue-500/10' : 
-                'border-emerald-500/10'
-              }`} />
-
-              <div className="space-y-0.5">
-                <span className={cn(
-                  "text-[8px] font-black uppercase tracking-[0.4em] transition-all",
-                  previewTheme === 'royal' ? 'text-amber-500' : 
-                  previewTheme === 'midnight' ? 'text-blue-400' : 
-                  'text-emerald-400'
-                )}>
-                  {customTitle}
-                </span>
-                <h2 className="text-xl font-serif font-bold text-white tracking-wide mt-1">
-                  QUIZBUZZ CHAMPIONSHIP
-                </h2>
-              </div>
-
-              <div className="space-y-1 mt-2">
-                <p className="text-[10px] italic text-neutral-400 font-serif">
-                  This secure credential is proudly presented to
-                </p>
-                <h3 className="text-2xl font-extrabold text-white tracking-tight">
-                  Alexander Mercer
-                </h3>
-                <div className={cn(
-                  "h-[1.5px] w-20 mx-auto rounded-full mt-2",
-                  previewTheme === 'royal' ? 'bg-amber-500/40' : 
-                  previewTheme === 'midnight' ? 'bg-blue-500/40' : 
-                  'bg-emerald-500/40'
-                )} />
-              </div>
-
-              <p className="text-[10px] text-neutral-300 max-w-sm leading-relaxed mt-1">
-                for demonstrating exceptional performance and mastery in the official evaluation
-                <span className="block font-black text-white text-[11px] mt-0.5">Global Hackathon Finals</span>
-              </p>
-
-              {/* Mock Metric Stats */}
-              <div className="grid grid-cols-3 gap-2 bg-neutral-950/60 border border-neutral-900 px-4 py-2 rounded-xl mt-2 w-full max-w-xs text-center">
-                <div>
-                  <span className="text-[8px] uppercase text-neutral-500 block">Score</span>
-                  <span className={cn(
-                    "text-xs font-black font-mono",
-                    previewTheme === 'royal' ? 'text-amber-400' : 
-                    previewTheme === 'midnight' ? 'text-blue-400' : 
-                    'text-emerald-400'
-                  )}>
-                    95%
-                  </span>
-                </div>
-                <div className="border-x border-neutral-900">
-                  <span className="text-[8px] uppercase text-neutral-500 block">Rank</span>
-                  <span className="text-xs font-black font-mono text-white">
-                    #3
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[8px] uppercase text-neutral-500 block">Duration</span>
-                  <span className="text-xs font-black font-mono text-neutral-300">
-                    4m 12s
-                  </span>
-                </div>
-              </div>
-
-              {/* Signatures Footer */}
-              <div className="w-full flex justify-between items-end mt-2">
-                <div className="text-left w-1/3">
-                  <div className="h-6 flex items-center justify-start pointer-events-none">
-                    <svg className="h-6 text-neutral-500 stroke-current opacity-60" viewBox="0 0 100 40">
-                      <path d="M10,25 Q30,5 50,30 T90,20" fill="none" strokeWidth="2" />
-                    </svg>
-                  </div>
-                  <div className="border-t border-neutral-800 pt-0.5 mt-0.5">
-                    <p className="text-[8px] font-bold text-neutral-300 leading-none">{sigName}</p>
-                    <p className="text-[6px] text-neutral-500 mt-0.5">{sigTitle}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center w-1/3 relative">
-                  <div className="relative w-10 h-10 flex items-center justify-center">
-                    <svg viewBox="0 0 100 100" className="w-full h-full">
-                      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" className={cn(
-                        "stroke-dashed opacity-50",
-                        previewTheme === 'royal' ? 'text-amber-500' : 
-                        previewTheme === 'midnight' ? 'text-blue-500' : 
-                        'text-emerald-500'
-                      )} />
-                    </svg>
-                    <Trophy className={cn(
-                      "absolute h-4 w-4",
-                      previewTheme === 'royal' ? 'text-amber-500' : 
-                      previewTheme === 'midnight' ? 'text-blue-500' : 
-                      'text-emerald-500'
-                    )} />
-                  </div>
-                  <span className="text-[6px] tracking-widest text-emerald-400 font-bold uppercase mt-0.5 flex items-center gap-0.5">
-                    <ShieldCheck className="h-1.5 w-1.5" /> SECURE
-                  </span>
-                </div>
-
-                <div className="text-right w-1/3 flex flex-col items-end">
-                  <div className="bg-neutral-800 h-6 w-6 rounded flex items-center justify-center text-neutral-600 font-mono text-[6px] mb-1">
-                    [QR]
-                  </div>
-                  <div className="border-t border-neutral-800 pt-0.5 w-full text-right">
-                    <p className="text-[8px] font-bold text-neutral-300 leading-none">Security Reference</p>
-                    <p className="text-[6px] text-neutral-500 mt-0.5 font-mono">SEC-REF-PREVIEW</p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      )}
 
     </div>
   );

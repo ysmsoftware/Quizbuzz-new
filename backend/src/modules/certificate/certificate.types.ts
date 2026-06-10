@@ -26,17 +26,74 @@ export interface CreateCertificateInput {
 /**
  * Template parameters stored at queue time and used by the worker when
  * rendering the HTML template. Everything the template needs lives here.
+ *
+ * Fields added here are automatically picked up by certificate.template.ts
+ * via the buildRenderContext() function — no worker changes needed.
  */
 export interface CertificateMetadata {
+    // ── Required ─────────────────────────────────────────────────────────────
     participantName:  string;
     contestTitle:     string;
+    issuedAt:         string;   // ISO string — date the cert was issued
+
+    // ── Performance (optional — rendered as stat pills when present) ──────────
     score?:           number | undefined;
     percentage?:      number | undefined;
     rank?:            number | undefined;
     timeTakenSecs?:   number | undefined;
-    issuedAt:         string;   // ISO string
-    templateId?:      string | undefined;   // future: multi-template support
-    [key: string]: any;     // allow arbitrary extra fields per contest
+
+    // ── Contest metadata ──────────────────────────────────────────────────────
+    /**
+     * Human-readable date of the contest event itself.
+     * Falls back to `issuedAt` if not supplied.
+     * Example: "2025-09-14T10:00:00.000Z" → rendered as "14 September 2025"
+     */
+    contestDate?:     string | undefined;
+
+    // ── Organisation branding (optional — defaults applied in template) ───────
+    /**
+     * Display name of the organising body.
+     * Shown in the footer and used as alt-text for the logo.
+     * Defaults to "QuizBuzz" if not set.
+     */
+    orgName?:         string | undefined;
+
+    /**
+     * Publicly accessible URL of the org logo (HTTPS).
+     * Puppeteer will fetch this image at render time — must be reachable
+     * from the Chromium sandbox (no localhost URLs in production).
+     * If null / absent, org name text is rendered instead.
+     */
+    orgLogoUrl?:      string | undefined;
+
+    /**
+     * Primary brand colour as a 6-digit hex string (e.g. "#1a3a6b").
+     * Controls border, title, stats pills, and top bar colour.
+     * Defaults to "#1a3a6b" (QuizBuzz navy) if not set.
+     */
+    primaryColor?:    string | undefined;
+
+    // ── Template selection ────────────────────────────────────────────────────
+    /**
+     * Explicit template variant override.
+     * If omitted, the variant is inferred automatically from rank/percentage:
+     *   rank 1-3 OR percentage >= 90  → MERIT
+     *   percentage >= 60              → ACHIEVEMENT
+     *   otherwise                     → PARTICIPATION
+     *
+     * Valid values: "PARTICIPATION" | "ACHIEVEMENT" | "MERIT"
+     */
+    templateVariant?: string | undefined;
+
+    /**
+     * Legacy field — kept for backward compatibility.
+     * Use `templateVariant` for new code.
+     */
+    templateId?:      string | undefined;
+
+    // ── Extension ─────────────────────────────────────────────────────────────
+    /** Arbitrary extra fields per contest (e.g. custom award name, etc.). */
+    [key: string]: any;
 }
 
 export interface UpdateCertificateStatusInput {

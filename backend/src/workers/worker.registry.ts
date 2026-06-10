@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import logger from '../config/logger';
 import { Worker } from './worker.interface';
 
@@ -17,11 +18,15 @@ class WorkerRegistry {
     startAll() {
         logger.info(`Starting ${this.workers.length} workers...`);
 
-        for(const worker of this.workers) {
-            try{
+        for (const worker of this.workers) {
+            try {
                 worker.start();
                 logger.info(`Worker started: ${worker.name}`);
-            } catch(error) {
+            } catch (error) {
+                Sentry.captureException(error, {
+                    tags: { worker: worker.name },
+                    extra: { phase: "startup" },
+                });
                 logger.error(`Worker failed to start: ${worker.name}`, error);
             }
         }

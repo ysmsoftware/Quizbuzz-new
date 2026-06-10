@@ -1,9 +1,11 @@
+
 import cookieParser from "cookie-parser";
 import express from 'express';
 import helmet from 'helmet';
 import addRequestId from "express-request-id";
 import cors from 'cors';
 import morgan from 'morgan';
+import * as Sentry from "@sentry/node";
 import logger, { morganStream } from "./config/logger";
 import { prisma } from './config/db';
 import path from "path";
@@ -13,10 +15,10 @@ import { globalErrorHandler } from "./middlewares/error.middleware";
 
 import { config } from './config/index';
 
-// Routes
+
 import { apiRouter } from './routes';
 import { paymentController } from "./container";
-import { globalLimiter } from "./middlewares/rate-limit.js";
+
 
 const app = express();
 
@@ -58,15 +60,11 @@ app.use(morgan(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static upload files
 app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
-// Serve local proctoring captures (dev only — in prod these go directly to S3)
 app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
 
-// Rate Limiting
-// app.use('/api/v1', globalLimiter);
 
-// Routes
+// routes
 app.use('/api/v1', apiRouter);
 
 
@@ -89,9 +87,8 @@ app.get('/health', async (req, res) => {
         requestId: req.id,
     });
 });
+app.get('/sentry-test', () => { throw new Error('Manual Sentry test - backend'); });
 
-
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -100,6 +97,9 @@ app.use((req, res) => {
     });
 });
 
-// Global error handling
+
+Sentry.setupExpressErrorHandler(app);
+
+
 app.use(globalErrorHandler);
 export default app;

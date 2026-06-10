@@ -35,3 +35,9 @@ Thumbs.db
 # Coverage
 coverage/
 **/coverage/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform/scripts/setup-ssm.sh
