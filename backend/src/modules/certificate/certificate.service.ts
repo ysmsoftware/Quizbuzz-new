@@ -183,11 +183,16 @@ export class CertificateService {
         const metadata: CertificateMetadata = {
             participantName: `${participant.contact.firstName} ${participant.contact.lastName ?? ""}`.trim(),
             contestTitle: participant.contest?.title ?? "",
+            // contestDate: the actual event date (startTime), not the issuance date
+            contestDate: participant.contest?.startTime?.toISOString() ?? new Date().toISOString(),
             score: participant.submission.score ? Number(participant.submission.score) : undefined,
             percentage: participant.submission.percentage ? Number(participant.submission.percentage) : undefined,
             rank: participant.leaderboard?.rank ?? undefined,
             timeTakenSecs: participant.submission.timeTakenSecs ?? undefined,
             issuedAt: new Date().toISOString(),
+            // Org branding fields — orgLogoUrl and primaryColor are left unset here
+            // so the template defaults (QuizBuzz navy) are used. These can be set
+            // per-contest in the future by storing them on the Contest model.
         };
 
         // 6. Create certificate row in QUEUED status
@@ -246,6 +251,7 @@ export class CertificateService {
             metadata: {
                 participantName: `${p.contact.firstName} ${p.contact.lastName ?? ""}`.trim(),
                 contestTitle,
+                contestDate: (p as any).contest?.startTime?.toISOString() ?? new Date().toISOString(),
                 score: p.submission?.score ? Number(p.submission.score) : undefined,
                 percentage: p.submission?.percentage ? Number(p.submission.percentage) : undefined,
                 rank: p.leaderboard?.rank ?? undefined,

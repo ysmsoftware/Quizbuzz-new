@@ -1,39 +1,46 @@
 import { Request, Response, NextFunction } from "express";
+import * as Sentry from "@sentry/node";
 import { verifyToken } from "../utils/jwt";
 import logger from "../config/logger";
 import { UnauthorizedError, ForbiddenError } from "../error/http-errors";
 
 export const authenticatedOrgMiddleware = async (
-  req: Request,
-  _res: Response,
-  next: NextFunction
+    req: Request,
+    _res: Response,
+    next: NextFunction
 ) => {
-  try {
+    try {
 
-    let token: string | undefined = req.cookies?.accessToken;
+        let token: string | undefined = req.cookies?.accessToken;
 
-    if(!token) {
-        const authHeader = req.headers.authorization;
-        if(authHeader?.startsWith("Bearer ")) {
-            token = authHeader.split(" ")[1];
+        if (!token) {
+            const authHeader = req.headers.authorization;
+            if (authHeader?.startsWith("Bearer ")) {
+                token = authHeader.split(" ")[1];
+            }
         }
+
+        if (!token) {
+            throw new UnauthorizedError("Unauthorized");
+        }
+
+        const payload = verifyToken(token);
+
+        req.user = { id: payload.userId, organizationId: payload.organizationId };
+
+        if (!req.user.organizationId) {
+            throw new ForbiddenError("No active organization");
+        }
+
+
+        Sentry.getCurrentScope().setUser({
+            id: payload.userId,
+            organizationId: payload.organizationId,
+        } as any);
+
+        logger.debug(`User authenticated: ${payload.userId} org: ${payload.organizationId}`);
+        next();
+    } catch (error) {
+        next(error);
     }
-
-    if (!token) {
-      throw new UnauthorizedError("Unauthorized");
-    }
-
-    const payload = verifyToken(token);
-
-    req.user = { id: payload.userId, organizationId: payload.organizationId };
-
-    if (!req.user.organizationId) {
-      throw new ForbiddenError("No active organization");
-    }
-    
-    logger.debug(`User authenticated: ${payload.userId} org: ${payload.organizationId}`);
-    next();
-  } catch (error) {
-    next(error);
-  }
 };

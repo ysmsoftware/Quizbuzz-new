@@ -8,15 +8,12 @@ import {
     CheckCircle2,
     FileText,
     IndianRupee,
-    ChevronRight,
     LayoutDashboard,
     HelpCircle,
     ShieldCheck,
     BarChart3,
     MonitorPlay,
-    Settings,
     AlertTriangle,
-    Archive,
     Award
 } from 'lucide-react';
 import {

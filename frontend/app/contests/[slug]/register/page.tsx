@@ -9,6 +9,7 @@ import { z } from "zod";
 import { motion } from "framer-motion";
 import { ArrowLeft, Loader2, CreditCard, CheckCircle, Mail, KeyRound } from "lucide-react";
 import Link from "next/link";
+import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +86,31 @@ export default function RegisterPage() {
       setStep("success");
     }
   }, [paymentState, step]);
+
+  // Celebrate on successful registration
+  useEffect(() => {
+    if (step === "success") {
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+      
+      const end = Date.now() + 1500;
+      const interval = setInterval(() => {
+        if (Date.now() > end) return clearInterval(interval);
+        confetti({
+          startVelocity: 15,
+          spread: 360,
+          ticks: 60,
+          origin: { x: Math.random(), y: Math.random() - 0.2 },
+          particleCount: 20
+        });
+      }, 200);
+      
+      return () => clearInterval(interval);
+    }
+  }, [step]);
 
   // OTP input refs
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);

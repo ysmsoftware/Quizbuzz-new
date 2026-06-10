@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import * as Sentry from "@sentry/node";
 import { AppError } from "../error/app-error";
 import logger from "../config/logger";
 import { TokenExpiredError, JsonWebTokenError } from "jsonwebtoken";
@@ -25,6 +26,11 @@ export const globalErrorHandler = (
 ) => {
     const requestId = (req as any).id;
     const { method, originalUrl } = req;
+
+    // Always clear the Sentry user scope after a request errors out.
+    // Express reuses worker threads across requests; without this, a failed
+    // request could leak its user context into a subsequent unrelated request.
+    Sentry.getCurrentScope().setUser(null);
 
     // ── 1. Zod Validation Error Handler ──────────────────────────────────
     if (err instanceof ZodError) {

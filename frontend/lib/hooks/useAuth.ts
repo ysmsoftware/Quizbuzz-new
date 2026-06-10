@@ -17,6 +17,7 @@ import {
 
 import * as authApi from '../api/auth.api';
 import { queryKeys } from '../api/queryClient';
+import { posthog } from '../posthog';
 
 export interface AdminUser {
   id: string;
@@ -61,9 +62,21 @@ export function useAuth() {
    */
   const loginMutation = useMutation({
     mutationFn: authApi.loginAdmin,
-    onSuccess: () => {
+    onSuccess: (res) => {
       // Refetch /me to populate auth state
       queryClient.invalidateQueries({ queryKey: queryKeys.auth.me });
+
+      // Identify the admin in PostHog so frontend events are linked to this user.
+      // The server independently tracks events under the same adminId, so funnel
+      // analysis will merge correctly once identity is established.
+      const admin = res?.data?.admin;
+      if (admin?.id) {
+        posthog.identify(admin.id, {
+          email: admin.email,
+          name: `${admin.firstName} ${admin.lastName}`.trim(),
+          role: 'admin',
+        });
+      }
     },
   });
 
@@ -73,6 +86,11 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: authApi.logoutAdmin,
     onSuccess: () => {
+      // Reset PostHog identity so the next session starts anonymous.
+      // Must happen before clearing the query cache so any final events
+      // still carry the current user context.
+      posthog.reset();
+
       // Immediately mark the user as logged-out in the cache before navigating.
       // queryClient.clear() alone is not synchronous enough — the layout's useEffect
       // can fire a redirect to /admin before the cache flush completes.
@@ -86,6 +104,7 @@ export function useAuth() {
     },
     onError: () => {
       // Even if the API call fails (e.g. expired token), clear local state and redirect.
+      posthog.reset();
       queryClient.setQueryData(queryKeys.auth.me, null);
       queryClient.resetQueries();
       if (typeof window !== 'undefined') {

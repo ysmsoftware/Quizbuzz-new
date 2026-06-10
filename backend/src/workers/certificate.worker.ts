@@ -24,7 +24,8 @@ import { redis } from "../config/redis";
 import { config } from "../config";
 import { certificateService } from "../container";
 import { storageService } from "../services/storage.service";
-import { CertificateJobPayload, CertificateMetadata } from "../modules/certificate/certificate.types";
+import { CertificateJobPayload } from "../modules/certificate/certificate.types";
+import { renderCertificateHtml } from "../modules/certificate/certificate.template";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -63,100 +64,6 @@ async function getBrowser(): Promise<Browser> {
     });
 
     return browser;
-}
-
-// ─── HTML template rendering ──────────────────────────────────────────────────
-
-/**
- * Renders the certificate HTML from the metadata.
- *
- * In production this function would load a template from:
- *   - A contest-specific template in S3/DB (keyed by metadata.templateId)
- *   - A default fallback template
- *
- * For now it produces a clean, self-contained HTML string that Puppeteer
- * can render without any network requests (all styles are inline).
- *
- * The HTML uses A4 landscape dimensions (297mm × 210mm).
- */
-function renderCertificateHtml(meta: CertificateMetadata): string {
-    const issuedDate = new Date(meta.issuedAt).toLocaleDateString("en-IN", {
-        day:   "2-digit",
-        month: "long",
-        year:  "numeric",
-    });
-
-    const scoreLine = meta.percentage !== undefined
-        ? `<p class="score">Score: <strong>${meta.percentage.toFixed(2)}%</strong>${
-            meta.rank ? ` &nbsp;|&nbsp; Rank: <strong>#${meta.rank}</strong>` : ""
-          }</p>`
-        : "";
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    @page { size: A4 landscape; margin: 0; }
-
-    body {
-      width: 297mm;
-      height: 210mm;
-      font-family: "Georgia", serif;
-      background: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .cert {
-      width: 270mm;
-      height: 185mm;
-      border: 8px double #1a3a6b;
-      padding: 32px 48px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      gap: 16px;
-    }
-
-    .org-logo { font-size: 13px; color: #777; text-transform: uppercase; letter-spacing: 3px; }
-    .title    { font-size: 36px; font-weight: bold; color: #1a3a6b; letter-spacing: 1px; }
-    .subtitle { font-size: 14px; color: #555; }
-    .name     { font-size: 28px; font-weight: bold; color: #222; border-bottom: 2px solid #1a3a6b; padding-bottom: 8px; min-width: 200px; }
-    .body     { font-size: 15px; color: #444; max-width: 420px; line-height: 1.7; }
-    .contest  { font-size: 18px; font-weight: bold; color: #1a3a6b; }
-    .score    { font-size: 14px; color: #555; }
-    .footer   { font-size: 12px; color: #999; margin-top: 8px; }
-  </style>
-</head>
-<body>
-  <div class="cert">
-    <p class="org-logo">QuizBuzz</p>
-    <h1 class="title">Certificate of Achievement</h1>
-    <p class="subtitle">This is to certify that</p>
-    <p class="name">${escapeHtml(meta.participantName)}</p>
-    <p class="body">
-      has successfully participated in and completed the
-    </p>
-    <p class="contest">${escapeHtml(meta.contestTitle)}</p>
-    ${scoreLine}
-    <p class="footer">Issued on ${issuedDate}</p>
-  </div>
-</body>
-</html>`;
-}
-
-function escapeHtml(str: string): string {
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
 }
 
 // ─── PDF generation ───────────────────────────────────────────────────────────
@@ -209,8 +116,10 @@ async function processCertificate(job: Job<CertificateJobPayload>): Promise<void
     await certificateService.markGenerating(certificateId, organizationId);
 
     // ── Step 3: Render HTML ───────────────────────────────────────────────────
+    // renderCertificateHtml is imported from certificate.template.ts
+    // It receives the full metadata + certificateId to build the context.
 
-    const html = renderCertificateHtml(metadata);
+    const html = renderCertificateHtml(metadata, certificateId);
 
     // ── Step 4: Generate PDF via Puppeteer ────────────────────────────────────
 
