@@ -12,6 +12,7 @@ import path from "path";
 
 import { redis } from './config/redis';
 import { globalErrorHandler } from "./middlewares/error.middleware";
+import { metricsRegistry, collectQueueMetrics } from './config/metrics';
 
 import { config } from './config/index';
 
@@ -69,6 +70,12 @@ app.use('/api/v1', apiRouter);
 
 
 
+
+app.get('/metrics', async (req, res) => {
+    await collectQueueMetrics();
+    res.set('Content-Type', metricsRegistry.contentType);
+    res.end(await metricsRegistry.metrics());
+});
 
 app.get('/health', async (req, res) => {
     const [db, cache] = await Promise.allSettled([
