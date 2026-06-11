@@ -43,7 +43,7 @@ services:
 
   # ── Backend API ──
   backend:
-    image: ghcr.io/ysmsoftware/quizbuzz-backend:latest   # ← pulled from GHCR
+    image: ghcr.io/ysmsoftware/quizbuzz-backend:629d3da   # ← pulled from GHCR
     container_name: quizbuzz_backend
     restart: unless-stopped
     <<: *backend-env
@@ -71,7 +71,7 @@ services:
 
   # ── Background Worker ──
   worker:
-    image: ghcr.io/ysmsoftware/quizbuzz-backend:latest   # ← same image, different CMD
+    image: ghcr.io/ysmsoftware/quizbuzz-backend:629d3da   # ← same image, different CMD
     container_name: quizbuzz_worker
     restart: unless-stopped
     <<: *backend-env
@@ -93,7 +93,7 @@ services:
 
   # ── Frontend ──
   frontend:
-    image: ghcr.io/ysmsoftware/quizbuzz-frontend:latest  # ← pulled from GHCR
+    image: ghcr.io/ysmsoftware/quizbuzz-frontend:629d3da  # ← pulled from GHCR
     container_name: quizbuzz_frontend
     restart: unless-stopped
     environment:
