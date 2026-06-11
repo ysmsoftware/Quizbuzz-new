@@ -17,7 +17,6 @@ env:
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # LINT & TEST
-  # Unchanged from your current pipeline.
   # ──────────────────────────────────────────────────────────────────────────
   test:
     name: Lint & Test
@@ -71,8 +70,6 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   # BUILD BACKEND
-  # Unchanged from your current pipeline.
-  # Pushes to GHCR with two tags: git SHA (e.g. "a3f8c2d") and "latest".
   # ──────────────────────────────────────────────────────────────────────────
   build-backend:
     name: Build Backend
@@ -118,7 +115,6 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────────────────
   # BUILD FRONTEND
-  # Unchanged from your current pipeline.
   # ──────────────────────────────────────────────────────────────────────────
   build-frontend:
     name: Build Frontend
@@ -173,35 +169,16 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ──────────────────────────────────────────────────────────────────────────
-  # DEPLOY
+  # DEPLOY — SSH to old manual EC2
   #
-  # WHAT CHANGED FROM YOUR OLD DEPLOY JOB:
-  # Old: SSH into EC2 → git pull → write .env files → docker compose up
-  # New: AWS SSM Run Command → EC2 pulls new images from GHCR → restart containers
+  # Uses EC2_HOST, EC2_USER, EC2_SSH_KEY secrets (already in your repo).
+  # Compose file is at: /home/ubuntu/quizbuzz/docker-compose.prod.yml
   #
-  # WHY THE CHANGE?
-  # The new EC2 (created by Terraform) does NOT have the git repo cloned.
-  # All config comes from /app/.env written at boot (from SSM).
-  # On every deploy we only need to: pull new images + restart services.
-  # SSM Run Command lets us do this without SSH or storing EC2_SSH_KEY in GitHub.
-  #
-  # WHAT YOU NEED IN GITHUB SECRETS FOR THIS JOB:
-  #   AWS_ACCESS_KEY_ID      — IAM user key for Terraform/CI (already in GitHub)
-  #   AWS_SECRET_ACCESS_KEY  — IAM user secret (already in GitHub)
-  #   AWS_ACCOUNT_ID         — your 12-digit AWS account ID (add this)
-  #
-  # HOW IT FINDS THE EC2:
-  # It searches for an EC2 with tag Name=quizbuzz-admin (set in Terraform).
-  # No hardcoded instance ID — works even if the instance is replaced.
-  #
-  # HOW ROLLBACK WORKS:
-  # SSM Run Command returns exit code 0 (success) or 1 (failure).
-  # If the health check after restart fails, we re-pull the "latest" tag
-  # (which still points to the previous image until the next successful build)
-  # and restart again. This is the same rollback logic as your old deploy.
+  # When we cut over to the Terraform EC2, this job gets replaced with
+  # the SSM Run Command version (kept as a comment at the bottom).
   # ──────────────────────────────────────────────────────────────────────────
   deploy:
-    name: Deploy to EC2 (SSM)
+    name: Deploy to EC2 (SSH)
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend]
 
@@ -217,170 +194,97 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-      # Configure AWS CLI with the IAM credentials stored in GitHub Secrets
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
-
-      # Step 1: Write the new git SHA as the image tag in SSM.
-      # The running EC2 doesn't read this at deploy time — the SSM Run Command
-      # below reads it explicitly. But it's stored here so if the EC2 is ever
-      # terminated and recreated, it boots with the latest image.
-      - name: Update image tag in SSM
+      # Compute short SHA — matches what docker/metadata-action outputs
+      # with type=sha,format=short (first 7 chars of github.sha)
+      - name: Set image tag
         run: |
-          IMAGE_TAG="${{ github.sha }}"
-          # github.sha is the full 40-char SHA. We use the short version (7 chars)
-          # which matches what docker/metadata-action outputs with format=short.
-          SHORT_TAG="${IMAGE_TAG:0:7}"
-          
-          aws ssm put-parameter \
-            --name "/quizbuzz/prod/image-tag" \
-            --value "$SHORT_TAG" \
-            --type String \
-            --overwrite \
-            --region ap-south-1
-          
+          SHORT_TAG="${{ github.sha }}"
+          SHORT_TAG="${SHORT_TAG:0:7}"
           echo "IMAGE_TAG=$SHORT_TAG" >> $GITHUB_ENV
-          echo "Stored image tag: $SHORT_TAG"
+          echo "Deploying image tag: $SHORT_TAG"
 
-      # Step 2: Find the admin EC2 instance by its Terraform-managed tag.
-      # This avoids hardcoding the instance ID in GitHub Secrets.
-      - name: Find admin EC2 instance ID
-        id: find-instance
+      - name: Setup SSH key
         run: |
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters \
-              "Name=tag:Name,Values=quizbuzz-admin" \
-              "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" \
-            --output text \
-            --region ap-south-1)
-          
-          if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
-            echo "ERROR: No running instance found with tag Name=quizbuzz-admin"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy via SSH
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+              NEW_TAG="${{ env.IMAGE_TAG }}" \
+              bash -s << 'ENDSSH'
+          set -euo pipefail
+          echo "=== Deploy starting on $(hostname) at $(date) ==="
+          echo "Image tag: $NEW_TAG"
+
+          # Compose file location (confirmed from your server)
+          COMPOSE_FILE="$HOME/quizbuzz/docker-compose.prod.yml"
+
+          if [ ! -f "$COMPOSE_FILE" ]; then
+            echo "ERROR: Compose file not found at $COMPOSE_FILE"
             exit 1
           fi
-          
-          echo "Found instance: $INSTANCE_ID"
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+          echo "Using: $COMPOSE_FILE"
 
-      # Step 3: Send the deploy command to the EC2 via SSM Run Command.
-      #
-      # The command does:
-      #   1. Log in to GHCR (using the GHCR_TOKEN from SSM)
-      #   2. Pull the new image tag (the git SHA from the build above)
-      #   3. Update the image tags in /app/docker-compose.yml with sed
-      #   4. Restart only the changed services (--no-deps prevents
-      #      restarting redis unnecessarily)
-      #   5. Health check — wait up to 60s for /health to return 200
-      #   6. If health check fails: roll back by pulling "latest" tag
-      #
-      # IMPORTANT: The SSM Run Command runs as root on the EC2.
-      # docker compose is available at /usr/local/lib/docker/cli-plugins/docker-compose
-      - name: Deploy via SSM Run Command
-        run: |
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "set -euo pipefail",
-              "echo \"=== Deploy starting: $(date) ===\"",
-              "",
-              "# Read GHCR token from SSM and login",
-              "GHCR_TOKEN=$(aws ssm get-parameter --name /quizbuzz/prod/GHCR_TOKEN --with-decryption --query Parameter.Value --output text --region ap-south-1)",
-              "echo \"$GHCR_TOKEN\" | docker login ghcr.io -u ysmsoftware --password-stdin",
-              "",
-              "# Pull new backend and frontend images (new git SHA tag)",
-              "NEW_TAG=${{ env.IMAGE_TAG }}",
-              "echo \"Pulling images with tag: $NEW_TAG\"",
-              "docker pull ghcr.io/ysmsoftware/quizbuzz-backend:$NEW_TAG",
-              "docker pull ghcr.io/ysmsoftware/quizbuzz-frontend:$NEW_TAG",
-              "",
-              "# Update image tags in the compose file",
-              "sed -i \"s|quizbuzz-backend:.*|quizbuzz-backend:$NEW_TAG|g\" /app/docker-compose.yml",
-              "sed -i \"s|quizbuzz-frontend:.*|quizbuzz-frontend:$NEW_TAG|g\" /app/docker-compose.yml",
-              "",
-              "# Restart backend, worker, frontend (not redis — no changes there)",
-              "docker compose -f /app/docker-compose.yml up -d --no-deps --no-build backend worker frontend",
-              "",
-              "# Health check — up to 60s (12 attempts x 5s)",
-              "echo \"Waiting for health check...\"",
-              "HEALTHY=false",
-              "for i in $(seq 1 12); do",
-              "  STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3005/health || echo 000)",
-              "  echo \"Attempt $i/12 — HTTP $STATUS\"",
-              "  if [ \"$STATUS\" = \"200\" ]; then HEALTHY=true; break; fi",
-              "  sleep 5",
-              "done",
-              "",
-              "if [ \"$HEALTHY\" = \"false\" ]; then",
-              "  echo \"Health check FAILED — rolling back to latest\"",
-              "  sed -i \"s|quizbuzz-backend:$NEW_TAG|quizbuzz-backend:latest|g\" /app/docker-compose.yml",
-              "  sed -i \"s|quizbuzz-frontend:$NEW_TAG|quizbuzz-frontend:latest|g\" /app/docker-compose.yml",
-              "  docker compose -f /app/docker-compose.yml up -d --no-deps --no-build backend worker frontend",
-              "  echo \"Rollback complete\"",
-              "  exit 1",
-              "fi",
-              "",
-              "# Retag latest to this new image (so rollback always has a valid target)",
-              "docker tag ghcr.io/ysmsoftware/quizbuzz-backend:$NEW_TAG ghcr.io/ysmsoftware/quizbuzz-backend:latest",
-              "docker tag ghcr.io/ysmsoftware/quizbuzz-frontend:$NEW_TAG ghcr.io/ysmsoftware/quizbuzz-frontend:latest",
-              "",
-              "# Clean up old images to free disk space",
-              "docker image prune -f",
-              "",
-              "echo \"=== Deploy complete: $(date) ===\""
-            ]' \
-            --timeout-seconds 300 \
-            --query "Command.CommandId" \
-            --output text \
-            --region ap-south-1)
-          
-          echo "SSM Command ID: $COMMAND_ID"
-          echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+          # ── Pull new images ───────────────────────────────────────────────
+          # GHCR credentials are cached on this server from previous deploys.
+          # If this fails with "unauthorized", SSH in manually and run:
+          #   docker login ghcr.io -u ysmsoftware
+          echo "Pulling backend:$NEW_TAG ..."
+          docker pull "ghcr.io/ysmsoftware/quizbuzz-backend:$NEW_TAG"
 
-      # Step 4: Wait for the SSM command to finish (poll every 5s, max 5 min)
-      - name: Wait for deploy to complete
-        run: |
-          echo "Waiting for SSM command $COMMAND_ID to complete..."
-          
-          for i in $(seq 1 60); do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --query "Status" \
-              --output text \
-              --region ap-south-1 2>/dev/null || echo "Pending")
-            
-            echo "  Attempt $i/60 — Status: $STATUS"
-            
-            case "$STATUS" in
-              "Success")
-                echo "Deploy succeeded."
-                exit 0
-                ;;
-              "Failed"|"Cancelled"|"TimedOut")
-                # Print the error output from the EC2 for debugging
-                aws ssm get-command-invocation \
-                  --command-id "$COMMAND_ID" \
-                  --instance-id "$INSTANCE_ID" \
-                  --query "StandardErrorContent" \
-                  --output text \
-                  --region ap-south-1 || true
-                echo "Deploy failed with status: $STATUS"
-                exit 1
-                ;;
-              *)
-                sleep 5
-                ;;
-            esac
+          echo "Pulling frontend:$NEW_TAG ..."
+          docker pull "ghcr.io/ysmsoftware/quizbuzz-frontend:$NEW_TAG"
+
+          # ── Update image tags in the compose file ─────────────────────────
+          sed -i "s|quizbuzz-backend:[^ ]*|quizbuzz-backend:$NEW_TAG|g" "$COMPOSE_FILE"
+          sed -i "s|quizbuzz-frontend:[^ ]*|quizbuzz-frontend:$NEW_TAG|g" "$COMPOSE_FILE"
+
+          # ── Restart only changed services ─────────────────────────────────
+          # --no-deps: don't touch redis, postgres, prometheus, grafana, etc.
+          # --no-build: use the already-pulled image
+          echo "Restarting backend, worker, frontend..."
+          docker compose -f "$COMPOSE_FILE" up -d --no-deps --no-build backend worker frontend
+
+          # ── Health check ─────────────────────────────────────────────────
+          echo "Running health check (up to 60s)..."
+          HEALTHY=false
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3005/health 2>/dev/null || echo "000")
+            echo "  Attempt $i/12 — HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              HEALTHY=true
+              break
+            fi
+            sleep 5
           done
-          
-          echo "Timed out waiting for SSM command."
-          exit 1
+
+          if [ "$HEALTHY" = "false" ]; then
+            echo "Health check FAILED — rolling back to latest"
+            sed -i "s|quizbuzz-backend:$NEW_TAG|quizbuzz-backend:latest|g" "$COMPOSE_FILE"
+            sed -i "s|quizbuzz-frontend:$NEW_TAG|quizbuzz-frontend:latest|g" "$COMPOSE_FILE"
+            docker compose -f "$COMPOSE_FILE" up -d --no-deps --no-build backend worker frontend
+            echo "Rollback complete"
+            docker compose -f "$COMPOSE_FILE" ps
+            exit 1
+          fi
+
+          # ── Retag :latest so rollback always has a valid target ───────────
+          docker tag "ghcr.io/ysmsoftware/quizbuzz-backend:$NEW_TAG" \
+                     "ghcr.io/ysmsoftware/quizbuzz-backend:latest"
+          docker tag "ghcr.io/ysmsoftware/quizbuzz-frontend:$NEW_TAG" \
+                     "ghcr.io/ysmsoftware/quizbuzz-frontend:latest"
+
+          # ── Cleanup old images ────────────────────────────────────────────
+          docker image prune -f
+
+          echo "=== Deploy complete at $(date) ==="
+          docker compose -f "$COMPOSE_FILE" ps
+          ENDSSH
 
       - name: Notify Slack — Deploy Succeeded
         if: success()
@@ -400,8 +304,60 @@ jobs:
         with:
           payload: |
             {
-              "text": ":fire: *Deploy FAILED!* `quiz.ysminfosolution.com`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":fire: *Deploy FAILED!* `quiz.ysminfosolution.com`\n*Tag:* `${{ env.IMAGE_TAG }}`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+# ────────────────────────────────────────────────────────────────────────────
+# FUTURE: Replace the SSH deploy job above with this SSM version
+# when cutting over to the Terraform EC2.
+#
+# deploy:
+#   name: Deploy to EC2 (SSM)
+#   runs-on: ubuntu-latest
+#   needs: [build-backend, build-frontend]
+#   steps:
+#     - name: Configure AWS credentials
+#       uses: aws-actions/configure-aws-credentials@v4
+#       with:
+#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         aws-region: ap-south-1
+#
+#     - name: Set image tag
+#       run: |
+#         SHORT_TAG="${{ github.sha }}"
+#         SHORT_TAG="${SHORT_TAG:0:7}"
+#         echo "IMAGE_TAG=$SHORT_TAG" >> $GITHUB_ENV
+#         aws ssm put-parameter --name "/quizbuzz/prod/image-tag" \
+#           --value "$SHORT_TAG" --type String --overwrite --region ap-south-1
+#
+#     - name: Find EC2 instance
+#       run: |
+#         INSTANCE_ID=$(aws ec2 describe-instances \
+#           --filters "Name=tag:Name,Values=quizbuzz-admin" \
+#                     "Name=instance-state-name,Values=running" \
+#           --query "Reservations[0].Instances[0].InstanceId" \
+#           --output text --region ap-south-1)
+#         echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+#
+#     - name: Deploy via SSM Run Command
+#       run: |
+#         COMMAND_ID=$(aws ssm send-command \
+#           --instance-ids "$INSTANCE_ID" \
+#           --document-name "AWS-RunShellScript" \
+#           --parameters 'commands=["..."]' \
+#           --timeout-seconds 300 \
+#           --query "Command.CommandId" \
+#           --output text --region ap-south-1)
+#         echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+#
+#     - name: Wait for deploy
+#       run: |
+#         aws ssm wait command-executed \
+#           --command-id "$COMMAND_ID" \
+#           --instance-id "$INSTANCE_ID" \
+#           --region ap-south-1
+# ────────────────────────────────────────────────────────────────────────────
