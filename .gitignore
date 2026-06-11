@@ -41,3 +41,4 @@ coverage/
 *.tfstate
 *.tfstate.*
 terraform/scripts/setup-ssm.sh
+.env

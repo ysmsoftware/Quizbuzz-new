@@ -43,7 +43,7 @@ services:
 
   # ── Backend API ──
   backend:
-    image: ghcr.io/ysmsoftware/quizbuzz-backend:629d3da   # ← pulled from GHCR
+    image: ghcr.io/ysmsoftware/quizbuzz-backend:7adb866   # ← pulled from GHCR
     container_name: quizbuzz_backend
     restart: unless-stopped
     <<: *backend-env
@@ -71,7 +71,7 @@ services:
 
   # ── Background Worker ──
   worker:
-    image: ghcr.io/ysmsoftware/quizbuzz-backend:629d3da   # ← same image, different CMD
+    image: ghcr.io/ysmsoftware/quizbuzz-backend:7adb866   # ← same image, different CMD
     container_name: quizbuzz_worker
     restart: unless-stopped
     <<: *backend-env
@@ -93,7 +93,7 @@ services:
 
   # ── Frontend ──
   frontend:
-    image: ghcr.io/ysmsoftware/quizbuzz-frontend:629d3da  # ← pulled from GHCR
+    image: ghcr.io/ysmsoftware/quizbuzz-frontend:7adb866  # ← pulled from GHCR
     container_name: quizbuzz_frontend
     restart: unless-stopped
     environment:
@@ -136,7 +136,7 @@ services:
     container_name: quizbuzz_postgres_exporter
     restart: unless-stopped
     environment:
-      - DATA_SOURCE_NAME=postgresql://postgres:postgres@postgres:5432/quizbuzz?sslmode=disable
+      - DATA_SOURCE_NAME=${DATA_SOURCE_NAME}
     networks:
       - internal
 
@@ -182,7 +182,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=QuizBuzz@Graf2026
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_HTTP_PORT=3001
     ports:
