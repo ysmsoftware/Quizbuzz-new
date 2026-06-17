@@ -100,6 +100,21 @@ module "admin_instance" {
 }
 
 ##############################################################################
+# MODULE: DNS
+# Creates Route53 hosted zone for quiz.ysminfosolution.com and manages A/ALIAS records
+# pointing to either the t3.small EC2 (idle mode) or the ALB (live mode).
+##############################################################################
+module "dns" {
+  source       = "../../modules/dns"
+  zone_name    = local.fqdn
+  fqdn         = local.fqdn
+  is_live      = local.is_live
+  admin_eip    = module.admin_instance.elastic_ip
+  alb_dns_name = ""
+  alb_zone_id  = ""
+}
+
+##############################################################################
 # OUTPUTS
 # Values that are useful to see after `terraform apply`.
 # Run `terraform output` to see them all.
@@ -108,6 +123,11 @@ module "admin_instance" {
 output "elastic_ip" {
   value       = module.admin_instance.elastic_ip
   description = "UPDATE YOUR DNS: Set quiz.ysminfosolution.com A record to this IP on host.co.in"
+}
+
+output "dns_name_servers" {
+  value       = module.dns.name_servers
+  description = "The nameservers to configure in host.co.in for quiz.ysminfosolution.com delegation"
 }
 
 output "instance_id" {
