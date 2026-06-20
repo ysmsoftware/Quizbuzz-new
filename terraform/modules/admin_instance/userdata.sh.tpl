@@ -548,7 +548,13 @@ mkdir -p /etc/nginx/conf.d
 # Remove the default nginx server block so it doesn't conflict
 rm -f /etc/nginx/conf.d/default.conf
 
-cat > /etc/nginx/conf.d/quiz.conf << "NGINX_EOF"
+# NOTE: This heredoc is SINGLE-quoted ('NGINX_TEMPLATE') so NEITHER bash
+# NOR Terraform's templatefile() touch its contents -- nginx's own $variables
+# (http_upgrade, host, scheme, etc.) survive untouched. The literal string
+# __DOMAIN__ is used as a placeholder and replaced with sed afterward.
+# This avoids the double-escaping bug where \$ and unicode dashes got
+# written literally into the config file.
+cat > /etc/nginx/conf.d/quiz.conf << 'NGINX_TEMPLATE'
 # Rate limit zone
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 
@@ -560,11 +566,11 @@ map $http_upgrade $connection_upgrade {
 
 # HTTP-only server block.
 # Certbot will extend this with an SSL redirect and add a 443 block
-# the first time you run: certbot --nginx -d ${domain}
+# the first time you run: certbot --nginx -d __DOMAIN__
 server {
     listen 80;
     listen [::]:80;
-    server_name ${domain};
+    server_name __DOMAIN__;
 
     # Allow Let's Encrypt HTTP-01 challenge through
     location /.well-known/acme-challenge/ {
@@ -574,52 +580,67 @@ server {
     # Temporary: serve over HTTP until certbot runs.
     # After certbot, this block is replaced by a 301 redirect to HTTPS.
 
-    # Frontend — Next.js on port 3000
+    # Frontend -- Next.js on port 3000
     location / {
         proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade    \$http_upgrade;
-        proxy_set_header   Connection \$connection_upgrade;
-        proxy_set_header   Host       \$host;
-        proxy_set_header   X-Real-IP  \$remote_addr;
-        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
         proxy_buffers      8 32k;
         proxy_buffer_size  64k;
     }
 
-    # Backend API — Express on port 3005
+    # Backend API -- Express on port 3005
     location /api {
         proxy_pass         http://127.0.0.1:3005;
         proxy_http_version 1.1;
-        proxy_set_header   Host       \$host;
-        proxy_set_header   X-Real-IP  \$remote_addr;
-        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         limit_req          zone=api_limit burst=50 nodelay;
         proxy_read_timeout    60s;
         proxy_connect_timeout 60s;
     }
 
-    # Socket.IO — Backend on port 3005
+    # Socket.IO -- Backend on port 3005
     location /socket.io {
         proxy_pass         http://127.0.0.1:3005;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade    \$http_upgrade;
-        proxy_set_header   Connection \$connection_upgrade;
-        proxy_set_header   Host       \$host;
-        proxy_set_header   X-Real-IP  \$remote_addr;
-        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout  86400s;
         proxy_send_timeout  86400s;
         proxy_buffering     off;
     }
 }
-NGINX_EOF
+NGINX_TEMPLATE
+
+# Substitute the real domain in place of the placeholder.
+# templatefile() variable ${domain} was already resolved by Terraform
+# BEFORE this script ever runs, so $domain here is a normal bash variable
+# available in this script's environment via the templatefile() substitution
+# done earlier in the file (see top-level ${domain} usage elsewhere).
+sed -i "s/__DOMAIN__/${domain}/g" /etc/nginx/conf.d/quiz.conf
 
 mkdir -p /var/www/certbot
+
+# Validate config BEFORE starting -- fail loudly if broken instead of
+# silently leaving nginx down
+if ! nginx -t 2>&1; then
+  echo "ERROR: nginx config is invalid. Dumping file for debugging:"
+  cat /etc/nginx/conf.d/quiz.conf
+  exit 1
+fi
 
 # Enable and start Nginx
 systemctl enable nginx
@@ -627,6 +648,8 @@ systemctl restart nginx
 
 echo "--- Nginx started on HTTP. Run certbot once to enable HTTPS: ---"
 echo "    sudo certbot --nginx -d ${domain}"
+echo "--- nginx -t output: ---"
+nginx -t
 
 echo "=== Boot script complete: $(date) ==="
 echo "Check containers: docker compose -f /app/docker-compose.yml ps"
