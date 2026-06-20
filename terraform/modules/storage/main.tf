@@ -1,26 +1,4 @@
 # STORAGE MODULE
-#
-# DELETION PROTECTION — mirrors the RDS module's deletion_protection = true.
-# S3 buckets have no AWS-level "deletion_protection" flag like RDS does, so
-# we use Terraform's own lifecycle.prevent_destroy instead. This makes
-# `terraform destroy` (or any plan that would remove this resource) fail
-# with an error rather than silently deleting the bucket and everything
-# inside it (certificates, assets — irreplaceable, unlike compute).
-#
-# HOW THIS BEHAVES ON destroy/apply CYCLES (idle <-> live mode switching):
-#   - terraform destroy / apply -var="mode=idle" after "mode=live":
-#     this module is NEVER targeted by the live/idle switch (it has no
-#     count or is_live conditional), so it is untouched on every normal
-#     apply regardless of mode. prevent_destroy is a safety net for the
-#     rare case someone runs `terraform destroy` against the whole stack
-#     or removes this module block from main.tf by mistake.
-#   - Because the bucket name (quizbuzz-assets-prod) is fixed and S3
-#     bucket names are globally unique + immutable, as long as this
-#     resource stays in Terraform state, `terraform apply` will always
-#     detect the existing bucket and reuse it — it will NEVER attempt to
-#     recreate it unless you change an immutable argument (e.g. `bucket`)
-#     or someone deletes it out-of-band and you run `terraform import`
-#     again.
 
 resource "aws_s3_bucket" "main" {
   bucket = "quizbuzz-assets-prod"
