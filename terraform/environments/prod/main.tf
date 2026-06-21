@@ -110,8 +110,35 @@ module "dns" {
   fqdn         = local.fqdn
   is_live      = local.is_live
   admin_eip    = module.admin_instance.elastic_ip
-  alb_dns_name = ""
-  alb_zone_id  = ""
+  alb_dns_name = local.is_live ? module.live_contest[0].alb_dns_name : ""
+  alb_zone_id  = local.is_live ? module.live_contest[0].alb_zone_id : ""
+}
+
+##############################################################################
+# MODULE: LIVE CONTEST (ALB + ASG + ElastiCache Redis + NAT Gateway)
+# Only created when mode = "live".
+##############################################################################
+module "live_contest" {
+  count                = local.is_live ? 1 : 0
+  source               = "../../modules/live_contest"
+  vpc_id               = module.networking.vpc_id
+  public_subnets       = module.networking.public_subnet_ids
+  private_subnets      = module.networking.private_subnet_ids
+  quiz_private_subnets = module.networking.quiz_private_subnet_ids
+  quiz_route_table_id  = module.networking.quiz_route_table_id
+  alb_sg_id            = module.networking.alb_sg_id
+  ec2_sg_id            = module.networking.ec2_sg_id
+  elasticache_sg_id    = module.networking.elasticache_sg_id
+
+  # Calculate initial/desired instances: ~1 instance per 1000 users.
+  # Clamp between 2 and 10 to ensure high availability while capping cost.
+  desired_capacity     = ceil(var.expected_participants / 1000) > 10 ? 10 : (ceil(var.expected_participants / 1000) < 2 ? 2 : ceil(var.expected_participants / 1000))
+
+  aws_region        = var.aws_region
+  s3_bucket         = module.storage.bucket_name
+  github_org        = var.github_org
+  domain            = local.fqdn
+  admin_instance_id = module.admin_instance.instance_id
 }
 
 ##############################################################################
@@ -149,3 +176,14 @@ output "s3_bucket" {
   value       = module.storage.bucket_name
   description = "S3 bucket name for S3_BUCKET env var"
 }
+
+output "alb_dns_name" {
+  value       = local.is_live ? module.live_contest[0].alb_dns_name : ""
+  description = "Application Load Balancer DNS name (live mode only)"
+}
+
+output "redis_primary_endpoint" {
+  value       = local.is_live ? module.live_contest[0].redis_primary_endpoint : ""
+  description = "ElastiCache Redis primary endpoint (live mode only)"
+}
+

@@ -49,17 +49,51 @@ resource "aws_subnet" "public" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRIVATE SUBNETS (2 AZs)
-# For resources that must NEVER be directly reachable from the internet:
-# RDS PostgreSQL, ElastiCache Redis (live mode), quiz EC2s (live mode).
+# PRIVATE SUBNETS (2 AZs) — DATABASE / ISOLATED TIER
+# For resources that must NEVER be directly reachable from the internet AND
+# must never have outbound internet access either: RDS PostgreSQL.
 # RDS subnet groups require at least 2 AZs even for single-AZ deployments.
+#
+# ISOLATION GUARANTEE: these subnets are associated ONLY with
+# aws_route_table.private below, which has NO internet route — not now,
+# not during live mode, not ever. The live_contest module's NAT Gateway
+# route is deliberately added to a SEPARATE set of subnets (quiz_private,
+# below) so that RDS never gains outbound internet capability even
+# temporarily during a live contest. See live_contest/nat.tf for the
+# full reasoning.
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.${count.index + 10}.0/24"
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags              = { Name = "quizbuzz-private-${count.index}" }
+  tags              = { Name = "quizbuzz-private-${count.index}", Tier = "database-isolated" }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRIVATE SUBNETS (2 AZs) — QUIZ COMPUTE TIER (used only during live mode)
+# For resources that must never be directly internet-reachable but DO need
+# outbound internet access: quiz EC2s (pull Docker images from GHCR, call
+# AWS SSM/CloudWatch/S3 APIs) and ElastiCache Redis (no outbound needed,
+# but lives here for network proximity to the quiz EC2s it serves).
+#
+# WHY SEPARATE FROM THE DATABASE-TIER PRIVATE SUBNETS ABOVE:
+# The live_contest module attaches a NAT Gateway route to whichever route
+# table these subnets use. If quiz EC2s shared subnets with RDS, that NAT
+# route would also grant RDS outbound internet access for the duration of
+# every live contest — an unnecessary and avoidable security regression on
+# the production database. Keeping them in dedicated subnets means RDS's
+# "zero outbound internet, ever" guarantee holds unconditionally, while
+# quiz EC2s in a DIFFERENT subnet can still reach RDS directly — subnets
+# within the same VPC route to each other automatically; only security
+# groups gate that traffic (RDS SG already allows the shared EC2 SG).
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_subnet" "quiz_private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.${count.index + 20}.0/24"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  tags              = { Name = "quizbuzz-quiz-private-${count.index}", Tier = "quiz-compute" }
 }
 
 # Internet Gateway — the door between your VPC and the public internet.
@@ -86,7 +120,10 @@ resource "aws_route_table_association" "public" {
 }
 
 # Private route table — no internet route. Resources here are isolated.
-# Week 3: add a NAT Gateway route here so private quiz EC2s can pull images.
+# This table is used ONLY by the database-tier private subnets above.
+# The quiz-compute-tier subnets get their own route table, created inside
+# the live_contest module (only exists during live mode), so this table's
+# "no internet, ever" guarantee is never modified by any other module.
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   tags   = { Name = "quizbuzz-private-rt" }
@@ -96,6 +133,22 @@ resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+# Dedicated route table for quiz_private subnets.
+# In idle mode, this route table has no route to the internet (isolated).
+# In live mode, the live_contest module attaches a route to a NAT Gateway
+# using an aws_route resource, granting outbound internet access only
+# when needed.
+resource "aws_route_table" "quiz_private" {
+  vpc_id = aws_vpc.main.id
+  tags   = { Name = "quizbuzz-quiz-private-rt" }
+}
+
+resource "aws_route_table_association" "quiz_private" {
+  count          = 2
+  subnet_id      = aws_subnet.quiz_private[count.index].id
+  route_table_id = aws_route_table.quiz_private.id
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -261,10 +314,25 @@ resource "aws_security_group" "alb" {
 # ─────────────────────────────────────────────────────────────────────────────
 # OUTPUTS — values passed to other modules
 # ─────────────────────────────────────────────────────────────────────────────
-output "vpc_id"             { value = aws_vpc.main.id }
-output "public_subnet_ids"  { value = aws_subnet.public[*].id }
-output "private_subnet_ids" { value = aws_subnet.private[*].id }
-output "ec2_sg_id"          { value = aws_security_group.ec2.id }
-output "rds_sg_id"          { value = aws_security_group.rds.id }
-output "elasticache_sg_id"  { value = aws_security_group.elasticache.id }
-output "alb_sg_id"          { value = aws_security_group.alb.id }
+output "vpc_id"                  { value = aws_vpc.main.id }
+output "public_subnet_ids"       { value = aws_subnet.public[*].id }
+
+output "private_subnet_ids" {
+  value       = aws_subnet.private[*].id
+  description = "Database-tier subnets — RDS only, never has outbound internet"
+}
+
+output "quiz_private_subnet_ids" {
+  value       = aws_subnet.quiz_private[*].id
+  description = "Quiz-compute-tier subnets — used by live_contest module for quiz EC2s and ElastiCache"
+}
+
+output "ec2_sg_id"               { value = aws_security_group.ec2.id }
+output "rds_sg_id"               { value = aws_security_group.rds.id }
+output "elasticache_sg_id"       { value = aws_security_group.elasticache.id }
+output "alb_sg_id"               { value = aws_security_group.alb.id }
+
+output "quiz_route_table_id" {
+  value       = aws_route_table.quiz_private.id
+  description = "Quiz private route table ID — used by live_contest to inject/remove the NAT route"
+}
