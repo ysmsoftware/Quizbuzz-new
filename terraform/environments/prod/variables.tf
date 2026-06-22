@@ -28,7 +28,7 @@ variable "expected_participants" {
   default     = 1000
   description = <<-EOT
     How many concurrent users you expect for the upcoming contest.
-    Used to calculate how many c6i.large quiz instances to spin up in live mode.
+    Used to calculate how many t3.medium quiz instances to spin up in live mode.
     Formula: ceil(participants / 1000), capped at 10.
     Examples: 1000 → 1 instance, 3000 → 3 instances, 10000 → 10 instances.
   EOT
@@ -74,21 +74,35 @@ variable "alert_email" {
 variable "db_password" {
   type        = string
   sensitive   = true
+  default     = null
   description = <<-EOT
-    Password for the RDS PostgreSQL master user (quizbuzz_admin).
-    NEVER put this in terraform.tfvars or commit it to git.
-    
-    How to pass it safely:
-    Option A — Environment variable (recommended for CI/CD):
-      export TF_VAR_db_password="YourStrongPassword123!"
-      terraform apply
-    
-    Option B — Command line (ok for local use, not CI/CD):
-      terraform apply -var="db_password=YourStrongPassword123!"
-    
-    Requirements: Min 8 chars, mix of upper/lower/numbers/symbols.
-    Save this password in a password manager — you need it for DATABASE_URL.
-  EOT
+    DEPRECATED MANUAL OVERRIDE — leave unset (null) in normal use.
+    Previously this variable required typing the RDS master password at
+    every `terraform apply` prompt. That created a real production
+    incident: a stale/incorrect password typed once silently changed
+    RDS's actual master password (because apply_immediately = true),
+    while SSM's DATABASE_URL parameter kept the OLD password baked into
+    its connection string — the two fell out of sync with no error or
+    warning, and the backend crash-looped (Prisma connection failure)
+    the next time live mode booted, with no obvious link back to "I typed
+    the wrong password three applies ago."
+
+   THE FIX: db_password is now read automatically from SSM Parameter
+    Store (/quizbuzz/prod/DB_MASTER_PASSWORD, see data.aws_ssm_parameter
+    below) on every apply. There's now exactly ONE source of truth for
+   this password, and it can never silently drift from what's actually
+    in DATABASE_URL again, because both originate from the same SSM value.
+
+    This variable still exists ONLY as an emergency manual override (e.g.
+    rotating the password for the first time, before SSM has it yet).
+    If you ever need to pass it manually again:
+      terraform apply -var="db_password=NewPassword123!"
+    Otherwise, NEVER set this — always update SSM directly instead:
+      aws ssm put-parameter --name "/quizbuzz/prod/DB_MASTER_PASSWORD" \
+        --value "NewPassword123!" --type SecureString --overwrite
+    and update DATABASE_URL in SSM to match in the SAME action, since
+    they must always stay consistent with each other.
+   EOT
 }
 
 variable "your_ip" {
@@ -130,5 +144,21 @@ variable "github_org" {
     from GHCR (GitHub Container Registry).
     Example: if your images are at ghcr.io/myusername/quizbuzz-backend
     then this value should be "myusername".
+  EOT
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = <<-EOT
+    ARN of the ACM certificate for quiz.ysminfosolution.com.
+    Required for HTTPS listener on the ALB in live mode.
+    Steps to get this:
+    1. AWS Console → Certificate Manager (ap-south-1) → Request certificate
+    2. Add domain: quiz.ysminfosolution.com
+    3. Choose DNS validation → ACM gives you a CNAME record
+    4. Add that CNAME at theserverindia.com DNS panel
+    5. Wait ~2 min for validation → copy the certificate ARN here
+    Example: "arn:aws:acm:ap-south-1:211125602755:certificate/xxxx-xxxx"
   EOT
 }

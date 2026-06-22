@@ -53,7 +53,8 @@ submissionRouter.get("/admin/contacts/:contactId/submissions", authenticatedOrgM
 submissionRouter.post("/:contestId/submit", idempotency, submissionController.submit);
 
 /**
- * GET /submissions/me/:participantId
+ * GET /submission/:participantId
  */
-submissionRouter.get("/submissions/me/:participantId", submissionController.getMySubmission);
+
+submissionRouter.get("/submission/:participantId", submissionController.getMySubmission);
 

@@ -49,8 +49,8 @@ variable "elasticache_sg_id" {
 # ── COMPUTE SIZING ───────────────────────────────────────────────────────────
 variable "instance_type" {
   type        = string
-  default     = "c6i.large"
-  description = "EC2 instance type for quiz backend fleet. c6i.large = 2vCPU, 4GB — compute-optimized for WebSocket + Socket.IO throughput."
+  default     = "t3.medium"
+  description = "EC2 instance type for quiz backend fleet. t3.medium = 2vCPU, 4GB — compute-optimized for WebSocket + Socket.IO throughput."
 }
 
 variable "min_size" {
@@ -96,4 +96,14 @@ variable "domain" {
 variable "admin_instance_id" {
   type        = string
   description = "EC2 instance ID of the existing admin instance — registered into the ALB's admin-tg so admin traffic also flows through the ALB during live mode"
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  description = "ARN of the ACM certificate for SSL/TLS on the ALB listener"
+
+  validation {
+    condition     = length(var.acm_certificate_arn) > 0
+    error_message = "acm_certificate_arn is required in live mode. Set it in terraform.tfvars or pass -var=\"acm_certificate_arn=arn:aws:acm:...\". See variables.tf for instructions."
+  }
 }

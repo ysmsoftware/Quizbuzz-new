@@ -210,7 +210,7 @@ resource "aws_autoscaling_group" "quiz" {
   # healthy — an instance whose Docker containers crashed but the EC2
   # itself is still up will correctly be marked unhealthy and replaced.
   health_check_type         = "ELB"
-  health_check_grace_period = 180 # 3 min — time for Docker pull + container boot before health checks count
+  health_check_grace_period = 420
 
   launch_template {
     id      = aws_launch_template.quiz.id
@@ -225,7 +225,7 @@ resource "aws_autoscaling_group" "quiz" {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = 100
-      instance_warmup        = 150 # 2.5 min — matches health_check_grace_period
+      instance_warmup        = 420
     }
   }
 

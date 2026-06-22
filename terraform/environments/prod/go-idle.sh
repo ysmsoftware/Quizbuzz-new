@@ -21,17 +21,12 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# Ensure we have the DB password (needed to read/validate RDS state)
-if [ -z "$TF_VAR_db_password" ]; then
-  echo "RDS database password environment variable (TF_VAR_db_password) is not set."
-  read -sp "Enter RDS database password: " db_pass
-  echo ""
-  if [ -z "$db_pass" ]; then
-    echo "ERROR: Password cannot be empty."
-    exit 1
-  fi
-  export TF_VAR_db_password="$db_pass"
-fi
+# ─────────────────────────────────────────────────────────────────────────
+# DB PASSWORD: deliberately NOT prompted for here anymore — same fix as
+# go-live.sh, see that file's comment for the full incident history.
+# main.tf reads /quizbuzz/prod/DB_MASTER_PASSWORD from SSM automatically.
+# ─────────────────────────────────────────────────────────────────────────
+
 
 echo "Initiating terraform apply for idle mode..."
 terraform apply -var-file="terraform.tfvars" -var="mode=idle" -auto-approve

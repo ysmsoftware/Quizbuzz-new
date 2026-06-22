@@ -45,7 +45,29 @@
 locals {
   is_live = var.mode == "live"
   fqdn    = "${var.api_subdomain}.${var.domain_name}"
+
+# ─────────────────────────────────────────────────────────────────────────
+# DB PASSWORD — read from SSM by default, manual override only if set.
+#
+# WHY THIS EXISTS (real incident, see variables.tf db_password comment
+# for full story): a manually-typed terraform apply password once drifted
+# from what SSM's DATABASE_URL actually contained, silently changing
+# RDS's real password while the connection string still had the old one.
+# The backend crash-looped on every boot afterward with no obvious link
+# back to the cause.
+#
+# coalesce() picks the FIRST non-null value: if you explicitly pass
+# -var="db_password=..." it wins (emergency override path); otherwise
+# this always reads /quizbuzz/prod/DB_MASTER_PASSWORD from SSM, which is
+# now the single source of truth kept in sync with DATABASE_URL.
+  db_password = coalesce(var.db_password, data.aws_ssm_parameter.db_master_password.value)
 }
+
+data "aws_ssm_parameter" "db_master_password" {
+  name            = "/quizbuzz/prod/DB_MASTER_PASSWORD"
+  with_decryption = true
+}
+
 
 ##############################################################################
 # MODULE: NETWORKING
@@ -69,7 +91,7 @@ module "database" {
   source          = "../../modules/database"
   private_subnets = module.networking.private_subnet_ids
   rds_sg_id       = module.networking.rds_sg_id
-  db_password     = var.db_password
+  db_password     = local.db_password
 }
 
 ##############################################################################
@@ -89,7 +111,7 @@ module "storage" {
 ##############################################################################
 module "admin_instance" {
   source         = "../../modules/admin_instance"
-  instance_type  = "t2.small"
+  instance_type  = "t3.medium"
   subnet_id      = module.networking.public_subnet_ids[0]
   ec2_sg_id      = module.networking.ec2_sg_id
   aws_region     = var.aws_region
@@ -139,6 +161,7 @@ module "live_contest" {
   github_org        = var.github_org
   domain            = local.fqdn
   admin_instance_id = module.admin_instance.instance_id
+  acm_certificate_arn = var.acm_certificate_arn
 }
 
 ##############################################################################
