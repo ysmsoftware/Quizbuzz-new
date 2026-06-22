@@ -27,7 +27,7 @@ echo "Time: $(date)"
 #     there's no SSL cert to manage at this layer and no second backend
 #     port to route between (only the backend itself listens here).
 #
-#   - HIGHER queue/connection limits: this instance type (c6i.large) is
+#   - HIGHER queue/connection limits: this instance type (t3.medium) is
 #     dedicated entirely to quiz traffic, unlike the admin t2.small which
 #     shares capacity with the dashboard, registration, and webhooks.
 #     QUEUE_CONCURRENCY and WS_MAX_CONNECTIONS_PER_INSTANCE are raised to
@@ -204,7 +204,7 @@ SOCKET_TOKEN_TTL=7200
 OTP_TTL=300
 IDEMPOTENCY_TTL=86400
 
-# ── WEBSOCKET (live-mode capacity — dedicated c6i.large) ────────────────────
+# ── WEBSOCKET (live-mode capacity — dedicated t3.mediums) ────────────────────
 WS_NAMESPACE=/quiz
 WS_PATH=/socket.io
 WS_HEARTBEAT_INTERVAL=15000

@@ -20,7 +20,7 @@
 #     a bottleneck exactly when you can least afford one (live contest).
 # Since this whole module only exists for ~24h windows, the NAT Gateway's
 # higher hourly cost ($0.045/hr + data processing) is negligible versus the
-# c6i.large fleet cost, and the reliability tradeoff is worth it.
+# t3.medium fleet cost, and the reliability tradeoff is worth it.
 #
 # IMPORTANT — THIS DOES NOT REPLACE THE IDLE-MODE NAT INSTANCE:
 # The idle-mode NAT Instance (in the networking module, used for the admin
@@ -68,6 +68,9 @@ resource "aws_route" "quiz_nat" {
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.live.id
 }
+
+# The association is already handled in the networking module.
+
 
 output "nat_gateway_id" {
   value       = aws_nat_gateway.live.id

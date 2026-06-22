@@ -15,18 +15,38 @@ echo " 4. NAT Gateway - Outbound connectivity for quiz instances"
 echo "========================================================="
 echo ""
 
-# Ensure we have the DB password (needed to read/validate RDS state)
-if [ -z "$TF_VAR_db_password" ]; then
-  echo "RDS database password environment variable (TF_VAR_db_password) is not set."
-  read -sp "Enter RDS database password: " db_pass
-  echo ""
-  if [ -z "$db_pass" ]; then
-    echo "ERROR: Password cannot be empty."
-    exit 1
-  fi
-  export TF_VAR_db_password="$db_pass"
-fi
 
+# ─────────────────────────────────────────────────────────────────────────
+# DB PASSWORD: deliberately NOT prompted for here anymore.
+#
+# WHY THIS CHANGED (real recurring incident): every time this script
+# prompted for db_password manually, there was a real chance of typing a
+# stale or slightly different password than what SSM's DATABASE_URL
+# actually contained. Since db_password feeds RDS's actual master
+# password (apply_immediately = true in the database module), a single
+# mistyped character would silently change RDS's real password while
+# DATABASE_URL in SSM kept the OLD one — causing every backend container
+# across the fleet to crash-loop on P1000 authentication failures, with
+# no obvious link back to "I typed it wrong on this one apply." This
+# happened more than once and cost real debugging time disconnected from
+# any actual code or infrastructure problem.
+#
+# root main.tf now reads db_password automatically from SSM
+# (/quizbuzz/prod/DB_MASTER_PASSWORD) via coalesce(var.db_password, ...),
+# where var.db_password defaults to null. As long as nothing sets
+# TF_VAR_db_password or passes -var="db_password=...", Terraform always
+# reads the SSM value — the SAME source DATABASE_URL is built from — so
+# the two can never drift apart through this script again.
+#
+# If you ever genuinely need to ROTATE the password, do it explicitly
+# and deliberately, OUTSIDE this script:
+#   aws ssm put-parameter --name "/quizbuzz/prod/DB_MASTER_PASSWORD" \
+#     --value "NewPassword123!" --type SecureString --overwrite
+#   aws rds modify-db-instance --db-instance-identifier quizbuzz-postgres \
+#     --master-user-password "NewPassword123!" --apply-immediately
+#   (then update DATABASE_URL in SSM to match, in the same sitting)
+# Never via an interactive prompt buried inside a routine mode-switch.
+# ────────────────────────────────────────────────────────────────────────
 echo "Initiating terraform apply for live mode..."
 terraform apply -var-file="terraform.tfvars" -var="mode=live" -auto-approve
 

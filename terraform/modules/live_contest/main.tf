@@ -36,9 +36,33 @@ resource "aws_lb" "quiz" {
 # admin-tg: routes to the existing admin EC2 (t2.small). Handles anything
 # that ISN'T live quiz traffic — admin dashboard, registration, payments,
 # results pages, certificate downloads, Next.js frontend SSR.
+#
+# PORT CORRECTED FROM 3005 TO 80 — REAL BUG FOUND DURING FIRST LIVE TEST:
+# This target group originally forwarded to port 3005 (the backend API
+# port), but the comment above it always said it should also serve the
+# Next.js frontend (port 3000). Those two facts contradicted each other.
+#
+# The admin EC2 already runs nginx (see modules/admin_instance and the
+# live quiz.conf you configured), which does its OWN path-based routing:
+#   /            -> proxy_pass to 127.0.0.1:3000 (Next.js frontend)
+#   /api         -> proxy_pass to 127.0.0.1:3005 (Express backend)
+#   /socket.io   -> proxy_pass to 127.0.0.1:3005 (Socket.IO)
+# on port 80 (then 443 with certbot, in idle mode).
+#
+# Forwarding admin-tg directly to 3005 completely bypassed nginx, which
+# meant: (a) the frontend was NEVER reachable through the ALB in live
+# mode — only the backend API was, even for plain page loads, and
+# (b) nginx's own routing logic (frontend vs backend split) was being
+# skipped entirely for any traffic arriving via the ALB.
+# The fix: point admin-tg at port 80, so nginx on the admin instance
+# does the SAME frontend/backend split for ALB-routed traffic that it
+# already does for direct-IP traffic in idle mode. This means nginx's
+# config is now the single source of truth for admin-instance routing
+# in BOTH modes — not duplicated or contradicted by ALB-level rules.
+
 resource "aws_lb_target_group" "admin" {
-  name     = "quizbuzz-admin-tg"
-  port     = 3005
+  name_prefix     = "adm-"
+  port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
 
@@ -51,12 +75,15 @@ resource "aws_lb_target_group" "admin" {
   }
 
   tags = { Name = "quizbuzz-admin-tg" }
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # quiz-tg: routes to the ASG fleet of quiz EC2s. Handles WebSocket
 # connections and live-quiz API calls (join, submit, answer).
 resource "aws_lb_target_group" "quiz" {
-  name     = "quizbuzz-quiz-tg"
+  name_prefix     = "quiz-"
   port     = 3005
   protocol = "HTTP"
   vpc_id   = var.vpc_id
@@ -89,16 +116,29 @@ resource "aws_lb_target_group" "quiz" {
   }
 
   tags = { Name = "quizbuzz-quiz-tg" }
+  lifecycle {
+    create_before_destroy = true
+  }
 }
+
+
 
 # Registers the EXISTING admin EC2 (created by the admin_instance module,
 # already running before live_contest is ever applied) into admin-tg.
 # This is what makes "everything except quiz traffic" reachable through
 # the ALB during live mode, without needing a second admin instance.
+#
+# Port 80, not 3005 — matches the target group's corrected port above.
+# This means the ALB's health check ("/health" on port 80) hits nginx,
+# which proxies it through to the backend's actual /health endpoint on
+# 3005. If nginx itself is down (not just the backend), this correctly
+# reports unhealthy too — a more complete health signal than hitting
+# 3005 directly, which would say "healthy" even if nginx had crashed and
+# frontend traffic had no path to reach the instance at all.
 resource "aws_lb_target_group_attachment" "admin_ec2" {
   target_group_arn = aws_lb_target_group.admin.arn
   target_id        = var.admin_instance_id
-  port             = 3005
+  port             = 80
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,14 +174,31 @@ resource "aws_lb_listener" "http" {
   # Default: anything not matched by a more specific rule below goes to
   # the admin target group (dashboard, registration, etc.)
   default_action {
+    type             = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+# HTTPS listener — actual traffic routing
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.quiz.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.acm_certificate_arn
+
+  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.admin.arn
   }
 }
 
-# Rule 1: WebSocket connections (Socket.IO handshake + upgrade) → quiz fleet
+# Rule 1: WebSocket → quiz fleet (explicit for clarity/priority),
 resource "aws_lb_listener_rule" "websocket" {
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.https.arn
   priority     = 10
 
   condition {
@@ -154,26 +211,25 @@ resource "aws_lb_listener_rule" "websocket" {
   }
 }
 
-# Rule 2: Quiz-specific REST endpoints (join, submit, answer) → quiz fleet
-# These paths must match your actual backend route prefixes exactly —
-# verify against your contest/quiz module routes before first live test.
-resource "aws_lb_listener_rule" "quiz_api" {
-  listener_arn = aws_lb_listener.http.arn
+# Rule 2: Frontend-only paths -> admin-tg (the ONLY Next.js runs)
+
+resource "aws_lb_listener_rule" "frontend" {
+  listener_arn = aws_lb_listener.https.arn
   priority     = 20
 
   condition {
     path_pattern {
       values = [
-        "/api/v1/quiz/*",
-        "/api/v1/contests/*/join",
-        "/api/v1/contests/*/submit",
+        "/",
+        "/_next/*",
+        "/favicon.ico",       
       ]
     }
   }
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.quiz.arn
+    target_group_arn = aws_lb_target_group.admin.arn
   }
 }
 

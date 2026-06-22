@@ -29,6 +29,43 @@ resource "aws_elasticache_subnet_group" "redis" {
   description = "Quiz-compute-tier subnets - keeps Redis network-adjacent to the quiz EC2 fleet, never internet-reachable"
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CUSTOM PARAMETER GROUP — maxmemory-policy = noeviction
+#
+# WHY THIS EXISTS (found during first live test):
+# Without an explicit parameter group, ElastiCache uses AWS's default
+# redis7 parameter group, whose maxmemory-policy is volatile-lru —
+# meaning Redis will silently EVICT keys (delete them) under memory
+# pressure, picking whichever key looks "least recently used."
+#
+# This is fine for a pure cache, but catastrophic for BullMQ: BullMQ
+# stores actual job data (submission records, evaluation jobs,
+# certificate generation jobs) as ordinary Redis keys. If Redis evicts
+# one of those under memory pressure, that job is GONE — no error, no
+# retry, no dead-letter queue entry, nothing. A participant's quiz
+# submission could silently vanish from the evaluation queue with zero
+# trace, exactly the kind of failure that's almost impossible to debug
+# after the fact because there's no log of it ever happening.
+#
+# noeviction instead makes Redis REFUSE new writes once memory is full
+# and return an OOM error — loud, visible, alertable — rather than
+# silently destroying existing data. This is the only acceptable policy
+# when Redis is being used as a queue/durable-ish store rather than a
+# pure best-effort cache, which is exactly how this replication group is
+# used here (session state + BullMQ both live in it).
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource "aws_elasticache_parameter_group" "redis" {
+  name   = "quizbuzz-live-redis-params"
+  family = "redis7"
+
+  parameter {
+    name  = "maxmemory-policy"
+    value = "noeviction"
+  }
+}
+
+
 resource "aws_elasticache_replication_group" "redis" {
   replication_group_id = "quizbuzz-live-redis"
   description           = "QuizBuzz live contest Redis - shared session state, pub/sub, and BullMQ queues across the quiz EC2 fleet"

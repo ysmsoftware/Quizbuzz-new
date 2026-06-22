@@ -1,0 +1,93 @@
+# QuizBuzz — Artillery staged load test (cross-check engine + HTTP funnel)
+#
+# Run a single stage (stage values pulled from config/stages.json via the
+# processor's beforeScenario hook, so this file has no hardcoded user counts
+# itself — only Artillery's own phase syntax requires literal numbers, which
+# are injected via environment variables set by scripts/run-stage.sh):
+#
+#   STAGE=1 ARRIVAL_RATE=50 ARRIVAL_DURATION=20 HOLD_DURATION=600 \
+#   BASE_URL=http://<alb-dns> WS_URL=ws://<alb-dns> \
+#   artillery run load-testing/artillery/quiz-load-test.yml
+#
+config:
+  target: "{{ $processEnvironment.BASE_URL }}"
+  processor: "./processor.js"
+  http:
+    timeout: 30
+  ws:
+    rejectUnauthorized: false
+  variables:
+    contestSlug: "load-test-contest"
+  phases:
+    - name: "ramp-up"
+      duration: "{{ $processEnvironment.ARRIVAL_DURATION }}"
+      arrivalRate: 1
+      rampTo: "{{ $processEnvironment.ARRIVAL_RATE }}"
+    - name: "hold"
+      duration: "{{ $processEnvironment.HOLD_DURATION }}"
+      arrivalRate: "{{ $processEnvironment.ARRIVAL_RATE }}"
+    - name: "ramp-down"
+      duration: 60
+      arrivalRate: "{{ $processEnvironment.ARRIVAL_RATE }}"
+      rampTo: 1
+  plugins:
+    metrics-by-endpoint: {}
+  ensure:
+    # Mirrors the k6 gate thresholds in LOAD_TEST_PLAN.md Section 3 —
+    # keep these two files in sync if thresholds change.
+    p95: 500
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Registration funnel (HTTP only) — pre-quiz, separate from WS load"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/v1/contests/{{ contestSlug }}/register"
+          json:
+            email: "{{ $randomString() }}@loadtest.quizbuzz.dev"
+            firstName: "LoadTest"
+            lastName: "User{{ $randomNumber(1, 999999) }}"
+            phone: "+91{{ $randomNumber(6000000000, 9999999999) }}"
+          capture:
+            - json: "$.participantId"
+              as: "participantId"
+          expect:
+            - statusCode: [200, 201]
+      - think: 2
+      - post:
+          url: "/api/v1/payments/create-order"
+          json:
+            participantId: "{{ participantId }}"
+          expect:
+            - statusCode: [200, 201]
+
+  - name: "Live quiz session (WS) — join, answer, submit, reconnect"
+    weight: 80
+    flow:
+      - post:
+          url: "/api/v1/contests/{{ contestSlug }}/join"
+          json:
+            participantRef: "ARTILLERY-{{ $randomNumber(1, 9999999) }}"
+            testToken: "{{ $processEnvironment.TEST_TOKEN }}"
+          capture:
+            - json: "$.socketToken"
+              as: "socketToken"
+              default: "{{ $processEnvironment.TEST_TOKEN }}"
+      - function: "beforeQuizSession"
+      - ws:
+          connect:
+            target: "{{ $processEnvironment.WS_URL }}/socket.io/?EIO=4&transport=websocket"
+      - ws:
+          send: '{"event":"quiz:v1:join","data":{"contestSlug":"{{ contestSlug }}","token":"{{ socketToken }}"}}'
+      - loop:
+          - think: "{{ $randomNumber(10, 30) }}"
+          - function: "recordQuestionStartWait"
+          - ws:
+              send: '{"event":"quiz:v1:answer","data":{"questionId":"{{ currentQuestionId }}","selectedOptionId":"opt-0"}}'
+          - function: "recordAnswerSent"
+        count: 20
+      - function: "maybeSimulateReconnect"
+      - ws:
+          send: '{"event":"quiz:v1:submit","data":{}}'
+      - function: "recordSubmissionComplete"
