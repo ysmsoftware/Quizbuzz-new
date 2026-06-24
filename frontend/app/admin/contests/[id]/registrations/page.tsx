@@ -203,7 +203,7 @@ export default function RegistrationsTabPage() {
             } : {};
             
             const response = await triggerExport(format, activeFilters);
-            setExportJobId(response.data.exportId);
+            setExportJobId(response.data.id || response.data.exportId); // Fallback just in case
             setExportProgress(0);
             setIsExporting(true);
             setIsExportModalOpen(false);
