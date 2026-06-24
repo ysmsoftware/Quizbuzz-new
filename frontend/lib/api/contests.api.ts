@@ -158,6 +158,36 @@ export async function bulkUpdateParticipantStatus(
 }
 
 /**
+ * POST /contests/:contestId/participants/export
+ */
+export async function triggerExport(
+  contestId: string,
+  format: 'csv' | 'pdf',
+  filters?: {
+    search?: string;
+    status?: string;
+    payment?: string;
+    startDate?: string;
+    endDate?: string;
+  }
+): Promise<ApiResponse<{ exportId: string; message: string }>> {
+  return post<{ exportId: string; message: string }>(`/contests/${contestId}/participants/export`, {
+    format,
+    filters,
+  });
+}
+
+/**
+ * GET /contests/:contestId/participants/export/:exportId
+ */
+export async function getExportStatus(
+  contestId: string,
+  exportId: string
+): Promise<ApiResponse<{ status: string; progress: number; fileUrl: string | null; error: string | null; format: string }>> {
+  return get<{ status: string; progress: number; fileUrl: string | null; error: string | null; format: string }>(`/contests/${contestId}/participants/export/${exportId}`);
+}
+
+/**
  * POST /contests/:contestId/evaluate
  */
 export async function triggerEvaluation(contestId: string): Promise<ApiResponse> {

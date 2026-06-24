@@ -118,4 +118,51 @@ export class ParticipantController {
             next(err);
         }
     };
+
+    triggerExport = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const contestId = req.params.contestId as string;
+            const { format, filters } = req.body;
+
+            if (!["csv", "pdf"].includes(format)) {
+                return res.status(400).json({ success: false, message: "Invalid format. Must be csv or pdf" });
+            }
+
+            const exportLog = await this.participantService.triggerExport(
+                user.organizationId,
+                contestId,
+                user.id,
+                format,
+                filters || {}
+            );
+
+            res.json({ success: true, data: exportLog, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getExportStatus = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const { contestId, exportId } = req.params;
+
+            const exportLog = await this.participantService.getExportStatus(
+                user.organizationId,
+                contestId as string,
+                exportId as string
+            );
+
+            res.json({ success: true, data: exportLog, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
 }

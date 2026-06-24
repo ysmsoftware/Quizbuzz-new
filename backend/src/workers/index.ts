@@ -10,6 +10,7 @@ import "./evaluation.worker";
 import "./analytics.worker";
 import "./leaderboard.worker";
 import "./capture-metadata.worker";
+import "./export.worker";
 
 export function startWorkers() {
     logger.info("Starting background workers...");

@@ -36,3 +36,15 @@ participantRouter.patch(
     authenticatedOrgMiddleware,
     participantController.disqualifyParticipant
 );
+
+participantRouter.post(
+    "/:contestId/participants/export",
+    authenticatedOrgMiddleware,
+    participantController.triggerExport
+);
+
+participantRouter.get(
+    "/:contestId/participants/export/:exportId",
+    authenticatedOrgMiddleware,
+    participantController.getExportStatus
+);
