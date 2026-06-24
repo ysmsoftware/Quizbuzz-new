@@ -526,6 +526,24 @@ server {
         proxy_buffer_size  64k;
     }
 
+    # Health check -- must proxy directly to backend (port 3005), NOT frontend.
+    # Without this explicit block, nginx matches /health to location / and
+    # proxies it to the Next.js frontend (port 3000) which returns HTTP 200
+    # with an HTML body. The ALB health checker sees 200 and marks the instance
+    # healthy even when the backend container is completely down -- a silent
+    # false positive that prevents proper failover.
+    location = /health {
+        proxy_pass         http://127.0.0.1:3005;
+        proxy_http_version 1.1;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout    5s;
+        access_log off;
+    }
+
     # Backend API -- Express on port 3005
     location /api {
         proxy_pass         http://127.0.0.1:3005;
