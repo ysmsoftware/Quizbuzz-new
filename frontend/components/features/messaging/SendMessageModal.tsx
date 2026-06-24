@@ -195,7 +195,7 @@ export function SendMessageModal({
           </DialogHeader>
 
           {/* Modal Body */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 items-start">
             {/* Left Column: Form Controls */}
             <div className="space-y-6">
               {/* Recipients Detail / Filter */}
@@ -235,9 +235,9 @@ export function SendMessageModal({
                         key={filterOpt.value}
                         variant={recipientFilter === filterOpt.value ? 'default' : 'outline'}
                         onClick={() => setRecipientFilter(filterOpt.value as RecipientFilter)}
-                        className="h-auto py-2.5 flex flex-col items-center justify-center gap-1 rounded-xl transition-all border-border/50 hover:bg-accent/40"
+                        className="h-auto min-h-16 py-2.5 px-1.5 flex flex-col items-center justify-center gap-1 rounded-xl transition-all border-border/50 hover:bg-accent/40 whitespace-normal text-center leading-tight"
                       >
-                        <span className="text-xs font-semibold">{filterOpt.label}</span>
+                        <span className="text-xs font-semibold text-center break-words">{filterOpt.label}</span>
                         {filterOpt.loading ? (
                           <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                         ) : (
@@ -284,7 +284,7 @@ export function SendMessageModal({
             </div>
 
             {/* Right Column: Preview Panel */}
-            <div className="space-y-4 lg:border-l lg:pl-6 border-border/30">
+            <div className="sticky top-0 space-y-4 lg:border-l lg:pl-6 border-border/30">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-foreground">Live Message Preview</h4>
                 {selectedTemplate && (
@@ -295,15 +295,13 @@ export function SendMessageModal({
               </div>
 
               {selectedTemplate ? (
-                <div className="sticky top-0">
-                  <MessagePreview
-                    body={selectedTemplate.body}
-                    channel={selectedChannel}
-                    variables={selectedTemplate.variables}
-                  />
-                </div>
+                <MessagePreview
+                  body={selectedTemplate.body}
+                  channel={selectedChannel}
+                  variables={selectedTemplate.variables}
+                />
               ) : (
-                <div className="flex flex-col items-center justify-center h-80 border rounded-2xl border-dashed border-border/60 bg-muted/5 text-center p-6">
+                <div className="flex flex-col items-center justify-center min-h-64 border rounded-2xl border-dashed border-border/60 bg-muted/5 text-center p-6">
                   <AlertCircle className="h-10 w-10 text-muted-foreground/60 mb-3" />
                   <p className="text-sm font-semibold text-muted-foreground">No template selected</p>
                   <p className="text-xs text-muted-foreground/80 mt-1 max-w-xs">

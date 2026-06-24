@@ -16,6 +16,11 @@ systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
 
+echo "--- Installing SSM Agent ---"
+yum install -y amazon-ssm-agent
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
 echo "--- Installing Docker Compose v2 ---"
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -SL "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" \
@@ -25,6 +30,19 @@ docker compose version
 
 echo "--- Installing CloudWatch Agent ---"
 yum install -y amazon-cloudwatch-agent
+
+echo "--- Installing Nginx ---"
+if command -v amazon-linux-extras >/dev/null 2>&1; then
+  amazon-linux-extras install nginx1 -y
+else
+  yum install -y nginx
+fi
+
+echo "--- Installing Certbot ---"
+python3 -m venv /opt/certbot/
+/opt/certbot/bin/pip install --upgrade pip
+/opt/certbot/bin/pip install certbot certbot-nginx
+ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
 
 echo "--- Reading secrets from SSM ---"
 
@@ -46,6 +64,18 @@ get_ssm() {
   echo "$result"
 }
 
+get_ssm_optional() {
+  local name="$1"
+  local result
+  result=$(aws ssm get-parameter \
+    --name "$name" \
+    --with-decryption \
+    --query Parameter.Value \
+    --output text \
+    --region "${aws_region}" 2>/dev/null) || true
+  echo "$result"
+}
+
 DATABASE_URL=$(get_ssm "/quizbuzz/prod/DATABASE_URL")
 REDIS_PASSWORD=$(get_ssm "/quizbuzz/prod/REDIS_PASSWORD")
 JWT_ACCESS_SECRET=$(get_ssm "/quizbuzz/prod/JWT_ACCESS_SECRET")
@@ -62,8 +92,30 @@ AISENSY_API_KEY=$(get_ssm "/quizbuzz/prod/AISENSY_API_KEY")
 GHCR_TOKEN=$(get_ssm "/quizbuzz/prod/GHCR_TOKEN")
 IMAGE_TAG=$(get_ssm "/quizbuzz/prod/image-tag")
 
-# EC2 instance ID — from AWS metadata service (always available, no SSM needed)
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+POSTHOG_API_KEY=$(get_ssm "/quizbuzz/prod/POSTHOG_API_KEY")
+POSTHOG_HOST=$(get_ssm_optional "/quizbuzz/prod/POSTHOG_HOST")
+SENTRY_DSN=$(get_ssm_optional "/quizbuzz/prod/SENTRY_DSN")
+
+if [ -z "$POSTHOG_HOST" ]; then
+  POSTHOG_HOST="https://us.i.posthog.com"
+fi
+
+# EC2 instance ID via IMDSv2 — Amazon Linux 2023 enforces IMDSv2 by default,
+# so a bare curl without a token returns HTTP 401. Fetch a short-lived token
+# first, then use it in the header of the actual metadata request.
+IMDS_TOKEN=$(curl -s -X PUT \
+  "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+
+INSTANCE_ID=$(curl -s \
+  -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+  "http://169.254.169.254/latest/meta-data/instance-id")
+
+if [[ ! "$INSTANCE_ID" =~ ^i- ]]; then
+  echo "WARNING: Could not get instance ID (got: $INSTANCE_ID)"
+  echo "Falling back to 'admin' as instance ID for log streams"
+  INSTANCE_ID="admin"
+fi
 
 echo "Instance: $INSTANCE_ID  |  Image tag: $IMAGE_TAG"
 
@@ -241,6 +293,14 @@ QUIZ_AUTO_SUBMIT=true
 QUIZ_TIME_WARNING_1=600
 QUIZ_TIME_WARNING_2=300
 QUIZ_TIME_WARNING_3=60
+
+# ── POSTHOG ANALYTICS ─────────────────────────────────────────────────────────
+POSTHOG_API_KEY=$POSTHOG_API_KEY
+POSTHOG_HOST=$POSTHOG_HOST
+
+# ── SENTRY ────────────────────────────────────────────────────────────────────
+SENTRY_DSN=$SENTRY_DSN
+APP_VERSION=$IMAGE_TAG
 EOF
 
 echo ".env written."
@@ -266,7 +326,7 @@ services:
       - --maxmemory
       - 256mb
       - --maxmemory-policy
-      - allkeys-lru
+      - noeviction
       - --save
       - ""
       - --appendonly
@@ -386,8 +446,8 @@ for log_group in /quizbuzz/backend /quizbuzz/worker /quizbuzz/frontend; do
   aws logs put-retention-policy \
     --log-group-name "$log_group" \
     --retention-in-days 30 \
-    --region "${aws_region}"
-  echo "  $log_group (30 days)"
+    --region "${aws_region}" || true
+  echo "  $log_group configured"
 done
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -409,7 +469,115 @@ sleep 15
 docker compose -f /app/docker-compose.yml ps
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. SYSTEMD SERVICE — auto-restart containers on EC2 reboot
+# 7. NGINX CONFIGURATION
+#
+# SSL STRATEGY:
+# On first boot, nginx starts on HTTP only (port 80). Certbot is installed
+# but NOT run automatically — you run it once manually after first deploy:
+#   sudo certbot --nginx -d quiz.ysminfosolution.com
+# Certbot will add the SSL block and a renewal cron automatically.
+# If the EC2 is replaced (new instance), re-run certbot once.
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Writing Nginx Configuration ---"
+mkdir -p /etc/nginx/conf.d
+
+# Remove the default nginx server block so it doesn't conflict
+rm -f /etc/nginx/conf.d/default.conf
+
+# NOTE: This heredoc is SINGLE-quoted ('NGINX_TEMPLATE') so NEITHER bash
+# NOR Terraform's templatefile() touch its contents -- nginx's own $variables
+# (http_upgrade, host, scheme, etc.) survive untouched. The literal string
+# __DOMAIN__ is used as a placeholder and replaced with sed afterward.
+cat > /etc/nginx/conf.d/quiz.conf << 'NGINX_TEMPLATE'
+# Rate limit zone
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
+
+# WebSocket upgrade map
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# HTTP-only server block.
+# Certbot will extend this with an SSL redirect and add a 443 block
+# the first time you run: certbot --nginx -d __DOMAIN__
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    # Allow Let's Encrypt HTTP-01 challenge through
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Frontend -- Next.js on port 3000
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffers      8 32k;
+        proxy_buffer_size  64k;
+    }
+
+    # Backend API -- Express on port 3005
+    location /api {
+        proxy_pass         http://127.0.0.1:3005;
+        proxy_http_version 1.1;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        limit_req          zone=api_limit burst=50 nodelay;
+        proxy_read_timeout    60s;
+        proxy_connect_timeout 60s;
+    }
+
+    # Socket.IO -- Backend on port 3005
+    location /socket.io {
+        proxy_pass         http://127.0.0.1:3005;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout  86400s;
+        proxy_send_timeout  86400s;
+        proxy_buffering     off;
+    }
+}
+NGINX_TEMPLATE
+
+# Substitute the real domain in place of the placeholder.
+sed -i "s/__DOMAIN__/${domain}/g" /etc/nginx/conf.d/quiz.conf
+
+mkdir -p /var/www/certbot
+
+# Validate config BEFORE starting -- fail loudly if broken instead of
+# silently leaving nginx down
+if ! nginx -t 2>&1; then
+  echo "ERROR: nginx config is invalid. Dumping file for debugging:"
+  cat /etc/nginx/conf.d/quiz.conf
+  exit 1
+fi
+
+# Enable and start Nginx
+systemctl enable nginx
+systemctl restart nginx
+
+echo "--- Nginx started on HTTP. Run certbot once to enable HTTPS: ---"
+echo "    sudo certbot --nginx -d ${domain}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. SYSTEMD SERVICE — auto-restart containers on EC2 reboot
 # Without this, a reboot (AWS maintenance, OS patch) stops all containers.
 # ─────────────────────────────────────────────────────────────────────────────
 cat > /etc/systemd/system/quizbuzz.service << 'SERVICE'
