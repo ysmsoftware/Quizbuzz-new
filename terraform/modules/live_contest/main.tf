@@ -217,7 +217,32 @@ resource "aws_lb_listener_rule" "websocket" {
   }
 }
 
-# Rule 2: Frontend-only paths -> admin-tg (the ONLY Next.js runs)
+# Rule 2: All API traffic → quiz fleet
+# /api/* must go to quiz-tg (ASG instances), NOT admin-tg.
+# admin-tg has only ONE target (the admin EC2). If that backend container
+# goes down, admin-tg has no failover target and returns 502 for all API
+# requests. The ASG quiz instances run the same backend image and can
+# serve all API routes — they are stateless, reading from the same
+# PostgreSQL + ElastiCache. Routing /api/* to quiz-tg gives us:
+#   (a) real failover — if one instance is unhealthy, ALB picks another
+#   (b) load distribution across the fleet for API requests
+#   (c) admin-tg becomes frontend-only (nginx → Next.js on :3000)
+#       which is its correct role — admin dashboard pages only
+resource "aws_lb_listener_rule" "api" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 15
+
+  condition {
+    path_pattern { values = ["/api/*"] }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.quiz.arn
+  }
+}
+
+# Rule 3: Frontend-only paths -> admin-tg (the ONLY Next.js runs)
 
 resource "aws_lb_listener_rule" "frontend" {
   listener_arn = aws_lb_listener.https.arn

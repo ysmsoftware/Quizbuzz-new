@@ -70,6 +70,49 @@ echo " $ALB_DNS"
 echo "--------------------------------------------------------"
 echo ""
 
+# ── SWITCH ADMIN INSTANCE TO ELASTICACHE ────────────────────────────────────
+# The admin instance's /app/.env is written once at first boot with
+# REDIS_HOST=redis (the local Docker container). In live mode it MUST join
+# the same ElastiCache cluster as the ASG quiz fleet — otherwise Socket.IO
+# pub/sub, BullMQ queues, and quiz session state on admin are invisible to
+# the rest of the fleet (and vice versa), even though the ALB happily
+# forwards traffic to both. This was confirmed in a live test: admin showed
+# allkeys-lru (local container's policy) while ASG instances showed
+# volatile-lru (ElastiCache's, before the noeviction parameter group existed)
+# — proof they were on two different Redis instances entirely.
+echo "▶ Switching admin instance to ElastiCache..."
+
+REDIS_HOST=$(terraform output -raw redis_primary_endpoint)
+ADMIN_INSTANCE_ID=$(terraform output -raw instance_id)
+
+if [ -z "$REDIS_HOST" ] || [ "$REDIS_HOST" = "null" ]; then
+  echo "ERROR: Could not read redis_primary_endpoint from Terraform output. Admin instance NOT switched — fix this before sending real traffic."
+  exit 1
+fi
+
+COMMAND_ID=$(aws ssm send-command \
+  --region ap-south-1 \
+  --instance-ids "$ADMIN_INSTANCE_ID" \
+  --document-name "AWS-RunShellScript" \
+  --parameters commands="[
+    \"sed -i 's|^REDIS_HOST=.*|REDIS_HOST=$REDIS_HOST|' /app/.env\",
+    \"sed -i 's|^REDIS_PASSWORD=.*|REDIS_PASSWORD=|' /app/.env\",
+    \"cd /app && docker compose up -d --force-recreate backend worker\",
+    \"sleep 15\",
+    \"docker ps\",
+    \"echo '--- REDIS_HOST confirmation ---' && grep REDIS_HOST /app/.env\"
+  ]" \
+  --query "Command.CommandId" \
+  --output text)
+
+aws ssm wait command-executed \
+  --command-id "$COMMAND_ID" \
+  --instance-id "$ADMIN_INSTANCE_ID" \
+  --region ap-south-1 || true
+
+echo "✔ Admin instance switched to ElastiCache: $REDIS_HOST"
+echo ""
+
 echo "Resolving ALB DNS Name to current IP addresses..."
 IPS=""
 if command -v dig &> /dev/null; then
