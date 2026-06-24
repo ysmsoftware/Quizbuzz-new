@@ -19,10 +19,18 @@ export class S3StorageProvider implements FileStorageProvider {
     constructor() {
         this.client = new S3Client({
             region: config.storage.s3.region!,
-            credentials: {
-                accessKeyId: config.storage.s3.accessKeyId!,
-                secretAccessKey: config.storage.s3.secretKey!,
-            },
+            // Only pass explicit credentials when an access key is configured.
+            // Omitting `credentials` lets the AWS SDK's default provider chain
+            // fall back to the EC2 instance role — passing empty strings here
+            // instead forces static (invalid) credentials and breaks auth.
+            ...(config.storage.s3.accessKeyId
+                ? {
+                    credentials: {
+                        accessKeyId: config.storage.s3.accessKeyId!,
+                        secretAccessKey: config.storage.s3.secretKey!,
+                    },
+                }
+                : {}),
         });
 
         this.bucket = config.storage.s3.bucket!;
