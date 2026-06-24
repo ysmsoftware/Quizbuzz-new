@@ -61,17 +61,23 @@ resource "aws_lb" "quiz" {
 # in BOTH modes — not duplicated or contradicted by ALB-level rules.
 
 resource "aws_lb_target_group" "admin" {
-  name_prefix     = "adm-"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name_prefix      = "adm-"
+  port             = 443
+  protocol         = "HTTPS"
+  vpc_id           = var.vpc_id
 
+  # The admin EC2 runs nginx with a Let's Encrypt cert on port 443.
+  # ALB sends HTTPS directly to nginx, which terminates SSL and routes
+  # internally to frontend (:3000) or backend (:3005). This avoids the
+  # redirect loop that happens when admin-tg forwards to port 80:
+  # ALB(HTTPS) → nginx:80 → 301 HTTPS → ALB(HTTPS) → nginx:80 → ...
   health_check {
     path                = "/health"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 30
     matcher             = "200"
+    protocol            = "HTTPS"
   }
 
   tags = { Name = "quizbuzz-admin-tg" }
@@ -138,7 +144,7 @@ resource "aws_lb_target_group" "quiz" {
 resource "aws_lb_target_group_attachment" "admin_ec2" {
   target_group_arn = aws_lb_target_group.admin.arn
   target_id        = var.admin_instance_id
-  port             = 80
+  port             = 443
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

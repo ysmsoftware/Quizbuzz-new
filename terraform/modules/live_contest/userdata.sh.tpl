@@ -46,6 +46,11 @@ systemctl enable docker
 systemctl start docker
 usermod -aG docker ec2-user
 
+echo "--- Installing SSM Agent ---"
+yum install -y amazon-ssm-agent
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
 echo "--- Installing Docker Compose v2 ---"
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -SL "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" \
@@ -422,11 +427,14 @@ echo "--- Creating CloudWatch log groups ---"
 for log_group in /quizbuzz/backend-live /quizbuzz/worker-live; do
   aws logs create-log-group --log-group-name "$log_group" \
     --region "${aws_region}" 2>/dev/null || true
+  # || true: PutRetentionPolicy fails if the IAM role doesn't yet have the
+  # permission (race between instance boot and IAM policy propagation).
+  # awslogs driver already auto-creates the group; retention is best-effort.
   aws logs put-retention-policy \
     --log-group-name "$log_group" \
     --retention-in-days 30 \
-    --region "${aws_region}"
-  echo "  $log_group (30 days)"
+    --region "${aws_region}" || true
+  echo "  $log_group configured"
 done
 
 # ─────────────────────────────────────────────────────────────────────────────

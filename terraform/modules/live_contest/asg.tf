@@ -44,16 +44,26 @@ resource "aws_iam_role_policy" "quiz_cloudwatch_logs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogStreams"
-      ]
-      Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/quizbuzz/*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:PutRetentionPolicy"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/quizbuzz/*"
+      },
+      {
+        # PutRetentionPolicy also requires a wildcard on log-group ARN
+        # without a trailing :* — AWS requires BOTH forms in some SDK versions.
+        Effect = "Allow"
+        Action = ["logs:PutRetentionPolicy"]
+        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/quizbuzz/*:*"
+      }
+    ]
   })
 }
 
