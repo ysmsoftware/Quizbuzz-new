@@ -181,10 +181,10 @@ export function SendMessageModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl rounded-2xl">
-        <div className="flex flex-col h-full">
+      <DialogContent className="w-[95vw] sm:max-w-[95vw] md:max-w-5xl lg:max-w-6xl max-h-[90vh] flex flex-col p-0 border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden">
+        <div className="flex flex-col h-full max-h-[90vh] overflow-hidden">
           {/* Header */}
-          <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20">
+          <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20 shrink-0">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <Sparkles className="h-5 w-5 text-primary animate-pulse" />
               {isBulkMode ? `Send Bulk Message (${selectedParticipantIds.length} Selected)` : 'Send Broadcast Message'}
@@ -195,7 +195,7 @@ export function SendMessageModal({
           </DialogHeader>
 
           {/* Modal Body */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 items-start overflow-y-auto flex-1">
             {/* Left Column: Form Controls */}
             <div className="space-y-6">
               {/* Recipients Detail / Filter */}
@@ -262,11 +262,11 @@ export function SendMessageModal({
                 </label>
                 
                 {templatesLoading ? (
-                  <div className="flex items-center justify-center h-48 border rounded-xl border-dashed">
+                  <div className="flex items-center justify-center h-[320px] border rounded-xl border-dashed">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
                 ) : (
-                  <ScrollArea className="h-50 border border-border/50 rounded-xl p-3 bg-muted/10">
+                  <ScrollArea className="h-[320px] border border-border/50 rounded-xl p-3 bg-muted/10">
                     <div className="grid grid-cols-1 gap-2.5">
                       {templates.map((tpl) => (
                         <TemplateCard
@@ -313,7 +313,7 @@ export function SendMessageModal({
           </div>
 
           {/* Dialog Footer */}
-          <DialogFooter className="p-6 border-t border-border/40 bg-muted/20 gap-2 sm:gap-0">
+          <DialogFooter className="p-6 border-t border-border/40 bg-muted/20 gap-2 sm:gap-0 shrink-0">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}

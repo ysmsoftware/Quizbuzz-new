@@ -170,8 +170,8 @@ export async function triggerExport(
     startDate?: string;
     endDate?: string;
   }
-): Promise<ApiResponse<{ exportId: string; message: string }>> {
-  return post<{ exportId: string; message: string }>(`/contests/${contestId}/participants/export`, {
+): Promise<ApiResponse<any>> {
+  return post<any>(`/contests/${contestId}/participants/export`, {
     format,
     filters,
   });
