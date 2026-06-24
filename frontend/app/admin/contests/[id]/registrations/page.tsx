@@ -116,6 +116,11 @@ export default function RegistrationsTabPage() {
     const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
     const [messageModalParticipantIds, setMessageModalParticipantIds] = useState<string[]>([]);
 
+    // Export progress state
+    const [exportJobId, setExportJobId] = useState<string | null>(null);
+    const [exportProgress, setExportProgress] = useState<number>(0);
+    const [isExporting, setIsExporting] = useState<boolean>(false);
+
     const filters = useMemo(() => ({
         search: searchQuery,
         status: statusFilter === 'all' ? undefined : statusFilter,
@@ -130,7 +135,9 @@ export default function RegistrationsTabPage() {
         markAsPaid,
         allowFreeEntry,
         bulkUpdateStatus,
-        statusSummary
+        statusSummary,
+        triggerExport,
+        checkExportStatus
     } = useRegistrations(id, filters);
 
     // Client-side filtration by Date Range
@@ -178,7 +185,7 @@ export default function RegistrationsTabPage() {
         };
     }, [contest, registrations]);
 
-    const handleExport = (format: 'csv' | 'pdf') => {
+    const handleExport = async (format: 'csv' | 'pdf') => {
         const dataset = exportScope === 'filtered' ? filteredRegistrations : (registrations || []);
         if (dataset.length === 0) {
             toast.error("No registrations matching scope to export");
@@ -186,18 +193,67 @@ export default function RegistrationsTabPage() {
         }
 
         try {
-            if (format === 'csv') {
-                exportToCSV({ contestTitle: contest?.title || 'Contest', registrations: dataset });
-                toast.success("CSV file downloaded successfully!");
-            } else {
-                exportToPDF({ contestTitle: contest?.title || 'Contest', registrations: dataset });
-                toast.success("PDF Print dialog triggered!");
-            }
+            // Calculate active filters based on scope
+            const activeFilters = exportScope === 'filtered' ? {
+                search: searchQuery,
+                status: statusFilter === 'all' ? undefined : statusFilter,
+                payment: paymentFilter === 'all' ? undefined : paymentFilter,
+                startDate: dateRange?.start,
+                endDate: dateRange?.end
+            } : {};
+            
+            const response = await triggerExport(format, activeFilters);
+            setExportJobId(response.data.exportId);
+            setExportProgress(0);
+            setIsExporting(true);
             setIsExportModalOpen(false);
+            toast.success("Export started! Generating file...");
         } catch (err: any) {
             toast.error(err.message || "Failed to trigger export");
         }
     };
+
+    // Polling for export status
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+
+        if (isExporting && exportJobId) {
+            interval = setInterval(async () => {
+                try {
+                    const response = await checkExportStatus(exportJobId);
+                    const { status, progress, fileUrl, error } = response.data;
+                    
+                    setExportProgress(progress);
+                    
+                    if (status === 'COMPLETED' && fileUrl) {
+                        setIsExporting(false);
+                        setExportJobId(null);
+                        clearInterval(interval);
+                        
+                        toast.success("Export completed successfully!");
+                        // Trigger file download
+                        const a = document.createElement('a');
+                        a.href = fileUrl;
+                        a.download = '';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else if (status === 'FAILED') {
+                        setIsExporting(false);
+                        setExportJobId(null);
+                        clearInterval(interval);
+                        toast.error(error || "Export failed. Please try again.");
+                    }
+                } catch (err) {
+                    console.error('Error polling export status:', err);
+                }
+            }, 2000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isExporting, exportJobId, checkExportStatus]);
 
     // Virtualizer setup using client-filtered registrations
     const parentRef = useRef<HTMLDivElement>(null);
@@ -823,6 +879,35 @@ export default function RegistrationsTabPage() {
                             <FileText className="mr-2 h-4 w-4" />
                             Print PDF
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* EXPORT PROGRESS MODAL */}
+            <Dialog open={isExporting} onOpenChange={() => {}}>
+                <DialogContent className="max-w-md bg-card/95 backdrop-blur-xl border border-border/50 rounded-3xl p-6 shadow-2xl [&>button]:hidden">
+                    <DialogHeader className="space-y-2 text-center flex flex-col items-center">
+                        <div className="p-3 rounded-full bg-primary/10 text-primary mb-2">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                        </div>
+                        <DialogTitle className="text-xl font-black tracking-tight text-foreground">
+                            Generating Export
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-muted-foreground">
+                            Please wait while we prepare your file. This may take a few moments.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2 mt-6">
+                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                            <motion.div 
+                                className="h-full bg-primary"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${exportProgress}%` }}
+                                transition={{ duration: 0.5 }}
+                            />
+                        </div>
+                        <p className="text-center text-xs font-bold text-muted-foreground">{exportProgress}% Complete</p>
                     </div>
                 </DialogContent>
             </Dialog>

@@ -4,6 +4,8 @@ import { NotFoundError, ConflictError } from "../../error/http-errors";
 import { FindAllParticipantsOptions } from "./participant.types";
 import { redis } from "../../config/redis";
 import { ParticipantStatus } from "@prisma/client";
+import { prisma } from "../../config/db";
+import { exportQueue } from "../../queues";
 
 export class ParticipantService {
     constructor(
@@ -190,5 +192,44 @@ export class ParticipantService {
         }
 
         return { updatedCount };
+    }
+
+    async triggerExport(
+        organizationId: string,
+        contestId: string,
+        adminId: string,
+        format: "csv" | "pdf",
+        filters: any
+    ) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) {
+            throw new NotFoundError("Contest not found");
+        }
+
+        const exportLog = await prisma.exportLog.create({
+            data: {
+                organizationId,
+                contestId,
+                adminId,
+                format,
+                filters
+            }
+        });
+
+        await exportQueue.add("export-job", { exportId: exportLog.id });
+
+        return exportLog;
+    }
+
+    async getExportStatus(organizationId: string, contestId: string, exportId: string) {
+        const exportLog = await prisma.exportLog.findUnique({
+            where: { id: exportId }
+        });
+
+        if (!exportLog || exportLog.organizationId !== organizationId || exportLog.contestId !== contestId) {
+            throw new NotFoundError("Export log not found");
+        }
+
+        return exportLog;
     }
 }

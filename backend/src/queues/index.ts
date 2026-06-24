@@ -124,3 +124,13 @@ export const captureMetadataQueue = new Queue<CaptureMetadataJobPayload>("captur
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+export interface ExportJobPayload {
+    exportId: string;
+}
+
+export const exportQueue = new Queue<ExportJobPayload>("export-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

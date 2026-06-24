@@ -161,6 +161,7 @@ model Organization {
   messageLogs MessageLog[]
   scheduledJobs ScheduledJob[]
   analyticsSnapshots ContestAnalyticsSnapshot[]
+  exportLogs  ExportLog[]
 
   @@index([slug])
   @@index([isActive, isDeleted])
@@ -209,6 +210,7 @@ model Admin {
   memberships       OrgMember[]
   refreshTokens     AdminRefreshToken[]
   contestsCreated   Contest[]   @relation("ContestCreatedBy")
+  exportLogs        ExportLog[]
 
   @@index([email])
   @@index([isActive, isDeleted])
@@ -278,6 +280,7 @@ model Contest {
   scheduledJobs         ScheduledJob[]
   payments              Payment[]
   proctoringScores      ProctoringScore[]
+  exportLogs            ExportLog[]
 
   @@index([organizationId, status])
   @@index([slug])
@@ -786,4 +789,38 @@ model ContestAnalyticsSnapshot {
   @@index([organizationId])
   @@index([contestId])
   @@map("contest_analytics_snapshots")
+}
+
+// EXPORT LOGS
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model ExportLog {
+  id              String       @id @default(ulid())
+  organizationId  String
+  contestId       String
+  adminId         String
+  format          String       // "csv" or "pdf"
+  status          ExportStatus @default(PENDING)
+  progress        Int          @default(0) // 0 to 100
+  fileUrl         String?
+  fileKey         String?
+  filters         Json?
+  error           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  admin           Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([contestId])
+  @@index([adminId])
+  @@map("export_logs")
 }

@@ -219,6 +219,8 @@ export function useRegistrations(
     allowFreeEntry: (id: string) => allowFreeEntryMutation.mutateAsync(id),
     disqualifyParticipant: (id: string, reason: string) => disqualifyMutation.mutateAsync({ participantId: id, reason }),
     bulkUpdateStatus: (args: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) => bulkStatusMutation.mutateAsync(args),
+    triggerExport: (format: 'csv' | 'pdf', filters?: any) => contestsApi.triggerExport(contestId, format, filters),
+    checkExportStatus: (exportId: string) => contestsApi.getExportStatus(contestId, exportId),
   };
 }
 
