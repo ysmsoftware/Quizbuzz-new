@@ -365,8 +365,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '3.0'
-          memory: 5500M
+          cpus: '1.0'
+          memory: 1G
     logging:
       driver: awslogs
       options:
@@ -397,7 +397,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 2G
+          memory: 1G
     logging:
       driver: awslogs
       options:

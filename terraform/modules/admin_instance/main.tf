@@ -6,8 +6,8 @@ variable "aws_region"   { description = "AWS region" }
 variable "s3_bucket"    { description = "S3 bucket name for certificates" }
 variable "s3_bucket_arn" { description = "S3 bucket ARN for IAM policy" }
 variable "instance_type" {
-  default     = "t2.small"
-  description = "EC2 instance type. t2.small = 1vCPU, 2GB. Upgrade to t3.small if needed."
+  default     = "t3.medium"
+  description = "EC2 instance type. t3.medium = 2vCPU, 4GB."
 }
 variable "key_pair_name" {
   description = "Name of the SSH key pair to attach. Must be created in AWS Console first."
