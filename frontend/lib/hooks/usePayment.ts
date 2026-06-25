@@ -34,6 +34,7 @@ export interface UseRazorpayReturn {
     initiatePayment: (contestId: string, participantId: string, config: RazorpayConfig) => Promise<void>;
     retryPayment: (participantId: string, config: RazorpayConfig) => Promise<void>;
     openCheckout: (config: RazorpayConfig, orderData: RazorpayOrderResult, participantId: string) => Promise<void>;
+    loadRazorpay: () => Promise<boolean>;
 }
 
 // ── Guaranteed lazy script loader ────────────────────────────────────────
@@ -237,7 +238,16 @@ export function useRazorpay(): UseRazorpayReturn {
         }
     }, [openCheckout]);
 
-    return { state, error, initiatePayment, retryPayment, openCheckout };
+    const loadRazorpay = useCallback(async () => {
+        try {
+            await loadRazorpayScript();
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    return { state, error, initiatePayment, retryPayment, openCheckout, loadRazorpay };
 }
 
 /**
