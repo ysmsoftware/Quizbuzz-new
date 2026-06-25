@@ -11,6 +11,7 @@ import {
 } from "./quiz.types.js";
 import { prisma } from "../../config/db.js";
 import { getStorageProvider } from "../../providers/storage.provider.js";
+import { config } from "../../config";
 
 export class QuizGateway {
     server!: Server;
@@ -117,6 +118,18 @@ export class QuizGateway {
         logger.info(`[QuizGateway] Participant ${participantId} connected to socket ${socket.id}`);
         await socket.join(`contest:${contestId}`);
         await socket.join(`participant:${participantId}`);
+
+        // Cache per-contest proctoring flag on the socket so handleViolation
+        // doesn't hit the DB on every proctoring event.
+        socket.data.proctoringEnabled = await this.isProctoringEnabled(contestId);
+    }
+
+    private async isProctoringEnabled(contestId: string): Promise<boolean> {
+        const contest = await prisma.contest.findUnique({
+            where: { id: contestId },
+            select: { proctoringEnabled: true },
+        });
+        return contest?.proctoringEnabled ?? true;
     }
 
     async handleDisconnect(socket: Socket) {
@@ -226,7 +239,13 @@ export class QuizGateway {
     }
 
     async handleViolation(socket: Socket, payload: ViolationPayload) {
-        const { participantId, contestId, organizationId } = socket.data;
+        const { participantId, contestId, organizationId, proctoringEnabled } = socket.data;
+
+        // Drop violations silently when proctoring is globally or per-contest disabled
+        if (!config.features.proctoring || !proctoringEnabled) {
+            return;
+        }
+
         const result = await this.proctoringService.recordViolation(
             participantId,
             contestId,

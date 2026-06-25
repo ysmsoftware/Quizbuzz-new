@@ -270,6 +270,7 @@ export interface QuizAuthResult {
     contestEndTime: string;
     contestDuration: number;        // minutes
     joinCodeRequired: boolean;
+    proctoringEnabled: boolean;
 }
 
 export interface SavedAnswer {

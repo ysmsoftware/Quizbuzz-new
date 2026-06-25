@@ -261,6 +261,7 @@ model Contest {
   allowResuming         Boolean         @default(true)
   shuffleQuestions      Boolean         @default(true)
   shuffleOptions        Boolean         @default(false)
+  proctoringEnabled     Boolean         @default(true)
   showResultsAfter      Int             @default(24)  // hours after end before results published
   isDeleted             Boolean         @default(false)
   isArchived            Boolean         @default(false)

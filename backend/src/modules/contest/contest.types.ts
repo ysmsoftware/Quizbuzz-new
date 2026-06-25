@@ -41,6 +41,7 @@ export interface CreateContestDTO {
   joinCode?: string | undefined;
   shuffleQuestions?: boolean | undefined;
   shuffleOptions?: boolean | undefined;
+  proctoringEnabled?: boolean | undefined;
   showResultsAfter?: number | undefined; // hours
   prizes?: PrizeDTO[] | undefined;
 }
@@ -138,6 +139,7 @@ export interface ContestDetail {
   registrationDeadline: Date;
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  proctoringEnabled: boolean;
   showResultsAfter: number;
   joinCode: string | null;
   prizes: PrizeDetail[];

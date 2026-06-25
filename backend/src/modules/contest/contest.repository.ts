@@ -49,6 +49,7 @@ export class ContestRepository implements IContestRepository {
                     paymentEnabled: contestData.paymentEnabled ?? false,
                     shuffleQuestions: contestData.shuffleQuestions ?? true,
                     shuffleOptions: contestData.shuffleOptions ?? false,
+                    proctoringEnabled: contestData.proctoringEnabled ?? true,
                     showResultsAfter: contestData.showResultsAfter ?? 24,
                 }
             });

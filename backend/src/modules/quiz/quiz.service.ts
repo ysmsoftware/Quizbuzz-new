@@ -134,8 +134,24 @@ export class QuizService {
         await this.session.addToWaitingRoom(contestId, participantId);
         await this.session.updatePhase(contestId, participantId, "WAITING");
 
+        // Auto-grant camera readiness for non-proctored contests so participants
+        // (and k6 load-test VUs, which have no camera) aren't stuck on the gate.
+        // Only the per-contest flag controls this — not the global ENABLE_PROCTORING.
+        const contestProctoringEnabled = await this.getContestProctoringEnabled(contestId);
+        if (!contestProctoringEnabled) {
+            await this.session.setReadiness(contestId, participantId, "camera", true);
+        }
+
         const count = await this.session.getWaitingCount(contestId);
         return { participantCount: count, status: "WAITING" };
+    }
+
+    private async getContestProctoringEnabled(contestId: string): Promise<boolean> {
+        const contest = await prisma.contest.findUnique({
+            where: { id: contestId },
+            select: { proctoringEnabled: true },
+        });
+        return contest?.proctoringEnabled ?? true;
     }
 
     /**
