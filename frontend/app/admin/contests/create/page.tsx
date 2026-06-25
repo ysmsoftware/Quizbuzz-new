@@ -70,6 +70,7 @@ interface ContestForm {
     prizes: PrizeBracket[];
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
+    proctoringEnabled: boolean;
 }
 
 export default function CreateContestPage() {
@@ -106,6 +107,7 @@ export default function CreateContestPage() {
         prizes: [],
         shuffleQuestions: true,
         shuffleOptions: false,
+        proctoringEnabled: true,
     });
 
     // Helpers for registrationDeadline
@@ -422,6 +424,7 @@ export default function CreateContestPage() {
                 startTime: new Date(form.startTime).toISOString(),
                 shuffleQuestions: form.shuffleQuestions,
                 shuffleOptions: form.shuffleOptions,
+                proctoringEnabled: form.proctoringEnabled,
                 showResultsAfter: Number(form.showResultsAfter) || 24,
                 prizes: form.prizes.map(p => ({
                     rankFrom: Number(p.rankFrom),
@@ -971,6 +974,24 @@ export default function CreateContestPage() {
                                             Shuffle options for each participant (Default: false)
                                         </label>
                                     </div>
+                                </div>
+
+                                {/* Proctoring Toggle */}
+                                <div className="flex items-center justify-between rounded-lg border border-border/50 p-4">
+                                    <div className="space-y-0.5">
+                                        <label className="text-sm font-semibold">Enable Proctoring</label>
+                                        <p className="text-xs text-muted-foreground">
+                                            When enabled, participants must allow camera access and will be
+                                            monitored for face detection, tab switching, and audio anomalies.
+                                            Disable for load testing or low-stakes contests.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={form.proctoringEnabled}
+                                        onCheckedChange={(checked) =>
+                                            setForm(prev => ({ ...prev, proctoringEnabled: checked }))
+                                        }
+                                    />
                                 </div>
                             </div>
                         )}

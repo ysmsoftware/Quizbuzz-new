@@ -61,6 +61,7 @@ export class QuizAuthService {
                 duration: true,
                 joinCode: true,
                 status: true,
+                proctoringEnabled: true,
             },
         });
 
@@ -129,6 +130,7 @@ export class QuizAuthService {
                 contestEndTime: contest.endTime.toISOString(),
                 contestDuration: contest.duration,
                 joinCodeRequired: false,
+                proctoringEnabled: contest.proctoringEnabled ?? true,
             };
         }
 
@@ -174,6 +176,7 @@ export class QuizAuthService {
             contestEndTime: contest.endTime.toISOString(),
             contestDuration: contest.duration,
             joinCodeRequired: !!contest.joinCode,
+            proctoringEnabled: contest.proctoringEnabled ?? true,
         };
     }
 
@@ -245,8 +248,9 @@ export class QuizAuthService {
 
         await this.sessionRepo.setReadiness(contestId, participantId, "joincode", true);
 
-        const readiness = await this.sessionRepo.getReadiness(contestId, participantId);
-        const allComplete = readiness.otp && readiness.camera && readiness.joincode;
+        // Use isFullyAuthenticated so the camera check respects the per-contest
+        // proctoringEnabled flag — direct readiness.camera check would bypass it.
+        const allComplete = await this.isFullyAuthenticated(participantId, contestId, true);
 
         logger.info(`[quiz-auth] Join code verified for participant ${participantId}`);
         return { verified: true, allComplete };
@@ -259,7 +263,24 @@ export class QuizAuthService {
             joinCodeRequired = await this.isJoinCodeRequired(contestId);
         }
         const readiness = await this.sessionRepo.getReadiness(contestId, participantId);
-        return readiness.otp && readiness.camera && (joinCodeRequired ? readiness.joincode : true);
+
+        // Camera check is bypassed only when this specific contest has
+        // proctoringEnabled = false. The global ENABLE_PROCTORING flag is
+        // intentionally NOT used here — proctoring is now a per-contest
+        // setting, not a platform-wide toggle. The global flag only controls
+        // whether violation events are recorded (see quiz.gateway.ts).
+        const contestProctoringEnabled = await this.isContestProctoringEnabled(contestId);
+        const cameraOk = !contestProctoringEnabled || readiness.camera;
+
+        return readiness.otp && cameraOk && (joinCodeRequired ? readiness.joincode : true);
+    }
+
+    private async isContestProctoringEnabled(contestId: string): Promise<boolean> {
+        const contest = await this.prisma.contest.findUnique({
+            where: { id: contestId },
+            select: { proctoringEnabled: true },
+        });
+        return contest?.proctoringEnabled ?? true;
     }
 
     private async isJoinCodeRequired(contestId: string): Promise<boolean> {
@@ -306,7 +327,7 @@ export class QuizAuthService {
         contestSlug?: string,
         contestId?: string,
         joinCode?: string,
-    ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string }> {
+    ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string; proctoringEnabled: boolean }> {
         // OTP verification is bypassed/removed since the email identity is already verified during registration.
 
         // 1. Resolve contest by slug/id (accept LIVE, PUBLISHED, REGISTRATION_CLOSED)
@@ -319,7 +340,7 @@ export class QuizAuthService {
                 status: { in: ["LIVE", "PUBLISHED", "REGISTRATION_CLOSED"] },
                 isDeleted: false,
             },
-            select: { id: true, organizationId: true, startTime: true, endTime: true, joinCode: true },
+            select: { id: true, organizationId: true, startTime: true, endTime: true, joinCode: true, proctoringEnabled: true },
         });
 
         if (!contest) {
@@ -374,6 +395,7 @@ export class QuizAuthService {
             participantId: participant.id,
             contestId: contest.id,
             organizationId: contest.organizationId,
+            proctoringEnabled: contest.proctoringEnabled ?? true,
         };
     }
 }

@@ -38,6 +38,7 @@ const CreateContestBase = z.object({
     joinCode: z.string().min(4).max(20).optional(),
     shuffleQuestions: z.boolean().default(true),
     shuffleOptions: z.boolean().default(false),
+    proctoringEnabled: z.boolean().default(true),
     showResultsAfter: z.number().int().min(0).max(168).default(24), // max 7 days
     prizes: z.array(PrizeSchema).optional(),
 });
