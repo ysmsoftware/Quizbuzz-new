@@ -1,5 +1,9 @@
 # ADMIN INSTANCE MODULE
 
+variable "domain" {
+  description = "Fully qualified domain for this instance (e.g. ysmquizbuzz.com)"
+  default     = "ysmquizbuzz.com"
+}
 variable "subnet_id"    { description = "Public subnet ID for the admin EC2" }
 variable "ec2_sg_id"    { description = "Security group ID for EC2" }
 variable "aws_region"   { description = "AWS region" }
@@ -174,7 +178,7 @@ data "cloudinit_config" "admin_config" {
       aws_region = var.aws_region
       s3_bucket  = var.s3_bucket
       github_org = var.github_org
-      domain     = "quiz.ysminfosolution.com"
+      domain     = var.domain
     })
   }
 }

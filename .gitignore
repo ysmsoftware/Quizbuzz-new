@@ -40,5 +40,9 @@ coverage/
 .terraform/
 *.tfstate
 *.tfstate.*
+terraform/
 terraform/scripts/setup-ssm.sh
 .env
+
+# Load Testing
+load-testing/
