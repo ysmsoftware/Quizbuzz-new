@@ -19,6 +19,7 @@ import { authService } from "@/lib/services/auth-service";
 import { contestService } from "@/lib/services/contest-service";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useProctoringStore } from "@/lib/stores/proctoring-store";
+import { useQuizStore } from "@/lib/stores/quiz-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
 import { WidgetErrorBoundary } from "@/components/shared/WidgetErrorBoundary";
 import type { Contest } from "@/lib/types";
@@ -113,6 +114,11 @@ export default function QuizJoinPage() {
                     deviceId: res.data.deviceId,
                 });
 
+                // Save per-contest proctoring flag in quiz store so system-check
+                // and play pages can read it across navigation boundaries.
+                const proctoringEnabledFromApi = res.data.proctoringEnabled ?? true;
+                useQuizStore.getState().setProctoringEnabled(proctoringEnabledFromApi);
+
                 if (contest?.proctoringEnabled && contest?.webcamRequired) {
                     setStep("CAMERA");
                 } else {
@@ -140,6 +146,19 @@ export default function QuizJoinPage() {
     const handleRedirect = () => {
         setStep("REDIRECTING");
         setTimeout(() => {
+            const isProctoringEnabled = useQuizStore.getState().proctoringEnabled;
+
+            // When proctoring is disabled, skip system-check entirely.
+            // Set the sessionStorage key so waiting room doesn't redirect back.
+            if (!isProctoringEnabled) {
+                if (typeof window !== 'undefined') {
+                    sessionStorage.setItem(`system_check_${slug}`, "passed");
+                }
+                router.push(`/quiz/${slug}/waiting`);
+                return;
+            }
+
+            // Proctoring enabled — normal flow through system-check
             if (!contest) {
                 router.push(`/quiz/${slug}/system-check`);
                 return;

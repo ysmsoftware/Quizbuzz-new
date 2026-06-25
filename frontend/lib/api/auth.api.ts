@@ -20,6 +20,15 @@ export async function registerAdmin(body: {
   return post('/auth/admin/register', body);
 }
 
+export interface LoginAdminData {
+  admin: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
 /**
  * POST /auth/admin/login
  * Uses raw fetch so a wrong password 401 is not treated as "session expired".
@@ -27,7 +36,7 @@ export async function registerAdmin(body: {
 export async function loginAdmin(body: {
   email: string;
   password: string;
-}): Promise<ApiResponse> {
+}): Promise<ApiResponse<LoginAdminData>> {
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
   const res = await fetch(`${API_BASE}/auth/admin/login`, {
     method: 'POST',

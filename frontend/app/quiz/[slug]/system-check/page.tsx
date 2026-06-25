@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProctoringStore } from "@/lib/stores/proctoring-store";
+import { useQuizStore } from "@/lib/stores/quiz-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
  
 interface SystemCheck {
@@ -35,6 +36,7 @@ export default function SystemCheckPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const { setCameraStream, setFullscreenEnabled, setCameraEnabled } = useProctoringStore();
+  const proctoringEnabled = useQuizStore((s) => s.proctoringEnabled);
 
   // iOS detection — iOS Safari and Chrome on iOS do NOT support the Fullscreen API
   const isIOS = useRef(
@@ -256,11 +258,23 @@ export default function SystemCheckPage() {
     }
   };
 
+  // Bypass system check for non-proctored contests.
+  // Use router.replace (not push) so back-button doesn't loop.
+  useEffect(() => {
+    if (proctoringEnabled === false) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`system_check_${slug}`, "passed");
+      }
+      router.replace(`/quiz/${slug}/waiting`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proctoringEnabled]);
+
   // On non-iOS browsers, auto-start checks immediately.
   // On iOS, we MUST wait for a user gesture (button tap) before calling getUserMedia,
   // otherwise Safari silently ignores / denies the permission request.
   useEffect(() => {
-    if (!isIOS.current) {
+    if (!isIOS.current && proctoringEnabled !== false) {
       runAllChecks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

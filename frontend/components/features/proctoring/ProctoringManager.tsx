@@ -16,9 +16,18 @@ interface ProctoringManagerProps {
     contestId?: string;
     participantId?: string;
     sessionToken?: string;
+    proctoringEnabled?: boolean;
 }
 
-export function ProctoringManager({
+// Outer wrapper: short-circuits before any hooks run when proctoring is
+// disabled. React forbids conditional hooks, so the bypass must happen
+// here rather than inside the implementation component.
+export function ProctoringManager(props: ProctoringManagerProps) {
+    if (props.proctoringEnabled === false) return null;
+    return <ProctoringManagerInner {...props} />;
+}
+
+function ProctoringManagerInner({
     emitProctoringWarning,
     videoRef,
     socket,

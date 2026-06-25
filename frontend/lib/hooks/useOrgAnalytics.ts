@@ -1,5 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { analyticsService } from '@/lib/services/analytics-service';
+import { analyticsService, type OrgAnalytics } from '@/lib/services/analytics-service';
+
+const EMPTY_ANALYTICS: OrgAnalytics = {
+  dailyMetrics: [],
+  totalRegistrations: 0,
+  totalRevenue: 0,
+  avgDailyRegistrations: 0,
+  contestsByStatus: {
+    live: 0,
+    upcoming: 0,
+    ended: 0,
+    draft: 0,
+  },
+  topContests: [],
+};
 
 export function useOrgAnalytics(
   orgId: string,
@@ -19,19 +33,7 @@ export function useOrgAnalytics(
   };
 
   return {
-    analytics: data ?? {
-      dailyMetrics: [],
-      totalRegistrations: 0,
-      totalRevenue: 0,
-      avgDailyRegistrations: 0,
-      contestsByStatus: {
-        live: 0,
-        upcoming: 0,
-        ended: 0,
-        draft: 0,
-      },
-      topContests: [],
-    },
+    analytics: data ?? EMPTY_ANALYTICS,
     loading: isLoading,
     exportCSV,
   };

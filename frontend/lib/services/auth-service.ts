@@ -25,6 +25,7 @@ interface OTPVerifyResponse {
         participantId: string;
     };
     deviceId: string;
+    proctoringEnabled: boolean;
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
@@ -120,6 +121,7 @@ class AuthService {
                     participantId: string;
                     contestId: string;
                     organizationId: string;
+                    proctoringEnabled: boolean;
                 };
             }>('/auth/quiz/participant-login', {
                 email: contact.toLowerCase(),
@@ -151,7 +153,8 @@ class AuthService {
                     registration: {
                         participantId: res.data.participantId
                     },
-                    deviceId
+                    deviceId,
+                    proctoringEnabled: res.data.proctoringEnabled ?? true
                 }
             };
         } catch (err: any) {
