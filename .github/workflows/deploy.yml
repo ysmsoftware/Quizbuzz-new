@@ -402,7 +402,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":white_check_mark: *Deploy succeeded!* `quiz.ysminfosolution.com` is live.\n*Tag:* `${{ env.IMAGE_TAG }}`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":white_check_mark: *Deploy succeeded!* `ysmquizbuzz.com` is live.\n*Tag:* `${{ env.IMAGE_TAG }}`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -414,7 +414,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":fire: *Deploy FAILED!* `quiz.ysminfosolution.com`\n*Tag:* `${{ env.IMAGE_TAG }}`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": ":fire: *Deploy FAILED!* `ysmquizbuzz.com`\n*Tag:* `${{ env.IMAGE_TAG }}`\n*By:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

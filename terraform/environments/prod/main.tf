@@ -44,7 +44,7 @@
 
 locals {
   is_live = var.mode == "live"
-  fqdn    = "${var.api_subdomain}.${var.domain_name}"
+  fqdn    = var.domain_name  # root domain — ysmquizbuzz.com, no subdomain
 
 # ─────────────────────────────────────────────────────────────────────────
 # DB PASSWORD — read from SSM by default, manual override only if set.
@@ -119,6 +119,7 @@ module "admin_instance" {
   s3_bucket_arn  = module.storage.bucket_arn
   key_pair_name  = var.key_pair_name
   github_org     = var.github_org
+  domain         = local.fqdn
 }
 
 ##############################################################################
@@ -128,9 +129,10 @@ module "admin_instance" {
 ##############################################################################
 module "dns" {
   source       = "../../modules/dns"
-  zone_name    = local.fqdn
+  zone_name    = var.domain_name
   fqdn         = local.fqdn
   is_live      = local.is_live
+  aws_region   = var.aws_region
   admin_eip    = module.admin_instance.elastic_ip
   alb_dns_name = local.is_live ? module.live_contest[0].alb_dns_name : ""
   alb_zone_id  = local.is_live ? module.live_contest[0].alb_zone_id : ""
@@ -161,7 +163,7 @@ module "live_contest" {
   github_org        = var.github_org
   domain            = local.fqdn
   admin_instance_id = module.admin_instance.instance_id
-  acm_certificate_arn = var.acm_certificate_arn
+  acm_certificate_arn = module.dns.certificate_arn
 }
 
 ##############################################################################
@@ -172,12 +174,12 @@ module "live_contest" {
 ##############################################################################
 output "elastic_ip" {
   value       = module.admin_instance.elastic_ip
-  description = "UPDATE YOUR DNS: Set quiz.ysminfosolution.com A record to this IP on host.co.in"
+  description = "Elastic IP — admin EC2. Point Hostinger nameservers to Route 53 instead of using this directly."
 }
 
 output "dns_name_servers" {
   value       = module.dns.name_servers
-  description = "The nameservers to configure in host.co.in for quiz.ysminfosolution.com delegation"
+  description = "Set these 4 nameservers in Hostinger for ysmquizbuzz.com (Change Nameservers)"
 }
 
 output "instance_id" {

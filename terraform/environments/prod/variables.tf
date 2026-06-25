@@ -47,18 +47,8 @@ variable "image_tag" {
 
 variable "domain_name" {
   type        = string
-  default     = "ysminfosolution.com"
-  description = "Your root domain. Used to build the full subdomain FQDN."
-}
-
-variable "api_subdomain" {
-  type        = string
-  default     = "quiz"
-  description = <<-EOT
-    The subdomain for your app. Combined with domain_name to get:
-    quiz.ysminfosolution.com
-    This is the URL your users and your CI/CD health checks will hit.
-  EOT
+  default     = "ysmquizbuzz.com"
+  description = "Root domain — used directly as the app URL. No subdomain."
 }
 
 variable "alert_email" {
@@ -144,21 +134,5 @@ variable "github_org" {
     from GHCR (GitHub Container Registry).
     Example: if your images are at ghcr.io/myusername/quizbuzz-backend
     then this value should be "myusername".
-  EOT
-}
-
-variable "acm_certificate_arn" {
-  type        = string
-  default     = ""
-  description = <<-EOT
-    ARN of the ACM certificate for quiz.ysminfosolution.com.
-    Required for HTTPS listener on the ALB in live mode.
-    Steps to get this:
-    1. AWS Console → Certificate Manager (ap-south-1) → Request certificate
-    2. Add domain: quiz.ysminfosolution.com
-    3. Choose DNS validation → ACM gives you a CNAME record
-    4. Add that CNAME at theserverindia.com DNS panel
-    5. Wait ~2 min for validation → copy the certificate ARN here
-    Example: "arn:aws:acm:ap-south-1:211125602755:certificate/xxxx-xxxx"
   EOT
 }

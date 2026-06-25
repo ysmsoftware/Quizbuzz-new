@@ -190,7 +190,7 @@ JWT_ACCESS_TTL=1800
 JWT_REFRESH_TTL=604800
 JWT_CONTACT_TTL=900
 
-COOKIE_DOMAIN=.ysminfosolution.com
+COOKIE_DOMAIN=.ysmquizbuzz.com
 COOKIE_SECURE=true
 COOKIE_SAME_SITE=none
 
@@ -223,11 +223,11 @@ RAZORPAY_WEBHOOK_SECRET=$RAZORPAY_WEBHOOK_SECRET
 PAYMENT_CURRENCY=INR
 
 # ── MESSAGING ─────────────────────────────────────────────────────────────────
-SMTP_HOST=mail.ysminfosolution.com
+SMTP_HOST=mail.ysmquizbuzz.com
 SMTP_PORT=465
 SMTP_USER=$SMTP_USER
 SMTP_PASS=$SMTP_PASS
-EMAIL_FROM=support@ysminfosolution.com
+EMAIL_FROM=support@ysmquizbuzz.com
 
 AISENSY_API_URL=https://backend.aisensy.com/campaign/t1/api/v2
 AISENSY_API_KEY=$AISENSY_API_KEY
