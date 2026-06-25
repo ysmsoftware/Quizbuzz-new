@@ -55,6 +55,7 @@ export default function QuizPlayPage() {
     const setCurrentQuestion = useQuizStore((s) => s.setCurrentQuestion);
     const visitQuestion = useQuizStore((s) => s.visitQuestion);
     const setContestContext = useQuizStore((s) => s.setContestContext);
+    const proctoringEnabled = useQuizStore((s) => s.proctoringEnabled);
 
     const { isFullscreen, setFullscreen } = useProctoringStore();
 
@@ -218,6 +219,9 @@ export default function QuizPlayPage() {
 
     // ─── Proctoring warnings → toast (side position) ─────────────────────────
     const emitProctoringWarning = useCallback((type: string) => {
+        // Never emit violations for non-proctored contests.
+        if (!proctoringEnabled) return;
+
         sendProctoringEvent(type, 1);
         const msgs: Record<string, string> = {
             TAB_SWITCH: "You left the quiz window!",
@@ -231,7 +235,7 @@ export default function QuizPlayPage() {
             duration: 4000,
             id: `proc-${type}`,
         });
-    }, [sendProctoringEvent]);
+    }, [sendProctoringEvent, proctoringEnabled]);
 
     // Connection status toasts
     useEffect(() => {
@@ -390,11 +394,14 @@ export default function QuizPlayPage() {
                 contestId={contest?.id || slug}
                 participantId={participantId}
                 sessionToken={sessionToken}
+                proctoringEnabled={proctoringEnabled}
             />
 
             {/* Overlays & modals */}
-            <FlaggedBanner />
-            <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
+            {proctoringEnabled && <FlaggedBanner />}
+            {proctoringEnabled && (
+                <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
+            )}
             <SubmitConfirmModal
                 isOpen={showSubmitModal}
                 onClose={() => setShowSubmitModal(false)}
@@ -456,33 +463,35 @@ export default function QuizPlayPage() {
                     <main className="flex-1 overflow-y-auto px-4 md:px-8 py-4">
                         <div className="max-w-2xl mx-auto flex flex-col gap-6">
                             
-                            {/* Widescreen Proctoring Camera Feed */}
-                            <div className="w-full max-w-md mx-auto">
-                                <div className="relative aspect-[21/9] sm:aspect-[24/9] rounded-2xl overflow-hidden bg-slate-900/60 border border-slate-800 shadow-2xl backdrop-blur-md group">
-                                    <video
-                                        ref={videoRef}
-                                        autoPlay playsInline muted
-                                        className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
-                                    />
-                                    
-                                    {/* Top overlays */}
-                                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-white/90">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping absolute" />
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                        <span>LIVE</span>
-                                    </div>
-                                    
-                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-orange-400">
-                                        <span>PROCTOR ACTIVE</span>
-                                    </div>
-                                    
-                                    {/* Ambient HUD decorative grid lines */}
-                                    <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-2xl" />
-                                    <div className="absolute bottom-2 left-2 text-[9px] font-mono text-white/40">
-                                        CAM_01 // SECURE_CONTEST
+                            {/* Widescreen Proctoring Camera Feed — only shown when proctoring is enabled */}
+                            {proctoringEnabled && (
+                                <div className="w-full max-w-md mx-auto">
+                                    <div className="relative aspect-[21/9] sm:aspect-[24/9] rounded-2xl overflow-hidden bg-slate-900/60 border border-slate-800 shadow-2xl backdrop-blur-md group">
+                                        <video
+                                            ref={videoRef}
+                                            autoPlay playsInline muted
+                                            className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
+                                        />
+
+                                        {/* Top overlays */}
+                                        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-white/90">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping absolute" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                            <span>LIVE</span>
+                                        </div>
+
+                                        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-orange-400">
+                                            <span>PROCTOR ACTIVE</span>
+                                        </div>
+
+                                        {/* Ambient HUD decorative grid lines */}
+                                        <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-2xl" />
+                                        <div className="absolute bottom-2 left-2 text-[9px] font-mono text-white/40">
+                                            CAM_01 // SECURE_CONTEST
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Animated Question & Option Cards */}
                             <AnimatePresence mode="wait">

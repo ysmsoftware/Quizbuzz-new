@@ -23,7 +23,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { usePublicContest, useRegistration } from '@/lib/hooks/useRegistration';
-import { usePayment, useRazorpay } from '@/lib/hooks/usePayment';
+import { usePayment } from '@/lib/hooks/usePayment';
 import { deriveContestPhase } from '@/lib/utils/contest';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,13 +34,40 @@ import { cn } from '@/lib/utils';
 
 type Step = 'landing' | 'email' | 'otp' | 'form' | 'payment' | 'success';
 
+// Lazily loads the Razorpay checkout script. Resolves true once available,
+// false if loading failed. Idempotent — safe to call multiple times.
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false);
+      return;
+    }
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const existingScript = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    ) as HTMLScriptElement | null;
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(true));
+      existingScript.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
 export default function PublicRegistrationPage() {
   const { slug } = useParams() as { slug: string };
   const router = useRouter();
   const { data: contest, isLoading: contestLoading, error: contestError } = usePublicContest(slug);
   const { requestOtpMutation, verifyOtpMutation, registerMutation } = useRegistration(slug);
-  const { loadRazorpay } = useRazorpay();
-  
   const [step, setStep] = useState<Step>('landing');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -128,7 +155,7 @@ export default function PublicRegistrationPage() {
 
   // Logic: Step 4 (Payment)
   const handlePayment = async (paymentData: any, pId: string) => {
-    const success = await loadRazorpay();
+    const success = await loadRazorpayScript();
     if (!success) {
       toast.error('Failed to load payment gateway');
       return;

@@ -77,6 +77,9 @@ interface QuizStoreState {
 
   // Submission
   submissionId: string | null;
+
+  // Per-contest proctoring config (from participant-login response)
+  proctoringEnabled: boolean;
 }
 
 interface QuizStoreActions {
@@ -109,6 +112,7 @@ interface QuizStoreActions {
   setQuizState(state: QuizState): void;
   setWsStatus(status: WsStatus): void;
   setSubmissionId(id: string): void;
+  setProctoringEnabled(enabled: boolean): void;
 
   // Computed getters
   getAnsweredCount(): number;
@@ -141,6 +145,7 @@ export const useQuizStore = create<QuizStoreState & QuizStoreActions>()(
       quizState: 'IDLE',
       wsStatus: 'disconnected',
       submissionId: null,
+      proctoringEnabled: true,
 
       // ─── Session ────────────────────────────────
       setContestContext: (orgSlug, contestSlug, contestId, participantId) =>
@@ -173,6 +178,7 @@ export const useQuizStore = create<QuizStoreState & QuizStoreActions>()(
           quizState: 'IDLE',
           submissionId: null,
           sessionId: null,
+          proctoringEnabled: true,
         }),
 
       // ─── Navigation ─────────────────────────────
@@ -244,6 +250,7 @@ export const useQuizStore = create<QuizStoreState & QuizStoreActions>()(
       setQuizState: (quizState) => set({ quizState }),
       setWsStatus: (wsStatus) => set({ wsStatus }),
       setSubmissionId: (id) => set({ submissionId: id }),
+      setProctoringEnabled: (enabled) => set({ proctoringEnabled: enabled }),
 
       // ─── Computed Getters ───────────────────────
       getAnsweredCount: () => Object.keys(get().answers).length,
@@ -280,6 +287,7 @@ export const useQuizStore = create<QuizStoreState & QuizStoreActions>()(
         hints: state.hints,
         visitedQuestions: state.visitedQuestions,
         timeRemaining: state.timeRemaining,
+        proctoringEnabled: state.proctoringEnabled,
       }),
     }
   )
