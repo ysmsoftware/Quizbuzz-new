@@ -130,7 +130,17 @@ export class ContestRepository implements IContestRepository {
             where: {
                 slug,
                 isDeleted: false,
-                status: { in: [ContestStatus.PUBLISHED, ContestStatus.REGISTRATION_CLOSED, ContestStatus.LIVE, ContestStatus.RESULTS_OUT, ContestStatus.COMPLETED] },
+                status: {
+                    in: [
+                        ContestStatus.PUBLISHED,
+                        ContestStatus.REGISTRATION_CLOSED,
+                        ContestStatus.LIVE,
+                        ContestStatus.EVALUATION,   // ← was missing: shows page while scores are being computed
+                        ContestStatus.RESULTS_OUT,
+                        ContestStatus.COMPLETED,
+                        ContestStatus.CANCELLED,    // ← was missing: shows page explaining cancellation
+                    ],
+                },
             },
             include: {
                 prizes: true,
