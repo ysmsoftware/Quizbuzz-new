@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -15,55 +14,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import {
-  ArrowLeft,
   Plus,
-  Edit2,
-  Trash2,
-  Eye,
   BookOpen,
+  Archive,
 } from 'lucide-react';
 import { useContests } from '@/lib/hooks/useContests';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as contestsApi from '@/lib/api/contests.api';
-import { queryKeys } from '@/lib/api/queryClient';
-import { toast } from 'sonner';
-import { Archive } from 'lucide-react';
 
 export default function ContestsPage() {
   const { contests = [], isLoading } = useContests();
-  const queryClient = useQueryClient();
-
-  const [contestToDelete, setContestToDelete] = useState<{ id: string, title: string } | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-
-  const deleteContestMutation = useMutation({
-    mutationFn: (contestId: string) => contestsApi.deleteContest(contestId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
-      toast.success('Contest deleted successfully');
-      setContestToDelete(null);
-      setDeleteConfirmText('');
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Failed to delete contest');
-    }
-  });
-
-  const handleDelete = async () => {
-    if (contestToDelete && deleteConfirmText.toLowerCase() === 'delete') {
-      deleteContestMutation.mutate(contestToDelete.id);
-    }
-  };
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -134,12 +94,15 @@ export default function ContestsPage() {
                         <TableHead>Status</TableHead>
                         <TableHead>Participants</TableHead>
                         <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {contests.map((contest) => (
-                        <TableRow key={contest.id}>
+                        <TableRow
+                          key={contest.id}
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/admin/contests/${contest.id}`)}
+                        >
                           <TableCell className="font-medium">{contest.title}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{contest.category}</Badge>
@@ -161,32 +124,6 @@ export default function ContestsPage() {
                           <TableCell className="text-sm text-muted-foreground">
                             {contest.contestDate ? new Date(contest.contestDate).toLocaleDateString() : 'TBD'}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Link href={`/admin/contests/${contest.id}`}>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              <Link href={`/admin/contests/${contest.id}/edit`}>
-                                <Button variant="ghost" size="sm">
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setContestToDelete({ id: contest.id, title: contest.title });
-                                  setDeleteConfirmText('');
-                                }}
-                                disabled={deleteContestMutation.isPending && contestToDelete?.id === contest.id}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -197,42 +134,6 @@ export default function ContestsPage() {
           </Card>
         </div>
       </WidgetErrorBoundary>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={!!contestToDelete} onOpenChange={(open) => !open && setContestToDelete(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Are you absolutely sure?</DialogTitle>
-            <DialogDescription>
-              This action cannot be reversed. This contest and all its data will be deleted.
-              Please type <strong>delete</strong> to confirm.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Input 
-              placeholder="Type delete to confirm" 
-              value={deleteConfirmText} 
-              onChange={(e) => setDeleteConfirmText(e.target.value)} 
-            />
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline"
-              onClick={() => setContestToDelete(null)}
-              disabled={deleteContestMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              disabled={deleteConfirmText.toLowerCase() !== 'delete' || deleteContestMutation.isPending}
-              onClick={handleDelete}
-            >
-              {deleteContestMutation.isPending ? 'Deleting...' : 'Confirm Deletion'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

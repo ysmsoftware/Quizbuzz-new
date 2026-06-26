@@ -4,19 +4,17 @@ import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  Rocket, 
-  ExternalLink, 
-  Trash2, 
-  Settings, 
-  Share2, 
-  AlertTriangle, 
-  CheckCircle2, 
+  Rocket,
+  ExternalLink,
+  Settings,
+  Share2,
+  AlertTriangle,
+  CheckCircle2,
   XCircle,
   Copy,
   Send,
   Radio,
   Power,
-  Archive,
   MessageSquare,
   ShieldAlert,
   Loader2,
@@ -68,12 +66,10 @@ interface ContestActionBarProps {
   onDeclareResults?: () => void | Promise<void>;
   isDeclaringResults?: boolean;
   onCancel?: (reason: string) => void;
-  onArchive?: () => void;
-  onDelete?: () => void;
 }
 
-export function ContestActionBar({ 
-  contest, 
+export function ContestActionBar({
+  contest,
   contestPhase,
   onPublish,
   isPublishing: isPublishingProp,
@@ -82,8 +78,6 @@ export function ContestActionBar({
   onDeclareResults,
   isDeclaringResults,
   onCancel,
-  onArchive,
-  onDelete 
 }: ContestActionBarProps) {
   const router = useRouter();
   const [localIsPublishing, setLocalIsPublishing] = useState(false);
@@ -175,29 +169,6 @@ export function ContestActionBar({
 
   const renderDraftActions = () => (
     <div className="flex items-center gap-3">
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Draft
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the contest "{contest.title}" and all its data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete Permanently
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <Button variant="outline" size="sm" asChild>
         <a href={publicUrl} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="mr-2 h-4 w-4" />
@@ -375,11 +346,6 @@ export function ContestActionBar({
 
     return (
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
-          <Archive className="mr-2 h-4 w-4" />
-          Archive
-        </Button>
-
         {onEvaluate && (
           <Button
             variant="outline"
@@ -419,10 +385,6 @@ export function ContestActionBar({
 
   const renderResultsPublishedActions = () => (
     <div className="flex items-center gap-3">
-      <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
-        <Archive className="mr-2 h-4 w-4" />
-        Archive
-      </Button>
       <Button variant="outline" size="sm" asChild>
         <Link href={`/admin/contests/${contest.id}/certificates`}>
           <ShieldAlert className="mr-2 h-4 w-4" />
@@ -439,20 +401,12 @@ export function ContestActionBar({
   );
 
   if (contestPhase === 'CANCELLED') {
-    const isOld = new Date(Date.now() - (new Date(contest.cancelledAt || Date.now()).getTime())) > new Date(1000 * 60 * 60 * 24 * 30);
-    
     return (
       <div className="flex items-center gap-4">
         <Badge variant="outline" className="border-destructive text-destructive px-3 py-1 flex items-center gap-2">
           <XCircle className="h-4 w-4" />
           Cancelled on {format(new Date(contest.cancelledAt || Date.now()), 'PP')}
         </Badge>
-        {isOld && (
-          <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={onDelete}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Permanently
-          </Button>
-        )}
       </div>
     );
   }

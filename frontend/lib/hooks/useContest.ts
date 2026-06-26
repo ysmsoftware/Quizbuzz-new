@@ -61,6 +61,17 @@ export function useContest(contestId: string) {
   });
 
   /**
+   * Complete contest mutation
+   */
+  const completeContestMutation = useMutation({
+    mutationFn: () => contestsApi.completeContest(contestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
+    },
+  });
+
+  /**
    * Publish contest mutation
    */
   const publishContestMutation = useMutation({
@@ -152,6 +163,7 @@ export function useContest(contestId: string) {
     evaluateMutation,
     declareResultsMutation,
     archiveContestMutation,
+    completeContestMutation,
 
     // Helper functions
     isRegistrationOpen,

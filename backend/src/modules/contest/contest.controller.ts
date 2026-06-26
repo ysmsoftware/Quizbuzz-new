@@ -161,6 +161,20 @@ export class ContestController {
         }
     };
 
+    completeContest = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            };
+            const result = await this.contestService.completeContest(req.params.contestId as string, user.organizationId);
+
+            res.json({ success: true, message: "Contest marked as completed", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     // ─── Public Routes (no auth) ──────────────────────────────────────────────
 
     listPublicContests = async (req: Request, res: Response, next: NextFunction) => {

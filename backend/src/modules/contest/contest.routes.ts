@@ -19,6 +19,7 @@ contestRouter.get("/:contestId", authenticatedOrgMiddleware, contestController.g
 contestRouter.patch("/:contestId", authenticatedOrgMiddleware, contestController.updateContest);
 contestRouter.delete("/:contestId", authenticatedOrgMiddleware, contestController.deleteContest);
 contestRouter.patch("/:contestId/archive", authenticatedOrgMiddleware, contestController.archiveContest);
+contestRouter.post("/:contestId/complete", authenticatedOrgMiddleware, contestController.completeContest);
 
 contestRouter.post("/:contestId/publish", authenticatedOrgMiddleware, contestController.publishContest);
 
