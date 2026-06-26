@@ -71,6 +71,13 @@ export async function archiveContest(contestId: string): Promise<ApiResponse> {
 }
 
 /**
+ * POST /contests/:contestId/complete
+ */
+export async function completeContest(contestId: string): Promise<ApiResponse> {
+  return post(`/contests/${contestId}/complete`);
+}
+
+/**
  * GET /contests/archived
  */
 export async function listArchivedContests(params?: {
