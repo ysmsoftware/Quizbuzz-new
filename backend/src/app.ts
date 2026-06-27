@@ -69,8 +69,6 @@ app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
 app.use('/api/v1', apiRouter);
 
 
-
-
 app.get('/metrics', async (req, res) => {
     await collectQueueMetrics();
     res.set('Content-Type', metricsRegistry.contentType);
