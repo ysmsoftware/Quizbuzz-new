@@ -40,6 +40,7 @@ import { ContestPrizeBracket } from '@/components/features/contests/ContestPrize
 import { PublicLinkCard } from '@/components/features/contests/PublicLinkCard';
 import { KeyDatesCard } from '@/components/features/contests/KeyDatesCard';
 import { DraftChecklistCard } from '@/components/features/contests/DraftChecklistCard';
+import { DangerZoneCard } from '@/components/features/contests/DangerZoneCard';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +52,8 @@ export default function ContestOverviewPage() {
         isLoading,
         error,
         publishContestMutation,
+        deleteContestMutation,
+        archiveContestMutation
     } = useContestDetail(id);
     const updateMutation = useUpdateContest(id);
 
@@ -435,6 +438,38 @@ export default function ContestOverviewPage() {
                         />
                     )}
 
+                    {/* Danger Zone */}
+                    <DangerZoneCard
+                        contestTitle={contest.title}
+                        phase={phase}
+                        participantCount={contest?._count?.participants || 0}
+                        onDelete={async () => {
+                            try {
+                                await deleteContestMutation.mutateAsync();
+                                toast.success("Contest deleted successfully");
+                                router.push('/admin/contests');
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to delete contest");
+                            }
+                        }}
+                        onCancel={async (reason) => {
+                            try {
+                                await updateMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
+                                toast.success("Contest cancelled and participants notified");
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to cancel contest");
+                            }
+                        }}
+                        onArchive={async () => {
+                            try {
+                                await archiveContestMutation.mutateAsync();
+                                toast.success("Contest archived");
+                                router.push('/admin/contests/archived');
+                            } catch (err: any) {
+                                toast.error(err?.message || "Failed to archive contest");
+                            }
+                        }}
+                    />
                 </div>
             </div>
         </div>

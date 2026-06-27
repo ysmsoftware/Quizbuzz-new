@@ -236,23 +236,7 @@ export class ContestService {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");
 
-        if (contest.status === ContestStatus.LIVE) {
-            throw new BadRequestError("Cannot archive a contest that is currently LIVE");
-        }
-
         return this.contestRepo.archive(contestId, organizationId);
-    }
-
-    async completeContest(contestId: string, organizationId: string) {
-        const contest = await this.contestRepo.findById(contestId, organizationId);
-        if (!contest) throw new NotFoundError("Contest not found");
-
-        if (contest.status !== ContestStatus.RESULTS_OUT) {
-            throw new BadRequestError("Only contests with results out can be marked as completed");
-        }
-
-        const updated = await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.COMPLETED);
-        return { status: updated.status };
     }
 
     async listArchivedContests(organizationId: string, query: Omit<ListContestsFilter, 'isArchived'>) {
