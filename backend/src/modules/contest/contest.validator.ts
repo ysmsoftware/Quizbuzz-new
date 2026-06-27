@@ -60,16 +60,25 @@ export const UpdateContestSchema = CreateContestBase.partial();
 export const RegisterParticipantSchema = z.object({
     contactToken: z.string().min(1),
     email: z.string().email().toLowerCase(),
+
+    // Accept a plain 10-digit number OR an optional country-code prefix
+    // (e.g. +91XXXXXXXXXX, 0091XXXXXXXXXX, 91XXXXXXXXXX).
+    // The transform always strips the prefix and stores exactly 10 digits.
     phone: z
         .string()
-        .regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number (E.164 expected)")
-        .optional(),
-    firstName: z.string().min(1).max(100),
-    lastName: z.string().max(100).optional(),
-    college: z.string().optional(),
+        .min(1, "Phone number is required")
+        .transform((val) => val.replace(/\D/g, ''))           // remove all non-digits
+        .transform((val) => val.replace(/^(91|0{2}91)/, '')) // strip leading 91 / 0091
+        .refine((val) => /^\d{10}$/.test(val), {
+            message: "Phone number must be exactly 10 digits",
+        }),
+
+    firstName: z.string().min(1, "First name is required").max(100),
+    lastName: z.string().min(1, "Last name is required").max(100),
+    college: z.string().min(1, "College / Organization is required").max(300),
     department: z.string().max(200).optional(),
-    city: z.string().max(100).optional(),
-    state: z.string().max(100).optional(),
+    city: z.string().min(1, "City is required").max(100),
+    state: z.string().min(1, "State is required").max(100),
 });
 
 

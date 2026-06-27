@@ -12,7 +12,7 @@ export type ContestWithRelation = Contest & {
 export interface IContestRepository {
     create(organizationId: string, createdById: string, data: CreateContestDTO): Promise<ContestWithRelation>;
     findById(contestId: string, organizationId?: string): Promise<ContestWithRelation | null>;
-    findBySlug(slug: string): Promise<Contest | null>;
+    findBySlug(slug: string, organizationId: string): Promise<Contest | null>;
     findBySlugPublic(slug: string): Promise<Contest | null>;
     list(organizationId: string, query: ListContestsFilter): Promise<{ data: ContestSummary[]; total: number }>;
     update(contestId: string, organizationId: string, data: UpdateContestDTO): Promise<Contest>;
@@ -118,9 +118,9 @@ export class ContestRepository implements IContestRepository {
         });
     }
 
-    async findBySlug(slug: string): Promise<Contest | null> {
+    async findBySlug(slug: string, organizationId: string): Promise<Contest | null> {
         return await prisma.contest.findFirst({
-            where: { slug, isDeleted: false },
+            where: { slug, organizationId },
             include: { _count: { select: { participants: true } }, paymentConfig: true }
         })
     }
@@ -135,10 +135,10 @@ export class ContestRepository implements IContestRepository {
                         ContestStatus.PUBLISHED,
                         ContestStatus.REGISTRATION_CLOSED,
                         ContestStatus.LIVE,
-                        ContestStatus.EVALUATION,   // ← was missing: shows page while scores are being computed
+                        ContestStatus.EVALUATION,
                         ContestStatus.RESULTS_OUT,
                         ContestStatus.COMPLETED,
-                        ContestStatus.CANCELLED,    // ← was missing: shows page explaining cancellation
+                        ContestStatus.CANCELLED,
                     ],
                 },
             },
@@ -158,7 +158,7 @@ export class ContestRepository implements IContestRepository {
         const skip = (page - 1) * limit;
 
         const where: Prisma.ContestWhereInput = {
-            organizationId, 
+            organizationId,
             isDeleted: false,
             isArchived: query.isArchived ?? false,
             ...(status ? { status } : {}),

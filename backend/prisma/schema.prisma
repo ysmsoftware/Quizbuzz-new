@@ -243,7 +243,7 @@ model Contest {
   organizationId        String
   createdById           String
   title                 String
-  slug                  String          @unique   // immutable after publish
+  slug                  String          // unique per org — see @@unique below
   description           String?
   details               String?         // rich text / markdown
   topics                String[]        // e.g. ["DSA", "System Design"]
@@ -283,8 +283,8 @@ model Contest {
   proctoringScores      ProctoringScore[]
   exportLogs            ExportLog[]
 
+  @@unique([organizationId, slug])        // slug is unique within an org, not globally
   @@index([organizationId, status])
-  @@index([slug])
   @@index([startTime, status])
   @@index([registrationDeadline])
   @@index([isDeleted, status])

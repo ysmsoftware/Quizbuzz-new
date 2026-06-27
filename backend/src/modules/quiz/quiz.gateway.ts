@@ -13,6 +13,20 @@ import { prisma } from "../../config/db.js";
 import { getStorageProvider } from "../../providers/storage.provider.js";
 import { config } from "../../config";
 
+// Violation types that require a live camera/mic feed to detect. When a
+// contest has no camera module (per-contest proctoringEnabled = false),
+// these are meaningless and are dropped. Behavioral checks that don't need
+// a camera — TAB_SWITCH, FULLSCREEN_EXIT, WINDOW_BLUR, SCREEN_RESIZE — are
+// NOT in this set and must keep being recorded regardless of the camera
+// module flag; only the global ENABLE_PROCTORING flag can silence those.
+const CAMERA_DEPENDENT_VIOLATION_TYPES = new Set([
+    "FACE_NOT_DETECTED",
+    "MULTIPLE_FACES",
+    "AUDIO_ANOMALY",
+    "POOR_LIGHTING",
+    "GAZE_AWAY",
+]);
+
 export class QuizGateway {
     server!: Server;
     private subscriberClient?: any;
@@ -241,8 +255,17 @@ export class QuizGateway {
     async handleViolation(socket: Socket, payload: ViolationPayload) {
         const { participantId, contestId, organizationId, proctoringEnabled } = socket.data;
 
-        // Drop violations silently when proctoring is globally or per-contest disabled
-        if (!config.features.proctoring || !proctoringEnabled) {
+        // Global kill switch — disables proctoring platform-wide regardless
+        // of any per-contest setting.
+        if (!config.features.proctoring) {
+            return;
+        }
+
+        // Per-contest proctoringEnabled=false means "no camera module" for
+        // this contest, NOT "stop monitoring". Only drop violation types
+        // that require a camera/mic to detect — behavioral checks like
+        // tab-switch and fullscreen-exit are still recorded.
+        if (!proctoringEnabled && CAMERA_DEPENDENT_VIOLATION_TYPES.has(payload.type)) {
             return;
         }
 

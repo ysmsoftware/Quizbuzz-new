@@ -98,9 +98,17 @@ export default function SystemCheckPage() {
   };
  
   const checkDevices = async () => {
+    // No camera module for this contest — camera/mic checks are not applicable.
+    // Mark them passed immediately without ever requesting permission.
+    if (!proctoringEnabled) {
+      updateCheckStatus("camera", "passed");
+      updateCheckStatus("microphone", "passed");
+      return true;
+    }
+
     updateCheckStatus("camera", "checking");
     updateCheckStatus("microphone", "checking");
-    
+
     try {
       const store = useProctoringStore.getState();
       // Single unified permission request to support iOS Safari constraints
@@ -258,23 +266,20 @@ export default function SystemCheckPage() {
     }
   };
 
-  // Bypass system check for non-proctored contests.
-  // Use router.replace (not push) so back-button doesn't loop.
-  useEffect(() => {
-    if (proctoringEnabled === false) {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem(`system_check_${slug}`, "passed");
-      }
-      router.replace(`/quiz/${slug}/waiting`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proctoringEnabled]);
+  // proctoringEnabled === false means this contest has no camera module —
+  // it does NOT mean skip the system check page. Fullscreen capability,
+  // network connectivity, and overall browser validity must still be
+  // verified before the participant is allowed into the waiting room.
+  // checkDevices() already short-circuits camera/mic to "passed" in that
+  // case, so the full system-check flow below runs unchanged otherwise.
 
   // On non-iOS browsers, auto-start checks immediately.
   // On iOS, we MUST wait for a user gesture (button tap) before calling getUserMedia,
   // otherwise Safari silently ignores / denies the permission request.
+  // When there's no camera module, there's no getUserMedia call at all, so the
+  // iOS gesture requirement doesn't apply — checks can auto-start there too.
   useEffect(() => {
-    if (!isIOS.current && proctoringEnabled !== false) {
+    if (!isIOS.current || !proctoringEnabled) {
       runAllChecks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -310,16 +315,20 @@ export default function SystemCheckPage() {
             </CardHeader>
  
             <CardContent className="space-y-6">
-              <CameraCheckWidget
-                onProceed={() => {
-                  updateCheckStatus("camera", "passed");
-                  updateCheckStatus("microphone", "passed");
-                }}
-                onRetryCamera={() => checkDevices()}
-              />
- 
+              {proctoringEnabled && (
+                <CameraCheckWidget
+                  onProceed={() => {
+                    updateCheckStatus("camera", "passed");
+                    updateCheckStatus("microphone", "passed");
+                  }}
+                  onRetryCamera={() => checkDevices()}
+                />
+              )}
+
               <div className="space-y-3">
-                {checks.map((check) => (
+                {checks
+                  .filter((check) => proctoringEnabled || (check.id !== "camera" && check.id !== "microphone"))
+                  .map((check) => (
                   <motion.div
                     key={check.id}
                     initial={{ opacity: 0, x: -20 }}
@@ -434,8 +443,11 @@ export default function SystemCheckPage() {
                 </Alert>
               )}
  
-              {/* iOS: show a prominent call-to-action before checks start */}
-              {isIOS.current && !checksStarted && (
+              {/* iOS: show a prominent call-to-action before checks start.
+                  Only relevant when there's a camera module — without one,
+                  no getUserMedia call happens so the gesture requirement
+                  doesn't apply and checks already auto-start. */}
+              {isIOS.current && proctoringEnabled && !checksStarted && (
                 <Alert className="border-primary/50 bg-primary/5">
                   <AlertTriangle className="h-4 w-4 text-primary" />
                   <AlertTitle className="text-primary">Tap the button below to start</AlertTitle>
@@ -476,8 +488,9 @@ export default function SystemCheckPage() {
               </div>
  
               <p className="text-xs text-center text-muted-foreground">
-                By continuing, you agree to keep your camera on
-                {isIOS.current ? "." : " and remain in fullscreen mode during the entire quiz session."}
+                {proctoringEnabled
+                  ? `By continuing, you agree to keep your camera on${isIOS.current ? "." : " and remain in fullscreen mode during the entire quiz session."}`
+                  : `By continuing, you agree to remain in fullscreen mode${isIOS.current ? "" : " and avoid switching tabs"} during the entire quiz session.`}
               </p>
             </CardContent>
           </Card>
