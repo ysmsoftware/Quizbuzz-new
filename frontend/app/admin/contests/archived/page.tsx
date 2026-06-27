@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table';
 import {
   ArrowLeft,
+  Eye,
   Archive,
 } from 'lucide-react';
 import { useArchivedContests } from '@/lib/hooks/useContests';
@@ -22,7 +23,6 @@ import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 
 export default function ArchivedContestsPage() {
   const { contests = [], isLoading } = useArchivedContests();
-  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -81,15 +81,12 @@ export default function ArchivedContestsPage() {
                         <TableHead>Status</TableHead>
                         <TableHead>Participants</TableHead>
                         <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {contests.map((contest) => (
-                        <TableRow
-                          key={contest.id}
-                          className="cursor-pointer"
-                          onClick={() => router.push(`/admin/contests/${contest.id}`)}
-                        >
+                        <TableRow key={contest.id}>
                           <TableCell className="font-medium">{contest.title}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{contest.category || contest.topic || contest.tags?.[0]}</Badge>
@@ -102,6 +99,15 @@ export default function ArchivedContestsPage() {
                           <TableCell>{contest.currentParticipants || contest._count?.participants || 0}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {contest.startTime ? new Date(contest.startTime).toLocaleDateString() : 'TBD'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Link href={`/admin/contests/${contest.id}`}>
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

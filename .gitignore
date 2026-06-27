@@ -23,7 +23,7 @@ npm-debug.log*
 
 # Docker
 .docker/
-.claude/
+
 # OS files
 .DS_Store
 Thumbs.db

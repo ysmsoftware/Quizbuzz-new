@@ -34,7 +34,6 @@ import { deriveContestPhase, isContestLive } from '@/lib/utils/contest';
 import { ContestPhaseBadge } from '@/components/features/contests/ContestPhaseBadge';
 import { StatCard } from '@/components/features/contests/StatCard';
 import { ContestActionBar } from '@/components/features/contests/ContestActionBar';
-import { ContestMoreMenu } from '@/components/features/contests/ContestMoreMenu';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { cn } from '@/lib/utils';
 
@@ -59,8 +58,6 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
         evaluateMutation,
         declareResultsMutation,
         deleteContestMutation,
-        archiveContestMutation,
-        completeContestMutation,
         updateContestMutation
     } = useContestDetail(contestId);
 
@@ -168,48 +165,34 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                 </div>
 
                 {/* Action Bar */}
-                <div className="flex items-center gap-3">
-                    <ContestActionBar
-                        contest={contest}
-                        contestPhase={contestPhase}
-                        onPublish={async () => {
-                            await publishContestMutation.mutateAsync();
-                            refetch();
-                        }}
-                        isPublishing={publishContestMutation.isPending}
-                        onEvaluate={async () => {
-                            await evaluateMutation.mutateAsync();
-                            refetch();
-                        }}
-                        isEvaluating={evaluateMutation.isPending}
-                        onDeclareResults={async () => {
-                            await declareResultsMutation.mutateAsync();
-                            refetch();
-                        }}
-                        isDeclaringResults={declareResultsMutation.isPending}
-                        onCancel={async (reason) => {
-                            await updateContestMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
-                            refetch();
-                        }}
-                    />
-
-                    <ContestMoreMenu
-                        contestTitle={contest.title}
-                        serverStatus={contest.serverStatus || 'DRAFT'}
-                        onComplete={async () => {
-                            await completeContestMutation.mutateAsync();
-                            refetch();
-                        }}
-                        onArchive={async () => {
-                            await archiveContestMutation.mutateAsync();
-                            router.push('/admin/contests/archived');
-                        }}
-                        onDelete={async () => {
-                            await deleteContestMutation.mutateAsync();
-                            router.push('/admin/contests');
-                        }}
-                    />
-                </div>
+                <ContestActionBar
+                    contest={contest}
+                    contestPhase={contestPhase}
+                    onPublish={async () => {
+                        await publishContestMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isPublishing={publishContestMutation.isPending}
+                    onEvaluate={async () => {
+                        await evaluateMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isEvaluating={evaluateMutation.isPending}
+                    onDeclareResults={async () => {
+                        await declareResultsMutation.mutateAsync();
+                        refetch();
+                    }}
+                    isDeclaringResults={declareResultsMutation.isPending}
+                    onCancel={async (reason) => {
+                        await updateContestMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
+                        refetch();
+                    }}
+                    onArchive={() => console.log('Archived')}
+                    onDelete={async () => {
+                        await deleteContestMutation.mutateAsync();
+                        router.push('/admin/contests');
+                    }}
+                />
             </div>
 
             {/* Stats Row */}
