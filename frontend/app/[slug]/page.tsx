@@ -106,11 +106,28 @@ export default function PublicRegistrationPage() {
     // Logic: Step 3 (Register)
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Client-side validation
+        const { firstName, lastName, phone, college, city, state } = formData;
+        if (!firstName.trim()) return toast.error('First name is required');
+        if (!lastName.trim()) return toast.error('Last name is required');
+        if (!college.trim()) return toast.error('College / Organization is required');
+        if (!city.trim()) return toast.error('City is required');
+        if (!state.trim()) return toast.error('State is required');
+
+        // Normalise phone: strip all non-digits, then strip leading country code (91)
+        const digitsOnly = phone.replace(/\D/g, '');
+        const normalised = digitsOnly.replace(/^(91|0091)/, '');
+        if (!/^\d{10}$/.test(normalised)) {
+            return toast.error('Please enter a valid 10-digit mobile number');
+        }
+
         try {
             const res = await registerMutation.mutateAsync({
                 contactToken,
                 email,
                 ...formData,
+                phone: normalised, // always send clean 10 digits
             }) as any;
 
             setParticipantId(res.data.participantId);
@@ -439,7 +456,9 @@ export default function PublicRegistrationPage() {
 
                                             <div className="grid sm:grid-cols-2 gap-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-sm font-medium">First Name</label>
+                                                    <label className="text-sm font-medium">
+                                                        First Name <span className="text-destructive">*</span>
+                                                    </label>
                                                     <Input
                                                         placeholder="John"
                                                         className="h-12 rounded-xl bg-secondary/30"
@@ -449,32 +468,47 @@ export default function PublicRegistrationPage() {
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-sm font-medium">Last Name</label>
+                                                    <label className="text-sm font-medium">
+                                                        Last Name <span className="text-destructive">*</span>
+                                                    </label>
                                                     <Input
                                                         placeholder="Doe"
                                                         className="h-12 rounded-xl bg-secondary/30"
                                                         value={formData.lastName}
                                                         onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium">Phone Number</label>
-                                                <div className="relative">
-                                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                                    <Input
-                                                        placeholder="+91 98765 43210"
-                                                        className="h-12 pl-10 rounded-xl bg-secondary/30"
-                                                        value={formData.phone}
-                                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                                         required
                                                     />
                                                 </div>
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-sm font-medium">College / Organization</label>
+                                                <label className="text-sm font-medium">
+                                                    Phone Number <span className="text-destructive">*</span>
+                                                </label>
+                                                <div className="relative">
+                                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                    <Input
+                                                        type="tel"
+                                                        inputMode="numeric"
+                                                        placeholder="9876543210"
+                                                        maxLength={13}
+                                                        className="h-12 pl-10 rounded-xl bg-secondary/30"
+                                                        value={formData.phone}
+                                                        onChange={(e) => {
+                                                            // Allow digits, spaces, dashes, + prefix only
+                                                            const val = e.target.value.replace(/[^\d+\s-]/g, '');
+                                                            setFormData({ ...formData, phone: val });
+                                                        }}
+                                                        required
+                                                    />
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Enter your 10-digit mobile number (no country code needed)</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-medium">
+                                                    College / Organization <span className="text-destructive">*</span>
+                                                </label>
                                                 <div className="relative">
                                                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                                     <Input
@@ -489,21 +523,27 @@ export default function PublicRegistrationPage() {
 
                                             <div className="grid sm:grid-cols-2 gap-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-sm font-medium">City</label>
+                                                    <label className="text-sm font-medium">
+                                                        City <span className="text-destructive">*</span>
+                                                    </label>
                                                     <Input
                                                         placeholder="Mumbai"
                                                         className="h-12 rounded-xl bg-secondary/30"
                                                         value={formData.city}
                                                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                                                        required
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-sm font-medium">State</label>
+                                                    <label className="text-sm font-medium">
+                                                        State <span className="text-destructive">*</span>
+                                                    </label>
                                                     <Input
                                                         placeholder="Maharashtra"
                                                         className="h-12 rounded-xl bg-secondary/30"
                                                         value={formData.state}
                                                         onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                                        required
                                                     />
                                                 </div>
                                             </div>

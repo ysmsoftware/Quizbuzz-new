@@ -19,21 +19,20 @@ interface ProctoringManagerProps {
     proctoringEnabled?: boolean;
 }
 
-// Outer wrapper: short-circuits before any hooks run when proctoring is
-// disabled. React forbids conditional hooks, so the bypass must happen
-// here rather than inside the implementation component.
-export function ProctoringManager(props: ProctoringManagerProps) {
-    if (props.proctoringEnabled === false) return null;
-    return <ProctoringManagerInner {...props} />;
-}
-
-function ProctoringManagerInner({
+// proctoringEnabled === false means "this contest has no camera module" —
+// it does NOT mean "stop monitoring the participant". Tab-switch detection,
+// fullscreen enforcement, copy/paste blocking, and keyboard-shortcut blocking
+// must keep running either way; only the camera-dependent pieces (face
+// detection, audio analysis from the mic, and snapshot capture/upload) are
+// skipped when there is no camera module for this contest.
+export function ProctoringManager({
     emitProctoringWarning,
     videoRef,
     socket,
     contestId,
     participantId,
     sessionToken,
+    proctoringEnabled = true,
 }: ProctoringManagerProps) {
     const [showFullscreenRequest, setShowFullscreenRequest] = useState(false);
     const store = useProctoringStore();
@@ -51,6 +50,8 @@ function ProctoringManagerInner({
     // path securely as proctoring/{contestSlug}/{participantSlug}/ from the JWT.
     // ─────────────────────────────────────────────────────────────────────
     const handleCaptureAndUpload = useCallback(async (captureType: string): Promise<void> => {
+        // No camera module for this contest — nothing to capture.
+        if (!proctoringEnabled) return;
         if (!videoRef.current || !sessionToken) return;
         const video = videoRef.current;
 
@@ -150,7 +151,7 @@ function ProctoringManagerInner({
                 }
             }, 'image/webp', 0.7);
         });
-    }, [sessionToken, videoRef]);
+    }, [sessionToken, videoRef, proctoringEnabled]);
 
     // ─────────────────────────────────────────────────────────────────────
     // Shared helper: fire a silent admin-only evidence capture + socket event.
@@ -262,12 +263,14 @@ function ProctoringManagerInner({
     // 6. CAMERA STREAM
     // On mount: check if stream already exists in store (from entry page)
     // Only request if not already granted (handles direct navigation to /live)
+    // Skipped entirely when this contest has no camera module.
     useEffect(() => {
+        if (!proctoringEnabled) return;
         const storeState = useProctoringStore.getState();
         if (!storeState.videoStream || storeState.cameraStatus !== 'active') {
             storeState.requestCameraPermission();
         }
-    }, []);
+    }, [proctoringEnabled]);
 
     // Attach stream to videoRef whenever the stream or ref changes.
     // Using a subscription so this fires even if the stream was set before this component mounted.
@@ -316,12 +319,14 @@ function ProctoringManagerInner({
 
     useFaceDetection({
         videoRef,
-        active: true,
+        active: proctoringEnabled,
         wsEmit: wrappedEmit
     });
 
     // 9. WEB AUDIO API - ENVIRONMENTAL VOLUME CHECKS (FFT size 256, 500ms loop, threshold 80, 2s anomalous state)
+    // Audio comes from the camera/mic stream — skip entirely with no camera module.
     useEffect(() => {
+        if (!proctoringEnabled) return;
         let audioContext: AudioContext | null = null;
         let source: MediaStreamAudioSourceNode | null = null;
         let analyser: AnalyserNode | null = null;
@@ -400,18 +405,18 @@ function ProctoringManagerInner({
                 audioContext.close();
             }
         };
-    }, [emitProctoringWarning, store]);
+    }, [emitProctoringWarning, store, proctoringEnabled]);
 
     // 10. ENTRY AUTO CAPTURE TRIGGER (Runs exactly once when the camera is active)
     useEffect(() => {
-        if (store.cameraStatus === 'active' && !entryCaptureRun.current) {
+        if (proctoringEnabled && store.cameraStatus === 'active' && !entryCaptureRun.current) {
             entryCaptureRun.current = true;
             // Wait 2 seconds after camera starts to capture a stable entry frame
             setTimeout(() => {
                 handleCaptureAndUpload('SNAPSHOT_START');
             }, 2000);
         }
-    }, [store.cameraStatus, handleCaptureAndUpload]);
+    }, [store.cameraStatus, handleCaptureAndUpload, proctoringEnabled]);
 
     // 11. WINDOW-LEVEL EXIT CAPTURE TRIGGER (Registered for synchronous capture during submit)
     useEffect(() => {

@@ -146,19 +146,10 @@ export default function QuizJoinPage() {
     const handleRedirect = () => {
         setStep("REDIRECTING");
         setTimeout(() => {
-            const isProctoringEnabled = useQuizStore.getState().proctoringEnabled;
-
-            // When proctoring is disabled, skip system-check entirely.
-            // Set the sessionStorage key so waiting room doesn't redirect back.
-            if (!isProctoringEnabled) {
-                if (typeof window !== 'undefined') {
-                    sessionStorage.setItem(`system_check_${slug}`, "passed");
-                }
-                router.push(`/quiz/${slug}/waiting`);
-                return;
-            }
-
-            // Proctoring enabled — normal flow through system-check
+            // Always route through system-check — proctoringEnabled=false only
+            // means "no camera module" (handled inside that page itself), not
+            // "skip validation". Fullscreen capability, network connectivity,
+            // and browser validity must still be verified for every contest.
             if (!contest) {
                 router.push(`/quiz/${slug}/system-check`);
                 return;

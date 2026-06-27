@@ -49,7 +49,7 @@ export class ContestService {
             throw new BadRequestError("Registration deadline must be before the start time")
         }
 
-        const slug = await this.ensureUniqueSlug(input.title);
+        const slug = await this.ensureUniqueSlug(input.title, organizationId);
 
         const data: CreateContestDTO = {
             ...input,
@@ -583,14 +583,14 @@ export class ContestService {
         return total > 0;
     }
 
-    private async ensureUniqueSlug(title: string): Promise<string> {
+    private async ensureUniqueSlug(title: string, organizationId: string): Promise<string> {
         let slug = createSlug(title);
         let attempt = 0;
 
         while (true) {
             const suffix = attempt > 0 ? `-${attempt}` : "";
             const candidate = `${slug}${suffix}`;
-            const existing = await this.contestRepo.findBySlug(candidate);
+            const existing = await this.contestRepo.findBySlug(candidate, organizationId);
 
             if (!existing) return candidate;
             attempt++;

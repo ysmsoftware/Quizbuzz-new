@@ -33,6 +33,7 @@ import { contestService } from "@/lib/services/contest-service";
 import { submissionService } from "@/lib/services/submission-service";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+const CAMERA_DEPENDENT_WARNING_TYPES = new Set(["MULTIPLE_FACES", "NO_FACE", "AUDIO_ANOMALY"]);
 
 export default function QuizPlayPage() {
     const params = useParams();
@@ -218,9 +219,13 @@ export default function QuizPlayPage() {
     });
 
     // ─── Proctoring warnings → toast (side position) ─────────────────────────
+    // proctoringEnabled=false only means "no camera module" — behavioral checks
+    // (tab switch, fullscreen exit) still apply and must still be reported.
+    // Camera-dependent warning types never fire in that case (ProctoringManager
+    // skips face detection/audio monitoring upstream), but guard here too in
+    // case a camera-dependent type ever reaches this callback.
     const emitProctoringWarning = useCallback((type: string) => {
-        // Never emit violations for non-proctored contests.
-        if (!proctoringEnabled) return;
+        if (!proctoringEnabled && CAMERA_DEPENDENT_WARNING_TYPES.has(type)) return;
 
         sendProctoringEvent(type, 1);
         const msgs: Record<string, string> = {
@@ -397,11 +402,12 @@ export default function QuizPlayPage() {
                 proctoringEnabled={proctoringEnabled}
             />
 
-            {/* Overlays & modals */}
-            {proctoringEnabled && <FlaggedBanner />}
-            {proctoringEnabled && (
-                <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
-            )}
+            {/* Overlays & modals — fullscreen enforcement and the flagged/warning
+                banner track behavioral checks (tab switch, fullscreen exit),
+                which stay active regardless of whether this contest has a
+                camera module, so these are never gated on proctoringEnabled. */}
+            <FlaggedBanner />
+            <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
             <SubmitConfirmModal
                 isOpen={showSubmitModal}
                 onClose={() => setShowSubmitModal(false)}
