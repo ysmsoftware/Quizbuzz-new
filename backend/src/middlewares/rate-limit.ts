@@ -42,7 +42,7 @@ export const authLimiter = rateLimit({
  */
 export const otpLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
-    limit: config.rateLimit.otp || 5,
+    limit: process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : (config.rateLimit.otp || 5),
     message: {
         status: 429,
         message: "Too many OTP requests, please try again after 10 minutes.",

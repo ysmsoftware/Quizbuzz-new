@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import * as contestsApi from '../api/contests.api';
@@ -96,6 +96,7 @@ export function useRegistrations(
     limit?: number;
     status?: string;
     search?: string;
+    payment?: string;
   }
 ) {
   const queryClient = useQueryClient();
@@ -107,6 +108,7 @@ export function useRegistrations(
     queryKey: queryKeys.contests.participants(contestId, params),
     queryFn: () => contestsApi.listParticipants(contestId, params),
     enabled: !!contestId,
+    placeholderData: keepPreviousData,
   });
 
   /**
@@ -201,6 +203,7 @@ export function useRegistrations(
   const participants = (participantsQuery.data?.data?.participants || []).map(normalizeRegistration);
   const pagination = participantsQuery.data?.data?.pagination;
   const isLoading = participantsQuery.isLoading;
+  const isFetching = participantsQuery.isFetching;
   const error = participantsQuery.error;
   const statusSummary = statusSummaryQuery.data?.data || null;
 
@@ -210,6 +213,7 @@ export function useRegistrations(
     participants,
     pagination,
     isLoading,
+    isFetching,
     error,
     statusSummary,
 
@@ -221,6 +225,7 @@ export function useRegistrations(
     bulkUpdateStatus: (args: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) => bulkStatusMutation.mutateAsync(args),
     triggerExport: (format: 'csv' | 'pdf', filters?: any) => contestsApi.triggerExport(contestId, format, filters),
     checkExportStatus: (exportId: string) => contestsApi.getExportStatus(contestId, exportId),
+    registrations: participants, // alias used by some pages
   };
 }
 

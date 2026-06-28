@@ -14,8 +14,6 @@ import {
   Eye,
   Ban,
   Download,
-  ChevronLeft,
-  ChevronRight,
   TrendingUp,
   User,
   ExternalLink,
@@ -86,6 +84,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 
 interface SubmissionRecord {
   id: string;
@@ -161,6 +160,11 @@ export default function ContestSubmissionsPage() {
     page, 
     limit: 20 
   });
+
+  // Reset to first page whenever search/status filters change
+  useEffect(() => {
+    setPage(1);
+  }, [status, search]);
 
   const { data: statsData } = useContestSubmissionsStats(contestId);
   const invalidateMutation = useInvalidateSubmission(contestId);
@@ -404,31 +408,15 @@ export default function ContestSubmissionsPage() {
           </Table>
 
           {/* Pagination */}
-          {pagination && pagination.pages > 1 && (
-            <div className="p-4 border-t border-border/50 flex items-center justify-between bg-secondary/10">
-              <p className="text-xs text-muted-foreground">
-                Showing page {page} of {pagination.pages} ({pagination.total} total)
-              </p>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8 rounded-lg"
-                  disabled={page === 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-8 rounded-lg"
-                  disabled={page === pagination.pages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
+          {pagination && pagination.total > 0 && (
+            <div className="p-4 border-t border-border/50 bg-secondary/10">
+              <PaginationBar
+                page={page}
+                totalPages={pagination.pages ?? 1}
+                total={pagination.total}
+                pageSize={20}
+                onPageChange={(p) => setPage(p)}
+              />
             </div>
           )}
         </Card>
