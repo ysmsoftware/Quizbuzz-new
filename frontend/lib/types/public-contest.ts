@@ -46,6 +46,7 @@ export interface PublicContestSummary {
   paymentEnabled: boolean;
   paymentConfig: PublicContestPaymentConfig | null;
   showResultsAfter: number;
+  bannerImage?: string | null;
   prizes: PublicContestPrize[];
   _count: {
     participants: number;

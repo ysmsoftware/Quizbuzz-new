@@ -120,6 +120,19 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
 
   return (
     <div className="bg-secondary/10">
+      {/* Contest Banner Image */}
+      {contest.bannerImage && (
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <div className="overflow-hidden rounded-2xl border border-border/30 shadow-sm aspect-[4/1] max-h-[250px] w-full">
+            <img
+              src={contest.bannerImage}
+              alt={contest.title}
+              className="object-cover w-full h-full"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-primary/5 to-transparent border-b">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

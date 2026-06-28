@@ -5,47 +5,87 @@ import { Check, Clock, Calendar, X, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Contest, ContestPhase } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
+import { EditableField } from '@/components/ui/editable-field';
 
 interface KeyDatesCardProps {
     contest: Contest;
     phase: ContestPhase;
     className?: string;
+    onSave?: (field: string, value: any) => Promise<void>;
 }
 
-export function KeyDatesCard({ contest, phase, className }: KeyDatesCardProps) {
+const formatToLocalDatetime = (dateStr: string | Date | null) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+export function KeyDatesCard({ contest, phase, className, onSave }: KeyDatesCardProps) {
     const isCancelled = phase === 'CANCELLED';
+    const isEndedOrLive = phase === 'LIVE' || phase === 'ENDED' || phase === 'RESULTS_PUBLISHED' || phase === 'REGISTRATION_CLOSED';
 
     const dates = [
         {
             label: 'Created',
             date: new Date(contest.createdAt),
             status: 'completed',
+            isEditable: false,
         },
         {
             label: 'Published',
             date: contest.publishedAt ? new Date(contest.publishedAt) : null,
             status: contest.publishedAt ? 'completed' : 'pending',
+            isEditable: false,
         },
         {
             label: 'Registration Ends',
             date: new Date(contest.registrationDeadline),
             status: phase === 'REGISTRATION_CLOSED' || phase === 'LIVE' || phase === 'ENDED' ? 'completed' : phase === 'PUBLISHED' ? 'active' : 'pending',
+            isEditable: !isCancelled && !isEndedOrLive,
+            fieldValue: formatToLocalDatetime(contest.registrationDeadline),
+            onSave: async (val: string) => {
+                if (!val) return;
+                const utcDate = new Date(val).toISOString();
+                await onSave?.('registrationDeadline', utcDate);
+            }
         },
         {
             label: 'Contest Starts',
             date: new Date(contest.startTime),
             status: phase === 'LIVE' || phase === 'ENDED' ? 'completed' : phase === 'REGISTRATION_CLOSED' ? 'active' : 'pending',
+            isEditable: !isCancelled && !isEndedOrLive,
+            fieldValue: formatToLocalDatetime(contest.startTime),
+            onSave: async (val: string) => {
+                if (!val) return;
+                const utcDate = new Date(val).toISOString();
+                await onSave?.('startTime', utcDate);
+            }
         },
         {
             label: 'Contest Ends',
             date: new Date(new Date(contest.startTime).getTime() + contest.durationMinutes * 60000),
             status: phase === 'ENDED' ? 'completed' : phase === 'LIVE' ? 'active' : 'pending',
+            isEditable: !isCancelled && !isEndedOrLive,
+            fieldValue: formatToLocalDatetime(new Date(new Date(contest.startTime).getTime() + contest.durationMinutes * 60000)),
+            onSave: async (val: string) => {
+                if (!val) return;
+                const startMs = new Date(contest.startTime).getTime();
+                const endMs = new Date(val).getTime();
+                const diffMinutes = Math.max(1, Math.round((endMs - startMs) / 60000));
+                await onSave?.('durationMinutes', diffMinutes);
+            }
         },
         {
             label: 'Results Published',
-            date: null, // Placeholder
-            status: 'pending',
+            date: contest.resultsPublishedAt ? new Date(contest.resultsPublishedAt) : null,
+            status: contest.resultsPublishedAt ? 'completed' : 'pending',
+            isEditable: false,
         },
     ];
 
@@ -75,20 +115,26 @@ export function KeyDatesCard({ contest, phase, className }: KeyDatesCardProps) {
                                             <div className="h-1 w-1 rounded-full bg-current" />}
                             </div>
 
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-1">
                                 <span className={cn(
                                     "text-xs font-semibold uppercase tracking-wider",
                                     isActive ? "text-primary" : "text-muted-foreground"
                                 )}>
                                     {item.label}
                                 </span>
-                                {item.date ? (
-                                    <span className="text-sm font-medium">
-                                        {fmtDateTime(item.date)}
-                                    </span>
+                                {item.isEditable && onSave ? (
+                                    <EditableField
+                                        label={item.label}
+                                        value={item.fieldValue || ''}
+                                        displayValue={item.date ? fmtDateTime(item.date) : undefined}
+                                        onSave={item.onSave!}
+                                        type="datetime-local"
+                                        disabled={isEndedOrLive}
+                                        className="[&_label]:hidden [&_.group\/field]:py-0 [&_.group\/field]:px-0 [&_.group\/field]:min-h-[20px]"
+                                    />
                                 ) : (
-                                    <span className="text-sm font-medium text-muted-foreground/50">
-                                        Pending
+                                    <span className="text-sm font-medium">
+                                        {item.date ? fmtDateTime(item.date) : 'Pending'}
                                     </span>
                                 )}
                             </div>

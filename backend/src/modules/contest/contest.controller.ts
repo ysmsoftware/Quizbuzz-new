@@ -10,7 +10,8 @@ import {
     GenerateCertificatesSchema,
     CancelContestSchema,
 } from "./contest.validator";
-import { UnauthorizedError } from "../../error/http-errors";
+import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
+import { storageService } from "../../services/storage.service";
 
 export class ContestController {
     constructor(private readonly contestService: ContestService) { }
@@ -128,6 +129,23 @@ export class ContestController {
             );
 
             res.json({ success: true, message: "Contest published", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    closeRegistration = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            };
+            const result = await this.contestService.closeRegistration(
+                req.params.contestId as string,
+                user.organizationId
+            );
+
+            res.json({ success: true, message: "Registration closed", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }
@@ -296,6 +314,51 @@ export class ContestController {
             );
 
             res.status(200).json({ success: true, ...result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    uploadBanner = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const { fileData, fileName } = req.body;
+            if (!fileData || !fileName) {
+                throw new BadRequestError("File data and file name are required.");
+            }
+
+            // Extract base64 content
+            // Data URL format: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            let buffer: Buffer;
+            let contentType: string;
+
+            if (matches && matches.length === 3) {
+                contentType = matches[1];
+                buffer = Buffer.from(matches[2], "base64");
+            } else {
+                // Try decoding direct base64
+                contentType = "image/png"; // default
+                buffer = Buffer.from(fileData, "base64");
+            }
+
+            const cleanFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+            const key = `banners/${user.organizationId}/${Date.now()}_${cleanFileName}`;
+
+            const uploadResult = await storageService.upload(key, buffer, contentType);
+
+            res.status(200).json({
+                success: true,
+                message: "Banner uploaded successfully",
+                data: {
+                    url: uploadResult.url,
+                    key: uploadResult.key
+                },
+                requestId: req.id,
+            });
         } catch (err) {
             next(err);
         }

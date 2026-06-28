@@ -64,6 +64,13 @@ export async function publishContest(contestId: string): Promise<ApiResponse> {
 }
 
 /**
+ * POST /contests/:contestId/close-registration
+ */
+export async function closeRegistration(contestId: string): Promise<ApiResponse<{ status: string }>> {
+  return post<{ status: string }>(`/contests/${contestId}/close-registration`);
+}
+
+/**
  * PATCH /contests/:contestId/archive
  */
 export async function archiveContest(contestId: string): Promise<ApiResponse> {
@@ -220,4 +227,11 @@ export async function getLeaderboard(
     query.toString() ? '?' + query.toString() : ''
   }`;
   return get(path);
+}
+
+/**
+ * POST /contests/upload-banner
+ */
+export async function uploadBanner(body: { fileData: string; fileName: string }): Promise<ApiResponse<{ url: string }>> {
+  return post<{ url: string }>('/contests/upload-banner', body);
 }

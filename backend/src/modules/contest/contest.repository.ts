@@ -21,6 +21,7 @@ export interface IContestRepository {
     softDelete(contestId: string, organizationId: string): Promise<void>;
     archive(contestId: string, organizationId: string): Promise<void>;
     countQuestions(contestId: string): Promise<number>;
+    countParticipants(contestId: string): Promise<number>;
 }
 
 export class ContestRepository implements IContestRepository {
@@ -51,6 +52,7 @@ export class ContestRepository implements IContestRepository {
                     shuffleOptions: contestData.shuffleOptions ?? false,
                     proctoringEnabled: contestData.proctoringEnabled ?? true,
                     showResultsAfter: contestData.showResultsAfter ?? 24,
+                    bannerImage: contestData.bannerImage ?? null,
                 }
             });
 
@@ -275,6 +277,10 @@ export class ContestRepository implements IContestRepository {
 
     async countQuestions(contestId: string): Promise<number> {
         return await prisma.contestQuestion.count({ where: { contestId } });
+    }
+
+    async countParticipants(contestId: string): Promise<number> {
+        return await prisma.participant.count({ where: { contestId } });
     }
 
     async findManyPublic(args: {

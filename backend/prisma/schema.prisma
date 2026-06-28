@@ -263,6 +263,7 @@ model Contest {
   shuffleOptions        Boolean         @default(false)
   proctoringEnabled     Boolean         @default(true)
   showResultsAfter      Int             @default(24)  // hours after end before results published
+  bannerImage           String?
   isDeleted             Boolean         @default(false)
   isArchived            Boolean         @default(false)
   createdAt             DateTime        @default(now())

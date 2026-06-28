@@ -155,8 +155,8 @@ export class QuestionService {
     ): Promise<AssignQuestionsResult> {
         const contest = await this.contestService.getContestContext(contestId, organizationId);
 
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new UnprocessableEntityError("Questions can only be assigned to DRAFT contests");
+        if (contest.status !== ContestStatus.DRAFT && contest.status !== ContestStatus.PUBLISHED) {
+            throw new UnprocessableEntityError("Questions can only be assigned to DRAFT or PUBLISHED contests");
         }
 
         // Validate all questionIds belong to this org
@@ -191,8 +191,8 @@ export class QuestionService {
     ) {
         const contest = await this.contestService.getContestContext(contestId, organizationId);
 
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new UnprocessableEntityError("Questions can only be removed from DRAFT contests");
+        if (contest.status !== ContestStatus.DRAFT && contest.status !== ContestStatus.PUBLISHED) {
+            throw new UnprocessableEntityError("Questions can only be removed from DRAFT or PUBLISHED contests");
         }
 
         const assignment = await this.questionRepo.getContestQuestion(contestId, questionId, organizationId);
@@ -204,8 +204,8 @@ export class QuestionService {
     async updateContestQuestion(contestId: string, questionId: string, organizationId: string, dto: UpdateContestQuestionInput) {
         const contest = await this.contestService.getContestContext(contestId, organizationId);
 
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new UnprocessableEntityError("Marks and negative marks can only be changed on DRAFT contests");
+        if (contest.status !== ContestStatus.DRAFT && contest.status !== ContestStatus.PUBLISHED) {
+            throw new UnprocessableEntityError("Marks and negative marks can only be changed on DRAFT or PUBLISHED contests");
         }
 
         const assignment = await this.questionRepo.getContestQuestion(contestId, questionId, organizationId);
@@ -260,8 +260,8 @@ export class QuestionService {
         dto: AutoGenerateQuestionsInput
     ) {
         const contest = await this.contestService.getContestContext(contestId, organizationId);
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new UnprocessableEntityError("Questions can only be generated for DRAFT contests");
+        if (contest.status !== ContestStatus.DRAFT && contest.status !== ContestStatus.PUBLISHED) {
+            throw new UnprocessableEntityError("Questions can only be generated for DRAFT or PUBLISHED contests");
         }
 
         const totalTarget = dto.totalQuestions;

@@ -162,5 +162,9 @@ export function useContest(contestId: string) {
     contest,
     loading,
     error,
+
+    // Raw (unadapted) server payload — needed where the adapted Contest shape
+    // is lossy, e.g. prize rankFrom/rankTo/currency/label fields.
+    rawContest: serverContest,
   };
 }

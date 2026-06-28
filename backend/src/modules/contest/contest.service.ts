@@ -155,16 +155,102 @@ export class ContestService {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");
 
-        if (contest.status !== ContestStatus.DRAFT) {
-            throw new BadRequestError("Contest can only be edited while in DRAFT status");
+        const editableStatuses: ContestStatus[] = [ContestStatus.DRAFT, ContestStatus.PUBLISHED, ContestStatus.REGISTRATION_CLOSED];
+        if (!editableStatuses.includes(contest.status)) {
+            throw new BadRequestError("Contest can only be edited while in DRAFT, PUBLISHED, or REGISTRATION_CLOSED status");
+        }
+
+        // Once registration has been manually closed, only the participant cap may still be raised
+        if (contest.status === ContestStatus.REGISTRATION_CLOSED) {
+            const allowedFields = new Set(["maxParticipants"]);
+            const attemptedFields = Object.keys(dto);
+            const disallowed = attemptedFields.filter((f) => !allowedFields.has(f));
+            if (disallowed.length > 0) {
+                throw new BadRequestError(
+                    `Only maxParticipants can be changed once registration is closed (attempted: ${disallowed.join(", ")})`
+                );
+            }
+        }
+
+        if (dto.maxParticipants !== undefined && dto.maxParticipants !== null) {
+            const currentParticipantCount = await this.contestRepo.countParticipants(contestId);
+            if (dto.maxParticipants < currentParticipantCount) {
+                throw new BadRequestError(
+                    `Max participants cannot be set below the current registered count (${currentParticipantCount})`
+                );
+            }
         }
 
         // Recompute endTime if startTime or duration changes
         const newStartTime = dto.startTime ? new Date(dto.startTime) : contest.startTime;
+        const newRegDeadline = dto.registrationDeadline ? new Date(dto.registrationDeadline) : contest.registrationDeadline;
+
+        if (newRegDeadline >= newStartTime) {
+            throw new BadRequestError("Registration deadline must be before the start time");
+        }
+        if (dto.startTime && newStartTime <= new Date()) {
+            throw new BadRequestError("Start time must be in the future");
+        }
+
         const newDuration = dto.duration ?? contest.duration;
         const newEndTime = new Date(newStartTime.getTime() + newDuration * 60 * 1000);
 
-        return this.contestRepo.update(contestId, organizationId, { ...dto, endTime: newEndTime } as any);
+        const isPublished = contest.status === ContestStatus.PUBLISHED;
+        const timingChanged =
+            (dto.startTime !== undefined && new Date(dto.startTime).getTime() !== new Date(contest.startTime).getTime()) ||
+            (dto.registrationDeadline !== undefined && new Date(dto.registrationDeadline).getTime() !== new Date(contest.registrationDeadline).getTime()) ||
+            (dto.duration !== undefined && dto.duration !== contest.duration) ||
+            (dto.showResultsAfter !== undefined && dto.showResultsAfter !== contest.showResultsAfter);
+
+        const updatedContest = await this.contestRepo.update(contestId, organizationId, { ...dto, endTime: newEndTime } as any);
+
+        if (isPublished && timingChanged) {
+            // 1. Cancel existing jobs
+            await this.schedulerService.cancelContestJobs(contestId);
+
+            const reminderJobIds = [`reminder-24h-${contestId}`, `reminder-1h-${contestId}`];
+            for (const jobId of reminderJobIds) {
+                try {
+                    const job = await messageQueue.getJob(jobId);
+                    if (job) {
+                        await job.remove();
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+
+            // 2. Schedule reminder notifications with new timings
+            const now = Date.now();
+            const startMs = new Date(updatedContest.startTime).getTime();
+
+            const delay24h = startMs - 24 * 60 * 60 * 1000 - now;
+            const delay1h = startMs - 60 * 60 * 1000 - now;
+
+            if (delay24h > 0) {
+                await messageQueue.add('bulk-notify', {
+                    contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
+                }, { delay: delay24h, jobId: `reminder-24h-${contestId}` });
+                logger.info(`[contest] Rescheduled 24h reminder for contest ${contestId}`);
+            }
+            if (delay1h > 0) {
+                await messageQueue.add('bulk-notify', {
+                    contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
+                }, { delay: delay1h, jobId: `reminder-1h-${contestId}` });
+                logger.info(`[contest] Rescheduled 1h reminder for contest ${contestId}`);
+            }
+
+            // 3. Reschedule automated lifecycle (start, warnings, auto-submit)
+            await this.schedulerService.scheduleContestLifecycle(
+                contestId,
+                organizationId,
+                new Date(updatedContest.startTime),
+                new Date(updatedContest.endTime),
+                updatedContest.showResultsAfter ?? 24,
+            );
+        }
+
+        return updatedContest;
     }
 
     async publishContest(contestId: string, organizationId: string) {
@@ -220,6 +306,25 @@ export class ContestService {
         return { status: updated.status, joinCode };
     }
 
+
+    /**
+     * Manually close registration ahead of the scheduled deadline.
+     * Blocks any further sign-ups while leaving the contest otherwise untouched —
+     * the start-time job still fires normally.
+     */
+    async closeRegistration(contestId: string, organizationId: string) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        if (contest.status !== ContestStatus.PUBLISHED) {
+            throw new BadRequestError("Only PUBLISHED contests with open registration can be closed early");
+        }
+
+        const updated = await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.REGISTRATION_CLOSED);
+        logger.info(`[contest] Registration manually closed early for contest ${contestId}`);
+
+        return { status: updated.status };
+    }
 
     async deleteContest(contestId: string, organizationId: string) {
         const contest = await this.contestRepo.findById(contestId, organizationId);
