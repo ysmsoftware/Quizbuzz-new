@@ -73,6 +73,33 @@ export function useAdminContestSocket(
   const onViolationRef = useRef(onViolation);
   useEffect(() => { onViolationRef.current = onViolation; }, [onViolation]);
 
+  // Performance Optimization Refs for batching real-time updates
+  const participantsRef = useRef<Map<string, LiveParticipant>>(new Map());
+  const statsRef = useRef({
+    totalJoined: 0,
+    activeNow: 0,
+    inWaitingRoom: 0,
+    submitted: 0,
+    flagged: 0,
+    totalViolations: 0,
+  });
+  const violationsRef = useRef<ProctorAlert[]>([]);
+  const hasChangesRef = useRef(false);
+
+  // Interval to flush batched updates to state every 500ms
+  useEffect(() => {
+    const flushInterval = setInterval(() => {
+      if (hasChangesRef.current) {
+        setParticipants(Array.from(participantsRef.current.values()));
+        setStats({ ...statsRef.current });
+        setViolations([...violationsRef.current]);
+        hasChangesRef.current = false;
+      }
+    }, 500);
+
+    return () => clearInterval(flushInterval);
+  }, []);
+
   useEffect(() => {
     if (!contestId) return;
 
@@ -119,47 +146,118 @@ export function useAdminContestSocket(
         }
       });
 
-      // Initial live stats snapshot — backend emits admin:v1:live-stats (hyphen)
+      // Initial live stats snapshot
       socket.on('admin:v1:live-stats', (data: any) => {
-        updateStats(data);
+        const nextStats = {
+          totalJoined:
+            (data.totalWaiting ?? 0) + (data.totalInQuiz ?? 0) + (data.totalSubmitted ?? 0),
+          activeNow: data.totalInQuiz ?? data.active ?? 0,
+          inWaitingRoom: data.totalWaiting ?? data.waiting ?? 0,
+          submitted: data.totalSubmitted ?? data.submitted ?? 0,
+          flagged: data.totalFlagged ?? data.flagged ?? 0,
+          totalViolations: data.totalViolations ?? 0,
+        };
+        statsRef.current = nextStats;
+
         if (data.participants) {
-          setParticipants(data.participants.map(mapBackendParticipant));
+          const map = new Map<string, LiveParticipant>();
+          data.participants.forEach((p: any) => {
+            const mapped = mapBackendParticipant(p);
+            map.set(mapped.participantId, mapped);
+          });
+          participantsRef.current = map;
         }
+
+        // Set state immediately on first snapshot load
+        setParticipants(Array.from(participantsRef.current.values()));
+        setStats(nextStats);
+        hasChangesRef.current = false;
       });
 
       // Participant joined the waiting room
       socket.on('admin:v1:participant_joined', (data: any) => {
-        setParticipants(prev => {
-          const exists = prev.find(p => p.participantId === data.participantId);
-          if (exists) return prev;
-          return [...prev, mapBackendParticipant(data)];
-        });
+        const mapped = mapBackendParticipant(data);
+        if (!participantsRef.current.has(mapped.participantId)) {
+          participantsRef.current.set(mapped.participantId, mapped);
+          
+          statsRef.current = {
+            ...statsRef.current,
+            inWaitingRoom: statsRef.current.inWaitingRoom + 1,
+            totalJoined: statsRef.current.totalJoined + 1,
+          };
+          hasChangesRef.current = true;
+        }
       });
 
       // Participant progress update
       socket.on('admin:v1:participant_progress', (data: any) => {
-        setParticipants(prev => prev.map(p =>
-          p.participantId === data.participantId
-            ? { ...p, currentQuestion: (data.currentQuestionIndex ?? 0) + 1, answeredCount: data.answeredCount ?? p.answeredCount }
-            : p
-        ));
+        const p = participantsRef.current.get(data.participantId);
+        if (p) {
+          participantsRef.current.set(data.participantId, {
+            ...p,
+            currentQuestion: (data.currentQuestionIndex ?? 0) + 1,
+            answeredCount: data.answeredCount ?? p.answeredCount,
+            estimatedScorePercent: Math.round(((data.answeredCount ?? p.answeredCount) / (p.totalQuestions || 1)) * 100),
+            estimatedCorrect: data.answeredCount ?? p.answeredCount,
+            lastActivityAt: data.timestamp || new Date().toISOString(),
+          });
+          hasChangesRef.current = true;
+        }
       });
 
       // Participant submitted
       socket.on('admin:v1:participant_submitted', (data: any) => {
-        setParticipants(prev => prev.map(p =>
-          p.participantId === data.participantId ? { ...p, status: 'submitted' as const } : p
-        ));
+        const p = participantsRef.current.get(data.participantId);
+        if (p) {
+          const oldStatus = p.status;
+          participantsRef.current.set(data.participantId, {
+            ...p,
+            status: 'submitted' as const,
+            lastActivityAt: new Date().toISOString(),
+          });
+
+          let activeNow = statsRef.current.activeNow;
+          let inWaitingRoom = statsRef.current.inWaitingRoom;
+          if (oldStatus === 'active') activeNow = Math.max(0, activeNow - 1);
+          if (oldStatus === 'waiting') inWaitingRoom = Math.max(0, inWaitingRoom - 1);
+
+          statsRef.current = {
+            ...statsRef.current,
+            activeNow,
+            inWaitingRoom,
+            submitted: statsRef.current.submitted + 1,
+          };
+          hasChangesRef.current = true;
+        }
         toast.info(`${data.name || 'A participant'} submitted their quiz`);
       });
 
       // Participant disconnected
       socket.on('admin:v1:participant_disconnected', (data: any) => {
-        setParticipants(prev => prev.map(p =>
-          p.participantId === data.participantId ? { ...p, status: 'disconnected' as const } : p
-        ));
+        const p = participantsRef.current.get(data.participantId);
+        if (p) {
+          const oldStatus = p.status;
+          participantsRef.current.set(data.participantId, {
+            ...p,
+            status: 'disconnected' as const,
+            lastActivityAt: new Date().toISOString(),
+          });
+
+          let activeNow = statsRef.current.activeNow;
+          let inWaitingRoom = statsRef.current.inWaitingRoom;
+          if (oldStatus === 'active') activeNow = Math.max(0, activeNow - 1);
+          if (oldStatus === 'waiting') inWaitingRoom = Math.max(0, inWaitingRoom - 1);
+
+          statsRef.current = {
+            ...statsRef.current,
+            activeNow,
+            inWaitingRoom,
+          };
+          hasChangesRef.current = true;
+        }
       });
 
+      // Violation alert
       socket.on('admin:v1:violation_alert', (data: any) => {
         const alert: ProctorAlert = {
           id: `${data.participantId}-${data.occurredAt || Date.now()}`,
@@ -169,16 +267,53 @@ export function useAdminContestSocket(
           severity: typeof data.severity === 'number' ? data.severity : 2,
           timestamp: data.occurredAt || data.timestamp || new Date().toISOString(),
         };
-        setViolations(prev => [alert, ...prev].slice(0, 50));
-        setParticipants(prev => prev.map(p =>
-          p.participantId === data.participantId
-            ? {
-                ...p,
-                proctoringAlerts: data.violationCount ?? (p.proctoringAlerts || 0) + 1,
-                isFlagged: !!data.isFlagged,
-              }
-            : p
-        ));
+        violationsRef.current = [alert, ...violationsRef.current].slice(0, 50);
+
+        const p = participantsRef.current.get(data.participantId);
+        let statusChangedToFlagged = false;
+        if (p) {
+          const oldStatus = p.status;
+          const isNowFlagged = !!data.isFlagged;
+          statusChangedToFlagged = isNowFlagged && oldStatus !== 'flagged';
+
+          participantsRef.current.set(data.participantId, {
+            ...p,
+            proctoringAlerts: data.violationCount ?? (p.proctoringAlerts || 0) + 1,
+            isFlagged: isNowFlagged,
+            status: isNowFlagged ? 'flagged' : p.status,
+            lastActivityAt: data.timestamp || new Date().toISOString(),
+          });
+
+          if (statusChangedToFlagged) {
+            let activeNow = statsRef.current.activeNow;
+            let inWaitingRoom = statsRef.current.inWaitingRoom;
+            let submitted = statsRef.current.submitted;
+            if (oldStatus === 'active') activeNow = Math.max(0, activeNow - 1);
+            if (oldStatus === 'waiting') inWaitingRoom = Math.max(0, inWaitingRoom - 1);
+            if (oldStatus === 'submitted') submitted = Math.max(0, submitted - 1);
+
+            statsRef.current = {
+              ...statsRef.current,
+              activeNow,
+              inWaitingRoom,
+              submitted,
+              flagged: statsRef.current.flagged + 1,
+              totalViolations: statsRef.current.totalViolations + 1,
+            };
+          } else {
+            statsRef.current = {
+              ...statsRef.current,
+              totalViolations: statsRef.current.totalViolations + 1,
+            };
+          }
+        } else {
+          statsRef.current = {
+            ...statsRef.current,
+            totalViolations: statsRef.current.totalViolations + 1,
+          };
+        }
+
+        hasChangesRef.current = true;
         if (onViolationRef.current) onViolationRef.current(data);
       });
     };
@@ -190,10 +325,10 @@ export function useAdminContestSocket(
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [contestId, organizationId]); // onViolation intentionally excluded — stored in ref to prevent reconnect storm
+  }, [contestId, organizationId]);
 
   const updateStats = (data: any) => {
-    setStats({
+    const nextStats = {
       totalJoined:
         (data.totalWaiting ?? 0) + (data.totalInQuiz ?? 0) + (data.totalSubmitted ?? 0),
       activeNow: data.totalInQuiz ?? data.active ?? 0,
@@ -201,8 +336,11 @@ export function useAdminContestSocket(
       submitted: data.totalSubmitted ?? data.submitted ?? 0,
       flagged: data.totalFlagged ?? data.flagged ?? 0,
       totalViolations: data.totalViolations ?? 0,
-    });
+    };
+    statsRef.current = nextStats;
+    hasChangesRef.current = true;
   };
+
 
   const mapBackendParticipant = (p: any): LiveParticipant => ({
     participantId: p.participantId,

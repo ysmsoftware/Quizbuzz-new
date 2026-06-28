@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Users,
@@ -17,8 +17,16 @@ import {
   Clock,
   CheckCircle2,
   DoorOpen,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAdminContestSocket } from '@/lib/hooks/useAdminContestSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -39,6 +47,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -118,14 +133,197 @@ export default function AdminLiveDashboard() {
     },
   );
 
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'progress' | 'answered' | 'status'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState<number | 'all'>(50);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 200);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [debouncedSearchQuery, sortField, sortOrder, pageSize]);
+
   const filteredParticipants = useMemo(() => {
-    const q = searchQuery.toLowerCase();
+    const q = debouncedSearchQuery.toLowerCase();
+    if (!q) return participants;
     return participants.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.participantId.toLowerCase().includes(q),
     );
-  }, [participants, searchQuery]);
+  }, [participants, debouncedSearchQuery]);
+
+  const STATUS_PRIORITY: Record<string, number> = {
+    flagged: 1,
+    active: 2,
+    waiting: 3,
+    submitted: 4,
+    disconnected: 5,
+  };
+
+  const sortedParticipants = useMemo(() => {
+    const sorted = [...filteredParticipants];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'name') {
+        comparison = a.name.localeCompare(b.name);
+      } else if (sortField === 'progress') {
+        const aProg = a.totalQuestions > 0 ? a.answeredCount / a.totalQuestions : 0;
+        const bProg = b.totalQuestions > 0 ? b.answeredCount / b.totalQuestions : 0;
+        comparison = aProg - bProg;
+      } else if (sortField === 'answered') {
+        comparison = a.answeredCount - b.answeredCount;
+      } else if (sortField === 'status') {
+        const aPriority = STATUS_PRIORITY[a.status] ?? 99;
+        const bPriority = STATUS_PRIORITY[b.status] ?? 99;
+        comparison = aPriority - bPriority;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [filteredParticipants, sortField, sortOrder]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    return Math.ceil(sortedParticipants.length / pageSize);
+  }, [sortedParticipants.length, pageSize]);
+
+  const paginatedParticipants = useMemo(() => {
+    if (pageSize === 'all') {
+      return sortedParticipants;
+    }
+    const start = pageIndex * pageSize;
+    const end = start + pageSize;
+    return sortedParticipants.slice(start, end);
+  }, [sortedParticipants, pageIndex, pageSize]);
+
+  const handleSort = (field: 'name' | 'progress' | 'answered' | 'status') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'progress' || field === 'answered' ? 'desc' : 'asc');
+    }
+  };
+
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const shouldVirtualize = paginatedParticipants.length > 50;
+
+  const rowVirtualizer = useVirtualizer({
+    count: paginatedParticipants.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 58,
+    overscan: 10,
+    enabled: shouldVirtualize,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    virtualRows.length > 0
+      ? totalSize - virtualRows[virtualRows.length - 1].end
+      : 0;
+  const renderParticipantRow = (p: any) => {
+    const progress = p.totalQuestions > 0 ? (p.answeredCount / p.totalQuestions) * 100 : 0;
+    return (
+      <TableRow
+        key={p.participantId}
+        className={cn(
+          'hover:bg-secondary/20 transition-colors',
+          p.isFlagged && 'bg-destructive/5 hover:bg-destructive/10',
+        )}
+      >
+        <TableCell>
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
+              {p.avatarInitials || p.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <p className="font-semibold text-sm leading-none mb-1">
+                {p.name}
+              </p>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                {p.participantId}
+              </p>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="w-48">
+          <div className="space-y-1.5">
+            <Progress value={progress} className="h-1.5" />
+            <p className="text-[10px] text-muted-foreground font-bold">
+              {Math.round(progress)}% complete
+            </p>
+          </div>
+        </TableCell>
+        <TableCell>
+          <Badge variant="secondary" className="font-mono text-xs">
+            {p.answeredCount} / {p.totalQuestions || '—'}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <Badge
+            className={cn(
+              'capitalize font-bold text-[10px] px-2 py-0.5',
+              p.status === 'active' &&
+                'bg-green-500/10 text-green-500 border-green-500/20',
+              p.status === 'waiting' &&
+                'bg-amber-500/10 text-amber-500 border-amber-500/20',
+              p.status === 'submitted' &&
+                'bg-blue-500/10 text-blue-500 border-blue-500/20',
+              p.status === 'flagged' &&
+                'bg-destructive/10 text-destructive border-destructive/20',
+            )}
+          >
+            {STATUS_LABEL[p.status] ?? p.status}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-48 rounded-xl border-border/50"
+            >
+              <DropdownMenuItem
+                onClick={() =>
+                  router.push(
+                    `/admin/contests/${contestId}/participants/${p.participantId}`,
+                  )
+                }
+              >
+                <Search className="h-4 w-4 mr-2" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-amber-500"
+                onClick={() => forceSubmitParticipant(p.participantId)}
+              >
+                <UserX className="h-4 w-4 mr-2" />
+                Force Submit
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   if (!connected) {
     return (
@@ -234,7 +432,7 @@ export default function AdminLiveDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
-                Participants ({participants.length})
+                Participants ({sortedParticipants.length === participants.length ? participants.length : `${sortedParticipants.length}/${participants.length}`})
               </h2>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -247,127 +445,216 @@ export default function AdminLiveDashboard() {
               </div>
             </div>
 
-            <Card className="bg-background/50 border-border/50 rounded-2xl overflow-hidden shadow-sm">
-              <Table>
-                <TableHeader className="bg-secondary/50">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-bold">Participant</TableHead>
-                    <TableHead className="font-bold">Progress</TableHead>
-                    <TableHead className="font-bold">Answered</TableHead>
-                    <TableHead className="font-bold">Status</TableHead>
-                    <TableHead className="font-bold text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredParticipants.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="h-24 text-center text-muted-foreground italic"
+            <Card className="bg-background/50 border-border/50 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+              <div
+                ref={tableContainerRef}
+                className="overflow-y-auto w-full max-h-[600px] relative scrollbar-thin scrollbar-thumb-secondary"
+              >
+                <Table className="relative">
+                  <TableHeader className="bg-secondary/50 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.1)]">
+                    <TableRow className="hover:bg-transparent border-b border-border/50">
+                      <TableHead
+                        className="font-bold cursor-pointer select-none hover:text-foreground transition-colors"
+                        onClick={() => handleSort('name')}
                       >
-                        No participants connected yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredParticipants.map((p) => {
-                      const progress =
-                        p.totalQuestions > 0
-                          ? (p.answeredCount / p.totalQuestions) * 100
-                          : 0;
-                      return (
-                        <TableRow
-                          key={p.participantId}
-                          className={cn(
-                            'hover:bg-secondary/20 transition-colors',
-                            p.isFlagged && 'bg-destructive/5 hover:bg-destructive/10',
+                        <div className="flex items-center gap-1.5 py-2">
+                          Participant
+                          {sortField === 'name' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40 hover:opacity-75" />
                           )}
+                        </div>
+                      </TableHead>
+                      <TableHead
+                        className="font-bold cursor-pointer select-none hover:text-foreground transition-colors w-48"
+                        onClick={() => handleSort('progress')}
+                      >
+                        <div className="flex items-center gap-1.5 py-2">
+                          Progress
+                          {sortField === 'progress' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40 hover:opacity-75" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead
+                        className="font-bold cursor-pointer select-none hover:text-foreground transition-colors"
+                        onClick={() => handleSort('answered')}
+                      >
+                        <div className="flex items-center gap-1.5 py-2">
+                          Answered
+                          {sortField === 'answered' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40 hover:opacity-75" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead
+                        className="font-bold cursor-pointer select-none hover:text-foreground transition-colors"
+                        onClick={() => handleSort('status')}
+                      >
+                        <div className="flex items-center gap-1.5 py-2">
+                          Status
+                          {sortField === 'status' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40 hover:opacity-75" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-bold text-right py-2">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedParticipants.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="h-24 text-center text-muted-foreground italic"
                         >
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
-                                {p.avatarInitials}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-sm leading-none mb-1">
-                                  {p.name}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground font-mono">
-                                  {p.participantId}
-                                </p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-48">
-                            <div className="space-y-1.5">
-                              <Progress value={progress} className="h-1.5" />
-                              <p className="text-[10px] text-muted-foreground font-bold">
-                                {Math.round(progress)}% complete
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              {p.answeredCount} / {p.totalQuestions || '—'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={cn(
-                                'capitalize font-bold text-[10px] px-2 py-0.5',
-                                p.status === 'active' &&
-                                  'bg-green-500/10 text-green-500 border-green-500/20',
-                                p.status === 'waiting' &&
-                                  'bg-amber-500/10 text-amber-500 border-amber-500/20',
-                                p.status === 'submitted' &&
-                                  'bg-blue-500/10 text-blue-500 border-blue-500/20',
-                                p.status === 'flagged' &&
-                                  'bg-destructive/10 text-destructive border-destructive/20',
-                              )}
-                            >
-                              {STATUS_LABEL[p.status] ?? p.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-lg"
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-48 rounded-xl border-border/50"
-                              >
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    router.push(
-                                      `/admin/contests/${contestId}/participants/${p.participantId}`,
-                                    )
-                                  }
-                                >
-                                  <Search className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-amber-500"
-                                  onClick={() => forceSubmitParticipant(p.participantId)}
-                                >
-                                  <UserX className="h-4 w-4 mr-2" />
-                                  Force Submit
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
+                          No participants connected yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : shouldVirtualize ? (
+                      <>
+                        {paddingTop > 0 && (
+                          <TableRow style={{ height: `${paddingTop}px` }} className="hover:bg-transparent">
+                            <TableCell colSpan={5} className="p-0 border-0" />
+                          </TableRow>
+                        )}
+                        {virtualRows.map((virtualRow) => {
+                          const p = paginatedParticipants[virtualRow.index];
+                          if (!p) return null;
+                          return renderParticipantRow(p);
+                        })}
+                        {paddingBottom > 0 && (
+                          <TableRow style={{ height: `${paddingBottom}px` }} className="hover:bg-transparent">
+                            <TableCell colSpan={5} className="p-0 border-0" />
+                          </TableRow>
+                        )}
+                      </>
+                    ) : (
+                      paginatedParticipants.map((p) => renderParticipantRow(p))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination Controls Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border/50 bg-secondary/15">
+                <div className="text-xs text-muted-foreground font-medium">
+                  {pageSize === 'all' ? (
+                    `Showing all ${sortedParticipants.length} participants`
+                  ) : (
+                    <>
+                      Showing{' '}
+                      <span className="font-semibold text-foreground">
+                        {sortedParticipants.length === 0 ? 0 : pageIndex * pageSize + 1}
+                      </span>{' '}
+                      to{' '}
+                      <span className="font-semibold text-foreground">
+                        {Math.min((pageIndex + 1) * pageSize, sortedParticipants.length)}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-semibold text-foreground">
+                        {sortedParticipants.length}
+                      </span>{' '}
+                      participants
+                    </>
                   )}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Rows per page
+                    </span>
+                    <Select
+                      value={pageSize.toString()}
+                      onValueChange={(val) => {
+                        if (val === 'all') {
+                          setPageSize('all');
+                        } else {
+                          setPageSize(Number(val));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[80px] rounded-lg bg-background border-border/50 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-border/50">
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {pageSize !== 'all' && totalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg bg-background border-border/50"
+                        onClick={() => setPageIndex(0)}
+                        disabled={pageIndex === 0}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg bg-background border-border/50"
+                        onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                        disabled={pageIndex === 0}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-xs font-semibold px-2">
+                        Page {pageIndex + 1} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg bg-background border-border/50"
+                        onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                        disabled={pageIndex >= totalPages - 1}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg bg-background border-border/50"
+                        onClick={() => setPageIndex(totalPages - 1)}
+                        disabled={pageIndex >= totalPages - 1}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </Card>
           </div>
         </WidgetErrorBoundary>
