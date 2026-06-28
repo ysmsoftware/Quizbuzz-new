@@ -224,7 +224,18 @@ export default function PublicRegistrationPage() {
                 <div className="absolute -bottom-[10%] -left-[5%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
             </div>
 
-            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-24">
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
+                {/* Contest Banner Image */}
+                {(contest as any).bannerImage && (
+                    <div className="mb-10 w-full overflow-hidden rounded-2xl border border-border/30 shadow-md aspect-[3/1] max-h-[300px]">
+                        <img 
+                            src={(contest as any).bannerImage} 
+                            alt={(contest as any).title} 
+                            className="object-cover w-full h-full"
+                        />
+                    </div>
+                )}
+
                 <AnimatePresence mode="wait">
                     {step === 'landing' && (
                         <motion.div

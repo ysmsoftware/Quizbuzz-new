@@ -44,6 +44,7 @@ export interface CreateContestDTO {
   proctoringEnabled?: boolean | undefined;
   showResultsAfter?: number | undefined; // hours
   prizes?: PrizeDTO[] | undefined;
+  bannerImage?: string | null | undefined;
 }
 
 
@@ -143,6 +144,7 @@ export interface ContestDetail {
   showResultsAfter: number;
   joinCode: string | null;
   prizes: PrizeDetail[];
+  bannerImage: string | null;
   _count: { questions: number; participants: number };
 }
 

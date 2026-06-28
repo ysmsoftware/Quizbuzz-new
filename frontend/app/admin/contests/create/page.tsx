@@ -35,6 +35,8 @@ import { useContests } from '@/lib/hooks/useContests';
 import { Stepper } from '@/components/shared/Stepper';
 import { Loader2 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/date-picker';
+import { FileUpload } from '@/components/features/shared/FileUpload';
+import { uploadBanner } from '@/lib/api/contests.api';
 
 const STEPS = [
     { id: 1, title: 'Basic Info', description: 'Title, description, details, topics, and rules' },
@@ -71,6 +73,7 @@ interface ContestForm {
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
     proctoringEnabled: boolean;
+    bannerImage?: string;
 }
 
 export default function CreateContestPage() {
@@ -108,6 +111,7 @@ export default function CreateContestPage() {
         shuffleQuestions: true,
         shuffleOptions: false,
         proctoringEnabled: true,
+        bannerImage: undefined,
     });
 
     // Helpers for registrationDeadline
@@ -196,6 +200,34 @@ export default function CreateContestPage() {
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
+    };
+
+    const [uploadingBanner, setUploadingBanner] = useState(false);
+
+    const handleBannerSelect = async (file: File, preview: string) => {
+        setUploadingBanner(true);
+        try {
+            const res = await uploadBanner({ fileData: preview, fileName: file.name });
+            if (res.data) {
+                setForm(prev => ({ ...prev, bannerImage: res.data.url }));
+                toast({
+                    title: "Success",
+                    description: "Banner image uploaded successfully!",
+                });
+            }
+        } catch (err: any) {
+            toast({
+                title: "Upload Failed",
+                description: err?.message || "Failed to upload banner image.",
+                variant: "destructive",
+            });
+        } finally {
+            setUploadingBanner(false);
+        }
+    };
+
+    const handleBannerClear = () => {
+        setForm(prev => ({ ...prev, bannerImage: undefined }));
     };
 
     // Topics helpers
@@ -434,6 +466,7 @@ export default function CreateContestPage() {
                     label: p.label || undefined,
                     benefits: p.benefits,
                 })),
+                bannerImage: form.bannerImage || undefined,
             };
 
             const result = await createContestMutation.mutateAsync(payload);
@@ -506,6 +539,22 @@ export default function CreateContestPage() {
                                         <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.title}</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground mt-1">Make it unique and self-explanatory.</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-semibold mb-1 block">Contest Banner Image</label>
+                                    <FileUpload
+                                        onFileSelect={handleBannerSelect}
+                                        onClear={handleBannerClear}
+                                        preview={form.bannerImage}
+                                        helperText="Drag and drop or click to upload a banner image. Recommended resolution: 1200x400."
+                                    />
+                                    {uploadingBanner && (
+                                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 animate-pulse">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                            Uploading banner image...
+                                        </p>
                                     )}
                                 </div>
 

@@ -453,10 +453,13 @@ export interface ServerContest {
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
     showResultsAfter: number;
+    bannerImage?: string | null;
     prizes?: Array<{
         rankFrom: number;
         rankTo: number;
-        prize: string;
+        amount: number;
+        currency?: string;
+        label?: string | null;
         benefits?: string[];
     }>;
     createdAt: string;

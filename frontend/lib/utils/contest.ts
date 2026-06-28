@@ -31,12 +31,10 @@ export function adaptServerContest(server: ServerContest): Contest {
 
   // Construct prizes
   const prizes = (server.prizes || []).map(p => {
-    const pAmt = Number((p as any).amount || parseFloat(p.prize) || 0);
-    const pLabel = (p as any).label || p.prize || '';
     return {
       rank: `${p.rankFrom}-${p.rankTo}`,
-      title: pLabel,
-      amount: pAmt,
+      title: p.label || '',
+      amount: Number(p.amount) || 0,
       description: p.benefits?.join(', ') || '',
     };
   });
@@ -55,9 +53,9 @@ export function adaptServerContest(server: ServerContest): Contest {
     category: server.topics?.[0] || 'General',
     difficulty: 'medium',
     status: mappedStatus,
-    coverImage: undefined,
-    bannerImage: undefined,
-    thumbnailImage: undefined,
+    coverImage: server.bannerImage || undefined,
+    bannerImage: server.bannerImage || undefined,
+    thumbnailImage: server.bannerImage || undefined,
 
     // Timing
     startTime: server.startTime,

@@ -22,6 +22,7 @@ const CreateContestBase = z.object({
     title: z.string().min(3).max(200),
     description: z.string().optional(),
     details: z.string().optional(),
+    bannerImage: z.string().optional().nullable(),
     topics: z.array(z.string()).default([]),
     rules: z.array(z.string()).default([]),
     paymentEnabled: z.boolean().default(false),

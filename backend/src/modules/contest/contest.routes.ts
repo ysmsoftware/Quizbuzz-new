@@ -7,6 +7,7 @@ export const contestRouter = Router();
 
 contestRouter.post("/", authenticatedOrgMiddleware, contestController.createContest);
 contestRouter.get("/", authenticatedOrgMiddleware, contestController.listContests);
+contestRouter.post("/upload-banner", authenticatedOrgMiddleware, contestController.uploadBanner);
 
 contestRouter.post("/register/:contestSlug", contestController.registerParticipant);
 
@@ -21,6 +22,7 @@ contestRouter.delete("/:contestId", authenticatedOrgMiddleware, contestControlle
 contestRouter.patch("/:contestId/archive", authenticatedOrgMiddleware, contestController.archiveContest);
 
 contestRouter.post("/:contestId/publish", authenticatedOrgMiddleware, contestController.publishContest);
+contestRouter.post("/:contestId/close-registration", authenticatedOrgMiddleware, contestController.closeRegistration);
 
 
 // ─── Participants (Admin) ─────────────────────────────────────────────────
