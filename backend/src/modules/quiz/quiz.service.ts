@@ -142,6 +142,25 @@ export class QuizService {
             await this.session.setReadiness(contestId, participantId, "camera", true);
         }
 
+        // ── LIVE CONTEST FAST-PATH ────────────────────────────────────────────────────
+        // If the contest is already LIVE when this participant joins, they should
+        // start immediately rather than waiting for the next CONTEST_START BullMQ job
+        // (which already fired once at startTime and won't fire again).
+        // Return START_IMMEDIATELY so handleJoin in the gateway calls
+        // startQuizForParticipant() directly, bypassing the waiting room entirely.
+        try {
+            const liveContest = await prisma.contest.findUnique({
+                where: { id: contestId },
+                select: { status: true },
+            });
+            if (liveContest?.status === "LIVE") {
+                const count = await this.session.getWaitingCount(contestId);
+                return { participantCount: count, status: "START_IMMEDIATELY" };
+            }
+        } catch (err) {
+            logger.warn(`[QuizService] Live-status check failed for ${participantId}: ${(err as Error).message}`);
+        }
+
         const count = await this.session.getWaitingCount(contestId);
         return { participantCount: count, status: "WAITING" };
     }

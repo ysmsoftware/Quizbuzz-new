@@ -174,10 +174,17 @@ export class QuizGateway {
             socket.data.contactId,
         );
 
-        if (result.status === "IN_QUIZ" || result.status === "SUBMITTED") {
+        if (result.status === "IN_QUIZ" || result.status === "SUBMITTED" || result.status === "START_IMMEDIATELY") {
             if (result.status === "SUBMITTED") {
-                // Already submitted — redirect
                 socket.emit("quiz:v1:waiting_room_status", { status: "SUBMITTED" });
+                return;
+            }
+            if (result.status === "START_IMMEDIATELY") {
+                // Contest is already LIVE — start quiz for this participant immediately
+                // without waiting for a CONTEST_START BullMQ job (already fired and gone).
+                logger.info(`[QuizGateway] Contest LIVE on join — starting quiz immediately for ${participantId}`);
+                await this.startQuizForParticipant(participantId, contestId, organizationId, socket.data.contactId ?? "");
+                await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
                 return;
             }
             // Participant already has a running session — send quiz data directly
