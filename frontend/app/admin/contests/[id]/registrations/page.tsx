@@ -93,6 +93,7 @@ import { toast } from 'sonner';
 import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
 import { exportToCSV, exportToPDF } from '@/lib/utils/export-utils';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 
 export default function RegistrationsTabPage() {
     const { id } = useParams() as { id: string };
@@ -106,6 +107,7 @@ export default function RegistrationsTabPage() {
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
+    const [page, setPage] = useState(1);
 
     // Date range filter and export states
     const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
@@ -121,23 +123,33 @@ export default function RegistrationsTabPage() {
     const [exportProgress, setExportProgress] = useState<number>(0);
     const [isExporting, setIsExporting] = useState<boolean>(false);
 
+    const PAGE_LIMIT = 25;
+
+    // Reset to page 1 whenever search/status/payment filters change
+    useEffect(() => {
+        setPage(1);
+    }, [searchQuery, statusFilter, paymentFilter]);
+
     const filters = useMemo(() => ({
         search: searchQuery,
         status: statusFilter === 'all' ? undefined : statusFilter,
         payment: paymentFilter === 'all' ? undefined : paymentFilter,
-        limit: 1000, // Fetch up to 1000 participant registrations for seamless client virtualization and local exporting
-    }), [searchQuery, statusFilter, paymentFilter]);
+        page,
+        limit: PAGE_LIMIT,
+    }), [searchQuery, statusFilter, paymentFilter, page]);
 
     const {
         data: registrations,
         isLoading,
+        isFetching,
         revokeRegistrations,
         markAsPaid,
         allowFreeEntry,
         bulkUpdateStatus,
         statusSummary,
         triggerExport,
-        checkExportStatus
+        checkExportStatus,
+        pagination: regPagination,
     } = useRegistrations(id, filters);
 
     // Client-side filtration by Date Range
@@ -163,27 +175,45 @@ export default function RegistrationsTabPage() {
     }, [contest]);
 
     const stats = useMemo(() => {
-        if (!contest || !registrations) return null;
-        const fee = contest.fee || 0;
+        if (!contest) return null;
+        
+        const sum = statusSummary || {
+            PENDING_PAYMENT: 0,
+            REGISTERED: 0,
+            CHECKED_IN: 0,
+            IN_WAITING: 0,
+            IN_QUIZ: 0,
+            SUBMITTED: 0,
+            DISQUALIFIED: 0,
+            ABSENT: 0,
+        };
 
-        // Calculate stats using the active filtered list for maximum context feedback
-        const confirmedCount = registrations.filter((r: Registration) => r.status === 'confirmed').length;
-        const paidCount = registrations.filter((r: Registration) => r.paymentStatus === 'completed').length;
-        const pendingCount = registrations.filter((r: Registration) => r.paymentStatus === 'pending').length;
-        const failedCount = registrations.filter((r: Registration) => r.paymentStatus === 'failed').length;
-        const freeCount = registrations.filter((r: Registration) => !r.amount || r.amount === 0).length;
+        const confirmedCount = 
+            (sum.REGISTERED || 0) + 
+            (sum.CHECKED_IN || 0) + 
+            (sum.IN_WAITING || 0) + 
+            (sum.IN_QUIZ || 0) + 
+            (sum.SUBMITTED || 0) + 
+            (sum.DISQUALIFIED || 0) + 
+            (sum.ABSENT || 0);
+
+        const pendingCount = sum.PENDING_PAYMENT || 0;
+        const paidCount = confirmedCount;
+        const failedCount = 0;
+        const freeCount = confirmedCount;
+        const total = contest?._count?.participants || (confirmedCount + pendingCount);
 
         return {
-            total: contest?._count?.participants || 0,
+            total,
             confirmed: confirmedCount,
             paid: paidCount,
             pending: pendingCount,
             failed: failedCount,
             free: freeCount,
             submitted: contest?._count?.submissions || 0,
-            revenue: registrations.reduce((sum: number, r: Registration) => sum + (r.paymentStatus === 'completed' ? (r.amount || 0) : 0), 0)
+            revenue: paidCount * (contest.fee || 0)
         };
-    }, [contest, registrations]);
+    }, [contest, statusSummary]);
 
     const handleExport = async (format: 'csv' | 'pdf') => {
         const dataset = exportScope === 'filtered' ? filteredRegistrations : (registrations || []);
@@ -264,7 +294,7 @@ export default function RegistrationsTabPage() {
         overscan: 10,
     });
 
-    if (isLoading) {
+    if (isLoading && !registrations) {
         return (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -421,7 +451,12 @@ export default function RegistrationsTabPage() {
 
             {/* REGISTRATIONS TABLE */}
             <WidgetErrorBoundary name="Registrations Table">
-                <Card className="border-border/50 overflow-hidden bg-card">
+                <Card className="border-border/50 overflow-hidden bg-card relative">
+                    {isFetching && (
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary/10 overflow-hidden z-30">
+                            <div className="h-full bg-primary/80 animate-pulse w-full" />
+                        </div>
+                    )}
                     <div ref={parentRef} className="h-[600px] overflow-auto relative">
                         <table className="w-full text-sm border-collapse table-fixed min-w-[1000px]">
                             <colgroup>
@@ -460,7 +495,7 @@ export default function RegistrationsTabPage() {
                                     <th className="w-12 px-4 py-3 text-right bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_rgba(var(--border))]"></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className={cn(isFetching && "opacity-50 transition-opacity duration-200")}>
                                 {!filteredRegistrations || filteredRegistrations.length === 0 ? (
                                     <tr>
                                         <td colSpan={totalColSpan} className="py-24 text-center">
@@ -641,6 +676,22 @@ export default function RegistrationsTabPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination bar */}
+                    {regPagination && regPagination.total > 0 && (
+                        <div className="px-4 py-3 border-t border-border/40 bg-muted/10">
+                            <PaginationBar
+                                page={page}
+                                totalPages={regPagination.totalPages ?? 1}
+                                total={regPagination.total}
+                                pageSize={PAGE_LIMIT}
+                                onPageChange={(p) => {
+                                    setPage(p);
+                                    setSelectedIds([]);
+                                }}
+                            />
+                        </div>
+                    )}
                 </Card>
             </WidgetErrorBoundary>
 

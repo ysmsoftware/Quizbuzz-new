@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useContacts } from '@/lib/hooks/useContacts';
 import {
   Users,
@@ -12,14 +12,13 @@ import {
   Building2,
   MapPin,
   Calendar,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   UserPlus,
   ArrowRight,
   History,
   Info
 } from 'lucide-react';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -69,6 +68,11 @@ export default function ContactsListPage() {
     createContactLoading,
     createContactError,
   } = useContacts({ search, college, page, limit: 20 });
+
+  // Reset to first page whenever search or college filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, college]);
 
   const handleCreateContact = async () => {
     try {
@@ -241,34 +245,15 @@ export default function ContactsListPage() {
       </WidgetErrorBoundary>
 
       {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground font-medium">
-            Showing <span className="text-foreground">{contacts.length}</span> of <span className="text-foreground">{pagination.total}</span> records
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl h-10 px-4 border-border/50"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl h-10 px-4 border-border/50"
-              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-              disabled={page === pagination.totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        </div>
+      {pagination && (
+        <PaginationBar
+          page={page}
+          totalPages={pagination.totalPages ?? 1}
+          total={pagination.total}
+          pageSize={20}
+          onPageChange={setPage}
+          className="mt-2"
+        />
       )}
     </div>
 
