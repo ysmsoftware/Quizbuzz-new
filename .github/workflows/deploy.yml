@@ -8,7 +8,6 @@ on:
       - "frontend/**"
       - "docker-compose.prod.yml"
       - ".github/workflows/deploy.yml"
-      - ".github/deploy-ec2.sh"
       - "prisma/**"
 
 env:
@@ -172,24 +171,19 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # DEPLOY
   #
-  # The deploy script (.github/deploy-ec2.sh) is base64-encoded here and
-  # sent to the EC2 via SSM Run Command. This avoids all JSON-array quoting
-  # issues and makes the deploy logic easy to read and test independently.
+  # Strategy: write the deploy script to a temp file on the GitHub runner,
+  # base64-encode it, send it to the EC2 via a single SSM command that
+  # decodes and executes it. This avoids JSON-array quoting entirely.
   #
-  # What the script does on EC2:
-  #   1. Patches NODE_OPTIONS + HEALTH_HEAP_THRESHOLD_PCT in /app/.env
-  #   2. Saves the current image tag as PREV_TAG for rollback
-  #   3. Logs into GHCR, pulls new images
-  #   4. Updates /app/docker-compose.yml to the new tag
-  #   5. Restarts backend, worker, frontend (redis untouched)
-  #   6. Health-checks /health for up to 90s with startup-GC tolerance
-  #   7. On failure: rolls back to PREV_TAG, dumps logs, exits 1
-  #   8. On success: promotes :latest, prunes old SHA-tagged images
-  #
-  # Requirements:
-  #   EC2 tag Name=quizbuzz-admin, SSM agent running, IAM role with SSM + ECR
-  #   GitHub Secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-  #   SSM params: /quizbuzz/prod/GHCR_TOKEN
+  # The script on EC2:
+  #   1. Patches NODE_OPTIONS + HEALTH_HEAP_THRESHOLD_PCT into /app/.env
+  #   2. Saves current tag as PREV_TAG for rollback
+  #   3. Pulls new images from GHCR
+  #   4. Updates /app/docker-compose.yml tags
+  #   5. Restarts backend, worker, frontend (redis stays untouched)
+  #   6. Health-checks /health for up to 90s
+  #   7. On failure: rolls back to PREV_TAG and dumps backend logs
+  #   8. On success: promotes :latest tag, prunes old SHA images
   # ──────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to EC2 (SSM)
@@ -197,8 +191,6 @@ jobs:
     needs: [build-backend, build-frontend]
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Notify Slack — Deploy Started
         uses: slackapi/slack-github-action@v1.27.0
         with:
@@ -232,7 +224,6 @@ jobs:
             --type String \
             --overwrite \
             --region ap-south-1
-          echo "Stored image tag in SSM: ${{ env.IMAGE_TAG }}"
 
       - name: Find admin EC2 instance ID
         run: |
@@ -243,21 +234,133 @@ jobs:
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text \
             --region ap-south-1)
-
           if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
             echo "ERROR: No running EC2 found with tag Name=quizbuzz-admin"
             exit 1
           fi
-
           echo "Found instance: $INSTANCE_ID"
           echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
 
-      # Encode the deploy script as base64 and send it via SSM.
-      # On EC2: decode -> write to /tmp/deploy-ec2.sh -> execute with NEW_TAG env var.
-      # This avoids all JSON-array quoting issues entirely.
-      - name: Send deploy script via SSM
+      # Write the deploy script to a temp file, encode it, send via SSM.
+      # The EC2 decodes it to /tmp/deploy-ec2.sh and executes it.
+      # Using a heredoc here means no quoting issues — bash reads it literally.
+      - name: Build and send deploy script via SSM
+        env:
+          NEW_TAG: ${{ env.IMAGE_TAG }}
         run: |
-          SCRIPT_B64=$(base64 -w0 < .github/deploy-ec2.sh)
+          # Write the deploy script (no quoting issues — plain heredoc)
+          cat > /tmp/deploy-ec2.sh << 'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -euo pipefail
+          exec > >(tee /tmp/deploy-ec2.log) 2>&1
+
+          COMPOSE_FILE="/app/docker-compose.yml"
+          REGISTRY="ghcr.io/ysmsoftware"
+
+          echo "=== QuizBuzz Deploy ==="
+          echo "Time    : $(date)"
+          echo "New tag : $NEW_TAG"
+          echo ""
+
+          # 1. Patch .env — ensure NODE_OPTIONS and heap threshold are set correctly
+          #    Runs on every deploy so even old instances that booted before these
+          #    vars existed get them applied automatically.
+          grep -q '^NODE_OPTIONS=' /app/.env \
+            && sed -i 's|^NODE_OPTIONS=.*|NODE_OPTIONS=--max-old-space-size=1536|' /app/.env \
+            || echo 'NODE_OPTIONS=--max-old-space-size=1536' >> /app/.env
+          grep -q '^HEALTH_HEAP_THRESHOLD_PCT=' /app/.env \
+            && sed -i 's|^HEALTH_HEAP_THRESHOLD_PCT=.*|HEALTH_HEAP_THRESHOLD_PCT=80|' /app/.env \
+            || echo 'HEALTH_HEAP_THRESHOLD_PCT=80' >> /app/.env
+          echo "NODE_OPTIONS   : $(grep NODE_OPTIONS /app/.env)"
+          echo "Heap threshold : $(grep HEALTH_HEAP_THRESHOLD_PCT /app/.env)"
+          echo ""
+
+          # 2. Save previous tag for rollback
+          PREV_TAG=$(grep -oP "quizbuzz-backend:\K[^\s'\"]*" "$COMPOSE_FILE" | head -1 || echo "latest")
+          echo "Previous tag : $PREV_TAG"
+          echo ""
+
+          # 3. Login to GHCR
+          GHCR_TOKEN=$(aws ssm get-parameter \
+            --name /quizbuzz/prod/GHCR_TOKEN \
+            --with-decryption \
+            --query Parameter.Value \
+            --output text \
+            --region ap-south-1)
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u ysmsoftware --password-stdin
+
+          # 4. Pull new images
+          docker pull "$REGISTRY/quizbuzz-backend:$NEW_TAG"
+          docker pull "$REGISTRY/quizbuzz-frontend:$NEW_TAG"
+          echo ""
+
+          # 5. Update compose file
+          sed -i "s|quizbuzz-backend:[^ '\"]*|quizbuzz-backend:$NEW_TAG|g" "$COMPOSE_FILE"
+          sed -i "s|quizbuzz-frontend:[^ '\"]*|quizbuzz-frontend:$NEW_TAG|g" "$COMPOSE_FILE"
+          echo "Compose updated to $NEW_TAG"
+          echo ""
+
+          # 6. Restart services (redis untouched)
+          docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate backend worker frontend
+
+          # 7. Health check — up to 90s
+          #    /health now uses v8.getHeapStatistics().heap_size_limit as denominator
+          #    so heapUsedPct is relative to the 1.5GB cap, not the tiny startup arena.
+          #    A status=OK (HTTP 200) is the only acceptance criterion.
+          echo "Waiting for health (up to 90s)..."
+          HEALTHY=false
+          for i in $(seq 1 18); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3005/health 2>/dev/null || echo "000")
+            BODY=$(curl -s http://localhost:3005/health 2>/dev/null || echo '{}')
+            STATUS_VAL=$(echo "$BODY" | grep -oP '"status":"\K[^"]+' || echo "")
+            HEAP_PCT=$(echo "$BODY"  | grep -oP '"heapUsedPct":\K[0-9]+' || echo "?")
+            WS=$(echo "$BODY"        | grep -oP '"wsConnections":\K[0-9]+' || echo "0")
+            echo "  [$i/18] HTTP $HTTP_CODE | status=$STATUS_VAL | heap=${HEAP_PCT}% | ws=$WS"
+            if [ "$HTTP_CODE" = "200" ]; then
+              HEALTHY=true
+              break
+            fi
+            sleep 5
+          done
+
+          # 8. Rollback on failure
+          if [ "$HEALTHY" = "false" ]; then
+            echo ""
+            echo "=== HEALTH CHECK FAILED — rolling back to $PREV_TAG ==="
+            echo "--- Last 60 lines of backend logs ---"
+            docker logs quizbuzz_backend --tail 60 || true
+            echo "---"
+            sed -i "s|quizbuzz-backend:$NEW_TAG|quizbuzz-backend:$PREV_TAG|g" "$COMPOSE_FILE"
+            sed -i "s|quizbuzz-frontend:$NEW_TAG|quizbuzz-frontend:$PREV_TAG|g" "$COMPOSE_FILE"
+            docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate backend worker frontend
+            echo "Rollback complete — running $PREV_TAG"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Healthy on $NEW_TAG ==="
+
+          # 9. Promote :latest (rollback target for next deploy)
+          docker tag "$REGISTRY/quizbuzz-backend:$NEW_TAG"  "$REGISTRY/quizbuzz-backend:latest"
+          docker tag "$REGISTRY/quizbuzz-frontend:$NEW_TAG" "$REGISTRY/quizbuzz-frontend:latest"
+
+          # 10. Prune old images — keep only current tag and :latest
+          docker image prune -f
+          docker images "$REGISTRY/quizbuzz-backend"  --format '{{.Tag}} {{.ID}}' \
+            | grep -vE "^(${NEW_TAG}|latest) " | awk '{print $2}' | sort -u \
+            | xargs -r docker rmi -f || true
+          docker images "$REGISTRY/quizbuzz-frontend" --format '{{.Tag}} {{.ID}}' \
+            | grep -vE "^(${NEW_TAG}|latest) " | awk '{print $2}' | sort -u \
+            | xargs -r docker rmi -f || true
+
+          echo "Disk after prune: $(df -h / | tail -1)"
+          echo ""
+          echo "=== Deploy complete: $(date) ==="
+          docker compose -f "$COMPOSE_FILE" ps
+          DEPLOY_SCRIPT
+
+          # Base64-encode (no line wraps) and send to EC2 via SSM
+          SCRIPT_B64=$(base64 -w0 < /tmp/deploy-ec2.sh)
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.INSTANCE_ID }}" \
@@ -265,8 +368,7 @@ jobs:
             --comment "Deploy ${{ env.IMAGE_TAG }} by ${{ github.actor }}" \
             --parameters "commands=[
               \"echo '$SCRIPT_B64' | base64 -d > /tmp/deploy-ec2.sh\",
-              \"chmod +x /tmp/deploy-ec2.sh\",
-              \"NEW_TAG=${{ env.IMAGE_TAG }} APP_ENV_FILE=/app/.env bash /tmp/deploy-ec2.sh\"
+              \"NEW_TAG=${{ env.IMAGE_TAG }} bash /tmp/deploy-ec2.sh\"
             ]" \
             --timeout-seconds 360 \
             --query "Command.CommandId" \
@@ -279,7 +381,6 @@ jobs:
       - name: Wait for deploy to complete
         run: |
           echo "Waiting for SSM command ${{ env.COMMAND_ID }} ..."
-
           for i in $(seq 1 72); do
             STATUS=$(aws ssm get-command-invocation \
               --command-id "${{ env.COMMAND_ID }}" \
@@ -287,9 +388,7 @@ jobs:
               --query "Status" \
               --output text \
               --region ap-south-1 2>/dev/null || echo "Pending")
-
             echo "  Attempt $i/72 — Status: $STATUS"
-
             case "$STATUS" in
               "Success")
                 echo "Deploy succeeded."
@@ -322,7 +421,6 @@ jobs:
                 ;;
             esac
           done
-
           echo "Timed out waiting for SSM command after 6 minutes."
           exit 1
 
@@ -351,14 +449,14 @@ jobs:
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
 # ────────────────────────────────────────────────────────────────────────────
-# FALLBACK: SSH deploy (activate by renaming deploy -> deploy-ssm and this -> deploy)
+# FALLBACK: SSH deploy (activate by renaming deploy -> deploy-ssm above and
+# uncommenting this block, then renaming this to deploy)
 #
 # deploy-ssh:
 #   name: Deploy to EC2 (SSH fallback)
 #   runs-on: ubuntu-latest
 #   needs: [build-backend, build-frontend]
 #   steps:
-#     - uses: actions/checkout@v4
 #     - name: Set image tag
 #       run: |
 #         SHORT_TAG="${{ github.sha }}"
@@ -372,8 +470,9 @@ jobs:
 #         ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 #     - name: Deploy via SSH
 #       run: |
-#         scp -i ~/.ssh/deploy_key .github/deploy-ec2.sh \
-#             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/deploy-ec2.sh"
-#         ssh -i ~/.ssh/deploy_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-#             "chmod +x /tmp/deploy-ec2.sh && NEW_TAG=${{ env.IMAGE_TAG }} APP_ENV_FILE=/app/.env bash /tmp/deploy-ec2.sh"
+#         ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+#             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+#             NEW_TAG="${{ env.IMAGE_TAG }}" bash -s << 'ENDSSH'
+#         # paste deploy script body here
+#         ENDSSH
 # ────────────────────────────────────────────────────────────────────────────
