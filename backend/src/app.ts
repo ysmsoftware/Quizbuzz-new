@@ -19,6 +19,7 @@ import { config } from './config/index';
 
 import { apiRouter } from './routes';
 import { paymentController } from "./container";
+import v8 from 'v8';
 
 // Connection counter — incremented/decremented by SocketService on connect/disconnect.
 // Read by /health to implement drain mode: when at capacity, /health returns 503
@@ -99,9 +100,14 @@ app.get('/health', async (req, res) => {
     // while all existing WebSocket sessions continue uninterrupted — the ALB never
     // closes an already-established TCP connection when a target goes unhealthy.
     const maxConnections = config.websocket.maxConnections;
-    const heapUsed       = process.memoryUsage().heapUsed;
-    const heapTotal      = process.memoryUsage().heapTotal;
-    const heapPct        = heapTotal > 0 ? Math.round((heapUsed / heapTotal) * 100) : 0;
+    const mem            = process.memoryUsage();
+    const heapUsed       = mem.heapUsed;
+    // Use v8 heap_size_limit (the actual cap set by --max-old-space-size) as the
+    // denominator. This gives a meaningful percentage relative to the real limit.
+    // Using heapUsed/heapTotal is WRONG — heapTotal is the currently allocated arena
+    // (starts tiny at ~4MB on startup) so 3MB/4MB = 75% looks alarming but is fine.
+    const heapLimit      = v8.getHeapStatistics().heap_size_limit;
+    const heapPct        = heapLimit > 0 ? Math.round((heapUsed / heapLimit) * 100) : 0;
     const heapThresholdPct = Number(process.env.HEALTH_HEAP_THRESHOLD_PCT ?? 80);
 
     const atConnectionCap = activeWsConnections >= maxConnections;
@@ -121,6 +127,8 @@ app.get('/health', async (req, res) => {
         cache:            cacheOk ? 'OK' : 'ERROR',
         wsConnections:    activeWsConnections,
         wsMaxConnections: maxConnections,
+        heapUsedMb:       Math.round(heapUsed / 1024 / 1024),
+        heapLimitMb:      Math.round(heapLimit / 1024 / 1024),
         heapUsedPct:      heapPct,
         heapThresholdPct,
         draining,
