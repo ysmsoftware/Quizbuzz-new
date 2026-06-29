@@ -1,17 +1,15 @@
 import { Router } from "express";
-import { messagingController } from "../../container";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
+
+function ctrl() { return require("../../container").messagingController; }
 
 export const messagingRouter = Router();
 
-// Admin Message Management Routes
-messagingRouter.get("/templates", authenticatedOrgMiddleware, messagingController.getTemplates);
-messagingRouter.get("/:id", authenticatedOrgMiddleware, messagingController.getMessageById);
-messagingRouter.post("/send", authenticatedOrgMiddleware, messagingController.sendMessage);
-messagingRouter.post("/:id/retry", authenticatedOrgMiddleware, messagingController.retryMessage);
-messagingRouter.post("/retry-failed", authenticatedOrgMiddleware, messagingController.retryFailedMessages);
-
-// Messages by entity
-messagingRouter.get("/contact/:contactId", authenticatedOrgMiddleware, messagingController.getMessagesByContact);
-messagingRouter.get("/contest/:contestId", authenticatedOrgMiddleware, messagingController.getMessagesByContest);
-messagingRouter.get("/contest/:contestId/contact/:contactId", authenticatedOrgMiddleware, messagingController.getMessagesByContactInContest);
+messagingRouter.get("/templates",                           authenticatedOrgMiddleware, (req, res, next) => ctrl().getTemplates(req, res, next));
+messagingRouter.get("/:id",                                 authenticatedOrgMiddleware, (req, res, next) => ctrl().getMessageById(req, res, next));
+messagingRouter.post("/send",                               authenticatedOrgMiddleware, (req, res, next) => ctrl().sendMessage(req, res, next));
+messagingRouter.post("/:id/retry",                          authenticatedOrgMiddleware, (req, res, next) => ctrl().retryMessage(req, res, next));
+messagingRouter.post("/retry-failed",                       authenticatedOrgMiddleware, (req, res, next) => ctrl().retryFailedMessages(req, res, next));
+messagingRouter.get("/contact/:contactId",                  authenticatedOrgMiddleware, (req, res, next) => ctrl().getMessagesByContact(req, res, next));
+messagingRouter.get("/contest/:contestId",                  authenticatedOrgMiddleware, (req, res, next) => ctrl().getMessagesByContest(req, res, next));
+messagingRouter.get("/contest/:contestId/contact/:contactId", authenticatedOrgMiddleware, (req, res, next) => ctrl().getMessagesByContactInContest(req, res, next));
