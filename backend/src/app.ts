@@ -18,17 +18,12 @@ import { config } from './config/index';
 
 
 import { apiRouter } from './routes';
-import { paymentController } from "./container";
 import v8 from 'v8';
+import { getActiveWsConnections } from './ws-connections';
 
-// Connection counter — incremented/decremented by SocketService on connect/disconnect.
-// Read by /health to implement drain mode: when at capacity, /health returns 503
-// so ALB stops routing new WebSocket connections to this instance while existing
-// sockets continue uninterrupted.
-let activeWsConnections = 0;
-export function incrementWsConnections() { activeWsConnections++; }
-export function decrementWsConnections() { if (activeWsConnections > 0) activeWsConnections--; }
-export function getActiveWsConnections() { return activeWsConnections; }
+// WebSocket connection counter is maintained in ws-connections.ts
+// (imported by socket.ts and here) to avoid a circular import chain:
+//   worker → container → socket.ts → app.ts → container (crash)
 
 
 const app = express();
@@ -43,10 +38,16 @@ app.use(helmet({
 app.use(addRequestId());
 
 // payment webhook
+// Lazy handler: paymentController is read at request time, not at module load.
+// app.ts is imported by container.ts (circular), so accessing paymentController
+// here at evaluation time causes: Cannot read properties of undefined (reading 'handleWebhook')
 app.post(
     "/api/payments/webhook",
     express.raw({ type: "application/json" }),
-    paymentController.handleWebhook
+    (req, res, next) => {
+        const { paymentController } = require('./container');
+        paymentController.handleWebhook(req, res, next);
+    }
 );
 
 // CORS
@@ -102,13 +103,10 @@ app.get('/health', async (req, res) => {
     const maxConnections = config.websocket.maxConnections;
     const mem            = process.memoryUsage();
     const heapUsed       = mem.heapUsed;
-    // Use v8 heap_size_limit (the actual cap set by --max-old-space-size) as the
-    // denominator. This gives a meaningful percentage relative to the real limit.
-    // Using heapUsed/heapTotal is WRONG — heapTotal is the currently allocated arena
-    // (starts tiny at ~4MB on startup) so 3MB/4MB = 75% looks alarming but is fine.
     const heapLimit      = v8.getHeapStatistics().heap_size_limit;
     const heapPct        = heapLimit > 0 ? Math.round((heapUsed / heapLimit) * 100) : 0;
     const heapThresholdPct = Number(process.env.HEALTH_HEAP_THRESHOLD_PCT ?? 80);
+    const activeWsConnections = getActiveWsConnections();
 
     const atConnectionCap = activeWsConnections >= maxConnections;
     const atMemoryCap     = heapPct >= heapThresholdPct;
