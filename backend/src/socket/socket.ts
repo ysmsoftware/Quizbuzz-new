@@ -18,6 +18,15 @@ export class SocketService {
                 methods: ["GET", "POST"],
                 credentials: true,
             },
+            // Quiz sessions last up to 2 hours. Use generous ping settings so
+            // the server doesn't close idle-looking connections mid-quiz.
+            // Default pingInterval=25s + pingTimeout=20s = drops at 45s under load.
+            // At 5000 concurrent connections the event loop can lag >20s on a ping
+            // response, causing false disconnections. Set timeout to 60s to give
+            // the event loop headroom without waiting too long for truly dead clients.
+            pingInterval: 25000,   // send PING every 25s (unchanged)
+            pingTimeout:  60000,   // wait 60s for PONG before declaring dead (was 20s)
+            upgradeTimeout: 30000, // time to complete WebSocket upgrade (was 10s)
             connectionStateRecovery: {
                 maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
             },
