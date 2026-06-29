@@ -1,7 +1,8 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { config } from "../../config";
-import { quizRegistrationController } from "../../container";
+
+function ctrl() { return require("../../container").quizRegistrationController; }
 
 // 5 OTP requests per window per IP (driven by RATE_LIMIT_OTP env var)
 const otpLimiter = rateLimit({
@@ -17,8 +18,7 @@ const otpLimiter = rateLimit({
 
 export const quizRegistrationRouter = Router();
 
-// TODO: add otpLimiter - 
 // Both routes are public — participants are not authenticated at this stage
-quizRegistrationRouter.post("/request-otp", quizRegistrationController.requestOtp);
-quizRegistrationRouter.post("/verify-otp", quizRegistrationController.verifyOtp);
-quizRegistrationRouter.post("/participant-login", quizRegistrationController.participantLogin);
+quizRegistrationRouter.post("/request-otp",       (req, res, next) => ctrl().requestOtp(req, res, next));
+quizRegistrationRouter.post("/verify-otp",        (req, res, next) => ctrl().verifyOtp(req, res, next));
+quizRegistrationRouter.post("/participant-login", (req, res, next) => ctrl().participantLogin(req, res, next));
