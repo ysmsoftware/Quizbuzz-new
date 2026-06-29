@@ -40,7 +40,7 @@ interface SubmissionsResponse {
     total: number;
     page: number;
     limit: number;
-    pages: number;
+    totalPages: number;
   };
   summary: SubmissionSummary;
 }

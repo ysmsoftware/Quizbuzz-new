@@ -412,7 +412,7 @@ export default function ContestSubmissionsPage() {
             <div className="p-4 border-t border-border/50 bg-secondary/10">
               <PaginationBar
                 page={page}
-                totalPages={pagination.pages ?? 1}
+                totalPages={pagination.totalPages ?? 1}
                 total={pagination.total}
                 pageSize={20}
                 onPageChange={(p) => setPage(p)}
