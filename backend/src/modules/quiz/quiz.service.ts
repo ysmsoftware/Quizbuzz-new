@@ -545,14 +545,32 @@ export class QuizService {
     }
 
     async handleTimeExpiry(contestId: string): Promise<{ submitted: string[]; errors: any[] }> {
-        const activeIds = await this.session.getSetMembers(contestId, "active");
+        // Submit ALL participants who were in-quiz at time expiry:
+        // - active SET: currently connected participants
+        // - disconnected SET: participants who lost connection mid-quiz
+        //   (their answers are preserved in Redis — submitQuiz reads them)
+        // We must cover both sets because OOM crashes / network drops move
+        // participants from active → disconnected without submitting them.
+        const [activeIds, disconnectedIds] = await Promise.all([
+            this.session.getSetMembers(contestId, "active"),
+            this.session.getSetMembers(contestId, "disconnected"),
+        ]);
+
+        // Deduplicate in case a participant appears in both (race condition)
+        const allIds = [...new Set([...activeIds, ...disconnectedIds])];
+
+        logger.info(
+            `[quiz-service] handleTimeExpiry: ${activeIds.length} active + ` +
+            `${disconnectedIds.length} disconnected = ${allIds.length} total to submit`
+        );
+
         const submitted: string[] = [];
         const errors: any[] = [];
 
         // Process concurrently in batches of 50 to avoid overwhelming Redis
         const BATCH = 50;
-        for (let i = 0; i < activeIds.length; i += BATCH) {
-            const batch = activeIds.slice(i, i + BATCH);
+        for (let i = 0; i < allIds.length; i += BATCH) {
+            const batch = allIds.slice(i, i + BATCH);
             await Promise.allSettled(
                 batch.map(async (pid) => {
                     try {

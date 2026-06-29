@@ -5,6 +5,7 @@ import { pubClient, subClient } from "../config/redis.js";
 import { config } from "../config/index.js";
 import logger from "../config/logger.js";
 import { socketAuthMiddleware } from "./socket.middleware.js";
+import { incrementWsConnections, decrementWsConnections } from "../app.js";
 
 export class SocketService {
     private io!: SocketIOServer;
@@ -30,6 +31,19 @@ export class SocketService {
         }
 
         logger.info(`[socket] Socket.IO server attached to HTTP server`);
+
+        // Track active WebSocket connections so /health can implement drain mode.
+        // Listen per-namespace (not on root io) to avoid double-counting, since
+        // Socket.IO fires the root 'connection' event AND the namespace event for
+        // the same socket when using named namespaces.
+        this.io.of("participant").on("connection", (socket: any) => {
+            incrementWsConnections();
+            socket.on("disconnect", () => decrementWsConnections());
+        });
+        this.io.of("/quiz-admin").on("connection", (socket: any) => {
+            incrementWsConnections();
+            socket.on("disconnect", () => decrementWsConnections());
+        });
 
         return this.io;
     }

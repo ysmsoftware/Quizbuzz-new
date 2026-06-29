@@ -376,13 +376,19 @@ export class QuizAuthService {
                 contactId: contact.id,
                 contestId: contest.id,
                 organizationId: contest.organizationId,
-                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ"] },
+                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
             },
-            select: { id: true },
+            select: { id: true, status: true },
         });
 
         if (!participant) {
             throw new QuizAuthError("NOT_REGISTERED", "You are not registered for this contest");
+        }
+
+        // Participant already submitted — let the frontend show a "you already submitted" screen
+        // rather than allowing them back into the quiz flow.
+        if (participant.status === "SUBMITTED") {
+            throw new QuizAuthError("ALREADY_SUBMITTED", "You have already submitted this quiz. Your answers have been recorded.");
         }
 
         // 4. Issue session token scoped to this participant + contest

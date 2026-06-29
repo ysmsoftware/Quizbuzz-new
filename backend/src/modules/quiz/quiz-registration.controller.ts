@@ -118,6 +118,7 @@ export class QuizRegistrationController {
                     CONTEST_ENDED:      410,
                     CONTACT_NOT_FOUND:  404,
                     NOT_REGISTERED:     403,
+                    ALREADY_SUBMITTED:  409,
                 };
                 res.status(statusMap[err.code] ?? 400).json({
                     success: false,
