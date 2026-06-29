@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { submissionsApi } from '@/lib/api/post-quiz.api';
 import { toast } from 'sonner';
 
@@ -23,6 +23,7 @@ export function useContestSubmissions(
     enabled: !!contestId,
     retry: 3,
     retryDelay: (attempt) => Math.min(attempt * 1000, 5000),
+    placeholderData: keepPreviousData,
   });
 }
 

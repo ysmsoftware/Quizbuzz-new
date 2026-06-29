@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { crmApi, Contact } from '@/lib/api/crm.api';
 
 export type ContactFilters = {
@@ -18,6 +18,7 @@ export function useContacts(filters: ContactFilters = {}, options?: { enabled?: 
     queryFn: () => crmApi.getContacts(filters),
     staleTime: 1000 * 60 * 2,
     enabled: options?.enabled ?? true,
+    placeholderData: keepPreviousData,
   });
 
   const createContactMutation = useMutation({
