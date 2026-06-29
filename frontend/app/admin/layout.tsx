@@ -121,7 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 )}
             >
                 {/* Logo / Sidebar Name Bar */}
-                <div 
+                <div
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     className={cn(
                         "border-b border-border/40 p-6 shrink-0 cursor-pointer hover:bg-secondary/40 transition-colors flex items-center justify-between",
@@ -202,7 +202,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                                                     "h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110",
                                                     isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
                                                 )} />
-                                                
+
                                                 <AnimatePresence initial={false}>
                                                     {sidebarOpen && (
                                                         <motion.span
@@ -306,7 +306,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                         </Button>
 
-                        <div 
+                        <div
                             ref={headerNameBarRef}
                             onClick={() => setSidebarOpen(!sidebarOpen)}
                             className="flex items-center gap-2 cursor-pointer hover:bg-secondary/40 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-border/30 select-none"
@@ -321,11 +321,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             </motion.div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground hidden sm:inline">
-                                Welcome, {admin?.firstName || admin?.email?.split('@')[0]}
-                            </span>
-                        </div>
+
                     </div>
                 </header>
 
