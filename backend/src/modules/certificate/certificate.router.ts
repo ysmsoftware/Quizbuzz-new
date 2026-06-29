@@ -1,35 +1,27 @@
 import { Router } from "express";
-import { certificateController } from "../../container";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
+
+function ctrl() { return require("../../container").certificateController; }
 
 const certificateRouter = Router();
 
 // Public endpoint for participants to download and view their certificates
-certificateRouter.get("/public/:id", certificateController.getCertificateByIdPublic);
+certificateRouter.get("/public/:id", (req, res, next) => ctrl().getCertificateByIdPublic(req, res, next));
 
 certificateRouter.use(authenticatedOrgMiddleware);
 
-// ─── Static routes BEFORE parameterised ones ─────────────────────────────────
-// Express matches top-down; "issue", "bulk-issue", "retry-failed" must come
-// before /:id or Express would match them as IDs.
+// Static routes BEFORE parameterised ones
+certificateRouter.post("/issue",        (req, res, next) => ctrl().issueCertificate(req, res, next));
+certificateRouter.post("/bulk-issue",   (req, res, next) => ctrl().bulkIssueCertificates(req, res, next));
+certificateRouter.post("/retry-failed", (req, res, next) => ctrl().retryFailedCertificates(req, res, next));
 
-certificateRouter.post("/issue",        certificateController.issueCertificate);
-certificateRouter.post("/bulk-issue",   certificateController.bulkIssueCertificates);
-certificateRouter.post("/retry-failed", certificateController.retryFailedCertificates);
+// Read routes
+certificateRouter.get("/contact/:contactId/contest/:contestId", (req, res, next) => ctrl().getCertificateByContactAndContest(req, res, next));
+certificateRouter.get("/contact/:contactId", (req, res, next) => ctrl().getCertificatesByContact(req, res, next));
+certificateRouter.get("/contest/:contestId", (req, res, next) => ctrl().getCertificatesByContest(req, res, next));
 
-// ─── Read routes ──────────────────────────────────────────────────────────────
-
-// contact+contest combo before single-param routes (more specific first)
-certificateRouter.get(
-    "/contact/:contactId/contest/:contestId",
-    certificateController.getCertificateByContactAndContest
-);
-certificateRouter.get("/contact/:contactId", certificateController.getCertificatesByContact);
-certificateRouter.get("/contest/:contestId", certificateController.getCertificatesByContest);
-
-// ─── Parameterised routes LAST ────────────────────────────────────────────────
-
-certificateRouter.get("/:id",          certificateController.getCertificateById);
-certificateRouter.post("/:id/retry",   certificateController.retryCertificate);
+// Parameterised routes last
+certificateRouter.get("/:id",        (req, res, next) => ctrl().getCertificateById(req, res, next));
+certificateRouter.post("/:id/retry", (req, res, next) => ctrl().retryCertificate(req, res, next));
 
 export { certificateRouter };
