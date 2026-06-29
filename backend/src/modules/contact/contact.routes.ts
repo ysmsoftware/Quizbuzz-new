@@ -1,15 +1,16 @@
 import { Router } from "express";
-import { contactController } from "../../container";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
+
+function ctrl() { return require("../../container").contactController; }
 
 export const contactRouter = Router();
 
-contactRouter.post("/", authenticatedOrgMiddleware, contactController.create);
-contactRouter.get("/lookup", authenticatedOrgMiddleware, contactController.lookup);
-contactRouter.get("/", authenticatedOrgMiddleware, contactController.list);
-contactRouter.get("/:id", authenticatedOrgMiddleware, contactController.getById);
-contactRouter.patch("/:id", authenticatedOrgMiddleware, contactController.update);
-contactRouter.delete("/:id", authenticatedOrgMiddleware, contactController.softDelete);
-contactRouter.get("/:id/contests", authenticatedOrgMiddleware, contactController.getContests);
-contactRouter.get("/:id/messages", authenticatedOrgMiddleware, contactController.getMessages);
-contactRouter.get("/:id/certificates", authenticatedOrgMiddleware, contactController.getCertificates);
+contactRouter.post("/",                        authenticatedOrgMiddleware, (req, res, next) => ctrl().create(req, res, next));
+contactRouter.get("/lookup",                   authenticatedOrgMiddleware, (req, res, next) => ctrl().lookup(req, res, next));
+contactRouter.get("/",                         authenticatedOrgMiddleware, (req, res, next) => ctrl().list(req, res, next));
+contactRouter.get("/:id",                      authenticatedOrgMiddleware, (req, res, next) => ctrl().getById(req, res, next));
+contactRouter.patch("/:id",                    authenticatedOrgMiddleware, (req, res, next) => ctrl().update(req, res, next));
+contactRouter.delete("/:id",                   authenticatedOrgMiddleware, (req, res, next) => ctrl().softDelete(req, res, next));
+contactRouter.get("/:id/contests",             authenticatedOrgMiddleware, (req, res, next) => ctrl().getContests(req, res, next));
+contactRouter.get("/:id/messages",             authenticatedOrgMiddleware, (req, res, next) => ctrl().getMessages(req, res, next));
+contactRouter.get("/:id/certificates",         authenticatedOrgMiddleware, (req, res, next) => ctrl().getCertificates(req, res, next));
