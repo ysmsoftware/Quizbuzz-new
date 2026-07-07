@@ -169,6 +169,15 @@ export function ProctoringManager({
 
     // 1. REQUEST + ENFORCE FULLSCREEN
     useEffect(() => {
+        const isIOS = typeof navigator !== "undefined" &&
+          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+          !(window as any).MSStream;
+
+        if (isIOS) {
+            store.setFullscreen(true);
+            return;
+        }
+
         const requestFullscreen = async () => {
             try {
                 if (!document.fullscreenElement) {

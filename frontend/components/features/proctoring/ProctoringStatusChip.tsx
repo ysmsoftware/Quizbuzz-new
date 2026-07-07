@@ -21,33 +21,33 @@ export function ProctoringStatusChip() {
   const getStatus = () => {
     if (isFlagged) {
       return { 
-        dot: 'bg-red-500', 
+        dot: 'bg-destructive', 
         text: 'Flagged', 
-        textClass: 'text-red-400',
+        textClass: 'text-destructive',
         badge: null 
       };
     }
     if (!cameraActive) {
       return { 
-        dot: 'bg-red-500', 
+        dot: 'bg-destructive', 
         text: 'Camera Off', 
-        textClass: 'text-red-400',
+        textClass: 'text-destructive',
         badge: null 
       };
     }
     if (!faceDetected) {
       return { 
-        dot: 'bg-amber-500', 
+        dot: 'bg-warning', 
         text: 'Face not detected', 
-        textClass: 'text-amber-400',
+        textClass: 'text-warning',
         badge: null 
       };
     }
     
     return { 
-      dot: 'bg-green-500 animate-pulse', 
+      dot: 'bg-success animate-pulse', 
       text: 'Monitored', 
-      textClass: 'text-white/60',
+      textClass: 'text-muted-foreground',
       badge: totalWarnings > 0 ? totalWarnings : null
     };
   };
@@ -58,21 +58,21 @@ export function ProctoringStatusChip() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-2 cursor-help px-2 py-1 rounded-full hover:bg-white/5 transition-colors">
+          <div className="flex items-center gap-2 cursor-help px-2 py-1 rounded-full hover:bg-muted transition-colors">
             <div className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
             <span className={`text-[10px] font-medium uppercase tracking-wider ${status.textClass}`}>
               {status.text}
             </span>
             {status.badge !== null && (
-              <span className="flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold px-1">
+              <span className="flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-destructive text-destructive-foreground text-[8px] font-bold px-1">
                 {status.badge}
               </span>
             )}
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="bg-slate-900 border-white/10 text-white text-[10px]">
+        <TooltipContent side="bottom" className="bg-popover border border-border text-popover-foreground text-[10px]">
           <p>Face detection active. Warnings: {totalWarnings}/3</p>
-          {isFlagged && <p className="text-red-400 mt-1">Session flagged for review</p>}
+          {isFlagged && <p className="text-destructive mt-1">Session flagged for review</p>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

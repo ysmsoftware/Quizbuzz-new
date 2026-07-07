@@ -7,7 +7,7 @@ import * as contestsApi from '../api/contests.api';
 import { queryKeys } from '../api/queryClient';
 import type { Registration } from '../types';
 
-function normalizeRegistration(raw: any): Registration {
+export function normalizeRegistration(raw: any): Registration {
   const contact = raw.contact || raw.participantDetails || {};
   const fullName = [contact.fullName, contact.firstName, contact.lastName]
     .filter(Boolean)

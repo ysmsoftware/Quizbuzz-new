@@ -98,13 +98,13 @@ export function CameraFeed({
           <div className="flex items-center gap-1 text-[10px] font-medium">
             {stream ? (
               <>
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-green-600 dark:text-green-400">Camera active</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-success">Camera active</span>
               </>
             ) : (
               <>
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span className="text-amber-600 dark:text-amber-400">Camera off</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-warning" />
+                <span className="text-warning">Camera off</span>
               </>
             )}
           </div>
