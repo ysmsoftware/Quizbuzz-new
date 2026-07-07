@@ -42,38 +42,27 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
+// Flat shape matching backend's ContestAnalyticsSnapshot Prisma model
 interface AnalyticsSnapshot {
   snapshotAt: string;
-  registrations: {
-    total: number;
-    paid: number;
-    free: number;
-    refunded: number;
-  };
-  revenue: {
-    total: string;
-    currency: string;
-    averagePerParticipant: string;
-  };
-  participation: {
-    totalCheckedIn: number;
-    totalJoined: number;
-    totalSubmitted: number;
-    totalAbsent: number;
-    submissionRate: number;
-  };
-  scores: {
-    average: string;
-    highest: string;
-    lowest: string;
-    passingCount: number;
-    failingCount: number;
-  };
-  timing: {
-    averageTimeTakenSecs: number;
-    fastestTimeSecs: number;
-    slowestTimeSecs: number;
-  };
+  // Registration
+  totalRegistrations: number;
+  totalRevenue: number | string;
+  // Participation
+  totalParticipated: number;
+  totalSubmitted: number;
+  // Scores
+  avgScore: number | null;
+  highestScore: number | null;
+  lowestScore: number | null;
+  medianScore: number | null;
+  avgTimeTakenSecs: number | null;
+  fastestTimeSecs?: number | null;
+  slowestTimeSecs?: number | null;
+  passingCount?: number | null;
+  failingCount?: number | null;
+  // Live (from Redis supplement)
+  activeNow?: number;
 }
 
 interface ScoreDistribution {
@@ -109,7 +98,10 @@ export default function ContestAnalyticsPage() {
     },
   });
 
-  const snapshot = snapshotData?.data as AnalyticsSnapshot | undefined;
+  // Backend returns: { snapshot: AnalyticsSnapshot | null, live: LiveAnalytics }
+  // The page only renders snapshot data; live data is real-time only.
+  const rawData = snapshotData?.data;
+  const snapshot = (rawData?.snapshot ?? rawData) as AnalyticsSnapshot | undefined;
   const distribution = scoreDistribution?.data as ScoreDistribution | undefined;
 
   if (isSnapshotLoading) {
@@ -160,10 +152,10 @@ export default function ContestAnalyticsPage() {
                 <Badge className="bg-primary/10 text-primary border-none text-[10px] uppercase font-bold">Registration</Badge>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-black">{snapshot?.registrations?.total || 0}</p>
+                <p className="text-3xl font-black">{snapshot?.totalRegistrations ?? 0}</p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <span className="text-green-500 font-bold flex items-center">
-                    <ArrowUpRight className="h-3 w-3" /> {snapshot?.registrations?.paid || 0}
+                    <ArrowUpRight className="h-3 w-3" /> {snapshot?.totalSubmitted ?? 0}
                   </span>
                   paid entries
                 </p>
@@ -180,8 +172,8 @@ export default function ContestAnalyticsPage() {
                 <Badge className="bg-green-500/10 text-green-500 border-none text-[10px] uppercase font-bold">Revenue</Badge>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-black">₹{parseFloat(snapshot?.revenue?.total || '0').toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Avg. ₹{snapshot?.revenue?.averagePerParticipant || '0'} per head</p>
+                <p className="text-3xl font-black">₹{Number(snapshot?.totalRevenue ?? 0).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Avg. ₹{snapshot?.totalRegistrations ? Math.round(Number(snapshot?.totalRevenue ?? 0) / snapshot.totalRegistrations) : 0} per head</p>
               </div>
             </CardContent>
           </Card>
@@ -195,8 +187,12 @@ export default function ContestAnalyticsPage() {
                 <Badge className="bg-blue-500/10 text-blue-500 border-none text-[10px] uppercase font-bold">Engagement</Badge>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-black">{Math.round((snapshot?.participation?.submissionRate || 0) * 100)}%</p>
-                <p className="text-xs text-muted-foreground">{snapshot?.participation?.totalSubmitted || 0} / {snapshot?.participation?.totalJoined || 0} submissions</p>
+                <p className="text-3xl font-black">
+                  {snapshot?.totalParticipated && snapshot?.totalRegistrations
+                    ? Math.round((snapshot.totalSubmitted / snapshot.totalParticipated) * 100)
+                    : 0}%
+                </p>
+                <p className="text-xs text-muted-foreground">{snapshot?.totalSubmitted ?? 0} / {snapshot?.totalParticipated ?? 0} submissions</p>
               </div>
             </CardContent>
           </Card>
@@ -210,8 +206,8 @@ export default function ContestAnalyticsPage() {
                 <Badge className="bg-amber-500/10 text-amber-500 border-none text-[10px] uppercase font-bold">Avg. Performance</Badge>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-black">{snapshot?.scores?.average || '0.00'}</p>
-                <p className="text-xs text-muted-foreground">Top score: {snapshot?.scores?.highest || '0'}</p>
+                <p className="text-3xl font-black">{snapshot?.avgScore != null ? Number(snapshot.avgScore).toFixed(2) : '—'}</p>
+                <p className="text-xs text-muted-foreground">Top score: {snapshot?.highestScore ?? '—'}</p>
               </div>
             </CardContent>
           </Card>
@@ -285,21 +281,25 @@ export default function ContestAnalyticsPage() {
                       <div className="h-2 w-2 rounded-full bg-green-500" />
                       <span className="text-sm font-semibold">Joined</span>
                     </div>
-                    <span className="text-sm font-bold">{snapshot?.participation?.totalJoined}</span>
+                    <span className="text-sm font-bold">{snapshot?.totalParticipated ?? '—'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <div className="h-2 w-2 rounded-full bg-primary" />
                       <span className="text-sm font-semibold">Submitted</span>
                     </div>
-                    <span className="text-sm font-bold">{snapshot?.participation?.totalSubmitted}</span>
+                    <span className="text-sm font-bold">{snapshot?.totalSubmitted ?? '—'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <div className="h-2 w-2 rounded-full bg-destructive" />
                       <span className="text-sm font-semibold">Absent</span>
                     </div>
-                    <span className="text-sm font-bold">{snapshot?.participation?.totalAbsent}</span>
+                    <span className="text-sm font-bold">
+                      {snapshot?.totalRegistrations != null && snapshot?.totalParticipated != null
+                        ? snapshot.totalRegistrations - snapshot.totalParticipated
+                        : '—'}
+                    </span>
                   </div>
                 </div>
                 <div className="pt-4 border-t border-border/50">
@@ -307,16 +307,16 @@ export default function ContestAnalyticsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 rounded-2xl bg-secondary/30 text-center">
                       <p className="text-xs text-muted-foreground mb-1">Fastest</p>
-                      <p className="text-sm font-bold">{Math.floor((snapshot?.timing?.fastestTimeSecs || 0) / 60)}m</p>
+                      <p className="text-sm font-bold">{Math.floor((snapshot?.fastestTimeSecs ?? 0) / 60)}m</p>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/30 text-center">
                       <p className="text-xs text-muted-foreground mb-1">Slowest</p>
-                      <p className="text-sm font-bold">{Math.floor((snapshot?.timing?.slowestTimeSecs || 0) / 60)}m</p>
+                      <p className="text-sm font-bold">{Math.floor((snapshot?.slowestTimeSecs ?? 0) / 60)}m</p>
                     </div>
                   </div>
                   <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/10 text-center">
                     <p className="text-xs text-muted-foreground mb-1">Average Duration</p>
-                    <p className="text-2xl font-black text-primary">{Math.floor((snapshot?.timing?.averageTimeTakenSecs || 0) / 60)} Minutes</p>
+                    <p className="text-2xl font-black text-primary">{Math.floor((snapshot?.avgTimeTakenSecs ?? 0) / 60)} Minutes</p>
                   </div>
                 </div>
               </CardContent>
@@ -332,18 +332,24 @@ export default function ContestAnalyticsPage() {
               <CardContent className="p-8 relative z-10 space-y-6">
                 <div>
                   <p className="text-xs font-bold text-primary-foreground/70 uppercase tracking-widest mb-1">Qualifying Rate</p>
-                  <p className="text-4xl font-black">{Math.round(((snapshot?.scores?.passingCount || 0) / (snapshot?.participation?.totalSubmitted || 1)) * 100)}%</p>
+                  <p className="text-4xl font-black">
+                    {snapshot?.passingCount != null && snapshot?.totalSubmitted && snapshot.totalSubmitted > 0
+                      ? Math.round((Number(snapshot.passingCount) / snapshot.totalSubmitted) * 100)
+                      : 0}%
+                  </p>
                 </div>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span>Passed</span>
-                    <span>{snapshot?.scores?.passingCount}</span>
+                    <span>{snapshot?.passingCount ?? 0}</span>
                   </div>
-                  <Progress 
-                    value={((snapshot?.scores?.passingCount || 0) / (snapshot?.participation?.totalSubmitted || 1)) * 100} 
-                    className="h-2 bg-white/20"
-                    indicatorClassName="bg-white"
-                  />
+                    <Progress 
+                      value={snapshot?.totalSubmitted && snapshot?.totalRegistrations
+                        ? (snapshot.totalSubmitted / snapshot.totalRegistrations) * 100
+                        : 0}
+                      className="h-2 bg-white/20"
+                      indicatorClassName="bg-white"
+                    />
                   <p className="text-xs text-primary-foreground/60 italic">Based on passing cutoff defined in contest settings</p>
                 </div>
               </CardContent>

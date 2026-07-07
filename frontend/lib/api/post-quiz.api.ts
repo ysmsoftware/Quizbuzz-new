@@ -83,8 +83,23 @@ export const analyticsApi = {
  * Proctoring API
  */
 export const proctoringApi = {
-  getOverview: (contestId: string) =>
-    get<any>(`/proctoring/contests/${contestId}/overview`),
+  getOverview: async (contestId: string) => {
+    const res = await get<any>(`/proctoring/contests/${contestId}/overview`);
+    const raw = res.data || {};
+    // Backend returns: { totalEvents, flaggedParticipants, eventsByType }
+    // Normalise to the shape the UI expects
+    return {
+      ...res,
+      data: {
+        flaggedCount: raw.flaggedParticipants ?? raw.flaggedCount ?? 0,
+        totalViolations: raw.totalEvents ?? raw.totalViolations ?? 0,
+        byType: raw.eventsByType ?? raw.byType ?? {},
+        averageTrustScore: raw.averageTrustScore ?? null,
+        cleanCount: raw.cleanCount ?? null,
+        disqualifiedCount: raw.disqualifiedCount ?? null,
+      }
+    };
+  },
 
   getFlaggedParticipants: (contestId: string, params?: { page?: number; limit?: number; isFlagged?: boolean }) =>
     get<any>(`/proctoring/contests/${contestId}/flagged`, { params }),

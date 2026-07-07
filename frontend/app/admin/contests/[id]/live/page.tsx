@@ -58,8 +58,12 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { cn } from '@/lib/utils';
-import { getContest } from '@/lib/api/contests.api';
-import type { ServerContest } from '@/lib/types';
+import { getContest, getParticipant } from '@/lib/api/contests.api';
+import { SendMessageModal } from '@/components/features/messaging/SendMessageModal';
+import { ParticipantDrawer } from '@/components/features/registrations/ParticipantDrawer';
+import { normalizeRegistration } from '@/lib/hooks/useRegistrations';
+import { deriveContestPhase } from '@/lib/utils/contest';
+import type { Registration, ServerContest } from '@/lib/types';
 
 const STATUS_LABEL: Record<string, string> = {
   waiting: 'Waiting room',
@@ -76,6 +80,15 @@ export default function AdminLiveDashboard() {
   const { admin, activeOrg } = useAuth();
   const [contest, setContest] = useState<ServerContest | null>(null);
   const [timeLeftStr, setTimeLeftStr] = useState<string>('Loading timer...');
+
+  // Participant drawer state
+  const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isLoadingParticipant, setIsLoadingParticipant] = useState(false);
+
+  // Messaging modal state
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [messageModalParticipantIds, setMessageModalParticipantIds] = useState<string[]>([]);
 
   useEffect(() => {
     getContest(contestId).then((res) => {
@@ -213,6 +226,26 @@ export default function AdminLiveDashboard() {
     }
   };
 
+  const handleViewDetails = async (participantId: string) => {
+    setIsDrawerOpen(true);
+    setSelectedRegistration(null);
+    setIsLoadingParticipant(true);
+    try {
+      const res = await getParticipant(contestId, participantId);
+      if (res.success && res.data) {
+        setSelectedRegistration(normalizeRegistration(res.data));
+      } else {
+        toast.error('Failed to load participant details.');
+        setIsDrawerOpen(false);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load participant details.');
+      setIsDrawerOpen(false);
+    } finally {
+      setIsLoadingParticipant(false);
+    }
+  };
+
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const shouldVirtualize = paginatedParticipants.length > 50;
 
@@ -302,11 +335,7 @@ export default function AdminLiveDashboard() {
               className="w-48 rounded-xl border-border/50"
             >
               <DropdownMenuItem
-                onClick={() =>
-                  router.push(
-                    `/admin/contests/${contestId}/participants/${p.participantId}`,
-                  )
-                }
+                onClick={() => handleViewDetails(p.participantId)}
               >
                 <Search className="h-4 w-4 mr-2" />
                 View Details
@@ -337,6 +366,7 @@ export default function AdminLiveDashboard() {
   }
 
   return (
+    <>
     <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="space-y-2">
@@ -740,6 +770,38 @@ export default function AdminLiveDashboard() {
         </WidgetErrorBoundary>
       </div>
     </div>
+
+      {/* PARTICIPANT DETAIL DRAWER */}
+      <ParticipantDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setSelectedRegistration(null);
+        }}
+        registration={selectedRegistration}
+        contest={contest}
+        phase={contest ? deriveContestPhase(contest) : 'LIVE'}
+        isLoading={isLoadingParticipant}
+        onMarkAsPaid={() => {}}
+        onAllowFree={() => {}}
+        onRevoke={(reason) => {
+          if (selectedRegistration) {
+            toast.info(`Revoke requested for ${selectedRegistration.participantDetails?.fullName}. Use the Registrations tab to confirm.`);
+          }
+        }}
+        onSendMessage={(id) => {
+          setMessageModalParticipantIds([id]);
+          setIsMessageModalOpen(true);
+        }}
+      />
+
+      <SendMessageModal
+        open={isMessageModalOpen}
+        onOpenChange={setIsMessageModalOpen}
+        contestId={contestId}
+        selectedParticipantIds={messageModalParticipantIds}
+      />
+    </>
   );
 }
 

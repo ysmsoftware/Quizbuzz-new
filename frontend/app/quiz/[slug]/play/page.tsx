@@ -1,9 +1,13 @@
 "use client";
 
+// ═══════════════════════════════════════════════════════
+// QuizPlayPage — Active Gameplay HUD Screen
+// ═══════════════════════════════════════════════════════
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Send, ChevronRight, SkipForward } from "lucide-react";
+import { Clock, Send, ChevronRight, SkipForward, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -57,8 +61,10 @@ export default function QuizPlayPage() {
     const visitQuestion = useQuizStore((s) => s.visitQuestion);
     const setContestContext = useQuizStore((s) => s.setContestContext);
     const proctoringEnabled = useQuizStore((s) => s.proctoringEnabled);
+    const flagged = useQuizStore((s) => s.flagged);
+    const toggleFlag = useQuizStore((s) => s.toggleFlag);
 
-    const { isFullscreen, setFullscreen } = useProctoringStore();
+    const { isFullscreen, setFullscreen, enterFullscreen } = useProctoringStore();
 
     const [contest, setContest] = useState<any>(null);
     const [contestId, setContestId] = useState<string>(authContestId);
@@ -219,11 +225,6 @@ export default function QuizPlayPage() {
     });
 
     // ─── Proctoring warnings → toast (side position) ─────────────────────────
-    // proctoringEnabled=false only means "no camera module" — behavioral checks
-    // (tab switch, fullscreen exit) still apply and must still be reported.
-    // Camera-dependent warning types never fire in that case (ProctoringManager
-    // skips face detection/audio monitoring upstream), but guard here too in
-    // case a camera-dependent type ever reaches this callback.
     const emitProctoringWarning = useCallback((type: string) => {
         if (!proctoringEnabled && CAMERA_DEPENDENT_WARNING_TYPES.has(type)) return;
 
@@ -268,7 +269,6 @@ export default function QuizPlayPage() {
     );
 
     // ─── Navigation ───────────────────────────────────────────────────────
-    // Next: confirm current answer → move forward
     const handleNext = useCallback(() => {
         if (currentIndex < questions.length - 1) {
             confirmAnswer(currentIndex);
@@ -278,10 +278,8 @@ export default function QuizPlayPage() {
         }
     }, [currentIndex, questions.length, confirmAnswer, setCurrentQuestion, visitQuestion]);
 
-    // Skip: emit null for current question → move forward
     const handleSkip = useCallback(() => {
         if (currentIndex < questions.length - 1) {
-            // Always emit a null answer so the backend tracks the skip
             const question = questions[currentIndex];
             if (question) emitAnswer(question.id, null, null, new Date().toISOString());
             const next = currentIndex + 1;
@@ -291,10 +289,7 @@ export default function QuizPlayPage() {
     }, [currentIndex, questions, emitAnswer, setCurrentQuestion, visitQuestion]);
 
     const handleReturnFullscreen = async () => {
-        try {
-            await document.documentElement.requestFullscreen();
-            setFullscreen(true);
-        } catch { /* ignore */ }
+        await enterFullscreen();
     };
 
     // ─── Submission ────────────────────────────────────────────────────────
@@ -309,7 +304,6 @@ export default function QuizPlayPage() {
         } catch { /* ignore */ }
 
         try {
-            // Always confirm the currently visible question first
             confirmAnswer(currentIndex);
 
             const answersRecord: Record<string, string> = {};
@@ -386,11 +380,18 @@ export default function QuizPlayPage() {
     const currentQuestion = questions[currentIndex];
     const isLastQuestion = currentIndex === questions.length - 1;
     const hasAnswer = answers[currentIndex] !== undefined;
-    // Progress: questions confirmed so far = currentIndex (each Next locks one in)
     const progressPct = Math.round((currentIndex / questions.length) * 100);
 
     return (
-        <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-white">
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#020617] text-slate-100 relative">
+            {/* Ambient background glows */}
+            <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
+            <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-violet-600/10 blur-[150px] pointer-events-none" />
+            <div className="absolute top-[40%] left-[30%] w-[40%] h-[40%] rounded-full bg-fuchsia-500/5 blur-[120px] pointer-events-none" />
+
+            {/* Digital HUD Grid overlay */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-60" />
+
             {/* Proctoring Engine — invisible, no DOM output */}
             <ProctoringManager
                 emitProctoringWarning={emitProctoringWarning}
@@ -402,10 +403,6 @@ export default function QuizPlayPage() {
                 proctoringEnabled={proctoringEnabled}
             />
 
-            {/* Overlays & modals — fullscreen enforcement and the flagged/warning
-                banner track behavioral checks (tab switch, fullscreen exit),
-                which stay active regardless of whether this contest has a
-                camera module, so these are never gated on proctoringEnabled. */}
             <FlaggedBanner />
             <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
             <SubmitConfirmModal
@@ -416,45 +413,56 @@ export default function QuizPlayPage() {
             <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
-            <header className="flex-none h-16 flex items-center justify-between px-4 md:px-8 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl z-40">
+            <header className="flex-none h-16 flex items-center justify-between px-6 md:px-8 border-b border-slate-900/60 bg-slate-950/40 backdrop-blur-xl z-40">
                 {/* Contest title */}
-                <div className="min-w-0 flex-1 mr-4">
-                    <p className="text-xs text-white/40 uppercase tracking-widest font-semibold truncate">
-                        {contest?.title || "Quiz"}
-                    </p>
+                <div className="min-w-0 flex-1 mr-4 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+                        <Shield className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-black leading-none mb-1">
+                            Secure Portal
+                        </p>
+                        <p className="text-sm text-slate-200 font-bold truncate max-w-[150px] sm:max-w-xs leading-none">
+                            {contest?.title || "Quiz"}
+                        </p>
+                    </div>
                 </div>
 
                 {/* Timer */}
                 <div className={cn(
-                    "flex items-center gap-2 px-4 py-1.5 rounded-xl border tabular-nums transition-all duration-300 flex-none",
+                    "flex items-center gap-2 px-3 py-1.5 sm:px-4 rounded-xl border font-mono tabular-nums transition-all duration-300 flex-none shadow-sm",
                     timeRemaining < 300
-                        ? "bg-red-500/10 border-red-500/30 text-red-400 animate-pulse"
-                        : "bg-white/5 border-white/10 text-white",
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
+                        : "bg-indigo-500/5 border-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.05)]",
                 )}>
-                    <Clock className="h-4 w-4 shrink-0 text-orange-500" />
-                    <span className="font-mono text-lg font-bold">{formatTime(timeRemaining)}</span>
+                    <div className={cn(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        timeRemaining < 300 ? "bg-rose-500 animate-pulse" : "bg-indigo-400"
+                    )} />
+                    <span className="text-sm sm:text-base font-black tracking-tight">{formatTime(timeRemaining)}</span>
                 </div>
 
                 {/* Submit */}
                 <Button
-                    className="ml-3 rounded-xl font-bold px-4 h-9 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 border border-orange-400/20 shadow-lg shadow-orange-500/10 flex-none text-sm"
+                    className="ml-3 rounded-xl font-bold px-4 h-9 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border border-indigo-400/20 shadow-lg shadow-indigo-500/20 flex-none text-xs sm:text-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-500/30"
                     onClick={() => setShowSubmitModal(true)}
                 >
-                    <Send className="h-4 w-4 mr-1.5" />
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
                     <span>Submit</span>
                 </Button>
             </header>
 
             {/* ── Progress bar + question counter ─────────────────────────────── */}
-            <div className="flex-none px-4 md:px-8 pt-3 pb-2 bg-slate-950">
+            <div className="flex-none px-6 md:px-8 pt-4 pb-2 bg-transparent z-10">
                 <div className="max-w-2xl mx-auto">
-                    <div className="flex items-center justify-between text-xs text-white/40 font-medium mb-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-1.5">
                         <span>Question {currentIndex + 1} of {questions.length}</span>
-                        <span>{progressPct}% done</span>
+                        <span className="text-indigo-400">{progressPct}% completed</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div className="h-2 w-full rounded-full bg-slate-950/80 border border-slate-900 overflow-hidden p-[1px] shadow-inner">
                         <motion.div
-                            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500"
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"
                             initial={false}
                             animate={{ width: `${progressPct}%` }}
                             transition={{ duration: 0.35, ease: "easeOut" }}
@@ -464,37 +472,50 @@ export default function QuizPlayPage() {
             </div>
 
             {/* ── Main container ─────────────────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+            <div className="flex-1 flex flex-col overflow-hidden bg-transparent z-10">
                 <WidgetErrorBoundary name="Question Player">
                     <main className="flex-1 overflow-y-auto px-4 md:px-8 py-4">
-                        <div className="max-w-2xl mx-auto flex flex-col gap-6">
+                        <div className="max-w-2xl mx-auto flex flex-col gap-6 relative">
                             
                             {/* Widescreen Proctoring Camera Feed — only shown when proctoring is enabled */}
                             {proctoringEnabled && (
-                                <div className="w-full max-w-md mx-auto">
-                                    <div className="relative aspect-[21/9] sm:aspect-[24/9] rounded-2xl overflow-hidden bg-slate-900/60 border border-slate-800 shadow-2xl backdrop-blur-md group">
-                                        <video
-                                            ref={videoRef}
-                                            autoPlay playsInline muted
-                                            className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
-                                        />
+                                <div className="lg:fixed lg:top-24 lg:right-8 lg:w-56 lg:h-36 lg:z-30 w-full relative aspect-[21/9] sm:aspect-[24/9] lg:aspect-video rounded-2xl overflow-hidden bg-slate-950/60 border border-slate-800 shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-indigo-500/40 shrink-0">
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay playsInline muted
+                                        className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
+                                    />
 
-                                        {/* Top overlays */}
-                                        <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-white/90">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping absolute" />
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                            <span>LIVE</span>
-                                        </div>
+                                    {/* Pulsing Scanline overlay using Framer Motion */}
+                                    <motion.div
+                                        className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-rose-500/80 to-transparent shadow-[0_0_8px_rgba(244,63,94,0.8)] pointer-events-none"
+                                        animate={{ top: ["0%", "100%", "0%"] }}
+                                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                    />
 
-                                        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-orange-400">
-                                            <span>PROCTOR ACTIVE</span>
-                                        </div>
+                                    {/* HUD corner markings */}
+                                    <div className="absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-indigo-500/10 rounded-lg flex items-center justify-center">
+                                        {/* Corner highlights */}
+                                        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-indigo-400/40" />
+                                        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-indigo-400/40" />
+                                        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-indigo-400/40" />
+                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-indigo-400/40" />
+                                    </div>
 
-                                        {/* Ambient HUD decorative grid lines */}
-                                        <div className="absolute inset-0 pointer-events-none border border-white/5 rounded-2xl" />
-                                        <div className="absolute bottom-2 left-2 text-[9px] font-mono text-white/40">
-                                            CAM_01 // SECURE_CONTEST
-                                        </div>
+                                    {/* Top overlays */}
+                                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-white/90">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping absolute" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                        <span>REC</span>
+                                    </div>
+
+                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-indigo-400">
+                                        <span>SECURE LINK</span>
+                                    </div>
+
+                                    {/* Ambient HUD decorative text */}
+                                    <div className="absolute bottom-2 left-2 text-[8px] font-mono text-white/40 tracking-wider">
+                                        CAM_01 // ACTIVE_FEED
                                     </div>
                                 </div>
                             )}
@@ -509,8 +530,14 @@ export default function QuizPlayPage() {
                                     transition={{ duration: 0.22, ease: "easeOut" }}
                                     className="flex flex-col gap-6"
                                 >
-                                    <div className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-6 shadow-xl backdrop-blur-sm">
-                                        <QuestionCard question={currentQuestion} questionNumber={currentIndex + 1} />
+                                    <div className="backdrop-blur-xl bg-slate-900/30 border border-slate-800/80 rounded-3xl p-5 md:p-6 shadow-[0_0_50px_-15px_rgba(99,102,241,0.08)] relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500/30 via-violet-500/20 to-transparent" />
+                                        <QuestionCard
+                                            question={currentQuestion}
+                                            questionNumber={currentIndex + 1}
+                                            isFlagged={flagged.includes(currentIndex)}
+                                            onToggleFlag={() => toggleFlag(currentIndex)}
+                                        />
                                     </div>
 
                                     <div className="grid gap-3">
@@ -530,13 +557,12 @@ export default function QuizPlayPage() {
                     </main>
 
                     {/* ── Bottom navigation bar stuck at screen bottom ───────────────── */}
-                    <footer className="flex-none border-t border-white/5 bg-slate-950/90 backdrop-blur-xl py-4 px-4 sm:px-8 z-40">
+                    <footer className="flex-none border-t border-slate-900/60 bg-slate-950/50 backdrop-blur-xl py-4 px-6 md:px-8 z-40">
                         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
                             {isLastQuestion ? (
-                                /* Last question — Submit button only, styled full-width on mobile */
                                 <Button
                                     size="lg"
-                                    className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white border-0 font-bold gap-2 shadow-lg shadow-orange-500/20 text-base"
+                                    className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:brightness-110 text-white font-bold gap-2 border-0 shadow-lg shadow-indigo-500/20 text-base cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
                                     onClick={() => setShowSubmitModal(true)}
                                 >
                                     <Send className="h-4 w-4" />
@@ -544,25 +570,23 @@ export default function QuizPlayPage() {
                                 </Button>
                             ) : (
                                 <>
-                                    {/* Skip: move forward without answering */}
                                     <Button
                                         size="lg"
                                         variant="ghost"
-                                        className="rounded-2xl h-12 px-6 text-white/50 hover:text-white hover:bg-white/5 gap-2 border border-white/10 hover:border-white/20 text-sm"
+                                        className="rounded-2xl h-12 px-6 text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 gap-2 border border-slate-800 hover:border-slate-700 text-sm font-semibold transition-all duration-200 cursor-pointer"
                                         onClick={handleSkip}
                                     >
-                                        <SkipForward className="h-4 w-4" />
+                                        <SkipForward className="h-4 w-4 text-slate-400" />
                                         <span>Skip</span>
                                     </Button>
 
-                                    {/* Next: confirm answer + move forward */}
                                     <Button
                                         size="lg"
                                         className={cn(
-                                            "flex-1 sm:flex-initial rounded-2xl h-12 px-10 font-bold gap-2 border-0 transition-all text-base",
+                                            "flex-1 sm:flex-initial rounded-2xl h-12 px-10 font-bold gap-2 border transition-all text-base cursor-pointer",
                                             hasAnswer
-                                                ? "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/20"
-                                                : "bg-white/10 hover:bg-white/15 text-white",
+                                                ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:brightness-110 text-white shadow-lg shadow-indigo-500/25 border-0 hover:-translate-y-0.5"
+                                                : "bg-slate-900/60 hover:bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-300",
                                         )}
                                         onClick={handleNext}
                                     >

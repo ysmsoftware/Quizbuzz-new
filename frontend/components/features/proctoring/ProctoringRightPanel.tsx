@@ -16,15 +16,30 @@ export function ProctoringRightPanel() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'text-green-500';
+        return 'text-success';
       case 'denied':
-        return 'text-red-500';
+        return 'text-destructive';
       case 'requesting':
-        return 'text-yellow-500';
+        return 'text-warning';
       case 'error':
-        return 'text-red-500';
+        return 'text-destructive';
       default:
-        return 'text-gray-400';
+        return 'text-muted-foreground';
+    }
+  };
+
+  const getStatusBgColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-success';
+      case 'denied':
+        return 'bg-destructive';
+      case 'requesting':
+        return 'bg-warning';
+      case 'error':
+        return 'bg-destructive';
+      default:
+        return 'bg-muted-foreground';
     }
   };
 
@@ -44,47 +59,47 @@ export function ProctoringRightPanel() {
   };
 
   return (
-    <aside className="w-80 border-l border-white/5 bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col p-4 gap-4 overflow-y-auto">
+    <aside className="w-80 border-l border-border/30 bg-card flex flex-col p-4 gap-4 overflow-y-auto">
       {/* Removed Camera Feed from sidebar since it is now in the main top-center view */}
 
       {/* Status Section */}
-      <div className="space-y-3 border-t border-white/5 pt-4">
-        <h3 className="text-sm font-semibold text-white">Monitoring Status</h3>
+      <div className="space-y-3 border-t border-border/30 pt-4">
+        <h3 className="text-sm font-semibold text-foreground">Monitoring Status</h3>
         
         {/* Camera Status */}
-        <div className="space-y-1 p-3 bg-slate-800/30 rounded-lg">
+        <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2">
-            <div className={cn('w-2 h-2 rounded-full', getStatusColor(cameraStatus))} />
-            <span className="text-xs font-medium text-white">Camera</span>
+            <div className={cn('w-2 h-2 rounded-full', getStatusBgColor(cameraStatus))} />
+            <span className="text-xs font-medium text-foreground">Camera</span>
           </div>
-          <p className={cn('text-xs', getStatusColor(cameraStatus))}>
+          <p className={cn('text-xs font-medium', getStatusColor(cameraStatus))}>
             {getStatusLabel(cameraStatus)}
           </p>
         </div>
 
         {/* Connection Status */}
-        <div className="space-y-1 p-3 bg-slate-800/30 rounded-lg">
+        <div className="space-y-1 p-3 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2">
             {isOnline ? (
-              <Wifi className="w-4 h-4 text-green-500" />
+              <Wifi className="w-4 h-4 text-success" />
             ) : (
-              <WifiOff className="w-4 h-4 text-red-500" />
+              <WifiOff className="w-4 h-4 text-destructive" />
             )}
-            <span className="text-xs font-medium text-white">Network</span>
+            <span className="text-xs font-medium text-foreground">Network</span>
           </div>
-          <p className={cn('text-xs', isOnline ? 'text-green-500' : 'text-red-500')}>
+          <p className={cn('text-xs font-medium', isOnline ? 'text-success' : 'text-destructive')}>
             {isOnline ? 'Connected' : 'Offline'}
           </p>
         </div>
 
         {/* Warning Count */}
         {totalWarnings > 0 && (
-          <div className="space-y-1 p-3 bg-red-950/30 rounded-lg border border-red-500/20">
+          <div className="space-y-1 p-3 bg-destructive/10 rounded-lg border border-destructive/20">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500" />
-              <span className="text-xs font-medium text-white">Warnings</span>
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <span className="text-xs font-medium text-foreground">Warnings</span>
             </div>
-            <p className="text-xs text-red-400">
+            <p className="text-xs font-medium text-destructive">
               {totalWarnings} proctoring warning{totalWarnings > 1 ? 's' : ''}
             </p>
           </div>
@@ -92,14 +107,14 @@ export function ProctoringRightPanel() {
       </div>
 
       {/* System Info */}
-      <div className="space-y-2 border-t border-white/5 pt-4 text-xs text-muted-foreground">
+      <div className="space-y-2 border-t border-border/30 pt-4 text-xs text-muted-foreground">
         <div className="flex justify-between">
           <span>Browser</span>
-          <span className="text-white">{typeof window !== 'undefined' ? 'Chrome' : 'N/A'}</span>
+          <span className="text-foreground">{typeof window !== 'undefined' ? 'Chrome' : 'N/A'}</span>
         </div>
         <div className="flex justify-between">
           <span>Screen Size</span>
-          <span className="text-white">Full Screen</span>
+          <span className="text-foreground">Full Screen</span>
         </div>
       </div>
     </aside>

@@ -14,6 +14,7 @@ import {
     Info,
     AlertTriangle,
     X,
+    Sparkles,
 } from "lucide-react";
 import { contestService } from "@/lib/services/contest-service";
 import { useAuthStore } from "@/lib/stores/auth-store";
@@ -207,22 +208,28 @@ export default function WaitingRoomPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0F2040 0%, #0D1117 100%)" }}>
-                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="min-h-screen flex items-center justify-center bg-[#0A0F1D] text-slate-100">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-10 h-10 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
+                    <span className="text-sm font-medium text-slate-400 animate-pulse">Entering Waiting Room...</span>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0F2040 0%, #0D1117 100%)" }}>
+        <div className="min-h-screen bg-[#0A0F1D] text-slate-100 relative overflow-hidden flex flex-col justify-start">
+            {/* Ambient background glows */}
+            <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-600/10 blur-[130px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-violet-600/10 blur-[130px] pointer-events-none" />
 
             {/* ─── Top Bar ──────────────────────────────── */}
-            <header className="fixed top-0 left-0 right-0 z-40 h-[52px] flex items-center justify-between px-4 sm:px-6" style={{ background: "rgba(15,32,64,0.80)", backdropFilter: "blur(12px)" }}>
+            <header className="fixed top-0 left-0 right-0 z-40 h-[56px] flex items-center justify-between px-4 sm:px-6 bg-slate-900/40 border-b border-slate-800/80 backdrop-blur-md">
                 <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-                        <Shield className="w-3.5 h-3.5 text-white/70" />
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <Shield className="w-4 h-4 text-white" />
                     </div>
-                    <span className="text-sm font-semibold text-white/90">QuizBuzz</span>
+                    <span className="text-sm font-bold text-white tracking-tight">QuizBuzz</span>
                 </div>
                 <WSConnectionStatus 
                     status={
@@ -252,21 +259,29 @@ export default function WaitingRoomPage() {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
                         className="fixed inset-0 z-50 flex items-center justify-center"
-                        style={{ background: "rgba(249,115,22,0.98)", backdropFilter: "blur(12px)" }}
+                        style={{ background: "radial-gradient(circle at center, rgba(15, 23, 42, 0.98) 0%, rgba(10, 15, 29, 0.99) 100%)", backdropFilter: "blur(16px)" }}
                     >
-                        <div className="text-center space-y-6">
+                        <div className="text-center space-y-8 max-w-md px-6">
                             <motion.div
-                                initial={{ scale: 0.5 }}
-                                animate={{ scale: 1 }}
+                                initial={{ scale: 0.5, rotate: -10 }}
+                                animate={{ scale: 1, rotate: 0 }}
                                 transition={{ type: "spring", damping: 15 }}
+                                className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center mx-auto shadow-2xl shadow-orange-500/30 border border-orange-400/30"
                             >
-                                <Play className="w-16 h-16 text-white mx-auto mb-2" fill="white" />
+                                <Play className="w-8 h-8 text-white ml-1" fill="white" />
                             </motion.div>
-                            <h2 className="text-2xl sm:text-3xl font-extrabold text-white uppercase tracking-widest">
-                                Contest is starting!
-                            </h2>
+                            
+                            <div className="space-y-3">
+                                <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-200 tracking-tight uppercase">
+                                    Contest is Starting!
+                               </h2>
+                               <p className="text-slate-400 text-sm font-medium">
+                                   Please do not close or refresh this tab.
+                               </p>
+                            </div>
+
                             {startCountdown !== null && (
-                                <div className="h-32 flex items-center justify-center">
+                                <div className="h-40 flex items-center justify-center">
                                     <AnimatePresence mode="wait">
                                         <motion.div
                                             key={startCountdown}
@@ -274,16 +289,18 @@ export default function WaitingRoomPage() {
                                             animate={{ opacity: 1, scale: 1, rotate: 0 }}
                                             exit={{ opacity: 0, scale: 1.5, rotate: 15 }}
                                             transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                                            className="text-7xl sm:text-9xl font-black text-white font-mono drop-shadow-[0_10px_10px_rgba(0,0,0,0.2)]"
+                                            className="text-8xl sm:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-400 to-orange-600 font-mono drop-shadow-[0_10px_20px_rgba(245,158,11,0.2)]"
                                         >
                                             {startCountdown > 0 ? startCountdown : "GO!"}
                                         </motion.div>
                                     </AnimatePresence>
                                 </div>
                             )}
-                            <p className="text-white/80 text-sm font-medium animate-pulse">
-                                Initializing secure proctoring environment...
-                            </p>
+
+                            <div className="flex items-center justify-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider animate-pulse">
+                                <Sparkles className="w-4 h-4" />
+                                <span>Initializing Secure Environment...</span>
+                            </div>
                         </div>
                     </motion.div>
                 )}
@@ -291,87 +308,104 @@ export default function WaitingRoomPage() {
 
             {/* ─── Main Content ─────────────────────────── */}
             <WidgetErrorBoundary name="Waiting Room Details">
-                <main className="flex flex-col items-center pt-24 sm:pt-32 pb-24 px-4">
-                    <div className="px-4 py-1.5 rounded-full border border-white/20 text-white/80 text-sm font-medium mb-6">
+                <main className="flex flex-col items-center pt-24 sm:pt-32 pb-24 px-4 w-full max-w-4xl mx-auto z-10">
+                    <div className="px-4 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-6 flex items-center gap-2 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                         Waiting Room
                     </div>
 
-                    <h1 className="text-2xl sm:text-[32px] font-bold text-white text-center max-w-lg leading-tight mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    <h1 className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-200 text-center max-w-2xl leading-tight mb-2 tracking-tight">
                         {contest?.title || "Quiz"}
                     </h1>
 
-                    <p className="text-white/60 text-sm mb-8">Contest begins in</p>
+                    <p className="text-slate-400 text-sm mb-8 font-medium">Contest begins in</p>
 
                     <CountdownDisplay time={timeToStart} />
 
-                    <div className="mt-8 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <div className="mt-8 flex items-center gap-2.5 bg-slate-900/60 border border-slate-800/80 px-4 py-2 rounded-full shadow-[0_2px_15px_rgba(0,0,0,0.1)] relative">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping absolute left-4" />
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
                         <motion.span
                             key={participantCount}
                             initial={{ opacity: 0.5, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-sm text-white/70"
+                            className="text-sm font-medium text-slate-300"
                         >
-                            {participantCount.toLocaleString()} participants in the waiting room
+                            <strong className="text-emerald-400 font-semibold">{participantCount.toLocaleString()}</strong> participants in the waiting room
                         </motion.span>
                     </div>
 
-                    <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full">
-                        <div className="rounded-2xl p-6" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)" }}>
-                            <div className="flex items-center gap-2 mb-4">
-                                <CheckCircle2 className="w-5 h-5 text-green-400" />
-                                <span className="text-sm font-semibold text-green-400">Verified</span>
+                    <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
+                        {/* Verified Details */}
+                        <div className="backdrop-blur-xl bg-slate-900/40 border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(99,102,241,0.05)] rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/50 via-emerald-400/20 to-transparent" />
+                            <div className="flex items-center gap-2.5 mb-5">
+                                <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                </div>
+                                <span className="text-sm font-bold text-slate-200 uppercase tracking-wider">Verification Details</span>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <InfoField label="Participant ID" value={participantId || "—"} mono />
-                                <InfoField label="Contact" value={maskedContact} />
-                                <InfoField label="Contest" value={contest?.title || "—"} />
+                                <InfoField label="Contact Identifier" value={maskedContact} />
+                                <InfoField label="Quiz Contest" value={contest?.title || "—"} />
                             </div>
                         </div>
 
-                        <div className="rounded-2xl p-6" style={{ background: "rgba(255,255,255,0.08)", backdropFilter: "blur(8px)" }}>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Clock className="w-5 h-5 text-white/60" />
-                                <span className="text-sm font-semibold text-white">What to Expect</span>
+                        {/* What to Expect / Rules */}
+                        <div className="backdrop-blur-xl bg-slate-900/40 border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(99,102,241,0.05)] rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500/50 via-indigo-400/20 to-transparent" />
+                            <div className="flex items-center gap-2.5 mb-5">
+                                <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                                    <Clock className="w-4 h-4 text-indigo-400" />
+                                </div>
+                                <span className="text-sm font-bold text-slate-200 uppercase tracking-wider">What to Expect</span>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <InfoField label="Questions" value={`${contest?.totalQuestions || "—"} questions`} />
-                                <InfoField label="Total Marks" value={`${contest?.totalMarks || "—"}`} />
+                                <InfoField label="Total Marks" value={`${contest?.totalMarks || "—"} marks`} />
                             </div>
 
-                            <div className="mt-4 pt-3 border-t border-white/10">
-                                <p className="text-xs text-white/50 mb-2">Rules</p>
-                                <p className="text-sm text-white/80">• {rules[0]}</p>
-                                {rules.length > 1 && (
-                                    <>
-                                        <AnimatePresence>
-                                            {showAllRules && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: "auto", opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    {rules.slice(1).map((rule: string, i: number) => (
-                                                         <p key={i} className="text-sm text-white/80 mt-1">• {rule}</p>
-                                                     ))}
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAllRules(!showAllRules)}
-                                            className="flex items-center gap-1 text-xs text-white/50 hover:text-white/70 mt-2 transition-colors"
-                                        >
-                                            {showAllRules ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                            {showAllRules ? "Show less" : `View all ${rules.length} rules`}
-                                        </button>
-                                    </>
-                                )}
+                            <div className="mt-5 pt-4 border-t border-slate-800/80">
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Rules & Guidelines</p>
+                                <div className="space-y-2">
+                                    <div className="flex gap-2 text-sm text-slate-300">
+                                        <span className="text-indigo-400 font-bold">•</span>
+                                        <span>{rules[0]}</span>
+                                    </div>
+                                    {rules.length > 1 && (
+                                        <>
+                                            <AnimatePresence>
+                                                {showAllRules && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: "auto", opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="overflow-hidden space-y-2"
+                                                    >
+                                                        {rules.slice(1).map((rule: string, i: number) => (
+                                                             <div key={i} className="flex gap-2 text-sm text-slate-300">
+                                                                 <span className="text-indigo-400 font-bold">•</span>
+                                                                 <span>{rule}</span>
+                                                             </div>
+                                                         ))}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAllRules(!showAllRules)}
+                                                className="flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 mt-3 transition-colors"
+                                            >
+                                                {showAllRules ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                {showAllRules ? "Show less" : `View all ${rules.length} rules`}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
-
                 </main>
             </WidgetErrorBoundary>
         </div>
@@ -387,28 +421,30 @@ function CountdownDisplay({ time }: { time: TimeDiff }) {
     ];
 
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 sm:gap-4 my-6">
             {units.map((unit, i) => (
-                <div key={unit.label} className="flex items-center gap-3">
+                <div key={unit.label} className="flex items-center gap-3 sm:gap-4">
                     <div className="flex flex-col items-center">
-                        <div className="w-[72px] sm:w-20 rounded-xl p-3 sm:p-4 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.08)" }}>
+                        <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center border border-slate-800/80 bg-slate-900/50 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+                            {/* Inner soft glow */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-50 pointer-events-none" />
                             <motion.span
                                 key={`${unit.label}-${unit.value}`}
-                                initial={{ scale: 1.1 }}
-                                animate={{ scale: 1 }}
-                                transition={{ duration: 0.1 }}
-                                className="text-3xl sm:text-[56px] font-bold text-white font-mono leading-none"
+                                initial={{ y: 8, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                                className="text-2xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 font-mono tracking-tight"
                             >
                                 {String(unit.value).padStart(2, "0")}
                             </motion.span>
                         </div>
-                        <span className="text-[10px] text-white/40 uppercase tracking-[0.1em] mt-2 font-medium">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-2.5 font-bold">
                             {unit.label}
                         </span>
                     </div>
 
                     {i < units.length - 1 && (
-                        <span className="text-white/30 text-2xl sm:text-[32px] font-bold self-start mt-3 sm:mt-4">:</span>
+                        <div className="text-slate-700 text-xl sm:text-3xl font-extrabold self-start mt-6 sm:mt-10 animate-pulse">:</div>
                     )}
                 </div>
             ))}
@@ -437,15 +473,21 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
     }, [onDismiss]);
 
     const bgMap = {
-        info: "rgba(29,78,216,0.90)",
-        warning: "rgba(180,83,9,0.90)",
-        urgent: "rgba(185,28,28,0.90)",
+        info: "rgba(30,41,59,0.95)",
+        warning: "rgba(120,53,4,0.95)",
+        urgent: "rgba(153,27,27,0.95)",
     };
 
     const borderMap = {
-        info: "#3B82F6",
-        warning: "#F59E0B",
-        urgent: "#EF4444",
+        info: "border-blue-500/30 text-blue-400",
+        warning: "border-amber-500/30 text-amber-400",
+        urgent: "border-red-500/30 text-red-400",
+    };
+
+    const progressBarMap = {
+        info: "bg-blue-500",
+        warning: "bg-amber-500",
+        urgent: "bg-red-500",
     };
 
     const iconMap = {
@@ -461,20 +503,20 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
             initial={{ y: -60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -60, opacity: 0 }}
-            className="fixed top-[52px] left-0 right-0 z-50"
+            className="fixed top-[56px] left-0 right-0 z-50 px-4 mt-2 max-w-2xl mx-auto"
         >
             <div
-                className="mx-4 mt-2 rounded-lg border p-3 flex items-center gap-3"
-                style={{ background: bgMap[message.type], borderColor: borderMap[message.type] }}
+                className={`backdrop-blur-md rounded-xl border p-3 flex items-center gap-3 shadow-lg ${borderMap[message.type]}`}
+                style={{ background: bgMap[message.type] }}
             >
-                <Icon className="w-5 h-5 text-white flex-shrink-0" />
-                <span className="text-sm text-white flex-1">{message.text}</span>
-                <button type="button" onClick={onDismiss} className="text-white/60 hover:text-white">
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm text-slate-100 flex-1">{message.text}</span>
+                <button type="button" onClick={onDismiss} className="text-white/60 hover:text-white transition-colors">
                     <X className="w-4 h-4" />
                 </button>
             </div>
-            <div className="mx-4 h-[3px] rounded-b-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-                <div className="h-full transition-all duration-100" style={{ width: `${progress}%`, background: borderMap[message.type] }} />
+            <div className="h-[3px] rounded-b-xl overflow-hidden mt-[-3px] mx-[1px]" style={{ background: "rgba(255,255,255,0.05)" }}>
+                <div className={`h-full transition-all duration-100 ${progressBarMap[message.type]}`} style={{ width: `${progress}%` }} />
             </div>
         </motion.div>
     );
@@ -482,9 +524,9 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
 
 function InfoField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
     return (
-        <div>
-            <p className="text-xs text-white/40">{label}</p>
-            <p className={`text-sm text-white/90 ${mono ? "font-mono" : ""}`}>{value}</p>
+        <div className="bg-slate-950/30 border border-slate-800/40 rounded-xl p-3">
+            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1">{label}</p>
+            <p className={`text-sm text-slate-200 font-medium ${mono ? "font-mono text-xs break-all" : ""}`}>{value}</p>
         </div>
     );
 }

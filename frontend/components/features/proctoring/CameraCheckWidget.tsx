@@ -100,9 +100,9 @@ export function CameraCheckWidget({
   if (cameraStatus === 'denied' || cameraStatus === 'error') {
     return (
       <div className="space-y-4">
-        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-8">
-          <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center mb-4">
-            <CameraOff className="w-7 h-7 text-red-500" />
+        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-destructive/30 bg-destructive/5 dark:bg-destructive/10 p-8">
+          <div className="w-14 h-14 rounded-full bg-destructive/10 dark:bg-destructive/20 flex items-center justify-center mb-4">
+            <CameraOff className="w-7 h-7 text-destructive" />
           </div>
           <h3 className="font-semibold text-foreground mb-1">Camera access required</h3>
           <p className="text-sm text-muted-foreground text-center mb-4 max-w-xs">
@@ -227,20 +227,20 @@ function StatusRow({
     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
       {ok ? (
         <>
-          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0" />
           <span className="text-sm font-medium text-foreground">{okText}</span>
         </>
       ) : warning ? (
         <>
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-          <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
+          <span className="text-sm font-medium text-warning">
             {warningText}
           </span>
         </>
       ) : (
         <>
-          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-          <span className="text-sm font-medium text-red-600 dark:text-red-400">
+          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+          <span className="text-sm font-medium text-destructive">
             {errorText}
           </span>
         </>

@@ -124,7 +124,7 @@ export default function ProctoringControlPanel() {
 
   const { data: flaggedData, isLoading: isFlaggedLoading } = useQuery({
     queryKey: ['proctoring-flagged', contestId, { page }],
-    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20, isFlagged: undefined }),
+    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20, isFlagged: true }),
   });
 
   const { detail: proctoringDetail, loading: proctoringLoading } = useParticipantProctoring(
@@ -134,8 +134,10 @@ export default function ProctoringControlPanel() {
   const proctoringEvents = (proctoringDetail as any)?.events || [];
 
   const overview = overviewData?.data as ProctoringOverview | undefined;
-  const flaggedParticipants = (flaggedData?.data?.data || []) as FlaggedParticipant[];
-  const pagination = flaggedData?.data?.pagination;
+  // Backend /flagged endpoint returns: { scores: [...], total: N }
+  const rawFlagged = flaggedData?.data || {};
+  const flaggedParticipants = (rawFlagged.scores || rawFlagged.data || []) as FlaggedParticipant[];
+  const pagination = rawFlagged.pagination ?? (rawFlagged.total != null ? { total: rawFlagged.total, page, limit: 20 } : undefined);
 
 
   const getTrustScoreColor = (score: number) => {
