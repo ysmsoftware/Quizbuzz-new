@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -493,7 +494,7 @@ export default function CreateContestPage() {
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
             {/* Page Header */}
             <div className="flex items-center justify-between">
                 <Link href="/admin/contests" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground">
@@ -509,7 +510,7 @@ export default function CreateContestPage() {
                 <Stepper steps={STEPS} currentStep={currentStep} onStepChange={setCurrentStep} />
 
                 {/* Form Content */}
-                <Card className="border-border/50 shadow-sm">
+                <Card className="border-border/50 shadow-sm rounded-2xl">
                     <CardHeader>
                         <CardTitle>{STEPS[currentStep - 1].title}</CardTitle>
                         <CardDescription>{STEPS[currentStep - 1].description}</CardDescription>
@@ -548,7 +549,9 @@ export default function CreateContestPage() {
                                         onFileSelect={handleBannerSelect}
                                         onClear={handleBannerClear}
                                         preview={form.bannerImage}
-                                        helperText="Drag and drop or click to upload a banner image. Recommended resolution: 1200x400."
+                                        aspectRatio="banner"
+                                        maxSizeMB={5}
+                                        helperText="Recommended: 1200×400px · max 5 MB"
                                     />
                                     {uploadingBanner && (
                                         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 animate-pulse">
@@ -560,24 +563,23 @@ export default function CreateContestPage() {
 
                                 <div>
                                     <label className="text-sm font-semibold mb-1 block">Short Description</label>
-                                    <textarea
+                                    <Textarea
                                         name="description"
                                         placeholder="A brief summary about the contest..."
                                         value={form.description}
                                         onChange={handleChange}
-                                        className="w-full px-3 py-2 border rounded-md text-sm bg-background border-border/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-all"
                                         rows={2}
                                     />
                                 </div>
 
                                 <div>
                                     <label className="text-sm font-semibold mb-1 block">Rich Text Details / Markdown</label>
-                                    <textarea
+                                    <Textarea
                                         name="details"
                                         placeholder="## About this Contest&#10;Describe instructions, syllabus, patterns, rules..."
                                         value={form.details}
                                         onChange={handleChange}
-                                        className="w-full px-3 py-2 border rounded-md text-sm bg-background border-border/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono transition-all"
+                                        className="font-mono"
                                         rows={6}
                                     />
                                 </div>
@@ -777,7 +779,7 @@ export default function CreateContestPage() {
                         {currentStep === 3 && (
                             <div className="space-y-6">
                                 {/* Switch for pricing */}
-                                <div className="flex items-center justify-between p-4 border border-border/50 rounded-lg bg-muted/10">
+                                <div className="flex items-center justify-between p-4 border border-border/50 rounded-2xl bg-muted/10">
                                     <div className="space-y-0.5">
                                         <label className="text-sm font-semibold">Enable Paid Registration</label>
                                         <p className="text-xs text-muted-foreground">Charge participants an entry fee to register.</p>
@@ -792,7 +794,7 @@ export default function CreateContestPage() {
 
                                 {/* Paid Details Fields */}
                                 {form.paymentEnabled && (
-                                    <div className="p-4 border border-border/50 rounded-lg bg-card space-y-4 shadow-inner">
+                                    <div className="p-4 border border-border/50 rounded-2xl bg-card space-y-4">
                                         <h3 className="text-sm font-semibold">Payment Configurations</h3>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -859,13 +861,13 @@ export default function CreateContestPage() {
                                     </div>
 
                                     {form.prizes.length === 0 ? (
-                                        <div className="text-center py-6 border border-dashed rounded-lg text-muted-foreground text-xs">
+                                        <div className="text-center py-6 border-2 border-dashed border-border/50 rounded-2xl text-muted-foreground text-xs">
                                             No prize brackets defined yet. Add brackets if you want to reward winners.
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
                                             {form.prizes.map((prize, idx) => (
-                                                <Card key={idx} className="border-border/60 bg-muted/5 relative">
+                                                <Card key={idx} className="border-border/60 bg-muted/5 relative rounded-2xl overflow-hidden transition-all hover:border-primary/30">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleRemovePrizeBracket(idx)}
@@ -995,7 +997,7 @@ export default function CreateContestPage() {
                                 </div>
 
                                 {/* Shuffling Options */}
-                                <div className="border border-border/50 rounded-lg p-4 bg-muted/10 space-y-3">
+                                <div className="border border-border/50 rounded-2xl p-4 bg-muted/10 space-y-3">
                                     <h3 className="text-sm font-semibold">Quiz Settings</h3>
 
                                     <div className="flex items-center gap-3">
@@ -1026,7 +1028,7 @@ export default function CreateContestPage() {
                                 </div>
 
                                 {/* Proctoring Toggle */}
-                                <div className="flex items-center justify-between rounded-lg border border-border/50 p-4">
+                                <div className="flex items-center justify-between rounded-2xl border border-border/50 p-4">
                                     <div className="space-y-0.5">
                                         <label className="text-sm font-semibold">Enable Proctoring</label>
                                         <p className="text-xs text-muted-foreground">
@@ -1051,6 +1053,7 @@ export default function CreateContestPage() {
                 <div className="flex items-center justify-between gap-4">
                     <Button
                         variant="outline"
+                        className="rounded-xl h-11 border-border/50"
                         onClick={handlePrevious}
                         disabled={currentStep === 1}
                     >
@@ -1065,13 +1068,13 @@ export default function CreateContestPage() {
                         <Button
                             onClick={handleSubmit}
                             disabled={loading}
-                            className="gap-2"
+                            className="rounded-xl h-11 gap-2 shadow-lg shadow-primary/20"
                         >
                             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                             {loading ? 'Creating...' : 'Create Contest'}
                         </Button>
                     ) : (
-                        <Button onClick={handleNext}>
+                        <Button className="rounded-xl h-11" onClick={handleNext}>
                             Next
                         </Button>
                     )}

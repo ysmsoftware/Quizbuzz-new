@@ -28,6 +28,7 @@ export const triggerEvaluationSchema = z.object({
 export const submitSubmissionSchema = z.object({
     participantId: z.string().min(1, "Invalid participant ID"),
     timeTakenSecs: z.number().int().min(0),
+    timeTakenMs: z.number().int().min(0).optional(),
     answers: z.array(
         z.object({
             questionId: z.string().min(1),

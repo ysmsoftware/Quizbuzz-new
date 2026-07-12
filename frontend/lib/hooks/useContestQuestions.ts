@@ -34,6 +34,10 @@ export function useContestQuestions(contestId: string) {
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      // Force an immediate re-fetch so the UI updates without a manual page reload
+      queryClient.refetchQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
     },
   });
 
@@ -67,6 +71,9 @@ export function useContestQuestions(contestId: string) {
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.refetchQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
       toast.success('Question removed from contest');
     },
   });
@@ -128,6 +135,9 @@ export function useContestQuestions(contestId: string) {
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.refetchQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
       toast.success('Question duplicated');
     },
   });
@@ -192,6 +202,9 @@ export function useContestQuestions(contestId: string) {
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.refetchQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
       toast.success('Question created and assigned to contest');
     },
   });
@@ -234,6 +247,9 @@ export function useContestQuestions(contestId: string) {
         queryKey: queryKeys.questions.contestQuestions(contestId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.refetchQueries({
+        queryKey: queryKeys.questions.contestQuestions(contestId),
+      });
       toast.success('Question updated successfully');
     },
   });

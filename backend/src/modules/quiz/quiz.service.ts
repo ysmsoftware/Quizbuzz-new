@@ -399,6 +399,7 @@ export class QuizService {
                     contestId,
                     submittedAt: new Date().toISOString(),
                     timeTakenSecs: 0,
+                    timeTakenMs: 0,
                     source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                     totalQuestions: 0,
                     attempted: 0,
@@ -433,7 +434,8 @@ export class QuizService {
             selectedOptionId: answeredMap[questionId] ?? null,
         }));
 
-        const timeTakenSecs = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
+        const timeTakenMs = Date.now() - new Date(state.startedAt).getTime();
+        const timeTakenSecs = timeTakenMs / 1000;
         const attemptedCount = answersArray.filter(a => a.selectedOptionId !== null).length;
         const jobId = `${participantId}-${contestId}`;
 
@@ -445,6 +447,7 @@ export class QuizService {
                 contestId,
                 submittedAt: new Date().toISOString(),
                 timeTakenSecs,
+                timeTakenMs,
                 source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                 totalQuestions: orderedQuestionIds.length,
                 attempted: attemptedCount,

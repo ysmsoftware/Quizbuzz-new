@@ -1,10 +1,12 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { MotionConfig } from 'framer-motion'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { PostHogProvider } from '@/components/providers/posthog-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { Suspense } from 'react'
 import './globals.css'
 
@@ -18,6 +20,11 @@ export const metadata: Metadata = {
     },
     description: 'Create, manage, and participate in quizzes and contests with real-time proctoring, leaderboards, and comprehensive analytics.',
     keywords: ['quiz', 'contest', 'assessment', 'education', 'proctoring', 'leaderboard'],
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: 'default',
+        title: 'QuizBuzz',
+    },
 }
 
 export const viewport: Viewport = {
@@ -40,16 +47,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 />
             </head>
             <body className="font-sans antialiased bg-background text-foreground">
-                <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-                    <QueryProvider>
-                        <Suspense>
-                            <PostHogProvider>
-                                {children}
-                            </PostHogProvider>
-                        </Suspense>
-                    </QueryProvider>
-                    <Toaster />
-                </ThemeProvider>
+                <MotionConfig reducedMotion="user">
+                    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+                        <QueryProvider>
+                            <Suspense>
+                                <PostHogProvider>
+                                    {children}
+                                </PostHogProvider>
+                            </Suspense>
+                        </QueryProvider>
+                        <Toaster />
+                        <InstallPrompt />
+                    </ThemeProvider>
+                </MotionConfig>
             </body>
         </html>
     )

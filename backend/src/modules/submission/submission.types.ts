@@ -14,6 +14,7 @@ export interface CreateSubmissionInput {
     contestId: string;
     submittedAt: Date;
     timeTakenSecs: number;
+    timeTakenMs?: number | null;
     source: SubmissionSource;
     totalQuestions: number;
     attempted: number;
@@ -61,6 +62,7 @@ export interface SubmissionSummary {
     percentage: number | null;
     isPassed: boolean | null;
     timeTakenSecs: number | null;
+    timeTakenMs: number | null;
     submittedAt: Date | null;
     evaluatedAt: Date | null;
 }
@@ -121,6 +123,7 @@ export interface SubmissionJobPayload {
     contestId: string;
     submittedAt: string;        // ISO string
     timeTakenSecs: number;
+    timeTakenMs?: number;
     source: SubmissionSource;
     totalQuestions: number;
     attempted: number;

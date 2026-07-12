@@ -58,6 +58,12 @@ function validatePayload(payload: SubmissionJobPayload): void {
             `[submission-worker] Invalid timeTakenSecs: ${payload.timeTakenSecs} for participant ${payload.participantId}`
         );
     }
+
+    if (payload.timeTakenMs !== undefined && (typeof payload.timeTakenMs !== "number" || payload.timeTakenMs < 0)) {
+        throw new UnrecoverableError(
+            `[submission-worker] Invalid timeTakenMs: ${payload.timeTakenMs} for participant ${payload.participantId}`
+        );
+    }
 }
 
 // ─── Worker processor ─────────────────────────────────────────────────────────
@@ -84,6 +90,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
         contestId:      payload.contestId,
         submittedAt:    new Date(payload.submittedAt),
         timeTakenSecs:  payload.timeTakenSecs,
+        timeTakenMs:    payload.timeTakenMs ?? (payload.timeTakenSecs * 1000),
         source:         payload.source,
         totalQuestions: payload.totalQuestions,
         attempted:      payload.attempted,

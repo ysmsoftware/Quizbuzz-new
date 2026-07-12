@@ -86,7 +86,7 @@ export const resultsApi = {
         get<LeaderboardResponse>(`/contests/${contestId}/leaderboard`, { params }),
 
     getAdminLeaderboard: (contestId: string, params?: { page?: number; limit?: number }) =>
-        get<LeaderboardResponse>(`/contests/${contestId}/leaderboard`, { params }),
+        get<LeaderboardResponse>(`/contests/${contestId}/admin-leaderboard`, { params }),
 
     /** Re-runs the evaluation pipeline — replaces the non-existent /leaderboard/build endpoint */
     triggerEvaluate: (contestId: string) =>

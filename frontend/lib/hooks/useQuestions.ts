@@ -76,9 +76,13 @@ export function useQuestions(filters?: {
   const autoGenerateMutation = useMutation({
     mutationFn: ({ contestId, body }: { contestId: string; body: questionsApi.AutoGenerateQuestionsInput }) =>
       questionsApi.autoGenerateQuestions(contestId, body),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['questions', 'list'] });
-      queryClient.invalidateQueries({ queryKey: ['contest-questions'] }); // Invalidate contest questions lists too
+      if (variables.contestId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.questions.contestQuestions(variables.contestId),
+        });
+      }
     },
   });
 

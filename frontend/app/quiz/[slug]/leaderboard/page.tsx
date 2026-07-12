@@ -60,7 +60,10 @@ export default function PublicLeaderboardPage() {
   const leaderboard = leaderboardData?.data;
   const entries = leaderboard?.entries || [];
 
-  if (isError) {
+  const RESULTS_VISIBLE_STATUSES = ['RESULTS_OUT', 'COMPLETED'];
+  const showNotDeclared = isError || (contest && !RESULTS_VISIBLE_STATUSES.includes(contest.status));
+
+  if (showNotDeclared) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
         <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center mb-6">
@@ -78,8 +81,13 @@ export default function PublicLeaderboardPage() {
     );
   }
 
-  const topThree = entries.slice(0, 3);
-  const remaining = entries.slice(3);
+  const filteredEntries = entries.filter((entry: any) => {
+    const contact = entry.participant?.contact;
+    const name = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.toLowerCase() : '';
+    const ref = entry.participant?.registrationRef?.toLowerCase() || '';
+    const query = search.toLowerCase();
+    return name.includes(query) || ref.includes(query) || entry.participantId?.toLowerCase().includes(query);
+  });
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -114,89 +122,7 @@ export default function PublicLeaderboardPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 -mt-12 relative z-20 space-y-12">
-        <WidgetErrorBoundary name="Leaderboard Podium">
-          {/* Podium Section */}
-          {entries.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-              {/* Rank 2 */}
-              {topThree[1] && (
-                <Card className="order-2 md:order-1 bg-background/80 backdrop-blur-xl border-border/50 rounded-[2.5rem] shadow-xl overflow-hidden hover:scale-[1.02] transition-all group">
-                  <CardContent className="p-8 pt-12 text-center relative">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-16 rounded-2xl bg-slate-200 flex items-center justify-center rotate-12 group-hover:rotate-0 transition-transform shadow-lg border-4 border-background">
-                      <Medal className="h-8 w-8 text-slate-500" />
-                    </div>
-                    <p className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Silver Medalist</p>
-                    <h3 className="text-2xl font-black mb-1">{topThree[1].participant.contact.firstName} {topThree[1].participant.contact.lastName}</h3>
-                    <p className="text-sm text-muted-foreground font-mono mb-6">{topThree[1].participant.registrationRef}</p>
-                    
-                    <div className="grid grid-cols-2 gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Score</p>
-                        <p className="text-lg font-black">{topThree[1].score}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Accuracy</p>
-                        <p className="text-lg font-black">{topThree[1].percentage}%</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
-              {/* Rank 1 */}
-              {topThree[0] && (
-                <Card className="order-1 md:order-2 bg-background/80 backdrop-blur-xl border-primary/20 rounded-[3rem] shadow-2xl overflow-hidden md:-mt-8 scale-105 hover:scale-[1.07] transition-all group ring-4 ring-primary/5">
-                  <CardContent className="p-10 pt-16 text-center relative">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-20 w-20 rounded-3xl bg-primary flex items-center justify-center -rotate-12 group-hover:rotate-0 transition-transform shadow-2xl border-8 border-background">
-                      <Crown className="h-10 w-10 text-primary-foreground" />
-                    </div>
-                    <p className="text-xs font-black text-primary uppercase tracking-[0.3em] mb-4 flex items-center justify-center gap-2">
-                      <Star className="h-3 w-3 fill-primary" /> Champion <Star className="h-3 w-3 fill-primary" />
-                    </p>
-                    <h3 className="text-3xl font-black mb-1">{topThree[0].participant.contact.firstName} {topThree[0].participant.contact.lastName}</h3>
-                    <p className="text-sm text-muted-foreground font-mono mb-8">{topThree[0].participant.registrationRef}</p>
-                    
-                    <div className="grid grid-cols-2 gap-4 p-6 rounded-[2rem] bg-primary/5 border border-primary/10">
-                      <div>
-                        <p className="text-[10px] text-primary/70 uppercase font-bold tracking-wider">Total Score</p>
-                        <p className="text-2xl font-black text-primary">{topThree[0].score}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-primary/70 uppercase font-bold tracking-wider">Accuracy</p>
-                        <p className="text-2xl font-black text-primary">{topThree[0].percentage}%</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Rank 3 */}
-              {topThree[2] && (
-                <Card className="order-3 bg-background/80 backdrop-blur-xl border-border/50 rounded-[2.5rem] shadow-xl overflow-hidden hover:scale-[1.02] transition-all group">
-                  <CardContent className="p-8 pt-12 text-center relative">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-16 rounded-2xl bg-amber-100 flex items-center justify-center -rotate-12 group-hover:rotate-0 transition-transform shadow-lg border-4 border-background">
-                      <Medal className="h-8 w-8 text-amber-600" />
-                    </div>
-                    <p className="text-xs font-black text-amber-600 uppercase tracking-[0.2em] mb-4">Bronze Medalist</p>
-                    <h3 className="text-2xl font-black mb-1">{topThree[2].participant.contact.firstName} {topThree[2].participant.contact.lastName}</h3>
-                    <p className="text-sm text-muted-foreground font-mono mb-6">{topThree[2].participant.registrationRef}</p>
-                    
-                    <div className="grid grid-cols-2 gap-4 p-4 rounded-3xl bg-amber-50/30 border border-amber-100">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Score</p>
-                        <p className="text-lg font-black">{topThree[2].score}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Accuracy</p>
-                        <p className="text-lg font-black">{topThree[2].percentage}%</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-        </WidgetErrorBoundary>
 
         {/* Main Table Section */}
         <WidgetErrorBoundary name="Rankings Table">
@@ -238,15 +164,18 @@ export default function PublicLeaderboardPage() {
                         <TableCell colSpan={6} className="h-16 bg-secondary/5" />
                       </TableRow>
                     ))
-                  ) : remaining.length === 0 ? (
+                  ) : filteredEntries.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-32 text-center text-muted-foreground italic">
-                        No more rankings to show.
+                        No records found matching search queries.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    remaining.map((entry) => (
-                      <TableRow key={entry.participant.registrationRef} className="hover:bg-secondary/10 transition-colors border-border/20 group">
+                    filteredEntries.map((entry: any) => {
+                      const contact = entry.participant?.contact;
+                      const fullName = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() : '';
+                      return (
+                      <TableRow key={entry.participant?.registrationRef ?? entry.rank} className="hover:bg-secondary/10 transition-colors border-border/20 group">
                         <TableCell className="pl-8">
                           <span className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center text-xs font-black">
                             {entry.rank}
@@ -255,14 +184,14 @@ export default function PublicLeaderboardPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="h-9 w-9 rounded-full bg-primary/5 flex items-center justify-center text-[10px] font-black text-primary">
-                              {entry.participant.contact.firstName[0]}{entry.participant.contact.lastName[0]}
+                              {(contact?.firstName?.[0] || '?').toUpperCase()}{(contact?.lastName?.[0] || '').toUpperCase()}
                             </div>
                             <div>
                               <p className="font-bold text-sm leading-none mb-1">
-                                {entry.participant.contact.firstName} {entry.participant.contact.lastName}
+                                {fullName || 'Unknown Participant'}
                               </p>
                               <p className="text-[10px] text-muted-foreground font-mono">
-                                {entry.participant.registrationRef}
+                                {entry.participant?.registrationRef || 'No Ref'}
                               </p>
                             </div>
                           </div>
@@ -292,7 +221,8 @@ export default function PublicLeaderboardPage() {
                           </Badge>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
