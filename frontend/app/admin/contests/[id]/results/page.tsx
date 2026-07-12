@@ -19,7 +19,8 @@ import {
   ShieldCheck,
   AlertCircle,
   Eye,
-  Activity
+  Activity,
+  Loader2
 } from 'lucide-react';
 import { resultsApi, LeaderboardEntry } from '@/lib/api/results-certs.api';
 import { getContest } from '@/lib/api/contests.api';
@@ -40,6 +41,24 @@ import { cn } from '@/lib/utils';
 import { LeaderboardPodium } from '@/components/features/leaderboard/LeaderboardPodium';
 import { ScoreDistributionChart } from '@/components/features/leaderboard/ScoreDistributionChart';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
+
+function csvCell(value: unknown): string {
+  const str = String(value ?? '');
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function downloadCsv(filename: string, rows: unknown[][]) {
+  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export default function AdminResultsPage() {
   const { id: contestId } = useParams() as { id: string };
@@ -101,13 +120,84 @@ export default function AdminResultsPage() {
     },
   });
 
-  const entries = leaderboardData?.data?.entries || (leaderboardData as any)?.entries || [];
-  const pagination = leaderboardData?.data?.pagination || (leaderboardData as any)?.pagination;
-  const totalEntries = leaderboardData?.data?.totalEntries || (leaderboardData as any)?.totalEntries || pagination?.total || 0;
+  const entries = leaderboardData?.data?.entries || [];
+  const pagination = leaderboardData?.data?.pagination;
+  const totalEntries = leaderboardData?.data?.totalEntries || pagination?.total || 0;
 
-  const handleExportCSV = () => {
-    toast.info('Exporting results as CSV...');
-    // Logic for CSV export would go here
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const [isExportingPrizes, setIsExportingPrizes] = useState(false);
+
+  // Full leaderboard may span more pages than the 50 currently rendered — fetch every
+  // entry in one shot for export so exports never silently omit lower-ranked participants.
+  const fetchFullLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+    if (totalEntries <= entries.length) return entries;
+    const res = await resultsApi.getAdminLeaderboard(contestId, { page: 1, limit: totalEntries });
+    return res.data?.entries || [];
+  };
+
+  const handleExportCSV = async () => {
+    if (totalEntries === 0) {
+      toast.info('There are no ranked entries to export yet.');
+      return;
+    }
+    setIsExportingCsv(true);
+    try {
+      const allEntries = await fetchFullLeaderboard();
+      const rows = [
+        ['Rank', 'First Name', 'Last Name', 'Registration Ref', 'Status', 'Score', 'Percentage'],
+        ...allEntries.map((entry: any) => [
+          entry.rank,
+          entry.participant?.contact?.firstName || '',
+          entry.participant?.contact?.lastName || '',
+          entry.participant?.registrationRef || '',
+          entry.isPassed ? 'PASSED' : 'FAILED',
+          entry.score,
+          entry.percentage,
+        ]),
+      ];
+      downloadCsv(`${contest?.title || 'contest'}-results.csv`, rows);
+      toast.success(`Exported ${allEntries.length} result${allEntries.length === 1 ? '' : 's'} as CSV.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export results.');
+    } finally {
+      setIsExportingCsv(false);
+    }
+  };
+
+  const handleDownloadPrizeList = async () => {
+    const prizes = contest?.prizes || [];
+    if (prizes.length === 0) {
+      toast.info('No prize brackets are configured for this contest.');
+      return;
+    }
+    setIsExportingPrizes(true);
+    try {
+      const allEntries = await fetchFullLeaderboard();
+      const rows = [
+        ['Rank', 'Winner Name', 'Registration Ref', 'Prize Label', 'Amount', 'Currency', 'Benefits'],
+        ...prizes.flatMap((prize) => {
+          const winners = allEntries.filter((entry: any) => entry.rank >= prize.rankFrom && entry.rank <= prize.rankTo);
+          if (winners.length === 0) {
+            return [[`${prize.rankFrom}-${prize.rankTo}`, 'Unclaimed', '', prize.label || '', prize.amount, prize.currency || 'INR', (prize.benefits || []).join('; ')]];
+          }
+          return winners.map((entry: any) => [
+            entry.rank,
+            entry.participant?.contact ? `${entry.participant.contact.firstName || ''} ${entry.participant.contact.lastName || ''}`.trim() : 'Unknown',
+            entry.participant?.registrationRef || '',
+            prize.label || '',
+            prize.amount,
+            prize.currency || 'INR',
+            (prize.benefits || []).join('; '),
+          ]);
+        }),
+      ];
+      downloadCsv(`${contest?.title || 'contest'}-prize-list.csv`, rows);
+      toast.success('Prize list downloaded.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to generate prize list.');
+    } finally {
+      setIsExportingPrizes(false);
+    }
   };
 
   return (
@@ -146,7 +236,7 @@ export default function AdminResultsPage() {
           <Card className="bg-background/50 border-border/50 rounded-3xl overflow-hidden shadow-sm">
             <CardHeader className="p-8 pb-0">
               <CardTitle className="text-xl font-bold flex items-center gap-2">
-                <Crown className="h-5 w-5 text-amber-500" />
+                <Crown className="h-5 w-5 text-accent" />
                 Current Standings Preview
               </CardTitle>
             </CardHeader>
@@ -220,19 +310,19 @@ export default function AdminResultsPage() {
                           </TableCell>
                           <TableCell className="text-center">
                             {entry.isPassed ? (
-                              <Badge className="bg-green-500/10 text-green-500 border-none hover:bg-green-500/20">PASSED</Badge>
+                              <Badge className="bg-success/10 text-success border-none hover:bg-success/20">PASSED</Badge>
                             ) : (
-                              <Badge variant="destructive" className="bg-red-500/10 text-red-500 border-none hover:bg-red-500/20">FAILED</Badge>
+                              <Badge variant="destructive" className="bg-destructive/10 text-destructive border-none hover:bg-destructive/20">FAILED</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-center font-bold">{entry.score}</TableCell>
-                          <TableCell className="text-center font-bold text-green-500">{entry.percentage}%</TableCell>
+                          <TableCell className="text-center font-bold text-success">{entry.percentage}%</TableCell>
                           <TableCell className="text-right pr-6">
                             {entry.id && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10 hover:text-primary"
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="touch-target rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-primary/10 hover:text-primary"
                                 onClick={() => router.push(`/admin/contests/${contestId}/submissions/${entry.id}`)}
                               >
                                 <Eye className="h-4 w-4" />
@@ -256,7 +346,7 @@ export default function AdminResultsPage() {
               <div className="space-y-2">
                 <Badge className="bg-white/20 text-white border-none text-[10px] uppercase font-black tracking-widest">Publishing Status</Badge>
                 <h3 className="text-2xl font-black">Private Mode</h3>
-                <p className="text-primary-foreground/70 text-sm leading-relaxed">
+                <p className="text-primary-foreground/90 text-sm leading-relaxed">
                   Results are currently only visible to admins. Use 'Declare Results' to make them public to participants.
                 </p>
               </div>
@@ -303,12 +393,12 @@ export default function AdminResultsPage() {
               </div>
             </Card>
 
-            <Card className="bg-secondary/20 border-border/50 rounded-2xl p-6 flex items-center justify-between group hover:border-amber-500/30 transition-all">
+            <Card className="bg-secondary/20 border-border/50 rounded-2xl p-6 flex items-center justify-between group hover:border-warning/30 transition-all">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Top Accuracy</p>
                 <p className="text-2xl font-black">{entries[0]?.percentage || 0}%</p>
               </div>
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+              <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center text-warning">
                 <TargetIcon className="h-5 w-5" />
               </div>
             </Card>
@@ -318,14 +408,35 @@ export default function AdminResultsPage() {
           <Card className="bg-background/50 border-border/50 rounded-3xl p-6">
             <CardTitle className="text-sm font-bold uppercase tracking-widest mb-6">Report Center</CardTitle>
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start rounded-xl h-12 border-border/50 hover:bg-secondary/50 group" onClick={handleExportCSV}>
-                <Download className="h-4 w-4 mr-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                Export CSV Report
+              <Button
+                variant="outline"
+                className="w-full justify-start rounded-xl h-12 border-border/50 hover:bg-secondary/50 group"
+                onClick={handleExportCSV}
+                disabled={isExportingCsv || totalEntries === 0}
+              >
+                {isExportingCsv ? (
+                  <Loader2 className="h-4 w-4 mr-3 text-muted-foreground animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                )}
+                {isExportingCsv ? 'Exporting...' : 'Export CSV Report'}
               </Button>
-              <Button variant="outline" className="w-full justify-start rounded-xl h-12 border-border/50 hover:bg-secondary/50 group">
-                <Download className="h-4 w-4 mr-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                Download Prize List
+              <Button
+                variant="outline"
+                className="w-full justify-start rounded-xl h-12 border-border/50 hover:bg-secondary/50 group"
+                onClick={handleDownloadPrizeList}
+                disabled={isExportingPrizes || (contest?.prizes?.length ?? 0) === 0}
+              >
+                {isExportingPrizes ? (
+                  <Loader2 className="h-4 w-4 mr-3 text-muted-foreground animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                )}
+                {isExportingPrizes ? 'Generating...' : 'Download Prize List'}
               </Button>
+              {(contest?.prizes?.length ?? 0) === 0 && (
+                <p className="text-xs text-muted-foreground px-1">No prize brackets configured for this contest.</p>
+              )}
             </div>
           </Card>
         </div>

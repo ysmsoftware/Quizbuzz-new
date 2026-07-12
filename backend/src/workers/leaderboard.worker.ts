@@ -28,6 +28,7 @@ interface ScoredRow {
     percentage: Prisma.Decimal;
     isPassed: boolean | null;
     timeTakenSecs: number | null;
+    timeTakenMs: number | null;
 }
 
 /**
@@ -43,9 +44,9 @@ export function rankRows(
         const scoreDiff = new Prisma.Decimal(b.score).minus(a.score).toNumber();
         if (scoreDiff !== 0) return scoreDiff > 0 ? 1 : -1;
 
-        // Tiebreaker: time ascending (faster = better)
-        const aTime = a.timeTakenSecs ?? Number.MAX_SAFE_INTEGER;
-        const bTime = b.timeTakenSecs ?? Number.MAX_SAFE_INTEGER;
+        // Tiebreaker: time Taken Ms ascending (faster = better)
+        const aTime = a.timeTakenMs ?? Number.MAX_SAFE_INTEGER;
+        const bTime = b.timeTakenMs ?? Number.MAX_SAFE_INTEGER;
         return aTime - bTime;
     });
 

@@ -25,7 +25,9 @@ import {
   Loader2
 } from 'lucide-react';
 import { proctoringApi } from '@/lib/api/post-quiz.api';
-import { 
+import { disqualifyParticipant } from '@/lib/api/contests.api';
+import { Textarea } from '@/components/ui/textarea';
+import {
   Sheet, 
   SheetContent, 
   SheetHeader, 
@@ -114,7 +116,7 @@ export default function ProctoringControlPanel() {
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   
   const [disqualifyParticipantId, setDisqualifyParticipantId] = useState<string | null>(null);
-  const [disqualifyInput, setDisqualifyInput] = useState('');
+  const [disqualifyReason, setDisqualifyReason] = useState('');
 
   // Queries
   const { data: overviewData, isLoading: isOverviewLoading } = useQuery({
@@ -124,7 +126,7 @@ export default function ProctoringControlPanel() {
 
   const { data: flaggedData, isLoading: isFlaggedLoading } = useQuery({
     queryKey: ['proctoring-flagged', contestId, { page }],
-    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20, isFlagged: true }),
+    queryFn: () => proctoringApi.getFlaggedParticipants(contestId, { page, limit: 20, isFlagged: undefined }),
   });
 
   const { detail: proctoringDetail, loading: proctoringLoading } = useParticipantProctoring(
@@ -139,10 +141,23 @@ export default function ProctoringControlPanel() {
   const flaggedParticipants = (rawFlagged.scores || rawFlagged.data || []) as FlaggedParticipant[];
   const pagination = rawFlagged.pagination ?? (rawFlagged.total != null ? { total: rawFlagged.total, page, limit: 20 } : undefined);
 
+  const disqualifyMutation = useMutation({
+    mutationFn: () => disqualifyParticipant(contestId, disqualifyParticipantId as string, disqualifyReason.trim()),
+    onSuccess: () => {
+      toast.success('Participant disqualified successfully.');
+      queryClient.invalidateQueries({ queryKey: ['proctoring-flagged', contestId] });
+      queryClient.invalidateQueries({ queryKey: ['proctoring-overview', contestId] });
+      setDisqualifyParticipantId(null);
+      setDisqualifyReason('');
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to disqualify participant.');
+    },
+  });
 
   const getTrustScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-500 bg-green-500/10 border-green-500/20';
-    if (score >= 70) return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+    if (score >= 90) return 'text-success bg-success/10 border-success/20';
+    if (score >= 70) return 'text-warning bg-warning/10 border-warning/20';
     return 'text-destructive bg-destructive/10 border-destructive/20';
   };
 
@@ -211,26 +226,26 @@ export default function ProctoringControlPanel() {
             </CardContent>
           </Card>
 
-          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden group hover:border-amber-500/30 transition-all">
+          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden group hover:border-warning/30 transition-all">
             <CardContent className="p-6 flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Violations</p>
-                <p className="text-3xl font-extrabold text-amber-500">{overview?.totalViolations || '--'}</p>
+                <p className="text-3xl font-extrabold text-warning">{overview?.totalViolations || '--'}</p>
               </div>
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <AlertTriangle className="h-6 w-6 text-amber-500" />
+              <div className="h-12 w-12 rounded-2xl bg-warning/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <AlertTriangle className="h-6 w-6 text-warning" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden group hover:border-green-500/30 transition-all">
+          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden group hover:border-success/30 transition-all">
             <CardContent className="p-6 flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Clean Status</p>
-                <p className="text-3xl font-extrabold text-green-500">{overview?.cleanCount || '--'}</p>
+                <p className="text-3xl font-extrabold text-success">{overview?.cleanCount || '--'}</p>
               </div>
-              <div className="h-12 w-12 rounded-2xl bg-green-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <UserCheck className="h-6 w-6 text-green-500" />
+              <div className="h-12 w-12 rounded-2xl bg-success/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <UserCheck className="h-6 w-6 text-success" />
               </div>
             </CardContent>
           </Card>
@@ -309,7 +324,7 @@ export default function ProctoringControlPanel() {
                               {p.totalViolations}
                             </Badge>
                             {p.highSeverityCount > 0 && (
-                              <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] h-6 font-bold">
+                              <Badge className="bg-warning/10 text-warning border-warning/20 text-[10px] h-6 font-bold">
                                 {p.highSeverityCount} Critical
                               </Badge>
                             )}
@@ -318,7 +333,7 @@ export default function ProctoringControlPanel() {
                         <TableCell>
                           <div className="flex items-center gap-3 w-32">
                             <Progress value={p.trustScore} className="h-1.5 flex-1" />
-                            <span className={cn("font-bold text-xs shrink-0", p.trustScore < 50 ? "text-destructive" : "text-amber-500")}>
+                            <span className={cn("font-bold text-xs shrink-0", p.trustScore < 50 ? "text-destructive" : "text-warning")}>
                               {p.trustScore}%
                             </span>
                           </div>
@@ -330,17 +345,17 @@ export default function ProctoringControlPanel() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-9 w-9 rounded-lg hover:bg-primary/10 hover:text-primary transition-all opacity-0 group-hover:opacity-100"
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="touch-target rounded-lg hover:bg-primary/10 hover:text-primary transition-all opacity-0 group-hover:opacity-100"
                               onClick={(e) => { e.stopPropagation(); setSelectedParticipantId(p.participantId); }}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="touch-target rounded-lg" onClick={(e) => e.stopPropagation()}>
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -352,7 +367,7 @@ export default function ProctoringControlPanel() {
                                 <DropdownMenuItem className="text-destructive" onClick={(e) => {
                                   e.stopPropagation();
                                   setDisqualifyParticipantId(p.participantId);
-                                  setDisqualifyInput('');
+                                  setDisqualifyReason('');
                                 }}>
                                   <Ban className="h-4 w-4 mr-2" />
                                   Disqualify
@@ -373,7 +388,7 @@ export default function ProctoringControlPanel() {
         {/* Violation Breakdown Sidebar */}
         <div className="space-y-6">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <TrendingDown className="h-5 w-5 text-amber-500" />
+            <TrendingDown className="h-5 w-5 text-warning" />
             Issue Distribution
           </h2>
 
@@ -397,7 +412,7 @@ export default function ProctoringControlPanel() {
                     <ShieldAlert className="h-8 w-8 text-destructive mx-auto opacity-50" />
                     <p className="text-xs text-muted-foreground font-medium">Critical Integrity Risk</p>
                     <p className="text-2xl font-black text-destructive">{overview?.disqualifiedCount || 0} Disqualified</p>
-                    <p className="text-[10px] text-destructive/70 font-bold uppercase tracking-widest">Action Required</p>
+                    <p className="text-[10px] text-destructive font-bold uppercase tracking-widest">Action Required</p>
                   </div>
                 </div>
               </CardContent>
@@ -441,12 +456,12 @@ export default function ProctoringControlPanel() {
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                 ) : proctoringEvents.length === 0 ? (
-                    <div className="p-6 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center justify-center text-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                    <div className="p-6 rounded-xl bg-success/5 border border-success/20 flex flex-col items-center justify-center text-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-success/10 flex items-center justify-center text-success">
                             <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
-                            <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Perfect Integrity</h4>
+                            <h4 className="text-sm font-semibold text-success">Perfect Integrity</h4>
                             <p className="text-xs text-muted-foreground mt-0.5">No proctoring violations recorded for this session.</p>
                         </div>
                     </div>
@@ -465,17 +480,17 @@ export default function ProctoringControlPanel() {
                                         <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Total</span>
                                         <span className="text-base font-extrabold text-foreground mt-0.5">{totalCount}</span>
                                     </div>
-                                    <div className="p-2 rounded-lg border border-red-500/10 bg-red-500/5 flex flex-col items-center justify-center text-center">
-                                        <span className="text-[9px] font-bold text-red-500/80 uppercase tracking-wider block">Severe</span>
-                                        <span className="text-base font-extrabold text-red-600 dark:text-red-400 mt-0.5">{severeCount}</span>
+                                    <div className="p-2 rounded-lg border border-destructive/10 bg-destructive/5 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-destructive uppercase tracking-wider block">Severe</span>
+                                        <span className="text-base font-extrabold text-destructive mt-0.5">{severeCount}</span>
                                     </div>
-                                    <div className="p-2 rounded-lg border border-amber-500/10 bg-amber-500/5 flex flex-col items-center justify-center text-center">
-                                        <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-wider block">Medium</span>
-                                        <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{mediumCount}</span>
+                                    <div className="p-2 rounded-lg border border-warning/10 bg-warning/5 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-warning uppercase tracking-wider block">Medium</span>
+                                        <span className="text-base font-extrabold text-warning mt-0.5">{mediumCount}</span>
                                     </div>
-                                    <div className="p-2 rounded-lg border border-yellow-500/10 bg-yellow-500/5 flex flex-col items-center justify-center text-center">
-                                        <span className="text-[9px] font-bold text-yellow-500/80 uppercase tracking-wider block">Low</span>
-                                        <span className="text-base font-extrabold text-yellow-600 dark:text-yellow-400 mt-0.5">{lowCount}</span>
+                                    <div className="p-2 rounded-lg border border-muted-foreground/10 bg-muted/30 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Low</span>
+                                        <span className="text-base font-extrabold text-muted-foreground mt-0.5">{lowCount}</span>
                                     </div>
                                 </div>
                             );
@@ -489,14 +504,14 @@ export default function ProctoringControlPanel() {
                                     .map((event, idx) => {
                                         const eventTypeClean = event.type.replace("SNAPSHOT_", "").replace(/_/g, " ");
                                         
-                                        let severityColor = "bg-yellow-500";
-                                        let borderColor = "border-yellow-500/20";
+                                        let severityColor = "bg-muted-foreground";
+                                        let borderColor = "border-muted-foreground/20";
                                         if (event.severity === 2) {
-                                            severityColor = "bg-amber-500";
-                                            borderColor = "border-amber-500/20";
+                                            severityColor = "bg-warning";
+                                            borderColor = "border-warning/20";
                                         } else if (event.severity === 3) {
-                                            severityColor = "bg-red-500";
-                                            borderColor = "border-red-500/20";
+                                            severityColor = "bg-destructive";
+                                            borderColor = "border-destructive/20";
                                         }
 
                                         return (
@@ -507,7 +522,7 @@ export default function ProctoringControlPanel() {
                                                 <div className={`p-3 rounded-lg border bg-card hover:bg-muted/10 transition-colors ${borderColor}`}>
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div>
-                                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 block">
+                                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
                                                                 {eventTypeClean}
                                                             </span>
                                                             <span className="text-[10px] text-muted-foreground mt-0.5 block">
@@ -515,9 +530,9 @@ export default function ProctoringControlPanel() {
                                                             </span>
                                                         </div>
                                                         <Badge variant="outline" className={`text-[10px] py-0 h-5 font-normal capitalize ${
-                                                            event.severity === 3 ? 'text-red-500 border-red-500/30' :
-                                                            event.severity === 2 ? 'text-amber-500 border-amber-500/30' :
-                                                            'text-yellow-500 border-yellow-500/30'
+                                                            event.severity === 3 ? 'text-destructive border-destructive/30' :
+                                                            event.severity === 2 ? 'text-warning border-warning/30' :
+                                                            'text-muted-foreground border-muted-foreground/30'
                                                         }`}>
                                                             {event.severity === 3 ? 'high' : event.severity === 2 ? 'medium' : 'low'}
                                                         </Badge>
@@ -546,7 +561,7 @@ export default function ProctoringControlPanel() {
             <Button variant="outline" onClick={() => setSelectedParticipantId(null)}>Close</Button>
             <Button variant="destructive" onClick={() => {
               setDisqualifyParticipantId(selectedParticipantId);
-              setDisqualifyInput('');
+              setDisqualifyReason('');
               setSelectedParticipantId(null);
             }}>
               Disqualify Participant
@@ -578,7 +593,15 @@ export default function ProctoringControlPanel() {
       </Dialog>
 
       {/* Disqualify Confirmation Dialog */}
-      <Dialog open={!!disqualifyParticipantId} onOpenChange={(open) => !open && setDisqualifyParticipantId(null)}>
+      <Dialog
+        open={!!disqualifyParticipantId}
+        onOpenChange={(open) => {
+          if (!open && !disqualifyMutation.isPending) {
+            setDisqualifyParticipantId(null);
+            setDisqualifyReason('');
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive flex items-center gap-2">
@@ -589,33 +612,44 @@ export default function ProctoringControlPanel() {
               This action is permanent and cannot be undone. The participant's score will be invalidated and they will be marked as disqualified.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                Type <strong>confirm</strong> to proceed
+                Reason for disqualification <span className="text-destructive">*</span>
               </label>
-              <Input 
-                value={disqualifyInput}
-                onChange={(e) => setDisqualifyInput(e.target.value)}
-                placeholder="confirm"
-                className="col-span-3"
+              <Textarea
+                value={disqualifyReason}
+                onChange={(e) => setDisqualifyReason(e.target.value)}
+                placeholder="e.g. Detected use of an external device, repeated tab-switching violations..."
+                rows={3}
+                maxLength={500}
+                disabled={disqualifyMutation.isPending}
+                className={cn(disqualifyReason.trim().length > 0 && disqualifyReason.trim().length < 5 ? 'border-destructive focus-visible:ring-destructive' : '')}
               />
+              {disqualifyReason.trim().length > 0 && disqualifyReason.trim().length < 5 ? (
+                <p className="text-xs text-destructive">Reason must be at least 5 characters.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Recorded against this participant's proctoring record.</p>
+              )}
             </div>
           </div>
-          
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDisqualifyParticipantId(null)}>Cancel</Button>
-            <Button 
-              variant="destructive" 
-              disabled={disqualifyInput !== 'confirm'}
-              onClick={() => {
-                toast.success('Participant disqualified successfully.');
-                setDisqualifyParticipantId(null);
-                setDisqualifyInput('');
-              }}
+            <Button variant="outline" onClick={() => setDisqualifyParticipantId(null)} disabled={disqualifyMutation.isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={disqualifyReason.trim().length < 5 || disqualifyMutation.isPending}
+              onClick={() => disqualifyMutation.mutate()}
             >
-              Confirm Disqualification
+              {disqualifyMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Disqualifying...
+                </>
+              ) : (
+                'Confirm Disqualification'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

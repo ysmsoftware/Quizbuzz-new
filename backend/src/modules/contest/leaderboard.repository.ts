@@ -7,6 +7,7 @@ interface ScoredRow {
     percentage: Prisma.Decimal;
     isPassed: boolean | null;
     timeTakenSecs: number | null;
+    timeTakenMs: number | null;
 }
 
 export class LeaderboardRepository {
@@ -27,6 +28,7 @@ export class LeaderboardRepository {
                 percentage: true,
                 isPassed: true,
                 timeTakenSecs: true,
+                timeTakenMs: true,
             },
         }) as unknown as Promise<ScoredRow[]>;
     }
@@ -58,6 +60,7 @@ export class LeaderboardRepository {
                     percentage: r.percentage,
                     isPassed: r.isPassed ?? false,
                     timeTakenSecs: r.timeTakenSecs ?? 0,
+                    timeTakenMs: r.timeTakenMs ?? null,
                     rank: r.rank,
                     isPublished: false,
                 })),

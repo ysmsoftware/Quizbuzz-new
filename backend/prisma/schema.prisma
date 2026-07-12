@@ -549,6 +549,7 @@ model Submission {
   percentage      Decimal?          @db.Decimal(5, 2)
   isPassed        Boolean?
   timeTakenSecs   Int?              // seconds from first question to submit
+  timeTakenMs     Int?
 
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -600,6 +601,7 @@ model LeaderboardEntry {
   score           Decimal   @db.Decimal(8, 2)
   percentage      Decimal   @db.Decimal(5, 2)
   timeTakenSecs   Int
+  timeTakenMs     Int?
   isPassed        Boolean   @default(false)
   prizeId         String?             // resolved prize bracket (nullable — not everyone wins)
   isPublished     Boolean   @default(false)

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -9,7 +9,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Menu, X, ChevronDown, Trophy, BookOpen, Users, HelpCircle } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, BookOpen, Users, HelpCircle, Download } from 'lucide-react';
+import { usePwaStore } from '@/lib/stores/pwa-store';
 
 const navigation = [
     { name: 'Browse Contests', href: '/contests', icon: Trophy },
@@ -19,6 +20,23 @@ const navigation = [
 
 export function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
+    const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+    useEffect(() => {
+        if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+        if (isStandalone) return;
+
+        const ua = window.navigator.userAgent;
+        const isIos = /iPad|iPhone|iPod/.test(ua);
+        const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|mercury/i.test(ua);
+
+        if (deferredPrompt || (isIos && isSafari)) {
+            setShowInstallBtn(true);
+        } else {
+            setShowInstallBtn(false);
+        }
+    }, [deferredPrompt, isStandalone]);
 
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -49,6 +67,17 @@ export function Header() {
 
                 {/* Desktop CTA */}
                 <div className="hidden md:flex md:items-center md:gap-3">
+                    {showInstallBtn && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowInstallPrompt(true)}
+                            className="text-primary font-medium hover:text-primary hover:bg-secondary flex items-center gap-1.5 mr-1"
+                        >
+                            <Download className="h-4 w-4" />
+                            Install App
+                        </Button>
+                    )}
                     <Link href="/login">
                         <Button variant="outline" size="sm">
                             Sign In
@@ -92,6 +121,19 @@ export function Header() {
                             </Link>
                         ))}
                         <div className="mt-4 flex flex-col gap-2 pt-4 border-t border-border/50">
+                            {showInstallBtn && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setMobileMenuOpen(false);
+                                        setShowInstallPrompt(true);
+                                    }}
+                                    className="w-full text-primary border-primary/20 hover:bg-primary/5 flex items-center justify-center gap-1.5"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Install App
+                                </Button>
+                            )}
                             <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                                 <Button variant="outline" className="w-full">
                                     Sign In
@@ -109,3 +151,4 @@ export function Header() {
         </header>
     );
 }
+

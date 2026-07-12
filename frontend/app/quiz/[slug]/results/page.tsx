@@ -26,6 +26,8 @@ import {
     Link2,
     Linkedin,
     Twitter,
+    Instagram,
+    MessageCircle,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -81,6 +83,22 @@ export default function QuizResultsPage() {
     const leaderboard = getLeaderboard() || [];
     const participantResult = results.find(r => r.participantId === verifiedId);
 
+    // Compute total negative marks from breakdown
+    const totalNegativeMarks = participantResult?.breakdown
+        ? participantResult.breakdown.reduce((sum, item) => item.marksObtained < 0 ? sum + Math.abs(item.marksObtained) : sum, 0)
+        : 0;
+
+    const scorePercentage = participantResult
+        ? (participantResult.totalMarks > 0 ? (participantResult.score / participantResult.totalMarks) * 100 : 0)
+        : 0;
+
+    const certUrl = typeof window !== 'undefined' ? `${window.location.origin}/quiz/${slug}/certificate/${verifiedId}` : '';
+    const shareLinks = {
+        linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(certUrl)}`,
+        twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(certUrl)}&text=${encodeURIComponent('I just completed ' + (contest?.title || 'the quiz') + '!')}`,
+        whatsapp: `https://wa.me/?text=${encodeURIComponent(certUrl)}`,
+    };
+
     // Check if participant was absent
     const isAbsent = participantResult && (participantResult as any).breakdown?.length === 0 && participantResult.correctAnswers === 0 && participantResult.wrongAnswers === 0;
 
@@ -109,9 +127,9 @@ export default function QuizResultsPage() {
     };
 
     const getRankBadge = (rank: number) => {
-        if (rank === 1) return { icon: Trophy, color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/20' };
-        if (rank === 2) return { icon: Medal, color: 'text-slate-400', bg: 'bg-slate-400/10 border-slate-400/20' };
-        if (rank === 3) return { icon: Medal, color: 'text-amber-600', bg: 'bg-amber-600/10 border-amber-600/20' };
+        if (rank === 1) return { icon: Trophy, color: 'text-accent', bg: 'bg-accent/10 border-accent/20' };
+        if (rank === 2) return { icon: Medal, color: 'text-muted-foreground', bg: 'bg-muted/50 border-border' };
+        if (rank === 3) return { icon: Medal, color: 'text-warning', bg: 'bg-warning/10 border-warning/20' };
         return { icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/10 border-primary/20' };
     };
 
@@ -151,14 +169,46 @@ export default function QuizResultsPage() {
         );
     }
 
+    // ── Status guard: results are only available once declared ──
+    const RESULTS_VISIBLE_STATUSES: string[] = ['RESULTS_OUT', 'COMPLETED'];
+    if (!RESULTS_VISIBLE_STATUSES.includes(contest.status)) {
+        const statusMessages: Record<string, string> = {
+            DRAFT: 'This contest is still being configured.',
+            PUBLISHED: 'The contest registration is open. Results will be published after the contest ends.',
+            REGISTRATION_CLOSED: 'Registration is closed. The contest has not started yet.',
+            LIVE: 'The contest is currently live! Results will be published after it concludes.',
+            EVALUATION: 'Submissions are being evaluated. Please check back shortly.',
+        };
+        const message = statusMessages[contest.status] ?? 'Results have not been published yet.';
+
+        return (
+            <div className="min-h-screen bg-background flex flex-col justify-between">
+                <PublicHeader />
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="h-24 w-24 rounded-full bg-warning/10 flex items-center justify-center mb-6">
+                        <Clock className="h-12 w-12 text-warning" />
+                    </div>
+                    <h1 className="text-2xl font-black mb-3">Results Not Declared Yet</h1>
+                    <p className="text-muted-foreground max-w-md text-sm leading-relaxed">{message}</p>
+                    <Link href={`/quiz/${slug}`} className="mt-8">
+                        <Button variant="outline" className="rounded-xl h-11 px-6">
+                            Back to Contest Info
+                        </Button>
+                    </Link>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
+
     // Filter leaderboard search
     const filteredLeaderboard = leaderboard.filter(entry =>
         entry.participantName.toLowerCase().includes(leaderboardSearch.toLowerCase()) ||
         entry.participantId.toLowerCase().includes(leaderboardSearch.toLowerCase())
     );
 
-    const topThree = leaderboard.slice(0, 3);
-    const remainingRankings = filteredLeaderboard.filter(e => e.rank > 3);
+    const remainingRankings = filteredLeaderboard;
+
 
     return (
         <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
@@ -288,11 +338,11 @@ export default function QuizResultsPage() {
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                         {/* Primary metrics column */}
                                         <Card className={cn(
-                                            "lg:col-span-2 border-border/40 bg-background/60 backdrop-blur-xl shadow-xl rounded-[2rem] overflow-hidden flex flex-col justify-between",
+                                            "lg:col-span-2 border-border/40 bg-background/60 backdrop-blur-xl shadow-xl rounded-[2rem] overflow-hidden h-fit flex flex-col",
                                             isAbsent && "border-destructive/20 bg-destructive/5"
                                         )}>
                                             <div className="bg-primary/5 p-8 border-b border-border/40 flex flex-col sm:flex-row items-center justify-between gap-6 relative">
-                                                {/* Rank Circle */}
+                                                {/* Rank/Status Header */}
                                                 {!isAbsent ? (
                                                     <div className="flex items-center gap-4">
                                                         <div className={cn(
@@ -427,7 +477,7 @@ export default function QuizResultsPage() {
                                                             </span>
                                                             <span className="text-foreground">{participantResult.wrongAnswers}</span>
                                                         </div>
-                                                        <Progress value={(participantResult.wrongAnswers / participantResult.totalMarks) * 100} className="h-2 bg-secondary animate-pulse" />
+                                                        <Progress value={(participantResult.wrongAnswers / participantResult.totalMarks) * 100} className="h-2 bg-secondary" />
                                                     </div>
 
                                                     {/* Unattempted / Skipped */}
@@ -441,6 +491,15 @@ export default function QuizResultsPage() {
                                                         <Progress value={(participantResult.unattempted / participantResult.totalMarks) * 100} className="h-2 bg-secondary" />
                                                     </div>
                                                 </div>
+
+                                                {totalNegativeMarks > 0 && (
+                                                    <div className="mt-6 p-4 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-start gap-2.5 text-destructive">
+                                                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                        <p className="text-[11px] font-semibold leading-relaxed text-left">
+                                                            This quiz uses negative marking — <strong>{totalNegativeMarks.toFixed(2)}</strong> marks deducted for incorrect answers.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {!isAbsent && (
@@ -452,25 +511,80 @@ export default function QuizResultsPage() {
                                                     ) : certificate?.fileUrl ? (
                                                         <>
                                                             <Button
-                                                                className="w-full rounded-xl h-11 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs uppercase tracking-widest shadow-lg shadow-amber-500/10"
+                                                                className="w-full rounded-xl h-11 bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-xs uppercase tracking-widest shadow-lg shadow-accent/10"
                                                                 asChild
                                                             >
                                                                 <a href={certificate.fileUrl} download target="_blank" rel="noopener noreferrer">
                                                                     <Download className="h-3.5 w-3.5 mr-2" /> Download Certificate
                                                                 </a>
                                                             </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                className="w-full rounded-xl h-11 border-border/50 text-xs font-bold uppercase tracking-widest"
-                                                                onClick={() => {
-                                                                    navigator.clipboard.writeText(
-                                                                        `${window.location.origin}/quiz/${slug}/certificate/${verifiedId}`
-                                                                    );
-                                                                    toast.success('Certificate link copied!');
-                                                                }}
-                                                            >
-                                                                <Share2 className="h-3.5 w-3.5 mr-2" /> Share Certificate
-                                                            </Button>
+                                                            <div className="space-y-2 mt-2">
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center mb-1">
+                                                                    Share Certificate
+                                                                </p>
+                                                                <div className="flex justify-center gap-2">
+                                                                    {/* LinkedIn */}
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="rounded-xl h-11 w-11 border-border/50 hover:bg-[#0077b5]/10 hover:text-[#0077b5] transition-colors"
+                                                                        onClick={() => window.open(shareLinks.linkedin, '_blank', 'noopener,noreferrer')}
+                                                                        title="Share on LinkedIn"
+                                                                    >
+                                                                        <Linkedin className="h-4 w-4" />
+                                                                    </Button>
+
+                                                                    {/* Twitter */}
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="rounded-xl h-11 w-11 border-border/50 hover:bg-[#1da1f2]/10 hover:text-[#1da1f2] transition-colors"
+                                                                        onClick={() => window.open(shareLinks.twitter, '_blank', 'noopener,noreferrer')}
+                                                                        title="Share on Twitter"
+                                                                    >
+                                                                        <Twitter className="h-4 w-4 animate-in" />
+                                                                    </Button>
+
+                                                                    {/* WhatsApp */}
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="rounded-xl h-11 w-11 border-border/50 hover:bg-[#25d366]/10 hover:text-[#25d366] transition-colors"
+                                                                        onClick={() => window.open(shareLinks.whatsapp, '_blank', 'noopener,noreferrer')}
+                                                                        title="Share on WhatsApp"
+                                                                    >
+                                                                        <MessageCircle className="h-4 w-4" />
+                                                                    </Button>
+
+                                                                    {/* Instagram fallback */}
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="rounded-xl h-11 w-11 border-border/50 hover:bg-[#e1306c]/10 hover:text-[#e1306c] transition-colors"
+                                                                        onClick={() => {
+                                                                            navigator.clipboard.writeText(certUrl);
+                                                                            toast.success('Link copied! Paste it in your Instagram story or post.');
+                                                                        }}
+                                                                        title="Copy for Instagram"
+                                                                    >
+                                                                        <Instagram className="h-4 w-4" />
+                                                                    </Button>
+
+                                                                    {/* Copy Link */}
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="rounded-xl h-11 w-11 border-border/50 hover:bg-primary/10 hover:text-primary transition-colors"
+                                                                        onClick={() => {
+                                                                            navigator.clipboard.writeText(certUrl);
+                                                                            toast.success('Certificate link copied!');
+                                                                        }}
+                                                                        title="Copy Link"
+                                                                    >
+                                                                        <Link2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
                                                         </>
                                                     ) : certificate ? (
                                                         <div className="text-center text-xs text-muted-foreground py-2 px-3 rounded-xl bg-secondary/30 border border-border/30">
@@ -539,8 +653,8 @@ export default function QuizResultsPage() {
                                                                             isSkipped && "bg-secondary text-muted-foreground"
                                                                         )}
                                                                     >
-                                                                        {isCorrect && `Correct (+1)`}
-                                                                        {isWrong && `Incorrect (-0.25)`}
+                                                                        {isCorrect && `Correct (+${item.marksObtained})`}
+                                                                        {isWrong && `Incorrect (${item.marksObtained})`}
                                                                         {isSkipped && "Skipped (0)"}
                                                                     </Badge>
                                                                 </div>
@@ -579,87 +693,6 @@ export default function QuizResultsPage() {
                                         )}
 
                                         <TabsContent value="leaderboard" className="space-y-6 animate-in fade-in-50 duration-300">
-                                            {/* Top Podium for Leaderboard */}
-                                            {topThree.length > 0 && (
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end pb-8">
-                                                    {/* Rank 2 */}
-                                                    {topThree[1] && (
-                                                        <Card className="order-2 md:order-1 bg-background/50 backdrop-blur-xl border-border/40 rounded-[2.2rem] shadow-xl overflow-hidden hover:scale-[1.02] transition-all group relative">
-                                                            <CardContent className="p-8 pt-12 text-center relative">
-                                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-14 w-14 rounded-2xl bg-slate-200 flex items-center justify-center rotate-6 group-hover:rotate-0 transition-transform shadow-md border-4 border-background">
-                                                                    <Medal className="h-6 w-6 text-slate-600" />
-                                                                </div>
-                                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Silver Medalist</p>
-                                                                <h3 className="text-xl font-black mb-1 text-foreground leading-none">{topThree[1].participantName}</h3>
-                                                                <p className="text-xs text-muted-foreground font-mono mb-6">{topThree[1].participantId.substring(0, 12)}</p>
-
-                                                                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-secondary/40 border border-border/40 text-sm">
-                                                                    <div>
-                                                                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Score</p>
-                                                                        <p className="text-base font-black text-foreground">{topThree[1].score}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Time</p>
-                                                                        <p className="text-base font-black text-foreground">{topThree[1].timeTaken}</p>
-                                                                    </div>
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    )}
-
-                                                    {/* Rank 1 */}
-                                                    {topThree[0] && (
-                                                        <Card className="order-1 md:order-2 bg-background/80 backdrop-blur-xl border-primary/20 rounded-[2.8rem] shadow-2xl overflow-hidden md:-mt-6 scale-105 hover:scale-[1.07] transition-all group ring-4 ring-primary/5">
-                                                            <CardContent className="p-10 pt-16 text-center relative">
-                                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-18 w-18 rounded-3xl bg-primary flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform shadow-xl border-8 border-background">
-                                                                    <Trophy className="h-8 w-8 text-primary-foreground" />
-                                                                </div>
-                                                                <p className="text-xs font-black text-primary uppercase tracking-[0.25em] mb-4 flex items-center justify-center gap-1.5">
-                                                                    <Sparkles className="h-3 w-3 fill-primary" /> Winner <Sparkles className="h-3 w-3 fill-primary" />
-                                                                </p>
-                                                                <h3 className="text-2xl font-black mb-1 text-foreground leading-none">{topThree[0].participantName}</h3>
-                                                                <p className="text-xs text-muted-foreground font-mono mb-6">{topThree[0].participantId.substring(0, 12)}</p>
-
-                                                                <div className="grid grid-cols-2 gap-4 p-5 rounded-[1.8rem] bg-primary/5 border border-primary/10 text-sm">
-                                                                    <div>
-                                                                        <p className="text-[9px] text-primary/70 uppercase font-bold tracking-wider mb-0.5">Total Score</p>
-                                                                        <p className="text-lg font-black text-primary">{topThree[0].score}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[9px] text-primary/70 uppercase font-bold tracking-wider mb-0.5">Time</p>
-                                                                        <p className="text-lg font-black text-primary">{topThree[0].timeTaken}</p>
-                                                                    </div>
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    )}
-
-                                                    {/* Rank 3 */}
-                                                    {topThree[2] && (
-                                                        <Card className="order-3 bg-background/50 backdrop-blur-xl border-border/40 rounded-[2.2rem] shadow-xl overflow-hidden hover:scale-[1.02] transition-all group relative">
-                                                            <CardContent className="p-8 pt-12 text-center relative">
-                                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 h-14 w-14 rounded-2xl bg-amber-100 flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-transform shadow-md border-4 border-background">
-                                                                    <Medal className="h-6 w-6 text-amber-700" />
-                                                                </div>
-                                                                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-3">Bronze Medalist</p>
-                                                                <h3 className="text-xl font-black mb-1 text-foreground leading-none">{topThree[2].participantName}</h3>
-                                                                <p className="text-xs text-muted-foreground font-mono mb-6">{topThree[2].participantId.substring(0, 12)}</p>
-
-                                                                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-amber-50/20 border border-amber-200/30 text-sm">
-                                                                    <div>
-                                                                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Score</p>
-                                                                        <p className="text-base font-black text-foreground">{topThree[2].score}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Time</p>
-                                                                        <p className="text-base font-black text-foreground">{topThree[2].timeTaken}</p>
-                                                                    </div>
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    )}
-                                                </div>
-                                            )}
 
                                             {/* Main rankings list */}
                                             <div className="space-y-4">
@@ -704,7 +737,7 @@ export default function QuizResultsPage() {
                                                                             key={entry.participantId}
                                                                             className={cn(
                                                                                 "hover:bg-secondary/10 transition-colors border-border/20 group",
-                                                                                isSelf && "bg-primary/5 hover:bg-primary/8 border-l-4 border-l-primary"
+                                                                                isSelf && "bg-primary/5 hover:bg-primary/8"
                                                                             )}
                                                                         >
                                                                             <TableCell className="pl-8">

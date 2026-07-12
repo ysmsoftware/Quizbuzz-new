@@ -535,6 +535,7 @@ export class SubmissionService {
             participantId: input.participantId,
             answers: completeAnswers,
             timeTakenSecs: input.timeTakenSecs,
+            timeTakenMs: input.timeTakenMs ?? (input.timeTakenSecs * 1000),
             submittedAt: new Date(),
             source: "MANUAL",
             totalQuestions,

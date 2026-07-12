@@ -289,7 +289,7 @@ export class ContestController {
                 limit
             );
 
-            res.status(200).json({ success: true, ...result, requestId: req.id });
+            res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }
@@ -313,7 +313,7 @@ export class ContestController {
                 limit
             );
 
-            res.status(200).json({ success: true, ...result, requestId: req.id });
+            res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

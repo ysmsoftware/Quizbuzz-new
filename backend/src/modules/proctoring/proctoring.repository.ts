@@ -10,7 +10,15 @@ export interface IProctoringRepository {
     findEvents(contestId: string, participantId: string): Promise<ProctoringEventRecord[]>;
     findScores(contestId: string, options: ProctoringPaginationOptions): Promise<{ scores: ProctoringScoreRecord[], total: number }>;
     updateScoreStatus(scoreId: string, organizationId: string, isDismissed: boolean): Promise<ProctoringScore>;
-    getContestStats(contestId: string): Promise<{ totalEvents: number, flaggedParticipants: number, eventsByType: any }>;
+    getContestStats(contestId: string): Promise<{
+        totalParticipants: number;
+        flaggedCount: number;
+        disqualifiedCount: number;
+        cleanCount: number;
+        averageTrustScore: number;
+        totalViolations: number;
+        byType: Record<string, number>;
+    }>;
     findScoreById(scoreId: string, organizationId: string): Promise<ProctoringScore | null>;
     findCaptures(contestId: string, participantId: string): Promise<{ id: string; type: string; occurredAt: Date; metadata: any }[]>;
 }
@@ -82,26 +90,67 @@ export class ProctoringRepository implements IProctoringRepository {
         });
     }
 
-    async getContestStats(contestId: string): Promise<{ totalEvents: number, flaggedParticipants: number, eventsByType: any }> {
-        const [totalEvents, flaggedParticipants, eventGroups] = await prisma.$transaction([
+    async getContestStats(contestId: string): Promise<{
+        totalParticipants: number;
+        flaggedCount: number;
+        disqualifiedCount: number;
+        cleanCount: number;
+        averageTrustScore: number;
+        totalViolations: number;
+        byType: Record<string, number>;
+    }> {
+        const [
+            totalEvents,
+            totalParticipants,
+            flaggedCount,
+            disqualifiedCount,
+            eventGroups,
+            scores
+        ] = await prisma.$transaction([
             prisma.proctoringEvent.count({ where: { contestId } }),
+            prisma.participant.count({ where: { contestId } }),
             prisma.proctoringScore.count({ where: { contestId, isFlagged: true } }),
+            prisma.participant.count({ where: { contestId, status: "DISQUALIFIED" } }),
             prisma.proctoringEvent.groupBy({
                 by: ['type'],
                 where: { contestId },
                 _count: { type: true },
                 orderBy: { _count: { type: 'desc' } }
+            }),
+            prisma.proctoringScore.findMany({
+                where: { contestId },
+                select: { trustScore: true }
             })
         ]);
 
-        const eventsByType: Record<string, number> = {};
+        const byType: Record<string, number> = {};
         (eventGroups as any).forEach((g: any) => {
             if (g._count) {
-                eventsByType[g.type] = g._count.type || 0;
+                byType[g.type] = g._count.type || 0;
             }
         });
 
-        return { totalEvents, flaggedParticipants, eventsByType };
+        const scoreRecordsCount = scores.length;
+        const noScoreCount = Math.max(0, totalParticipants - scoreRecordsCount);
+        let sumTrustScore = noScoreCount * 100;
+        for (const s of scores) {
+            sumTrustScore += Number(s.trustScore || 0);
+        }
+        const averageTrustScore = totalParticipants > 0 
+            ? Math.round(sumTrustScore / totalParticipants) 
+            : 100;
+
+        const cleanCount = Math.max(0, totalParticipants - flaggedCount - disqualifiedCount);
+
+        return {
+            totalParticipants,
+            flaggedCount,
+            disqualifiedCount,
+            cleanCount,
+            averageTrustScore,
+            totalViolations: totalEvents,
+            byType
+        };
     }
 
     /**

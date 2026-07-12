@@ -73,6 +73,7 @@ export class SubmissionRepository {
                     status: "SUBMITTED",
                     submittedAt: input.submittedAt,
                     timeTakenSecs: input.timeTakenSecs,
+                    timeTakenMs: input.timeTakenMs ?? null,
                     totalQuestions: input.totalQuestions,
                     attempted: input.attempted,
                     source: input.source,
@@ -362,6 +363,7 @@ export class SubmissionRepository {
             percentage: row.percentage !== null ? Number(row.percentage) : null,
             isPassed: row.isPassed ?? null,
             timeTakenSecs: row.timeTakenSecs ?? null,
+            timeTakenMs: row.timeTakenMs ?? null,
             submittedAt: row.submittedAt ?? null,
             evaluatedAt: row.evaluatedAt ?? null,
         };

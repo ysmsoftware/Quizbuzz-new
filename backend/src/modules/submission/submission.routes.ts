@@ -16,4 +16,4 @@ submissionRouter.get("/admin/contacts/:contactId/submissions",         authentic
 
 // Participant-facing routes
 submissionRouter.post("/:contestId/submit", idempotency, (req, res, next) => ctrl().submit(req, res, next));
-submissionRouter.get("/submission/:participantId",        (req, res, next) => ctrl().getMySubmission(req, res, next));
+submissionRouter.get("/submissions/me/:participantId",    (req, res, next) => ctrl().getMySubmission(req, res, next));

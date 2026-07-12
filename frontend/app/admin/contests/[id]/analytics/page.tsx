@@ -99,16 +99,43 @@ export default function ContestAnalyticsPage() {
   });
 
   // Backend returns: { snapshot: AnalyticsSnapshot | null, live: LiveAnalytics }
-  // The page only renders snapshot data; live data is real-time only.
+  // The page only renders snapshot data; live data supplements when snapshot is null.
   const rawData = snapshotData?.data;
-  const snapshot = (rawData?.snapshot ?? rawData) as AnalyticsSnapshot | undefined;
+  const snapshotRaw = (rawData?.snapshot ?? null) as AnalyticsSnapshot | null;
+  const liveData = rawData?.live as { activeNow: number; totalParticipated: number; totalSubmitted: number } | undefined;
+
+  // Merge live data into snapshot for real-time feel when a snapshot exists,
+  // or build a minimal display object from live data when no snapshot has been computed yet.
+  const snapshot: AnalyticsSnapshot | null = snapshotRaw
+    ? {
+        ...snapshotRaw,
+        totalParticipated: liveData?.totalParticipated ?? snapshotRaw.totalParticipated,
+        totalSubmitted: liveData?.totalSubmitted ?? snapshotRaw.totalSubmitted,
+        activeNow: liveData?.activeNow,
+      }
+    : liveData
+    ? {
+        snapshotAt: new Date().toISOString(),
+        totalRegistrations: 0,
+        totalRevenue: 0,
+        totalParticipated: liveData.totalParticipated,
+        totalSubmitted: liveData.totalSubmitted,
+        avgScore: null,
+        highestScore: null,
+        lowestScore: null,
+        medianScore: null,
+        avgTimeTakenSecs: null,
+        activeNow: liveData.activeNow,
+      }
+    : null;
+
   const distribution = scoreDistribution?.data as ScoreDistribution | undefined;
 
   if (isSnapshotLoading) {
     return (
       <div className="h-[70vh] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center animate-bounce">
+          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center animate-pulse">
             <BarChart3 className="h-6 w-6 text-primary" />
           </div>
           <p className="text-muted-foreground font-medium">Computing analytics snapshot...</p>
@@ -124,7 +151,7 @@ export default function ContestAnalyticsPage() {
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Contest Analytics</h1>
           <p className="text-muted-foreground flex items-center gap-2">
-            Last snapshot: {snapshot?.snapshotAt ? format(new Date(snapshot.snapshotAt), 'MMM dd, HH:mm') : 'Never'}
+            Last snapshot: {snapshotRaw?.snapshotAt ? format(new Date(snapshotRaw.snapshotAt), 'MMM dd, HH:mm') : 'Never'}
             <span className="h-1 w-1 rounded-full bg-border" />
             Automatically updates every 15 minutes
           </p>
@@ -140,6 +167,28 @@ export default function ContestAnalyticsPage() {
         </Button>
       </div>
 
+      {/* No-snapshot banner */}
+      {!snapshotRaw && (
+        <div className="flex items-start gap-4 p-5 rounded-2xl bg-warning/10 border border-warning/20">
+          <div className="h-9 w-9 rounded-xl bg-warning/20 flex items-center justify-center shrink-0">
+            <LayoutDashboard className="h-4 w-4 text-warning" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-warning mb-0.5">No snapshot generated yet</p>
+            <p className="text-xs text-muted-foreground">
+              Analytics snapshots are computed periodically. Click{' '}
+              <button
+                onClick={() => refreshMutation.mutate()}
+                className="font-bold text-primary hover:underline"
+              >
+                Refresh Snapshot
+              </button>{' '}
+              to generate one now. Live participation counts are shown below from real-time data.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* High Level Metrics */}
       <WidgetErrorBoundary name="Analytics Metrics">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -154,7 +203,7 @@ export default function ContestAnalyticsPage() {
               <div className="space-y-1">
                 <p className="text-3xl font-black">{snapshot?.totalRegistrations ?? 0}</p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="text-green-500 font-bold flex items-center">
+                  <span className="text-success font-bold flex items-center">
                     <ArrowUpRight className="h-3 w-3" /> {snapshot?.totalSubmitted ?? 0}
                   </span>
                   paid entries
@@ -163,13 +212,13 @@ export default function ContestAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-green-500/30 transition-all">
+          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-success/30 transition-all">
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform">
+                <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center text-success group-hover:scale-110 transition-transform">
                   <IndianRupee className="h-5 w-5" />
                 </div>
-                <Badge className="bg-green-500/10 text-green-500 border-none text-[10px] uppercase font-bold">Revenue</Badge>
+                <Badge className="bg-success/10 text-success border-none text-[10px] uppercase font-bold">Revenue</Badge>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-black">₹{Number(snapshot?.totalRevenue ?? 0).toLocaleString()}</p>
@@ -178,13 +227,13 @@ export default function ContestAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-blue-500/30 transition-all">
+          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-chart-2/30 transition-all">
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                <div className="h-10 w-10 rounded-xl bg-chart-2/10 flex items-center justify-center text-chart-2 group-hover:scale-110 transition-transform">
                   <Activity className="h-5 w-5" />
                 </div>
-                <Badge className="bg-blue-500/10 text-blue-500 border-none text-[10px] uppercase font-bold">Engagement</Badge>
+                <Badge className="bg-chart-2/10 text-chart-2 border-none text-[10px] uppercase font-bold">Engagement</Badge>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-black">
@@ -197,13 +246,13 @@ export default function ContestAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-amber-500/30 transition-all">
+          <Card className="bg-secondary/20 border-border/50 rounded-2xl overflow-hidden relative group hover:border-warning/30 transition-all">
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center text-warning group-hover:scale-110 transition-transform">
                   <Target className="h-5 w-5" />
                 </div>
-                <Badge className="bg-amber-500/10 text-amber-500 border-none text-[10px] uppercase font-bold">Avg. Performance</Badge>
+                <Badge className="bg-warning/10 text-warning border-none text-[10px] uppercase font-bold">Avg. Performance</Badge>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-black">{snapshot?.avgScore != null ? Number(snapshot.avgScore).toFixed(2) : '—'}</p>
@@ -238,26 +287,34 @@ export default function ContestAnalyticsPage() {
             <CardContent className="p-8 pt-0 h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={distribution?.buckets || []} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
-                  <XAxis 
-                    dataKey="range" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 700, fill: '#888' }} 
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="range"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 700, fill: 'var(--muted-foreground)' }}
                     dy={10}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 700, fill: '#888' }} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fontWeight: 700, fill: 'var(--muted-foreground)' }}
                   />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(0,0,0,0.02)' }}
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', fontSize: '12px', fontWeight: 'bold' }}
+                  <Tooltip
+                    cursor={{ fill: 'var(--muted)' }}
+                    contentStyle={{
+                      borderRadius: '16px',
+                      border: '1px solid var(--border)',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      background: 'var(--popover)',
+                      color: 'var(--popover-foreground)',
+                    }}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={40}>
+                  <Bar dataKey="count" fill="var(--primary)" radius={[8, 8, 0, 0]} barSize={40}>
                     {distribution?.buckets?.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={index === distribution.buckets.length - 1 ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.3)'} />
+                      <Cell key={`cell-${index}`} fill={index === distribution.buckets.length - 1 ? 'var(--primary)' : 'color-mix(in oklch, var(--primary) 30%, transparent)'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -278,7 +335,7 @@ export default function ContestAnalyticsPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      <div className="h-2 w-2 rounded-full bg-success" />
                       <span className="text-sm font-semibold">Joined</span>
                     </div>
                     <span className="text-sm font-bold">{snapshot?.totalParticipated ?? '—'}</span>
@@ -331,7 +388,7 @@ export default function ContestAnalyticsPage() {
               </div>
               <CardContent className="p-8 relative z-10 space-y-6">
                 <div>
-                  <p className="text-xs font-bold text-primary-foreground/70 uppercase tracking-widest mb-1">Qualifying Rate</p>
+                  <p className="text-xs font-bold text-primary-foreground uppercase tracking-widest mb-1">Qualifying Rate</p>
                   <p className="text-4xl font-black">
                     {snapshot?.passingCount != null && snapshot?.totalSubmitted && snapshot.totalSubmitted > 0
                       ? Math.round((Number(snapshot.passingCount) / snapshot.totalSubmitted) * 100)
@@ -350,7 +407,7 @@ export default function ContestAnalyticsPage() {
                       className="h-2 bg-white/20"
                       indicatorClassName="bg-white"
                     />
-                  <p className="text-xs text-primary-foreground/60 italic">Based on passing cutoff defined in contest settings</p>
+                  <p className="text-xs text-primary-foreground/90 italic">Based on passing cutoff defined in contest settings</p>
                 </div>
               </CardContent>
             </Card>

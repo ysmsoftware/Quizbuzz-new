@@ -51,21 +51,21 @@ export class ProctoringService {
             violation,
         );
 
-        // 2. Persist to PostgreSQL (fire-and-forget)
-        this.persistViolationToDB(participantId, contestId, organizationId, violation)
-            .catch((err) => {
-                logger.error(`[proctoring] Failed to persist violation to DB: ${err.message}`);
-            });
+        // 2. Persist to PostgreSQL (wait for write to query HIGH severity counts immediately after)
+        try {
+            await this.persistViolationToDB(participantId, contestId, organizationId, violation);
+        } catch (err: any) {
+            logger.error(`[proctoring] Failed to persist violation to DB: ${err.message}`);
+        }
 
         // 3. Check threshold
         const flagged = totalViolations >= VIOLATION_THRESHOLD;
 
-        if (flagged) {
-            this.flagParticipant(participantId, contestId, organizationId, totalViolations)
-                .catch((err) => {
-                    logger.error(`[proctoring] Failed to flag participant: ${err.message}`);
-                });
-        }
+        // 4. Update proctoring score on every violation
+        this.updateProctoringScore(participantId, contestId, organizationId, totalViolations, flagged)
+            .catch((err) => {
+                logger.error(`[proctoring] Failed to update proctoring score: ${err.message}`);
+            });
 
         return { totalViolations, threshold: VIOLATION_THRESHOLD, flagged };
     }
@@ -122,27 +122,43 @@ export class ProctoringService {
         });
     }
 
-    private async flagParticipant(
+    private async updateProctoringScore(
         participantId: string,
         contestId: string,
         organizationId: string,
         totalViolations: number,
+        isFlagged: boolean,
     ): Promise<void> {
-        await (this.prisma.proctoringScore as any).upsert({
+        const highSeverityCount = await this.prisma.proctoringEvent.count({
+            where: {
+                participantId,
+                contestId,
+                severity: 3, // HIGH Maps to 3
+            },
+        });
+
+        const trustScore = Math.max(0, 100 - totalViolations * 10 - highSeverityCount * 20);
+
+        await this.prisma.proctoringScore.upsert({
             where: {
                 participantId_contestId: { participantId, contestId },
             },
             update: {
-                isFlagged: true,
                 totalViolations,
+                highSeverityCount,
+                trustScore,
+                isFlagged,
+                flaggedAt: isFlagged ? new Date() : null,
             },
             create: {
                 participantId,
                 contestId,
                 organizationId,
-                isFlagged: true,
                 totalViolations,
-                trustScore: 0,
+                highSeverityCount,
+                trustScore,
+                isFlagged,
+                flaggedAt: isFlagged ? new Date() : null,
             },
         });
     }
