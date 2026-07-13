@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
+import { HeroInstallButton, BottomInstallButton, FloatingInstallButton } from '@/components/pwa/LandingInstallButtons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +105,7 @@ export default function HomePage() {
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 </Link>
+                                <HeroInstallButton />
                                 <Link href="/register">
                                     <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
                                         <Lock className="h-5 w-5" />
@@ -282,6 +284,7 @@ export default function HomePage() {
                                         Sign In Now
                                     </Button>
                                 </Link>
+                                <BottomInstallButton />
                                 <Link href="/register">
                                     <Button
                                         size="lg"
@@ -297,6 +300,7 @@ export default function HomePage() {
                 </section>
             </main>
 
+            <FloatingInstallButton />
             <Footer />
         </div>
     );
