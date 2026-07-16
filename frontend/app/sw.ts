@@ -1,4 +1,6 @@
-import { type PrecacheEntry, Serwist } from 'serwist';
+/// <reference lib="webworker" />
+
+import { type PrecacheEntry, Serwist, NetworkOnly, NetworkFirst, StaleWhileRevalidate, CacheFirst, ExpirationPlugin } from 'serwist';
 import { shouldExcludeFromPwa } from '../lib/constants/pwa-excluded-routes';
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -16,22 +18,23 @@ const serwist = new Serwist({
       matcher({ url, request }) {
         return shouldExcludeFromPwa(url, request);
       },
-      handler: 'NetworkOnly',
+      handler: new NetworkOnly(),
     },
     // 2. NetworkFirst for navigation/pages (dashboard, contests, etc.) with a 3-second timeout
     {
       matcher({ request }) {
         return request.mode === 'navigate';
       },
-      handler: 'NetworkFirst',
-      options: {
+      handler: new NetworkFirst({
         cacheName: 'pages-cache',
         networkTimeoutSeconds: 3,
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
-        },
-      },
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 50,
+            maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+          }),
+        ],
+      }),
     },
     // 3. StaleWhileRevalidate for static assets (scripts, stylesheets, fonts)
     {
@@ -43,14 +46,15 @@ const serwist = new Serwist({
           url.pathname.startsWith('/_next/static/')
         );
       },
-      handler: 'StaleWhileRevalidate',
-      options: {
+      handler: new StaleWhileRevalidate({
         cacheName: 'static-assets',
-        expiration: {
-          maxEntries: 150,
-          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-        },
-      },
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 150,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          }),
+        ],
+      }),
     },
     // 4. CacheFirst for public images and PWA icons
     {
@@ -61,14 +65,15 @@ const serwist = new Serwist({
           (url.pathname.startsWith('/public/') && /\.(png|jpg|jpeg|gif|svg|webp|ico)$/i.test(url.pathname))
         );
       },
-      handler: 'CacheFirst',
-      options: {
+      handler: new CacheFirst({
         cacheName: 'images-cache',
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-        },
-      },
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 100,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+          }),
+        ],
+      }),
     },
   ],
   // Fallbacks config: serves /offline when navigation request fails and there is no cache hit
@@ -85,7 +90,7 @@ const serwist = new Serwist({
 });
 
 // Update handling: listen to custom skipWaiting message triggered from frontend toast
-self.addEventListener('message', (event) => {
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
