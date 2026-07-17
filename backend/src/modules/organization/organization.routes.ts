@@ -19,6 +19,7 @@ function ctrl() {
 // Org profile
 organizationRouter.get("/:orgId",                          authenticatedOrgMiddleware, (req, res, next) => ctrl().getOrganization(req, res, next));
 organizationRouter.patch("/:orgId",                        authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganization(req, res, next));
+organizationRouter.patch("/:orgId/profile",                authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganizationProfile(req, res, next));
 
 // Members
 organizationRouter.get("/:orgId/members",                  authenticatedOrgMiddleware, (req, res, next) => ctrl().listMembers(req, res, next));

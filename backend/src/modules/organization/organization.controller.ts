@@ -6,6 +6,7 @@ import {
     inviteMemberSchema,
     updateMemberRoleSchema,
     acceptInviteSchema,
+    updateOrganizationProfileSchema,
 } from "./organization.validator";
 
 export class OrganizationController {
@@ -14,6 +15,46 @@ export class OrganizationController {
         // Thin cross-domain injection: only used for findByEmail in inviteMember.
         private readonly adminRepo: AdminAuthRepository,
     ) { }
+
+    // PATCH /organizations/:orgId/profile
+    updateOrganizationProfile = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const organizationId = req.params.orgId;
+            if (!organizationId) {
+                res.status(400).json({
+                    success: false,
+                    error: { code: "VALIDATION_ERROR", message: "Organization ID is required" },
+                });
+                return;
+            }
+
+            const parsed = updateOrganizationProfileSchema.safeParse(req.body);
+            if (!parsed.success) {
+                res.status(400).json({
+                    success: false,
+                    error: {
+                        code: "VALIDATION_ERROR",
+                        message: (parsed.error as any).errors[0].message,
+                    },
+                });
+                return;
+            }
+
+            // Remove undefined properties to satisfy exactOptionalPropertyTypes
+            const updateData = Object.fromEntries(
+                Object.entries(parsed.data).filter(([_, v]) => v !== undefined)
+            );
+
+            const profile = await this.orgService.updateOrganizationProfile(
+                organizationId as string,
+                req.user!.id,
+                updateData as any,
+            );
+            res.json({ success: true, data: profile });
+        } catch (err) {
+            next(err);
+        }
+    };
 
     // GET /organizations/:orgId
     getOrganization = async (req: Request, res: Response, next: NextFunction) => {

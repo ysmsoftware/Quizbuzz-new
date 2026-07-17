@@ -83,4 +83,9 @@ export const queryKeys = {
   registration: {
     // public endpoints — no auth required
   },
+
+  onboarding: {
+    status: ['onboarding', 'status'],
+    plans:  ['onboarding', 'plans'],
+  },
 } as const;

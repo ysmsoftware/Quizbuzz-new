@@ -21,7 +21,7 @@ export default function SettingsPage() {
 
     const parsed = JSON.parse(userData);
     if (parsed.role === 'admin' || parsed.email.includes('admin')) {
-      router.push('/admin/settings');
+      router.push('/org/settings');
       return;
     }
     setUser(parsed);

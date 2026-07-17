@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
         const parsed = JSON.parse(userData);
         if (parsed.role === 'admin' || parsed.email.includes('admin')) {
-            router.push('/admin');
+            router.push('/org');
             return;
         }
         setUser(parsed);

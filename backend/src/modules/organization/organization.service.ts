@@ -4,8 +4,8 @@ import { MessagingService } from "../messaging/messaging.service";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../error/http-errors";
 import { createSlug } from "../../utils/slug";
 import { config } from "../../config";
-import { InviteMemberDTO, InviteMemberResult, OrgMemberResult, OrgMemberWithOrg, OrgWithMembersResult, OrganizationResult, UpdateOrganizationDTO, } from "./organization.types";
-import { OrgMemberRole } from "@prisma/client";
+import { InviteMemberDTO, InviteMemberResult, OrgMemberResult, OrgMemberWithOrg, OrgWithMembersResult, OrganizationResult, UpdateOrganizationDTO, UpdateOrganizationProfileDTO, } from "./organization.types";
+import { OrgMemberRole, OrganizationProfile } from "@prisma/client";
 import { redis } from "../../config/redis";
 import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
@@ -53,6 +53,7 @@ export class OrganizationService {
                 admin: m.admin,
             })),
             _count: org._count,
+            profile: org.profile,
         };
     }
 
@@ -64,6 +65,18 @@ export class OrganizationService {
         ]);
         const updated = await this.organizationRepo.update(orgId, data);
         return this._toOrganizationResult(updated);
+    }
+
+    async updateOrganizationProfile(
+        orgId: string,
+        requestingAdminId: string,
+        data: UpdateOrganizationProfileDTO
+    ): Promise<OrganizationProfile> {
+        await this._assertRole(requestingAdminId, orgId, [
+            OrgMemberRole.OWNER,
+            OrgMemberRole.ADMIN,
+        ]);
+        return this.organizationRepo.upsertProfile(orgId, data);
     }
 
 

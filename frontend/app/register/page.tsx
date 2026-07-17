@@ -26,7 +26,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (isLoggedIn) {
-      router.push('/admin');
+      router.push('/org');
     }
   }, [isLoggedIn, router]);
 
