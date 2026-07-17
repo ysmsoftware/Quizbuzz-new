@@ -48,6 +48,17 @@ export function useOrganization(orgId: string) {
   });
 
   /**
+   * Update org profile mutation
+   */
+  const updateOrgProfileMutation = useMutation({
+    mutationFn: (body: Record<string, any>) =>
+      orgApi.updateOrgProfile(orgId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.org.detail(orgId) });
+    },
+  });
+
+  /**
    * Invite member mutation
    */
   const inviteMemberMutation = useMutation({
@@ -91,6 +102,7 @@ export function useOrganization(orgId: string) {
 
     // Mutations
     updateOrgMutation,
+    updateOrgProfileMutation,
     inviteMemberMutation,
     changeMemberRoleMutation,
     removeMemberMutation,

@@ -1,4 +1,4 @@
-import { OrgMember, OrgMemberRole, Organization } from "@prisma/client";
+import { OrgMember, OrgMemberRole, Organization, OrganizationProfile } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { OrgMemberWithAdmin, OrgMemberWithOrg } from "./organization.types";
 
@@ -17,7 +17,7 @@ export class OrganizationRepository {
     }
 
     async findByIdWithCounts(id: string): Promise<
-        (Organization & { _count: { members: number; contests: number } }) | null
+        (Organization & { _count: { members: number; contests: number }; profile: OrganizationProfile | null }) | null
     > {
         return prisma.organization.findUnique({
             where: { id, isDeleted: false },
@@ -25,7 +25,16 @@ export class OrganizationRepository {
                 _count: {
                     select: { members: true, contests: true },
                 },
+                profile: true,
             },
+        });
+    }
+
+    async upsertProfile(orgId: string, data: any): Promise<OrganizationProfile> {
+        return prisma.organizationProfile.upsert({
+            where: { organizationId: orgId },
+            create: { organizationId: orgId, ...data },
+            update: data,
         });
     }
 

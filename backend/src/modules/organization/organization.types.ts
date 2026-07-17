@@ -1,4 +1,4 @@
-import { OrgMemberRole } from "@prisma/client";
+import { OrgMemberRole, OrganizationProfile } from "@prisma/client";
 
 // ─── Input DTOs ───────────────────────────────────────────────────────────────
 
@@ -6,6 +6,27 @@ export interface UpdateOrganizationDTO {
     name?: string;
     logoUrl?: string;
     website?: string;
+}
+
+export interface UpdateOrganizationProfileDTO {
+    primaryUseCase?:           string;
+    useCaseOther?:            string;
+    sizeBucket?:               string;
+    expectedContestsPerMonth?: string;
+    expectedParticipants?:     string;
+    heardAboutSource?:         string;
+    heardAboutOther?:          string;
+    primaryContactName?:       string;
+    primaryContactPhone?:      string;
+    primaryContactEmail?:      string;
+    country?:                  string;
+    state?:                    string;
+    city?:                     string;
+    timezone?:                 string;
+    preferredCurrency?:        string;
+    gstNumber?:                string;
+    billingAddress?:           string;
+    marketingOptIn?:           boolean;
 }
 
 export interface InviteMemberDTO {
@@ -51,6 +72,7 @@ export interface OrgWithMembersResult extends OrganizationResult {
         members: number;
         contests: number;
     };
+    profile: OrganizationProfile | null;
 }
 
 export interface InviteMemberResult {

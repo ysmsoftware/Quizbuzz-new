@@ -73,6 +73,7 @@ export class AdminAuthRepository {
                 data: {
                     name: input.orgData.name,
                     slug: input.orgData.slug,
+                    onboardingStep: "IDENTITY", // wizard starts at step 1 for new orgs
                 },
             });
 

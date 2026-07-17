@@ -12,6 +12,7 @@ import { certificateRouter } from "./modules/certificate/certificate.router";
 import { submissionRouter } from "./modules/submission/submission.routes";
 import { proctoringRouter } from "./modules/proctoring/proctoring.routes";
 import { analyticsRouter } from "./modules/analytics/analytics.routes";
+import { onboardingRouter } from "./modules/onboarding/onboarding.routes";
 
 import { authLimiter, analyticsLimiter } from "./middlewares/rate-limit.js";
 import { authenticatedOrgMiddleware } from "./middlewares/authenticated-org.middleware";
@@ -35,6 +36,7 @@ apiRouter.use("/payments", paymentRouter);
 apiRouter.use("/certificates", certificateRouter);
 apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
+apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/queues", authenticatedOrgMiddleware, bullBoardRouter);
 apiRouter.use("/", submissionRouter); // submission routes carry their own full prefixes
 

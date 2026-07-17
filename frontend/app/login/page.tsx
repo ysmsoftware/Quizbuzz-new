@@ -19,7 +19,7 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (isLoggedIn) {
-            router.push('/admin');
+            router.push('/org');
         }
     }, [isLoggedIn, router]);
 

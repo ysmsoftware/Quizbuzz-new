@@ -76,10 +76,10 @@ export const RegisterParticipantSchema = z.object({
 
     firstName: z.string().min(1, "First name is required").max(100),
     lastName: z.string().min(1, "Last name is required").max(100),
-    college: z.string().min(1, "College / Organization is required").max(300),
+    college: z.string().max(300).optional(),
     department: z.string().max(200).optional(),
-    city: z.string().min(1, "City is required").max(100),
-    state: z.string().min(1, "State is required").max(100),
+    city: z.string().max(100).optional(),
+    state: z.string().max(100).optional(),
 });
 
 

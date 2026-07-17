@@ -31,6 +31,16 @@ export async function updateOrg(
 }
 
 /**
+ * PATCH /org/:orgId/profile
+ */
+export async function updateOrgProfile(
+  orgId: string,
+  body: Record<string, any>
+): Promise<ApiResponse> {
+  return patch(`/org/${orgId}/profile`, body);
+}
+
+/**
  * GET /org/:orgId/members
  */
 export async function getOrgMembers(orgId: string): Promise<ApiResponse<any[]>> {

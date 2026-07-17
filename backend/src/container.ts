@@ -37,6 +37,9 @@ import { ProctoringController } from './modules/proctoring/proctoring.controller
 import { AnalyticsRepository } from './modules/analytics/analytics.repository.js';
 import { AnalyticsService } from './modules/analytics/analytics.service.js';
 import { AnalyticsController } from './modules/analytics/analytics.controller.js';
+import { OnboardingRepository } from './modules/onboarding/onboarding.repository.js';
+import { OnboardingService } from './modules/onboarding/onboarding.service.js';
+import { OnboardingController } from './modules/onboarding/onboarding.controller.js';
 
 // Quiz Module
 import { QuizSession } from './modules/quiz/quiz.session.js';
@@ -70,6 +73,7 @@ export const submissionRepository = new SubmissionRepository();
 export const paymentRepository = new PaymentRepository();
 export const proctoringRepository = new ProctoringRepository();
 export const analyticsRepository = new AnalyticsRepository(prisma);
+export const onboardingRepository = new OnboardingRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -86,6 +90,7 @@ export const paymentService = new PaymentService(paymentRepository, razorpay, co
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
 export const quizSession = new QuizSession();
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
+export const onboardingService = new OnboardingService(onboardingRepository);
 export const proctoringService = new ProctoringService(prisma, quizSession);
 export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
@@ -124,4 +129,5 @@ export const participantController = new ParticipantController(participantServic
 export const paymentController = new PaymentController(paymentService);
 export const proctoringController = new ProctoringController(adminProctoringService);
 export const analyticsController = new AnalyticsController(analyticsService);
+export const onboardingController = new OnboardingController(onboardingService);
 export const quizRegistrationController = new QuizRegistrationController(quizRegistrationService, quizAuthService);

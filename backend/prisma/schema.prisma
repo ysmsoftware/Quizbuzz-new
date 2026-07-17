@@ -129,42 +129,102 @@ enum JobStatus {
   DELAYED
 }
 
+enum OnboardingStep {
+  NOT_STARTED   // Default: wizard not yet begun
+  IDENTITY      // Step 1: org identity (logo, website, etc.)
+  USE_CASE      // Step 2: primary use case + org size
+  ATTRIBUTION   // Step 3: how they heard about us
+  CONTACT_LOCALE // Step 4: billing contact, timezone, currency
+  PLAN_SELECTION // Step 5: plan selection (stubbed Free only for now)
+  COMPLETED     // Wizard finished
+}
+
+enum OrgPrimaryUseCase {
+  EDUCATIONAL_INSTITUTION
+  COACHING_INSTITUTE
+  CORPORATE_TRAINING
+  RECRUITMENT_ASSESSMENT
+  INDIVIDUAL_EDUCATOR
+  COMMUNITY_CLUB
+  PERSONAL
+  OTHER
+}
+
+enum OrgSizeBucket {
+  SIZE_1
+  SIZE_2_10
+  SIZE_11_50
+  SIZE_51_200
+  SIZE_200_PLUS
+}
+
+enum ExpectedContestVolume {
+  RANGE_1_4
+  RANGE_5_20
+  RANGE_20_PLUS
+  UNSURE
+}
+
+enum ExpectedParticipantVolume {
+  RANGE_UNDER_100
+  RANGE_100_500
+  RANGE_500_2000
+  RANGE_2000_PLUS
+  UNSURE
+}
+
+enum HeardAboutSource {
+  GOOGLE_SEARCH
+  SOCIAL_MEDIA
+  LINKEDIN
+  WORD_OF_MOUTH
+  REFERRAL
+  ADVERTISEMENT
+  EVENT_CONFERENCE
+  OTHER
+}
+
 // ORGANIZATION & MEMBERS  (multi-tenant root)
 
 model Organization {
-  id          String    @id @default(ulid())
-  name        String
-  slug        String    @unique           // used in URLs: quizbuzz.com/org/my-company
-  logoUrl     String?
-  website     String?
-  isActive    Boolean   @default(true)
-  isDeleted   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                   String         @id @default(ulid())
+  name                 String
+  slug                 String         @unique           // used in URLs: quizbuzz.com/org/my-company
+  logoUrl              String?
+  website              String?
+  isActive             Boolean        @default(true)
+  isDeleted            Boolean        @default(false)
+  onboardingStep       OnboardingStep @default(NOT_STARTED) // current wizard step
+  onboardingCompleted  Boolean        @default(false)       // true once wizard finished
+  onboardingCompletedAt DateTime?                           // when wizard was completed
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   // Relations
-  members     OrgMember[]
-  contests    Contest[]
-  contacts    Contact[]
-  prizes      Prize[]
-  questionOptions QuestionOption[]
-  contestQuestions ContestQuestion[]
-  participants Participant[]
-  payments    Payment[]
-  quizSessions QuizSession[]
-  submissions Submission[]
-  answers     Answer[]
-  leaderboard LeaderboardEntry[]
-  certificates Certificate[]
-  proctoringEvents ProctoringEvent[]
-  proctoringScores ProctoringScore[]
-  messageLogs MessageLog[]
-  scheduledJobs ScheduledJob[]
-  analyticsSnapshots ContestAnalyticsSnapshot[]
-  exportLogs  ExportLog[]
+  profile              OrganizationProfile?
+  members              OrgMember[]
+  contests             Contest[]
+  contacts             Contact[]
+  prizes               Prize[]
+  questionOptions      QuestionOption[]
+  contestQuestions     ContestQuestion[]
+  participants         Participant[]
+  payments             Payment[]
+  quizSessions         QuizSession[]
+  submissions          Submission[]
+  answers              Answer[]
+  leaderboard          LeaderboardEntry[]
+  certificates         Certificate[]
+  proctoringEvents     ProctoringEvent[]
+  proctoringScores     ProctoringScore[]
+  messageLogs          MessageLog[]
+  scheduledJobs        ScheduledJob[]
+  analyticsSnapshots   ContestAnalyticsSnapshot[]
+  exportLogs           ExportLog[]
 
   @@index([slug])
   @@index([isActive, isDeleted])
+  @@index([onboardingCompleted])   // ops-dashboard funnel queries
   @@map("organizations")
 }
 
@@ -827,4 +887,40 @@ model ExportLog {
   @@index([contestId])
   @@index([adminId])
   @@map("export_logs")
+}
+
+// ORGANIZATION ONBOARDING PROFILE
+// Captures enrichment data collected during the post-signup wizard.
+// Stored separately to keep the hot-path Organization row lean.
+
+model OrganizationProfile {
+  id                       String                    @id @default(ulid())
+  organizationId           String                    @unique
+  primaryUseCase           OrgPrimaryUseCase?
+  useCaseOther             String?                   // filled when primaryUseCase = OTHER
+  sizeBucket               OrgSizeBucket?
+  expectedContestsPerMonth ExpectedContestVolume     @default(UNSURE)
+  expectedParticipants     ExpectedParticipantVolume @default(UNSURE)
+  heardAboutSource         HeardAboutSource?
+  heardAboutOther          String?                   // filled when heardAboutSource = OTHER
+  primaryContactName       String?
+  primaryContactPhone      String?
+  primaryContactEmail      String?
+  country                  String?
+  state                    String?
+  city                     String?
+  timezone                 String?
+  preferredCurrency        String                    @default("INR")
+  gstNumber                String?
+  billingAddress           String?
+  marketingOptIn           Boolean                   @default(false)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+
+  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([primaryUseCase])
+  @@index([sizeBucket])
+  @@index([heardAboutSource])
+  @@map("organization_profiles")
 }
