@@ -189,14 +189,17 @@ enum HeardAboutSource {
 model Organization {
   id                   String         @id @default(ulid())
   name                 String
-  slug                 String         @unique           // used in URLs: quizbuzz.com/org/my-company
+  slug                 String         @unique
   logoUrl              String?
   website              String?
   isActive             Boolean        @default(true)
   isDeleted            Boolean        @default(false)
-  onboardingStep       OnboardingStep @default(NOT_STARTED) // current wizard step
-  onboardingCompleted  Boolean        @default(false)       // true once wizard finished
-  onboardingCompletedAt DateTime?                           // when wizard was completed
+  onboardingStep       OnboardingStep @default(NOT_STARTED)
+  onboardingCompleted  Boolean        @default(false)
+  onboardingCompletedAt DateTime?
+  planSlug              String?
+  planStaus             String?
+  planLimitsCache     Json?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 

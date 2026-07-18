@@ -28,12 +28,9 @@ export class QuizRegistrationController {
     constructor(
         private readonly service: QuizRegistrationService,
         private readonly quizAuthService: QuizAuthService,
-    ) {}
+    ) { }
 
-    /**
-     * POST /auth/quiz/request-otp
-     * Public — no auth required.
-     */
+
     requestOtp = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { email } = RequestOtpSchema.parse(req.body);
@@ -49,11 +46,6 @@ export class QuizRegistrationController {
         }
     };
 
-    /**
-     * POST /auth/quiz/verify-otp
-     * Public — no auth required.
-     * Returns a contactToken (for the registration flow, Wave 4).
-     */
     verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { email, otp } = VerifyOtpSchema.parse(req.body);
@@ -69,13 +61,13 @@ export class QuizRegistrationController {
             // Map domain errors to clean HTTP responses
             if (err instanceof RegistrationAuthError) {
                 const statusMap: Record<string, number> = {
-                    OTP_EXPIRED:      400,
-                    OTP_INVALID:      400,
+                    OTP_EXPIRED: 400,
+                    OTP_INVALID: 400,
                     OTP_MAX_ATTEMPTS: 429,
                 };
                 res.status(statusMap[err.code] ?? 400).json({
                     success: false,
-                    code:    err.code,
+                    code: err.code,
                     message: err.message,
                     requestId: (req as any).id,
                 });
@@ -111,18 +103,18 @@ export class QuizRegistrationController {
         } catch (err) {
             if (err instanceof QuizAuthError) {
                 const statusMap: Record<string, number> = {
-                    OTP_EXPIRED:        400,
-                    OTP_INVALID:        400,
-                    OTP_MAX_ATTEMPTS:   429,
-                    CONTEST_NOT_FOUND:  404,
-                    CONTEST_ENDED:      410,
-                    CONTACT_NOT_FOUND:  404,
-                    NOT_REGISTERED:     403,
-                    ALREADY_SUBMITTED:  409,
+                    OTP_EXPIRED: 400,
+                    OTP_INVALID: 400,
+                    OTP_MAX_ATTEMPTS: 429,
+                    CONTEST_NOT_FOUND: 404,
+                    CONTEST_ENDED: 410,
+                    CONTACT_NOT_FOUND: 404,
+                    NOT_REGISTERED: 403,
+                    ALREADY_SUBMITTED: 409,
                 };
                 res.status(statusMap[err.code] ?? 400).json({
                     success: false,
-                    code:    err.code,
+                    code: err.code,
                     message: err.message,
                     requestId: (req as any).id,
                 });
