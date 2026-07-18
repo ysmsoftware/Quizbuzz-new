@@ -28,13 +28,9 @@ import { MessageTemplate } from "../../types/message-template.enum";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const OTP_TTL      = config.redis.ttl.otp;         // seconds (e.g. 300)
+const OTP_TTL = config.redis.ttl.otp;         // seconds (e.g. 300)
 const MAX_ATTEMPTS = config.auth.otp.maxAttempts;   // e.g. 5
 
-/**
- * Redis key for a registration OTP.
- * Distinct from the quiz-auth OTP key (which is keyed by contactId).
- */
 function regOtpKey(email: string): string {
     return `auth:reg:otp:${email.toLowerCase()}`;
 }
@@ -54,29 +50,20 @@ export class RegistrationAuthError extends Error {
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class QuizRegistrationService {
-    constructor(private readonly emailProvider: EmailProvider) {}
+    constructor(private readonly emailProvider: EmailProvider) { }
 
-    /**
-     * Step 1 — Send a 6-digit OTP to the participant's email.
-     *
-     * Idempotent within the TTL window: calling again simply overwrites the
-     * previous OTP so the participant always has the latest code.
-     */
     async requestOtp(email: string): Promise<void> {
-        const otp  = generateotp();
+        const otp = generateotp();
         const hash = hashOtp(otp);
-        const key  = regOtpKey(email);
+        const key = regOtpKey(email);
 
-        // Store hash + attempt counter; TTL resets on each call
         await redis.hset(key, { hash, attempts: "0" });
         await redis.expire(key, OTP_TTL);
 
-        // Log OTP in non-production so you can test without SMTP
         if (config.app.nodeEnv !== "production") {
             logger.info(`[reg-auth] OTP for ${email}: ${otp}`);
         }
 
-        // Fire-and-forget — don't block the HTTP response on email delivery
         this.emailProvider
             .send(MessageTemplate.OTP_VERIFICATION_CODE, email, {
                 name: email,
@@ -86,15 +73,8 @@ export class QuizRegistrationService {
                 logger.error(`[reg-auth] Failed to send OTP email to ${email}: ${err.message}`);
             });
     }
-
-    /**
-     * Step 2 — Verify the OTP and return a contactToken JWT.
-     *
-     * The contactToken carries the verified email and is consumed by
-     * POST /contests/register/:contestSlug. Valid for JWT_CONTACT_TTL seconds.
-     */
     async verifyOtp(email: string, otp: string): Promise<{ contactToken: string; expiresIn: number }> {
-        const key    = regOtpKey(email);
+        const key = regOtpKey(email);
         const stored = await redis.hgetall(key);
 
         if (!stored.hash) {
@@ -114,7 +94,6 @@ export class QuizRegistrationService {
             );
         }
 
-        // Increment before comparing to prevent brute-force
         await redis.hincrby(key, "attempts", 1);
 
         if (!compareOtp(otp, stored.hash)) {
@@ -127,15 +106,12 @@ export class QuizRegistrationService {
             );
         }
 
-        // Verified — delete OTP immediately
         await redis.del(key);
 
         logger.info(`[reg-auth] OTP verified for ${email}`);
 
-        // organizationId is intentionally empty here — ContestService.registerParticipant()
-        // derives organizationId from the contest slug, not from this token.
         const contactToken = createContactToken({ email, organizationId: "" });
-        const expiresIn    = config.auth.jwt.contactTtl; // seconds
+        const expiresIn = config.auth.jwt.contactTtl; // seconds
 
         return { contactToken, expiresIn };
     }

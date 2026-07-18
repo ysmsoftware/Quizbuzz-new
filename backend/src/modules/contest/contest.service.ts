@@ -1,4 +1,5 @@
 import { ContestStatus, ParticipantStatus, SubmissionStatus } from "@prisma/client";
+import { OrganizationRepository } from "../organization/organization.repository";
 import { ContestRepository } from "./contest.repository";
 import { ParticipantService } from "../participant/participant.service";
 import { LeaderboardRepository } from "./leaderboard.repository";
@@ -8,13 +9,9 @@ import { QuizSchedulerService } from "../quiz/quiz-scheduler.service";
 import {
     CreateContestInput,
     UpdateContestInput,
-    ListContestsQueryInput,
     RegisterParticipantInput,
-    AssignQuestionsInput,
-    ReorderQuestionsInput,
-    GenerateCertificatesInput,
 } from "./contest.validator";
-import { BadRequestError, ConflictError, NotFoundError } from "../../error/http-errors";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../error/http-errors";
 import { createSlug } from "../../utils/slug";
 import { generateRegistrationRef } from "../../utils/ref";
 import { config } from "../../config";
@@ -29,6 +26,7 @@ import logger from "../../config/logger";
 
 export class ContestService {
     constructor(
+        private readonly orgRepo: OrganizationRepository,
         private readonly contestRepo: ContestRepository,
         private readonly participantService: ParticipantService,
         private readonly leaderboardRepo: LeaderboardRepository,
@@ -44,6 +42,13 @@ export class ContestService {
         const registrationDeadline = new Date(input.registrationDeadline);
         const startTime = new Date(input.startTime);
         const endTime = new Date(startTime.getTime() + input.duration * 60 * 1000);
+
+        const org = await this.orgRepo.findById(organizationId);
+
+        if (!org?.isActive) {
+            throw new ForbiddenError("Organization is not active, and cannot create contests");
+        }
+
 
         if (registrationDeadline >= startTime) {
             throw new BadRequestError("Registration deadline must be before the start time")
