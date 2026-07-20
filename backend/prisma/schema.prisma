@@ -9,20 +9,20 @@ datasource db {
 // ENUMS
 
 enum OrgMemberRole {
-  OWNER         // Full control: billing, delete org, manage admins
-  ADMIN         // Create/manage contests, view analytics
-  VIEWER        // Read-only access to analytics and participants
+  OWNER        
+  ADMIN        
+  VIEWER        
 }
 
 enum ContestStatus {
-  DRAFT         // Being configured, not visible publicly
-  PUBLISHED     // Visible, registration open
-  REGISTRATION_CLOSED // Past deadline, awaiting start
-  LIVE          // Quiz is actively running
-  EVALUATION    // Submissions being evaluated by workers
-  RESULTS_OUT   // Leaderboard published
-  COMPLETED     // Certificates issued, archived
-  CANCELLED     // Cancelled by admin
+  DRAFT         
+  PUBLISHED     
+  REGISTRATION_CLOSED 
+  LIVE          
+  EVALUATION    
+  RESULTS_OUT   
+  COMPLETED     
+  CANCELLED    
 }
 
 enum QuestionDifficulty {
@@ -32,45 +32,45 @@ enum QuestionDifficulty {
 }
 
 enum ParticipantStatus {
-  PENDING_PAYMENT // Paid contest — seat held, awaiting payment confirmation
-  REGISTERED    // Confirmed (free contest) or payment captured (paid contest)
-  CHECKED_IN    // Entered OTP/ID at quiz join time
-  IN_WAITING    // In waiting room
-  IN_QUIZ       // Actively answering questions
-  SUBMITTED     // Submitted answers
-  DISQUALIFIED  // Proctoring threshold exceeded
-  ABSENT        // Never joined
+  PENDING_PAYMENT 
+  REGISTERED    
+  CHECKED_IN    
+  IN_WAITING    
+  IN_QUIZ       
+  SUBMITTED     
+  DISQUALIFIED  
+  ABSENT 
 }
 
 enum PaymentStatus {
   CREATED
-  PENDING       // Order created, awaiting payment
+  PENDING       
   SUCCESS
-  FAILED        // Payment failed or expired
+  FAILED       
   CANCELLED
-  REFUNDED      // Admin issued refund
+  REFUNDED      
 }
 
 enum PaymentProvider {
   RAZORPAY
-  MANUAL        // Admin manually confirmed offline payment
-  FREE          // Zero-fee contest
+  MANUAL       
+  FREE        
 }
 
 enum SubmissionStatus {
-  PENDING       // Auto-saved progress, not yet submitted
-  SUBMITTED     // Final submission received
-  EVALUATED     // Scored by worker
-  INVALIDATED   // Disqualified post-evaluation
+  PENDING     
+  SUBMITTED     
+  EVALUATED     
+  INVALIDATED   
 }
 
 enum CertificateStatus {
-  PENDING       // Not yet generated
+  PENDING    
   QUEUED
-  GENERATING    // Worker picked up job
-  GENERATED     // PDF ready, URL stored
-  FAILED        // Generation failed
-  DELIVERED     // Notification sent to participant
+  GENERATING  
+  GENERATED     
+  FAILED        
+  DELIVERED     
 }
 
 enum MessageChannel {
@@ -87,7 +87,7 @@ enum MessageStatus {
 }
 
 enum MessageTemplate {
-  // Existing Aisensy campaign templates
+  
   OTP_VERIFICATION_CODE
   BIRTHDAY_WISHES_YSM
   FEEDBACK_COLLECTION_MESSAGE
@@ -95,11 +95,11 @@ enum MessageTemplate {
   REGISTRATION_SUCCESSFUL
   WORKSHOP_REMINDER_MESSAGE
   PAYMENT_CONFIRMATION_MESSAGE
-  // Admin / system templates (email-only)
+  
   EMAIL_VERIFICATION
   PASSWORD_RESET
   ORG_INVITE
-  // Contest lifecycle
+  
   DISQUALIFICATION_NOTICE
   RESULTS_PUBLISHED
   CUSTOM
@@ -130,13 +130,13 @@ enum JobStatus {
 }
 
 enum OnboardingStep {
-  NOT_STARTED   // Default: wizard not yet begun
-  IDENTITY      // Step 1: org identity (logo, website, etc.)
-  USE_CASE      // Step 2: primary use case + org size
-  ATTRIBUTION   // Step 3: how they heard about us
-  CONTACT_LOCALE // Step 4: billing contact, timezone, currency
-  PLAN_SELECTION // Step 5: plan selection (stubbed Free only for now)
-  COMPLETED     // Wizard finished
+  NOT_STARTED  
+  IDENTITY      
+  USE_CASE      
+  ATTRIBUTION   
+  CONTACT_LOCALE 
+  PLAN_SELECTION 
+  COMPLETED     
 }
 
 enum OrgPrimaryUseCase {
@@ -198,7 +198,7 @@ model Organization {
   onboardingCompleted  Boolean        @default(false)
   onboardingCompletedAt DateTime?
   planSlug              String?
-  planStaus             String?
+  planStatus             String?
   planLimitsCache     Json?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
