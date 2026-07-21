@@ -99,6 +99,9 @@ const envSchema = z.object({
     RAZORPAY_KEY_SECRET: z.string(),
     RAZORPAY_WEBHOOK_SECRET: z.string(),
     PAYMENT_CURRENCY: z.string().default("INR"),
+    RAZORPAY_ROUTE_ENABLED: z.coerce.boolean().default(false),
+    RAZORPAY_ROUTE_ONBOARDING_MODE: z.enum(["MANUAL", "API"]).default("MANUAL"),
+    PLATFORM_COMMISSION_PERCENT: z.coerce.number().min(0).max(100).default(10),
 
     // MESSAGING
     SMTP_HOST: z.string(),
@@ -317,6 +320,12 @@ export const config = {
             webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
         },
         currency: env.PAYMENT_CURRENCY,
+    },
+
+    payout: {
+        enabled: env.RAZORPAY_ROUTE_ENABLED,
+        onboardingMode: env.RAZORPAY_ROUTE_ONBOARDING_MODE,
+        commissionPercent: env.PLATFORM_COMMISSION_PERCENT,
     },
 
     messaging: {

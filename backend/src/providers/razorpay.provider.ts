@@ -83,5 +83,26 @@ export class RazorpayProvider {
         return expected === signature;
     }
 
+    async createLinkedAccount(params: any) {
+        return this.client.accounts.create(params);
+    }
 
+    async createPaymentTransfer(params: {
+        razorpayPaymentId: string;
+        account: string;
+        amount: number;
+        currency: string;
+        notes?: Record<string, string | number>;
+    }) {
+        return (this.client.payments as any).transfer(params.razorpayPaymentId, {
+            transfers: [
+                {
+                    account: params.account,
+                    amount: params.amount,
+                    currency: params.currency,
+                    ...(params.notes && { notes: params.notes }),
+                },
+            ],
+        });
+    }
 }

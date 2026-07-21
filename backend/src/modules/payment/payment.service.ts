@@ -10,6 +10,7 @@ import logger from "../../config/logger";
 
 
 import { PaymentListResult, PaymentDetailResult } from "./payment.types";
+import { PayoutService } from "../payout/payout.service";
 
 
 export class PaymentService {
@@ -20,7 +21,7 @@ export class PaymentService {
         private contestService: ContestService,
         private participantService: ParticipantService,
         private messagingService: MessagingService,
-
+        private payoutService?: PayoutService,
     ) { }
 
 
@@ -257,6 +258,19 @@ export class PaymentService {
                         },
                     }).catch((err) => {
                         logger.error(`[payment] Failed to enqueue payment confirmation: ${(err as Error).message}`);
+                    });
+                }
+
+                // Trigger Razorpay Route payout transfer
+                if (this.payoutService) {
+                    this.payoutService.createRouteTransferForPayment({
+                        id: payment.id,
+                        organizationId: payment.organizationId,
+                        amount: payment.amount,
+                        razorpayPaymentId: paymentEntity.id,
+                        currency: payment.currency,
+                    }).catch((err) => {
+                        logger.error(`[payment] Failed to process route transfer: ${(err as Error).message}`, { paymentId: payment.id });
                     });
                 }
                 break;

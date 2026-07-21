@@ -40,6 +40,9 @@ import { AnalyticsController } from './modules/analytics/analytics.controller.js
 import { OnboardingRepository } from './modules/onboarding/onboarding.repository.js';
 import { OnboardingService } from './modules/onboarding/onboarding.service.js';
 import { OnboardingController } from './modules/onboarding/onboarding.controller.js';
+import { PayoutRepository } from './modules/payout/payout.repository.js';
+import { PayoutService } from './modules/payout/payout.service.js';
+import { PayoutController } from './modules/payout/payout.controller.js';
 
 // Quiz Module
 import { QuizSession } from './modules/quiz/quiz.session.js';
@@ -74,6 +77,7 @@ export const paymentRepository = new PaymentRepository();
 export const proctoringRepository = new ProctoringRepository();
 export const analyticsRepository = new AnalyticsRepository(prisma);
 export const onboardingRepository = new OnboardingRepository();
+export const payoutRepository = new PayoutRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -84,9 +88,10 @@ export const contactService = new ContactService(contactRepository, messagingSer
 export const submissionService = new SubmissionService(submissionRepository, participantRepository, contestRepository);
 export const participantService = new ParticipantService(participantRepository, contestRepository);
 export const quizSchedulerService = new QuizSchedulerService();
-export const contestService = new ContestService(organizationRepository, contestRepository, participantService, leaderboardRepository, contactService, messagingService, submissionService, quizSchedulerService);
+export const payoutService = new PayoutService(payoutRepository, razorpay);
+export const contestService = new ContestService(organizationRepository, contestRepository, participantService, leaderboardRepository, contactService, messagingService, submissionService, quizSchedulerService, payoutRepository);
 export const questionService = new QuestionService(questionRepository, contestService);
-export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService)
+export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService, payoutService);
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
 export const quizSession = new QuizSession();
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
@@ -131,3 +136,4 @@ export const proctoringController = new ProctoringController(adminProctoringServ
 export const analyticsController = new AnalyticsController(analyticsService);
 export const onboardingController = new OnboardingController(onboardingService);
 export const quizRegistrationController = new QuizRegistrationController(quizRegistrationService, quizAuthService);
+export const payoutController = new PayoutController(payoutService);

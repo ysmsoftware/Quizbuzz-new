@@ -18,6 +18,7 @@ import { authLimiter, analyticsLimiter } from "./middlewares/rate-limit.js";
 import { authenticatedOrgMiddleware } from "./middlewares/authenticated-org.middleware";
 import { bullBoardRouter } from "./queues/board";
 import paymentRouter from "./modules/payment/payment.routes.js";
+import payoutRouter from "./modules/payout/payout.routes.js";
 import { quizRegistrationRouter } from "./modules/quiz/quiz-registration.routes.js";
 import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
 
@@ -33,6 +34,7 @@ apiRouter.use("/contests", participantRouter);
 apiRouter.use("/questions", questionRouter);
 apiRouter.use("/messaging", messagingRouter);
 apiRouter.use("/payments", paymentRouter);
+apiRouter.use("/payout-accounts", payoutRouter);
 apiRouter.use("/certificates", certificateRouter);
 apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);

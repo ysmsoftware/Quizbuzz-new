@@ -57,6 +57,25 @@ enum PaymentProvider {
   FREE        
 }
 
+enum PayoutAccountStatus {
+  PENDING
+  ACTIVE
+  VERIFICATION_FAILED
+  DISABLED
+}
+
+enum PayoutOnboardingMode {
+  MANUAL
+  API
+}
+
+enum RouteTransferStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  REVERSED
+}
+
 enum SubmissionStatus {
   PENDING     
   SUBMITTED     
@@ -213,6 +232,8 @@ model Organization {
   contestQuestions     ContestQuestion[]
   participants         Participant[]
   payments             Payment[]
+  payoutAccount        OrganizationPayoutAccount?
+  routeTransfers       PaymentRouteTransfer[]
   quizSessions         QuizSession[]
   submissions          Submission[]
   answers              Answer[]
@@ -551,6 +572,7 @@ model Payment {
   contest         Contest          @relation(fields: [contestId], references: [id])
   participant     Participant     @relation(fields: [participantId], references: [id])
   contact         Contact         @relation(fields: [contactId], references: [id])
+  routeTransfer   PaymentRouteTransfer?
 
   @@index([organizationId])
   @@index([contactId])
@@ -561,6 +583,53 @@ model Payment {
   @@index([razorpayOrderId])
   @@index([razorpayPaymentId])
   @@index([status, createdAt])
+  @@map("payments")
+}
+
+model OrganizationPayoutAccount {
+  id                      String                @id @default(ulid())
+  organizationId          String                @unique
+  razorpayLinkedAccountId String?               @unique
+  accountName             String
+  accountEmail            String
+  contactNumber           String?
+  status                  PayoutAccountStatus   @default(PENDING)
+  onboardingMode          PayoutOnboardingMode  @default(MANUAL)
+  activatedAt             DateTime?
+  metadata                Json?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("organization_payout_accounts")
+}
+
+model PaymentRouteTransfer {
+  id                      String               @id @default(ulid())
+  organizationId          String
+  paymentId               String               @unique
+  razorpayPaymentId       String
+  razorpayTransferId      String?              @unique
+  razorpayLinkedAccountId String?
+  grossAmount             Int
+  platformFeeAmount       Int
+  transferAmount          Int
+  currency                String               @default("INR")
+  status                  RouteTransferStatus  @default(PENDING)
+  failureReason           String?
+  processedAt             DateTime?
+  metadata                Json?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payment      Payment      @relation(fields: [paymentId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("payment_route_transfers")
 }
 
 // QUIZ SESSION  (device-level session tracking during live quiz)
