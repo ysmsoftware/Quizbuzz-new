@@ -88,4 +88,9 @@ export const queryKeys = {
     status: ['onboarding', 'status'],
     plans:  ['onboarding', 'plans'],
   },
+
+  payout: {
+    account: ['payout', 'account'],
+    transfers: ['payout', 'transfers'],
+  },
 } as const;

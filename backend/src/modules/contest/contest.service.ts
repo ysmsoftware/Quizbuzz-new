@@ -1,4 +1,4 @@
-import { ContestStatus, ParticipantStatus, SubmissionStatus } from "@prisma/client";
+import { ContestStatus, ParticipantStatus, SubmissionStatus, PayoutAccountStatus } from "@prisma/client";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { ContestRepository } from "./contest.repository";
 import { ParticipantService } from "../participant/participant.service";
@@ -6,6 +6,7 @@ import { LeaderboardRepository } from "./leaderboard.repository";
 import { MessagingService } from "../messaging/messaging.service";
 import { SubmissionService } from "../submission/submission.service";
 import { QuizSchedulerService } from "../quiz/quiz-scheduler.service";
+import { PayoutRepository } from "../payout/payout.repository";
 import {
     CreateContestInput,
     UpdateContestInput,
@@ -34,6 +35,7 @@ export class ContestService {
         private readonly messagingService: MessagingService,
         private readonly submissionService: SubmissionService,
         private readonly schedulerService: QuizSchedulerService,
+        private readonly payoutRepo?: PayoutRepository,
     ) { }
 
     // ─── Contest CRUD ─────────────────────────────────────────────────────────
@@ -47,6 +49,13 @@ export class ContestService {
 
         if (!org?.isActive) {
             throw new ForbiddenError("Organization is not active, and cannot create contests");
+        }
+
+        if (input.paymentEnabled && this.payoutRepo) {
+            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
+            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
+                throw new BadRequestError("Set up payouts before enabling paid registration for this contest");
+            }
         }
 
 
@@ -165,6 +174,13 @@ export class ContestService {
             throw new BadRequestError("Contest can only be edited while in DRAFT, PUBLISHED, or REGISTRATION_CLOSED status");
         }
 
+        if (dto.paymentEnabled === true && this.payoutRepo) {
+            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
+            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
+                throw new BadRequestError("Set up payouts before enabling paid registration for this contest");
+            }
+        }
+
         // Once registration has been manually closed, only the participant cap may still be raised
         if (contest.status === ContestStatus.REGISTRATION_CLOSED) {
             const allowedFields = new Set(["maxParticipants"]);
@@ -264,6 +280,13 @@ export class ContestService {
 
         if (contest.status !== ContestStatus.DRAFT) {
             throw new BadRequestError("Only DRAFT contests can be published");
+        }
+
+        if (contest.paymentEnabled && this.payoutRepo) {
+            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
+            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
+                throw new BadRequestError("Set up payouts before publishing a paid contest");
+            }
         }
 
         if (new Date(contest.registrationDeadline) <= new Date()) {

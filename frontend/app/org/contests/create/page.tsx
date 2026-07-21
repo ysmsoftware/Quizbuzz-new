@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { usePayout } from '@/lib/hooks/use-payout';
 import { useToast } from '@/components/ui/use-toast';
 import { useContests } from '@/lib/hooks/useContests';
 import { Stepper } from '@/components/shared/Stepper';
@@ -82,6 +83,7 @@ export default function CreateContestPage() {
     const { toast } = useToast();
     const { createContestMutation } = useContests();
     const { isLoggedIn, meQuery } = useAuth();
+    const payout = usePayout();
 
     const [currentStep, setCurrentStep] = useState(1);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -778,6 +780,18 @@ export default function CreateContestPage() {
                         {/* Step 3: Pricing & Prizes (combined) */}
                         {currentStep === 3 && (
                             <div className="space-y-6">
+                                {!payout.isActive && (
+                                    <Alert className="border-amber-500/20 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                        <AlertDescription className="flex items-center justify-between text-xs font-medium w-full">
+                                            <span>Set up payouts before enabling paid registration for your contests.</span>
+                                            <Link href="/org/settings?tab=payouts" className="underline font-bold hover:text-amber-700 dark:hover:text-amber-100 shrink-0 ml-2">
+                                                Configure Payouts
+                                            </Link>
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
                                 {/* Switch for pricing */}
                                 <div className="flex items-center justify-between p-4 border border-border/50 rounded-2xl bg-muted/10">
                                     <div className="space-y-0.5">
@@ -785,7 +799,8 @@ export default function CreateContestPage() {
                                         <p className="text-xs text-muted-foreground">Charge participants an entry fee to register.</p>
                                     </div>
                                     <Switch
-                                        checked={form.paymentEnabled}
+                                        checked={form.paymentEnabled && payout.isActive}
+                                        disabled={!payout.isActive}
                                         onCheckedChange={(checked) =>
                                             setForm(prev => ({ ...prev, paymentEnabled: checked }))
                                         }
