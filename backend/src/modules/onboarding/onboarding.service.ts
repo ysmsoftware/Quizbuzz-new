@@ -1,5 +1,7 @@
 import { OnboardingStep } from "@prisma/client";
+import jwt from "jsonwebtoken";
 import { prisma } from "../../config/db";
+import { config } from "../../config";
 import { ForbiddenError, NotFoundError, BadRequestError } from "../../error/http-errors";
 import { OnboardingRepository } from "./onboarding.repository";
 import { STEP_SCHEMAS, StepName } from "./onboarding.validator";
@@ -118,8 +120,7 @@ export class OnboardingService {
         }
 
         if (upperStep === "PLAN_SELECTION") {
-            // Plan selection is stubbed — no plan data lives on the profile table.
-            // Just advance the step to COMPLETED so the wizard can call /complete.
+            // Plan selection step: save plan selection or advance step to COMPLETED
             await this.repo.advanceStep(orgId, OnboardingStep.COMPLETED);
             return;
         }
@@ -138,7 +139,52 @@ export class OnboardingService {
 
     // ─── GET /onboarding/plans ────────────────────────────────────────────────
 
-    getPlans(): PlanOption[] {
+    async getPlans(): Promise<PlanOption[]> {
+        try {
+            const opsUrl = config.billing.opsBaseUrl;
+            const res = await fetch(`${opsUrl}/api/v1/billing-portal/plans`);
+            if (res.ok) {
+                const json = (await res.json()) as { success?: boolean; data?: PlanOption[] };
+                if (json.success && Array.isArray(json.data)) {
+                    return json.data;
+                }
+            }
+        } catch (error) {
+            console.warn("Failed to fetch live catalog plans from Ops, falling back to static stub:", error);
+        }
         return STATIC_PLANS;
+    }
+
+    // ─── POST /onboarding/handoff ─────────────────────────────────────────────
+
+    async createHandoffToken(adminId: string, orgId: string, planSlug: string): Promise<{ checkoutUrl: string }> {
+        await this.assertOwner(adminId, orgId);
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+            select: { firstName: true, lastName: true, email: true },
+        });
+
+        const adminName = admin ? `${admin.firstName} ${admin.lastName}`.trim() : "Org Admin";
+        const adminEmail = admin?.email || "admin@org.com";
+
+        const secret = config.billing.handoffSecret || "billing_handoff_secret_shared_key_998877";
+        const opsUrl = config.billing.opsBaseUrl || "http://localhost:3010";
+
+        const token = jwt.sign(
+            {
+                organizationId: orgId,
+                adminId,
+                adminEmail,
+                adminName,
+                planSlug,
+            },
+            secret,
+            { expiresIn: "10m" }
+        );
+
+        return {
+            checkoutUrl: `${opsUrl}/billing/checkout?token=${token}`,
+        };
     }
 }

@@ -20,6 +20,10 @@ const envSchema = z.object({
     INSTANCE_ID: z.string(),
     INSTANCE_COUNT: z.coerce.number().default(1),
 
+    // OPS & BILLING HANDOFF
+    BILLING_HANDOFF_SECRET: z.string().default("billing_handoff_secret_shared_key_998877"),
+    OPS_BASE_URL: z.string().default("http://localhost:3010"),
+
     // DATABASE
     DATABASE_URL: z.string().url(),
     DB_POOL_MIN: z.coerce.number().default(5),
@@ -219,6 +223,11 @@ export const config = {
         instanceCount: env.INSTANCE_COUNT,
         maxSlugRetries: env.MAX_SLUG_RETRIES,
         joinCodeLength: env.JOIN_CODE_LENGTH,
+    },
+
+    billing: {
+        handoffSecret: env.BILLING_HANDOFF_SECRET,
+        opsBaseUrl: env.OPS_BASE_URL,
     },
 
     database: {

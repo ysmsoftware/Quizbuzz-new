@@ -265,44 +265,64 @@ function ContactLocaleStep({
   );
 }
 
-function PlanSelectionStep({ plans }: { plans: import('@/lib/api/onboarding.api').PlanOption[] }) {
+function PlanSelectionStep({
+  plans,
+  selectedSlug,
+  onSelect,
+}: {
+  plans: import('@/lib/api/onboarding.api').PlanOption[];
+  selectedSlug: string;
+  onSelect: (slug: string) => void;
+}) {
   return (
     <div className="space-y-4">
-      {plans.map((plan) => (
-        <div
-          key={plan.slug}
-          className="p-6 rounded-xl border-2 border-primary bg-primary/5"
-        >
-          <div className="flex items-start justify-between mb-4 gap-4">
-            <div className="min-w-0">
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              <p className="text-muted-foreground text-sm mt-1">{plan.description}</p>
+      {plans.map((plan) => {
+        const isSelected = selectedSlug === plan.slug;
+        return (
+          <div
+            key={plan.slug}
+            onClick={() => onSelect(plan.slug)}
+            className={cn(
+              'p-6 rounded-xl border-2 transition-all cursor-pointer',
+              isSelected
+                ? 'border-primary bg-primary/5 shadow-sm'
+                : 'border-border hover:border-primary/50 bg-card'
+            )}
+          >
+            <div className="flex items-start justify-between mb-4 gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">{plan.name}</h3>
+                  {isSelected && (
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground">
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <p className="text-muted-foreground text-sm mt-1">{plan.description}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-3xl font-extrabold text-primary">
+                  {plan.price === 0 ? 'Free' : `₹${plan.price}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {plan.price === 0 ? 'forever' : 'per month'}
+                </p>
+              </div>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-3xl font-extrabold text-primary">
-                {plan.price === 0 ? 'Free' : `₹${plan.price}`}
-              </p>
-              {plan.price === 0 && (
-                <p className="text-xs text-muted-foreground">forever</p>
-              )}
-            </div>
+            <ul className="space-y-1.5">
+              {plan.features.map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="space-y-1.5">
-            {plan.features.map((f) => (
-              <li key={f} className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 w-fit">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span className="text-xs font-medium text-primary">Currently selected</span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <p className="text-xs text-muted-foreground text-center pt-1">
-        More plans coming soon. You can always upgrade from Settings.
+        Select a plan to continue setting up your workspace.
       </p>
     </div>
   );
@@ -319,13 +339,13 @@ export default function OnboardingPage() {
   const saveStepMutation   = useSaveOnboardingStep();
   const completeOnboarding = useCompleteOnboarding();
 
-  // Step data keyed by step name — shape unchanged, logic untouched
+  // Step data keyed by step name
   const [stepData, setStepData] = useState<Record<StepKey, Record<string, unknown>>>({
     IDENTITY:       {},
     USE_CASE:       {},
     ATTRIBUTION:    {},
     CONTACT_LOCALE: {},
-    PLAN_SELECTION: { planSlug: 'free' },
+    PLAN_SELECTION: { planSlug: 'starter-test' },
   });
 
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -379,6 +399,10 @@ export default function OnboardingPage() {
   }, [onboardingQuery.data, router]);
 
   const currentStep = STEPS[currentIdx];
+  const plans       = plansQuery.data?.data ?? [];
+
+  const selectedPlanSlug = (stepData.PLAN_SELECTION?.planSlug as string) || (plans[0]?.slug ?? 'free');
+  const selectedPlan     = plans.find((p) => p.slug === selectedPlanSlug) || plans[0];
 
   function updateField(key: string, value: unknown) {
     setStepData((prev) => ({
@@ -398,6 +422,22 @@ export default function OnboardingPage() {
       if (currentIdx < STEPS.length - 1) {
         setCurrentIdx((i) => i + 1);
       } else {
+        // At PLAN_SELECTION step (final step)
+        const currentSelectedSlug = (stepData.PLAN_SELECTION?.planSlug as string) || plans[0]?.slug;
+        const activePlan = plans.find((p) => p.slug === currentSelectedSlug);
+
+        if (activePlan && activePlan.price > 0) {
+          // Paid plan: generate signed handoff token & redirect to Ops checkout
+          const { createBillingHandoff } = await import('@/lib/api/onboarding.api');
+          const handoffRes = await createBillingHandoff(activePlan.slug);
+
+          if (handoffRes.data?.checkoutUrl) {
+            window.location.href = handoffRes.data.checkoutUrl;
+            return;
+          }
+        }
+
+        // Free plan: complete onboarding directly
         await completeOnboarding.mutateAsync();
         router.replace('/org');
       }
@@ -411,7 +451,6 @@ export default function OnboardingPage() {
   }
 
   const isSubmitting = saveStepMutation.isPending || completeOnboarding.isPending;
-  const plans        = plansQuery.data?.data ?? [];
 
   if (meQuery.isLoading || onboardingQuery.isLoading) {
     return (
@@ -428,14 +467,14 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6">
-      {/* Subtle background blobs — token-based colors */}
+      {/* Subtle background blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden>
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-accent/5 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-xl">
-        {/* ── Header: text-only, no gradient icon tile ── */}
+        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Welcome to QuizBuzz
@@ -448,7 +487,7 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        {/* ── Step progress dots — existing token colours, no glow ── */}
+        {/* Step progress dots */}
         <div className="flex items-center justify-center gap-1.5 mb-6">
           {STEPS.map((s, i) => (
             <div
@@ -465,13 +504,11 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        {/* ── Card — rounded-xl to match app radius, shadow-lg, bg-primary top bar ── */}
+        {/* Card */}
         <div className="bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-          {/* Flat primary accent bar replacing per-step gradient bar */}
           <div className="h-1 bg-primary" />
 
           <div className="p-6 sm:p-8">
-            {/* Step title — icon in flat token chip, no gradient */}
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
                 <StepIcon className="h-4 w-4 text-primary" />
@@ -484,7 +521,7 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            {/* Step content with slide animation — untouched logic */}
+            {/* Step content */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentStep.key}
@@ -512,7 +549,11 @@ export default function OnboardingPage() {
                   />
                 )}
                 {currentStep.key === 'PLAN_SELECTION' && (
-                  <PlanSelectionStep plans={plans} />
+                  <PlanSelectionStep
+                    plans={plans}
+                    selectedSlug={selectedPlanSlug}
+                    onSelect={(slug) => updateField('planSlug', slug)}
+                  />
                 )}
               </motion.div>
             </AnimatePresence>
@@ -548,6 +589,12 @@ export default function OnboardingPage() {
                 ) : currentIdx < STEPS.length - 1 ? (
                   <>
                     Continue
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                ) : selectedPlan && selectedPlan.price > 0 ? (
+                  <>
+                    <CreditCard className="h-4 w-4" />
+                    Continue to Payment
                     <ArrowRight className="h-4 w-4" />
                   </>
                 ) : (

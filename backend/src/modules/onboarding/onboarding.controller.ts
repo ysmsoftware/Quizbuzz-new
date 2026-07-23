@@ -47,8 +47,22 @@ export class OnboardingController {
     // GET /onboarding/plans
     getPlans = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const plans = this.service.getPlans();
+            const plans = await this.service.getPlans();
             res.json({ success: true, data: plans });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // POST /onboarding/handoff
+    createHandoff = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const adminId  = req.user!.id;
+            const orgId    = req.user!.organizationId;
+            const planSlug = String(req.body.planSlug || "starter-test");
+
+            const handoff = await this.service.createHandoffToken(adminId, orgId, planSlug);
+            res.json({ success: true, data: handoff });
         } catch (err) {
             next(err);
         }

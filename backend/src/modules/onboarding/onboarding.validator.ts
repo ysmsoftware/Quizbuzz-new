@@ -60,7 +60,7 @@ export const ContactLocaleStepSchema = z.object({
 // ─── PLAN_SELECTION step (stub) ───────────────────────────────────────────────
 
 export const PlanSelectionStepSchema = z.object({
-    planSlug: z.enum(["free"]),
+    planSlug: z.string().min(1, "Please select a plan"),
 });
 
 // ─── Per-step schema lookup ───────────────────────────────────────────────────
