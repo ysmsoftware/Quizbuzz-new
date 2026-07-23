@@ -15,3 +15,4 @@ onboardingRouter.get(  "/status",      authenticatedOrgMiddleware, (req, res, ne
 onboardingRouter.patch("/step/:step",  authenticatedOrgMiddleware, (req, res, next) => ctrl().saveStep(req, res, next));
 onboardingRouter.post( "/complete",    authenticatedOrgMiddleware, (req, res, next) => ctrl().complete(req, res, next));
 onboardingRouter.get(  "/plans",       authenticatedOrgMiddleware, (req, res, next) => ctrl().getPlans(req, res, next));
+onboardingRouter.post( "/handoff",     authenticatedOrgMiddleware, (req, res, next) => ctrl().createHandoff(req, res, next));

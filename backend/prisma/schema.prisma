@@ -596,6 +596,7 @@ model OrganizationPayoutAccount {
   status                  PayoutAccountStatus   @default(PENDING)
   onboardingMode          PayoutOnboardingMode  @default(MANUAL)
   activatedAt             DateTime?
+  statusReason            String?
   metadata                Json?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt

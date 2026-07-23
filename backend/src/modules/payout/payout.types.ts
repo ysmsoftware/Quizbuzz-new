@@ -20,6 +20,7 @@ export interface PayoutAccountResponse {
   status: PayoutAccountStatus;
   onboardingMode: PayoutOnboardingMode;
   activatedAt: Date | null;
+  statusReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

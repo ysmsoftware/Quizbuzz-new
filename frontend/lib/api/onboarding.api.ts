@@ -78,10 +78,25 @@ export async function completeOnboarding(): Promise<ApiResponse> {
   return post('/onboarding/complete', {});
 }
 
+export interface BillingHandoffResponse {
+  checkoutUrl: string;
+}
+
 /**
  * GET /onboarding/plans
- * Returns available plan options (currently static Free only).
+ * Returns available plan options (from Ops catalog or static fallback).
  */
 export async function getOnboardingPlans(): Promise<ApiResponse<PlanOption[]>> {
   return get<PlanOption[]>('/onboarding/plans');
 }
+
+/**
+ * POST /onboarding/handoff
+ * Generates a signed billing handoff token and checkout redirect URL.
+ */
+export async function createBillingHandoff(
+  planSlug: string,
+): Promise<ApiResponse<BillingHandoffResponse>> {
+  return post<BillingHandoffResponse>('/onboarding/handoff', { planSlug });
+}
+

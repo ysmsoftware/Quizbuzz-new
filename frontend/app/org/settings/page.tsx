@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CheckCircle2, AlertTriangle, Clock, Ban, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipSelect } from '@/components/shared/ChipSelect';
 import { USE_CASES, ORG_SIZES, CONTEST_VOLUMES, PARTICIPANT_VOLUMES, HEARD_SOURCES } from '@/lib/constants/org-profile-options';
@@ -86,6 +86,18 @@ export default function SettingsPage() {
             }
         }
     }, [org]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const subStatus = params.get('subscription');
+            if (subStatus === 'success') {
+                toast.success('Subscription updated successfully! Your new plan features are now active.');
+            } else if (subStatus === 'failed') {
+                toast.error('Payment was not completed or failed. Your plan was not changed.');
+            }
+        }
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -710,14 +722,13 @@ export default function SettingsPage() {
 }
 
 function PayoutsTabContent() {
-    const { account, status, isActive, loading, setupAccountMutation, attachLinkedAccountMutation } = usePayout();
+    const { account, status, isActive, loading, setupAccountMutation } = usePayout();
 
     const [payoutForm, setPayoutForm] = useState({
         accountName: '',
         accountEmail: '',
         contactNumber: '',
     });
-    const [linkedAccountIdInput, setLinkedAccountIdInput] = useState('');
 
     useEffect(() => {
         if (account) {
@@ -726,9 +737,6 @@ function PayoutsTabContent() {
                 accountEmail: account.accountEmail || '',
                 contactNumber: account.contactNumber || '',
             });
-            if (account.razorpayLinkedAccountId) {
-                setLinkedAccountIdInput(account.razorpayLinkedAccountId);
-            }
         }
     }, [account]);
 
@@ -744,25 +752,9 @@ function PayoutsTabContent() {
                 accountEmail: payoutForm.accountEmail,
                 contactNumber: payoutForm.contactNumber || undefined,
             });
-            toast.success('Payout account details saved');
+            toast.success('Payout setup request submitted');
         } catch (err: any) {
-            toast.error(err?.message || 'Failed to save payout details');
-        }
-    };
-
-    const handleAttachLinkedAccount = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!linkedAccountIdInput.startsWith('acc_')) {
-            toast.error('Razorpay linked account ID must start with acc_');
-            return;
-        }
-        try {
-            await attachLinkedAccountMutation.mutateAsync({
-                razorpayLinkedAccountId: linkedAccountIdInput.trim(),
-            });
-            toast.success('Linked account attached and activated successfully!');
-        } catch (err: any) {
-            toast.error(err?.message || 'Failed to attach linked account');
+            toast.error(err?.message || 'Failed to submit payout setup request');
         }
     };
 
@@ -774,6 +766,9 @@ function PayoutsTabContent() {
         );
     }
 
+    const hasSubmittedRequest = !!account;
+    const contactChannel = [account?.accountEmail, account?.contactNumber].filter(Boolean).join(' / ');
+
     return (
         <div className="space-y-6">
             {/* Status Card */}
@@ -782,7 +777,7 @@ function PayoutsTabContent() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle className="text-xl font-bold">Payout Account Status</CardTitle>
-                            <CardDescription>Configure payouts to receive contest registration funds automatically via Razorpay Route</CardDescription>
+                            <CardDescription>Set up payouts to receive contest registration funds automatically via Razorpay Route</CardDescription>
                         </div>
                         <div>
                             {isActive && (
@@ -797,14 +792,19 @@ function PayoutsTabContent() {
                             )}
                             {status === 'VERIFICATION_FAILED' && (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                                    <AlertTriangle className="h-3.5 w-3.5" /> FAILED
+                                    <AlertTriangle className="h-3.5 w-3.5" /> VERIFICATION FAILED
+                                </span>
+                            )}
+                            {status === 'DISABLED' && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
+                                    <Ban className="h-3.5 w-3.5" /> DISABLED
                                 </span>
                             )}
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {isActive ? (
+                    {isActive && (
                         <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 space-y-2">
                             <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                                 Payouts are fully enabled for your organization!
@@ -816,13 +816,47 @@ function PayoutsTabContent() {
                                 Registration fees collected from participants will automatically transfer to your bank account after platform commission deduction.
                             </p>
                         </div>
-                    ) : (
+                    )}
+                    {status === 'PENDING' && hasSubmittedRequest && (
                         <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
-                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                                Payout account setup is pending
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                <Mail className="h-4 w-4" /> Your request has been received
                             </p>
                             <p className="text-xs text-muted-foreground leading-relaxed">
-                                Complete your payout details below. Creating paid contests will be enabled once your Razorpay Route Linked Account is linked and marked Active.
+                                Our billing team will contact you{contactChannel ? <> at <span className="font-medium text-foreground">{contactChannel}</span></> : ''} within 1–2 business days to collect the remaining details Razorpay requires (business KYC, bank account) and complete verification. You don&apos;t need to do anything further here — we&apos;ll email you once payouts are active.
+                            </p>
+                        </div>
+                    )}
+                    {status === 'PENDING' && !hasSubmittedRequest && (
+                        <div className="p-4 rounded-xl border border-border bg-secondary/10 space-y-2">
+                            <p className="text-sm font-semibold text-foreground">
+                                Payouts aren&apos;t set up yet
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                Submit your contact details below and our billing team will reach out to complete setup with Razorpay on your behalf.
+                            </p>
+                        </div>
+                    )}
+                    {status === 'VERIFICATION_FAILED' && (
+                        <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 space-y-2">
+                            <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">
+                                We couldn&apos;t verify your payout account
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                {account?.statusReason || 'Our billing team will contact you shortly to resolve this.'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                Need this sooner? Reach out to <span className="font-medium text-foreground">support@quizbuzz.com</span>.
+                            </p>
+                        </div>
+                    )}
+                    {status === 'DISABLED' && (
+                        <div className="p-4 rounded-xl border border-border bg-secondary/10 space-y-2">
+                            <p className="text-sm font-semibold text-foreground">
+                                Payouts are currently disabled for your organization
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                {account?.statusReason || 'Contact support@quizbuzz.com for details.'}
                             </p>
                         </div>
                     )}
@@ -833,8 +867,10 @@ function PayoutsTabContent() {
             <form onSubmit={handleSavePayoutSetup}>
                 <Card className="border-border/50">
                     <CardHeader>
-                        <CardTitle>Payout Contact & Account Details</CardTitle>
-                        <CardDescription>Enter primary business details for receiving Route transfers</CardDescription>
+                        <CardTitle>Request Payout Setup</CardTitle>
+                        <CardDescription>
+                            Tell us who to contact to set up payouts. Our billing team will reach out to complete verification with Razorpay — you won&apos;t need to do anything else here.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -849,7 +885,7 @@ function PayoutsTabContent() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="payout-email">Payout Email Address</Label>
+                                <Label htmlFor="payout-email">Contact Email Address</Label>
                                 <Input
                                     id="payout-email"
                                     type="email"
@@ -872,32 +908,7 @@ function PayoutsTabContent() {
                         <div className="flex justify-end pt-2">
                             <Button type="submit" disabled={setupAccountMutation.isPending} className="gap-2">
                                 {setupAccountMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                                Save Details
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </form>
-
-            {/* Manual Link Attachment (Admin / Dev Helper) */}
-            <form onSubmit={handleAttachLinkedAccount}>
-                <Card className="border-border/50 bg-secondary/10">
-                    <CardHeader>
-                        <CardTitle className="text-base font-semibold">Razorpay Linked Account ID</CardTitle>
-                        <CardDescription>
-                            Attach your Razorpay Linked Account ID (<code className="font-mono text-xs">acc_...</code>) from your Razorpay Dashboard (Route → Linked Accounts).
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex gap-3">
-                            <Input
-                                value={linkedAccountIdInput}
-                                onChange={(e) => setLinkedAccountIdInput(e.target.value)}
-                                placeholder="acc_N1x23456789"
-                                className="font-mono text-sm"
-                            />
-                            <Button type="submit" disabled={attachLinkedAccountMutation.isPending || !linkedAccountIdInput} variant="outline">
-                                {attachLinkedAccountMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Attach & Activate'}
+                                Request Payout Setup
                             </Button>
                         </div>
                     </CardContent>
