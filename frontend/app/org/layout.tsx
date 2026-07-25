@@ -30,6 +30,9 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+import { OnboardingModal } from '@/components/features/organization/OnboardingModal';
+import { UpgradePromptModal } from '@/components/features/organization/UpgradePromptModal';
+
 const navItems = [
     { label: 'Dashboard', href: '/org', icon: LayoutDashboard },
     { label: 'Contests', href: '/org/contests', icon: Trophy },
@@ -45,6 +48,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { isLoggedIn, isEmailVerified, admin, activeOrg, logoutMutation, meQuery } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [upgradePromptOpen, setUpgradePromptOpen] = useState(false);
 
     // Only query onboarding status once the user is fully logged-in + verified
     const readyForOnboarding = !meQuery.isLoading && isLoggedIn && isEmailVerified;
@@ -85,26 +89,12 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
         }
     }, [isLoggedIn, isEmailVerified, meQuery.isLoading, admin, router]);
 
-    // Onboarding gate — redirect OWNER to wizard if onboarding not yet done
-    useEffect(() => {
-        if (
-            readyForOnboarding &&
-            !onboardingQuery.isLoading &&
-            onboardingQuery.data?.data &&
-            !onboardingQuery.data.data.completed &&
-            activeOrg?.role === 'OWNER' &&
-            !pathname.startsWith('/org/onboarding')
-        ) {
-            router.push('/org/onboarding');
-        }
-    }, [
-        readyForOnboarding,
-        onboardingQuery.isLoading,
-        onboardingQuery.data,
-        activeOrg?.role,
-        pathname,
-        router,
-    ]);
+    const showOnboardingModal =
+        readyForOnboarding &&
+        !onboardingQuery.isLoading &&
+        !!onboardingQuery.data?.data &&
+        !onboardingQuery.data.data.completed &&
+        activeOrg?.role === 'OWNER';
 
     const handleLogout = async () => {
         try {
@@ -368,6 +358,18 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
+
+            {/* Onboarding Modal Overlay */}
+            <OnboardingModal
+                open={showOnboardingModal}
+                onTriggerUpgradePrompt={() => setUpgradePromptOpen(true)}
+            />
+
+            {/* Post-Onboarding Upgrade Prompt Modal */}
+            <UpgradePromptModal
+                open={upgradePromptOpen}
+                onClose={() => setUpgradePromptOpen(false)}
+            />
         </div>
     );
 }

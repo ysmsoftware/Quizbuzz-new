@@ -58,17 +58,31 @@ export class OnboardingRepository {
     }
 
     /**
-     * Also saves profile data for IDENTITY step which writes to Organization
-     * directly (logoUrl / website) rather than the profile table.
+     * Finds another org by slug (excluding currentOrgId) to check uniqueness.
+     */
+    async findOtherBySlug(slug: string, currentOrgId: string): Promise<{ id: string } | null> {
+        return prisma.organization.findFirst({
+            where: {
+                slug,
+                id: { not: currentOrgId },
+                isDeleted: false,
+            },
+            select: { id: true },
+        });
+    }
+
+    /**
+     * Saves org name & slug for IDENTITY step on Organization model.
      */
     async saveIdentityStep(
         orgId: string,
-        orgData: { logoUrl?: string; website?: string },
+        orgData: { name: string; slug: string },
     ): Promise<void> {
         await prisma.organization.update({
             where: { id: orgId },
             data: {
-                ...orgData,
+                name: orgData.name,
+                slug: orgData.slug,
                 onboardingStep: OnboardingStep.USE_CASE,
             },
         });

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../../config/db";
 import { config } from "../../config";
 import { ForbiddenError, NotFoundError, BadRequestError } from "../../error/http-errors";
+import { createSlug } from "../../utils/slug";
 import { OnboardingRepository } from "./onboarding.repository";
 import { STEP_SCHEMAS, StepName } from "./onboarding.validator";
 import { OnboardingStatusDTO, PlanOption } from "./onboarding.types";
@@ -12,9 +13,7 @@ const STEP_ORDER: OnboardingStep[] = [
     OnboardingStep.NOT_STARTED,
     OnboardingStep.IDENTITY,
     OnboardingStep.USE_CASE,
-    OnboardingStep.ATTRIBUTION,
     OnboardingStep.CONTACT_LOCALE,
-    OnboardingStep.PLAN_SELECTION,
     OnboardingStep.COMPLETED,
 ];
 
@@ -23,6 +22,7 @@ function nextStep(current: OnboardingStep): OnboardingStep {
     if (idx === -1 || idx >= STEP_ORDER.length - 1) return OnboardingStep.COMPLETED;
     return STEP_ORDER[idx + 1] as OnboardingStep;
 }
+
 
 // Static plan stub — will be replaced by real ops-subscription call later
 const STATIC_PLANS: PlanOption[] = [
@@ -43,7 +43,7 @@ const STATIC_PLANS: PlanOption[] = [
 ];
 
 export class OnboardingService {
-    constructor(private readonly repo: OnboardingRepository) {}
+    constructor(private readonly repo: OnboardingRepository) { }
 
     // ─── Guard: caller must be OWNER of the org ───────────────────────────────
 
@@ -65,31 +65,51 @@ export class OnboardingService {
         if (!row) throw new NotFoundError("Organization not found");
 
         return {
-            completed:   row.onboardingCompleted,
+            completed: row.onboardingCompleted,
             currentStep: row.onboardingStep,
-            profile:     row.profile
+            profile: row.profile
                 ? {
-                    primaryUseCase:           row.profile.primaryUseCase,
-                    useCaseOther:             row.profile.useCaseOther,
-                    sizeBucket:               row.profile.sizeBucket,
+                    primaryUseCase: row.profile.primaryUseCase,
+                    useCaseOther: row.profile.useCaseOther,
+                    sizeBucket: row.profile.sizeBucket,
                     expectedContestsPerMonth: row.profile.expectedContestsPerMonth,
-                    expectedParticipants:     row.profile.expectedParticipants,
-                    heardAboutSource:         row.profile.heardAboutSource,
-                    heardAboutOther:          row.profile.heardAboutOther,
-                    primaryContactName:       row.profile.primaryContactName,
-                    primaryContactPhone:      row.profile.primaryContactPhone,
-                    primaryContactEmail:      row.profile.primaryContactEmail,
-                    country:                  row.profile.country,
-                    state:                    row.profile.state,
-                    city:                     row.profile.city,
-                    timezone:                 row.profile.timezone,
-                    preferredCurrency:        row.profile.preferredCurrency,
-                    gstNumber:                row.profile.gstNumber,
-                    billingAddress:           row.profile.billingAddress,
-                    marketingOptIn:           row.profile.marketingOptIn,
+                    expectedParticipants: row.profile.expectedParticipants,
+                    heardAboutSource: row.profile.heardAboutSource,
+                    heardAboutOther: row.profile.heardAboutOther,
+                    primaryContactName: row.profile.primaryContactName,
+                    primaryContactPhone: row.profile.primaryContactPhone,
+                    primaryContactEmail: row.profile.primaryContactEmail,
+                    country: row.profile.country,
+                    state: row.profile.state,
+                    city: row.profile.city,
+                    timezone: row.profile.timezone,
+                    preferredCurrency: row.profile.preferredCurrency,
+                    gstNumber: row.profile.gstNumber,
+                    billingAddress: row.profile.billingAddress,
+                    marketingOptIn: row.profile.marketingOptIn,
                 }
                 : null,
         };
+    }
+
+    // ─── Private slug generator ───────────────────────────────────────────────
+
+    private async generateUniqueSlugForOrg(orgId: string, name: string): Promise<string> {
+        let baseSlug = createSlug(name);
+        if (!baseSlug) baseSlug = "org";
+        let attempt = 0;
+        const maxRetries = config.app?.maxSlugRetries ?? 10;
+
+        while (attempt <= maxRetries) {
+            const suffix = attempt > 0 ? `-${attempt}` : "";
+            const candidate = `${baseSlug}${suffix}`;
+            const existing = await this.repo.findOtherBySlug(candidate, orgId);
+            if (!existing) return candidate;
+            attempt++;
+        }
+
+        // Fallback with random suffix if retries exceeded
+        return `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
     }
 
     // ─── PATCH /onboarding/step/:step ─────────────────────────────────────────
@@ -114,13 +134,16 @@ export class OnboardingService {
         const data = parsed.data;
 
         if (upperStep === "IDENTITY") {
-            // Identity data goes on the Organization row (logoUrl/website), not profile
-            await this.repo.saveIdentityStep(orgId, data as { logoUrl?: string; website?: string });
+            const identityData = data as { name: string };
+            const uniqueSlug = await this.generateUniqueSlugForOrg(orgId, identityData.name);
+            await this.repo.saveIdentityStep(orgId, {
+                name: identityData.name,
+                slug: uniqueSlug,
+            });
             return;
         }
 
         if (upperStep === "PLAN_SELECTION") {
-            // Plan selection step: save plan selection or advance step to COMPLETED
             await this.repo.advanceStep(orgId, OnboardingStep.COMPLETED);
             return;
         }

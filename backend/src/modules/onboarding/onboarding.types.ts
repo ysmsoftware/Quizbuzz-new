@@ -39,8 +39,7 @@ export interface OnboardingStatusDTO {
 // ─── Step input types ─────────────────────────────────────────────────────────
 
 export interface IdentityStepInput {
-    logoUrl?: string;
-    website?: string;
+    name: string;
 }
 
 export interface UseCaseStepInput {
@@ -65,9 +64,9 @@ export interface ContactLocaleStepInput {
     state?:               string;
     city?:                string;
     timezone?:            string;
-    preferredCurrency?:   string;
-    gstNumber?:           string;
-    billingAddress?:      string;
+    heardAboutSource?:    HeardAboutSource;
+    heardAboutOther?:     string;
+    marketingOptIn?:      boolean;
 }
 
 export interface PlanSelectionStepInput {
