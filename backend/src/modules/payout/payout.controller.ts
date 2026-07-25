@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { PayoutService } from "./payout.service";
-import { setupPayoutAccountSchema, attachLinkedAccountSchema } from "./payout.validator";
+import { setupPayoutAccountSchema, attachLinkedAccountSchema, listTransfersQuerySchema } from "./payout.validator";
 import logger from "../../config/logger";
 
 export class PayoutController {
@@ -61,9 +61,27 @@ export class PayoutController {
   listTransfers = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { organizationId } = req.user!;
-      logger.info("List payout transfers request", { organizationId, requestId: req.id });
+      const query = listTransfersQuerySchema.parse(req.query);
 
-      const result = await this.payoutService.listTransfers(organizationId);
+      logger.info("List payout transfers request", { organizationId, query, requestId: req.id });
+
+      const result = await this.payoutService.listTransfers(organizationId, query);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  getTransferSummary = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { organizationId } = req.user!;
+      logger.info("Get payout transfer summary request", { organizationId, requestId: req.id });
+
+      const result = await this.payoutService.getTransferSummary(organizationId);
 
       return res.status(200).json({
         success: true,
@@ -74,3 +92,4 @@ export class PayoutController {
     }
   };
 }
+

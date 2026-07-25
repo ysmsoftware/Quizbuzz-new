@@ -134,3 +134,41 @@ export const exportQueue = new Queue<ExportJobPayload>("export-queue", {
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+// ─── Route Transfer ──────────────────────────────────────────────────────────
+
+export interface RouteTransferJobPayload {
+    paymentId: string;
+    organizationId: string;
+    amount: number;
+    razorpayPaymentId: string;
+    currency: string;
+    /**
+     * Set only by an explicit, human-triggered retry (e.g. an ops admin retrying a
+     * FAILED transfer from the dashboard after fixing whatever caused it). Normal
+     * webhook-driven and reconciliation-driven jobs never set this — it exists to
+     * bypass the "don't auto-retry a FAILED transfer in a hot loop" guard in
+     * PayoutService.createRouteTransferForPayment for the one case where a human has
+     * actually looked at why it failed and decided it's safe to try again.
+     */
+    forceRetry?: boolean;
+}
+
+/**
+ * Route transfer queue.
+ * Producers : PaymentService.handleWebhook (payment.captured branch)
+ * Consumers : route-transfer.worker.ts
+ * JobId     : `route-transfer-{paymentId}` ← dedupes concurrent webhook redeliveries
+ *
+ * Deliberately queued rather than fired inline from the webhook: the webhook is
+ * the single source of truth for payment state and must stay fast/reliable under
+ * registration-traffic bursts. Queuing gets durability (survives process restarts),
+ * automatic retries via config.queue.retryAttempts/backoff, and a scheduling delay
+ * (config.payout.transferDelayMs) as a safety window before funds leave the
+ * primary account — all without blocking the webhook response.
+ */
+export const routeTransferQueue = new Queue<RouteTransferJobPayload>("route-transfer-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

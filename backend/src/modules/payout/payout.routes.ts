@@ -12,5 +12,6 @@ payoutRouter.post("/setup", authenticatedOrgMiddleware, idempotency, (req, res, 
 payoutRouter.get("/account", authenticatedOrgMiddleware, (req, res, next) => ctrl().getPayoutAccount(req, res, next));
 payoutRouter.patch("/link", authenticatedOrgMiddleware, (req, res, next) => ctrl().attachLinkedAccount(req, res, next));
 payoutRouter.get("/transfers", authenticatedOrgMiddleware, (req, res, next) => ctrl().listTransfers(req, res, next));
+payoutRouter.get("/summary", authenticatedOrgMiddleware, (req, res, next) => ctrl().getTransferSummary(req, res, next));
 
 export default payoutRouter;

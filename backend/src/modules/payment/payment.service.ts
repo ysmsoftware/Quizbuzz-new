@@ -1,4 +1,4 @@
-import { Payment, PaymentStatus } from "@prisma/client";
+import { Payment, PaymentStatus, Prisma } from "@prisma/client";
 import { IPaymentRepository } from "./payment.repository";
 import { RazorpayProvider } from '../../providers/razorpay.provider';
 import { ContestService } from "../contest/contest.service";
@@ -11,6 +11,8 @@ import logger from "../../config/logger";
 
 import { PaymentListResult, PaymentDetailResult } from "./payment.types";
 import { PayoutService } from "../payout/payout.service";
+import { routeTransferQueue, RouteTransferJobPayload } from "../../queues";
+import { config } from "../../config";
 
 
 export class PaymentService {
@@ -223,18 +225,41 @@ export class PaymentService {
                     return;
                 }
 
-                await this.paymentRepo.markSuccess({
-                    razorpayOrderId,
-                    razorpayPaymentId: paymentEntity.id,
-                    paidAt: new Date(paymentEntity.created_at * 1000),
-                    metadata: {
-                        event: parsed.event,
-                        paymentId: paymentEntity.id,
-                        method: paymentEntity.method,
-                        email: paymentEntity.email,
-                        contact: paymentEntity.contact
+                // markSuccess's WHERE clause now guards on status !== SUCCESS too (see
+                // payment.repository.ts) — this closes the race where two concurrent
+                // webhook redeliveries both read PENDING above before either writes. The
+                // check above is a fast-path optimism check, not the actual guarantee;
+                // this try/catch around the real DB write is. If a concurrent delivery
+                // already won (Prisma P2025 — the WHERE clause matched zero rows because
+                // status flipped to SUCCESS between our read and our write), stop here:
+                // the winning delivery already handled registration confirmation, the
+                // email, and the transfer enqueue — running them again would duplicate
+                // side effects for no benefit.
+                try {
+                    await this.paymentRepo.markSuccess({
+                        razorpayOrderId,
+                        razorpayPaymentId: paymentEntity.id,
+                        paidAt: new Date(paymentEntity.created_at * 1000),
+                        metadata: {
+                            event: parsed.event,
+                            paymentId: paymentEntity.id,
+                            method: paymentEntity.method,
+                            email: paymentEntity.email,
+                            contact: paymentEntity.contact
+                        }
+                    });
+                } catch (err: any) {
+                    const lostRace =
+                        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025";
+                    if (lostRace) {
+                        logger.info("[payment] Concurrent webhook delivery already marked this payment SUCCESS — skipping duplicate processing", {
+                            razorpayOrderId,
+                            paymentId: payment.id,
+                        });
+                        return;
                     }
-                });
+                    throw err;
+                }
 
                 // Confirm the participant's seat: PENDING_PAYMENT → REGISTERED
                 // This is the source-of-truth gate for paid contests.
@@ -261,17 +286,34 @@ export class PaymentService {
                     });
                 }
 
-                // Trigger Razorpay Route payout transfer
+                // Enqueue the Razorpay Route payout transfer — deliberately NOT an inline
+                // fire-and-forget call. The webhook is the single source of truth for
+                // payment state and must stay fast/reliable under registration-traffic
+                // bursts; an in-process promise here would silently drop the transfer
+                // (no retry, no record) if the process crashed between webhook response
+                // and promise completion. Queuing gets durability, automatic retries
+                // (config.queue.retryAttempts/backoff), and a scheduling delay
+                // (config.payout.transferDelayMs) as a safety window before funds leave
+                // the primary account. jobId dedupes concurrent webhook redeliveries.
                 if (this.payoutService) {
-                    this.payoutService.createRouteTransferForPayment({
-                        id: payment.id,
-                        organizationId: payment.organizationId,
-                        amount: payment.amount,
-                        razorpayPaymentId: paymentEntity.id,
-                        currency: payment.currency,
-                    }).catch((err) => {
-                        logger.error(`[payment] Failed to process route transfer: ${(err as Error).message}`, { paymentId: payment.id });
-                    });
+                    try {
+                        await routeTransferQueue.add(
+                            "create-route-transfer",
+                            {
+                                paymentId: payment.id,
+                                organizationId: payment.organizationId,
+                                amount: payment.amount,
+                                razorpayPaymentId: paymentEntity.id,
+                                currency: payment.currency,
+                            },
+                            {
+                                jobId: `route-transfer-${payment.id}`,
+                                delay: config.payout.transferDelayMs,
+                            }
+                        );
+                    } catch (err) {
+                        logger.error(`[payment] Failed to enqueue route transfer: ${(err as Error).message}`, { paymentId: payment.id });
+                    }
                 }
                 break;
 
@@ -435,6 +477,125 @@ export class PaymentService {
         return payments;
     }
 
+
+    /**
+     * Periodic safety net (see docs/payout-flow-audit.md §4.1) for the one failure mode
+     * nothing else self-heals: a payment marked SUCCESS whose transfer job never got
+     * created at all — e.g. Redis was briefly unreachable at the exact moment
+     * handleWebhook tried to enqueue it. There's no PaymentRouteTransfer row in that
+     * case, so PayoutService's own stuck-transfer resumption (see 3.1's fix) has nothing
+     * to find. This sweep also re-enqueues stuck PENDING transfers that do have a row
+     * but whose original job is gone (e.g. it already ran to "completion" from BullMQ's
+     * point of view even though the business-level transfer never finished) — those will
+     * resume correctly once re-invoked, per PayoutService.createRouteTransferForPayment.
+     *
+     * Both re-enqueues go through the same queue and worker as the normal webhook path —
+     * this is not a separate code path for "doing the transfer", only for "noticing it
+     * needs to happen again".
+     */
+    async reconcileStuckTransfers(): Promise<{ missingCount: number; stuckCount: number }> {
+        const gracePeriodMs = config.payout.reconciliationGracePeriodMs;
+
+        const missingPayments = await this.paymentRepo.findSuccessPaymentsMissingTransfer(gracePeriodMs);
+        for (const payment of missingPayments) {
+            if (!payment.razorpayPaymentId) continue; // defensive — query already filters this
+            try {
+                await routeTransferQueue.add(
+                    "create-route-transfer",
+                    {
+                        paymentId: payment.id,
+                        organizationId: payment.organizationId,
+                        amount: payment.amount,
+                        razorpayPaymentId: payment.razorpayPaymentId,
+                        currency: payment.currency,
+                    },
+                    { jobId: `route-transfer-${payment.id}` } // no extra delay — already well past the safety window
+                );
+                logger.warn("[reconciliation] Re-enqueued a SUCCESS payment with no transfer record at all", {
+                    paymentId: payment.id,
+                    organizationId: payment.organizationId,
+                    ageMinutes: Math.round((Date.now() - payment.createdAt.getTime()) / 60000),
+                });
+            } catch (err) {
+                logger.error("[reconciliation] Failed to re-enqueue a missing transfer — will retry next sweep", {
+                    paymentId: payment.id,
+                    err: (err as Error).message,
+                });
+            }
+        }
+
+        let stuckCount = 0;
+        if (this.payoutService) {
+            const stuckTransfers = await this.payoutService.findStuckPendingTransfers(gracePeriodMs);
+            stuckCount = stuckTransfers.length;
+            for (const transfer of stuckTransfers) {
+                try {
+                    // Deliberately NOT reusing `route-transfer-${paymentId}` as the jobId here:
+                    // that job may already be sitting in BullMQ's "completed" or "failed" set
+                    // (retained per removeOnComplete/removeOnFail), and BullMQ's jobId dedup
+                    // would silently no-op the add() rather than create a fresh attempt.
+                    await routeTransferQueue.add(
+                        "create-route-transfer",
+                        {
+                            paymentId: transfer.paymentId,
+                            organizationId: transfer.organizationId,
+                            amount: transfer.grossAmount,
+                            razorpayPaymentId: transfer.razorpayPaymentId,
+                            currency: transfer.currency,
+                        },
+                        { jobId: `route-transfer-reconcile-${transfer.id}-${Date.now()}` }
+                    );
+                    logger.warn("[reconciliation] Re-enqueued a stuck PENDING transfer", {
+                        paymentId: transfer.paymentId,
+                        transferId: transfer.id,
+                        ageMinutes: Math.round((Date.now() - transfer.createdAt.getTime()) / 60000),
+                    });
+                } catch (err) {
+                    logger.error("[reconciliation] Failed to re-enqueue a stuck transfer — will retry next sweep", {
+                        transferId: transfer.id,
+                        err: (err as Error).message,
+                    });
+                }
+            }
+        }
+
+        if (missingPayments.length > 0 || stuckCount > 0) {
+            logger.warn("[reconciliation] Sweep complete", { missingCount: missingPayments.length, stuckCount });
+        } else {
+            logger.info("[reconciliation] Sweep complete — nothing to reconcile");
+        }
+
+        return { missingCount: missingPayments.length, stuckCount };
+    }
+
+    /** Registers the recurring BullMQ job that drives reconcileStuckTransfers on a schedule. */
+    async ensureReconciliationRecurringJob(): Promise<void> {
+        const jobId = "periodic-payout-reconciliation";
+        const intervalMs = config.payout.reconciliationIntervalMinutes * 60 * 1000;
+
+        const repeatables = await routeTransferQueue.getRepeatableJobs();
+        const existing = repeatables.find((repeatable) => repeatable.id === jobId);
+        if (existing) {
+            await routeTransferQueue.removeRepeatableByKey(existing.key);
+        }
+
+        // This queue's generic type is RouteTransferJobPayload (per-payment transfer jobs);
+        // the recurring housekeeping job carries no payload, hence the cast. The worker
+        // dispatches on job.name before touching job.data, so this never gets read as a
+        // RouteTransferJobPayload.
+        await routeTransferQueue.add(
+            "reconcile-transfers",
+            {} as unknown as RouteTransferJobPayload,
+            {
+                jobId,
+                repeat: { every: intervalMs },
+                removeOnComplete: true,
+                removeOnFail: true,
+            }
+        );
+
+        logger.info(`[payment-service] Recurring payout reconciliation scheduled every ${config.payout.reconciliationIntervalMinutes} minutes`);
+    }
 
     async getAllPayments(params: {
         organizationId: string;

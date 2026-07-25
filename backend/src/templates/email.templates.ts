@@ -85,6 +85,53 @@ export const EmailTemplates: {
         }),
     },
 
+    [MessageTemplate.PAYOUT_TRANSFER_CONFIRMATION]: {
+        build: (params) => ({
+            subject: `Payout transferred — ${params.transferAmount} credited to your account`,
+            html: `
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
+                    <h2 style="color:#1a1a1a;">Payout transferred</h2>
+                    <p>Hi ${params.name},</p>
+                    <p>A payment has been received and your share has been transferred to your linked payout account. Here's the full breakdown:</p>
+                    <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+                        <tr>
+                            <td style="padding:8px 0;color:#666;">Gross payment received</td>
+                            <td style="padding:8px 0;text-align:right;font-weight:600;">${params.grossAmount}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0;color:#666;">Platform commission (${params.commissionPercent})</td>
+                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.commissionAmount}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0;color:#666;">Payment gateway fee (${params.gatewayFeePercent})</td>
+                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.gatewayFeeAmount}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0;color:#666;">GST on gateway fee (${params.gstPercent})</td>
+                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.gstAmount}</td>
+                        </tr>
+                        <tr style="border-top:1px solid #eee;">
+                            <td style="padding:8px 0;color:#666;">Total deducted</td>
+                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.totalDeducted}</td>
+                        </tr>
+                        <tr style="border-top:2px solid #1a1a1a;">
+                            <td style="padding:12px 0;font-weight:700;">Amount transferred to you</td>
+                            <td style="padding:12px 0;text-align:right;font-weight:700;color:#1a7a3c;">${params.transferAmount}</td>
+                        </tr>
+                    </table>
+                    <p style="color:#999;font-size:12px;">
+                        The payment gateway fee and GST are charges levied by Razorpay on every transaction and are passed through as-is — QuizBuzz does not profit from this portion.
+                    </p>
+                    <p style="color:#999;font-size:12px;">Transfer reference: ${params.transferId}</p>
+                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+                    <p style="color:#999;font-size:12px;">
+                        This is an automated payout notification from QuizBuzz.
+                    </p>
+                </div>
+            `,
+        }),
+    },
+
     // ── Admin / system templates ──────────────────────────────────────────────
 
     [MessageTemplate.EMAIL_VERIFICATION]: {

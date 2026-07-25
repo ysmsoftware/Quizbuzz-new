@@ -91,6 +91,7 @@ export const queryKeys = {
 
   payout: {
     account: ['payout', 'account'],
-    transfers: ['payout', 'transfers'],
+    summary: ['payout', 'summary'],
+    transfers: (filters?: any) => ['payout', 'transfers', filters],
   },
 } as const;

@@ -38,6 +38,19 @@ export type TemplateParamsMap = {
         amount: string,
         eventName: string,
     },
+    [MessageTemplate.PAYOUT_TRANSFER_CONFIRMATION]: {
+        name: string,
+        grossAmount: string,
+        commissionPercent: string,
+        commissionAmount: string,
+        gatewayFeePercent: string,
+        gatewayFeeAmount: string,
+        gstPercent: string,
+        gstAmount: string,
+        totalDeducted: string,
+        transferAmount: string,
+        transferId: string,
+    },
 
     // ── Admin / system templates ──────────────────────────────────────────────
 

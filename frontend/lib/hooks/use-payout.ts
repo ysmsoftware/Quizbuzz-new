@@ -4,8 +4,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as payoutApi from '../api/payout.api';
 import { queryKeys } from '../api/queryClient';
 
-export function usePayout() {
+export interface UsePayoutParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+}
+
+export function usePayout(params: UsePayoutParams = {}) {
   const queryClient = useQueryClient();
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 20;
+  const statusParam = params.status ?? 'all';
 
   const accountQuery = useQuery({
     queryKey: queryKeys.payout.account,
@@ -13,8 +22,13 @@ export function usePayout() {
   });
 
   const transfersQuery = useQuery({
-    queryKey: queryKeys.payout.transfers,
-    queryFn: () => payoutApi.listPayoutTransfers(),
+    queryKey: queryKeys.payout.transfers({ page, limit, status: statusParam }),
+    queryFn: () => payoutApi.listPayoutTransfers({ page, limit, status: statusParam }),
+  });
+
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.payout.summary,
+    queryFn: () => payoutApi.getPayoutSummary(),
   });
 
   const setupAccountMutation = useMutation({
@@ -41,6 +55,7 @@ export function usePayout() {
   return {
     accountQuery,
     transfersQuery,
+    summaryQuery,
     setupAccountMutation,
     attachLinkedAccountMutation,
 
@@ -50,5 +65,10 @@ export function usePayout() {
     hasAccount,
     loading: accountQuery.isLoading,
     error: accountQuery.error?.message ?? null,
+
+    transfers: transfersQuery.data?.data?.items ?? [],
+    transfersTotal: transfersQuery.data?.data?.total ?? 0,
+    summary: summaryQuery.data?.data ?? null,
   };
 }
+

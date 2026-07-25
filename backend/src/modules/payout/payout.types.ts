@@ -24,3 +24,32 @@ export interface PayoutAccountResponse {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface PayoutTransferItem {
+  id: string;
+  contestTitle: string;
+  grossAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  gatewayFeePercent: number;
+  gatewayFeeAmount: number;
+  gstPercent: number;
+  gstAmount: number;
+  totalDeducted: number;
+  transferAmount: number;
+  currency: string;
+  status: RouteTransferStatus;
+  failureReason: string | null;
+  razorpayTransferId: string | null;
+  processedAt: string | null;
+  createdAt: string;
+}
+
+export interface PayoutTransferSummary {
+  processed: number;
+  pending: number;
+  failed: number;
+  totalReceivedAllTime: number;
+  currency: string;
+}
+

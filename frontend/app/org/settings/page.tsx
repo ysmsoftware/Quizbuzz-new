@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CheckCircle2, AlertTriangle, Clock, Ban, Mail } from 'lucide-react';
+import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CheckCircle2, AlertTriangle, Clock, Ban, Mail, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipSelect } from '@/components/shared/ChipSelect';
 import { USE_CASES, ORG_SIZES, CONTEST_VOLUMES, PARTICIPANT_VOLUMES, HEARD_SOURCES } from '@/lib/constants/org-profile-options';
@@ -722,7 +722,22 @@ export default function SettingsPage() {
 }
 
 function PayoutsTabContent() {
-    const { account, status, isActive, loading, setupAccountMutation } = usePayout();
+    const [page, setPage] = useState(1);
+    const [statusFilter, setStatusFilter] = useState('all');
+    const limit = 20;
+
+    const {
+        account,
+        status,
+        isActive,
+        hasAccount,
+        loading,
+        setupAccountMutation,
+        transfers,
+        transfersTotal,
+        summary,
+        transfersQuery,
+    } = usePayout({ page, limit, status: statusFilter });
 
     const [payoutForm, setPayoutForm] = useState({
         accountName: '',
@@ -768,6 +783,24 @@ function PayoutsTabContent() {
 
     const hasSubmittedRequest = !!account;
     const contactChannel = [account?.accountEmail, account?.contactNumber].filter(Boolean).join(' / ');
+    const totalPages = Math.ceil(transfersTotal / limit) || 1;
+
+    const formatPaise = (amountInPaise: number) => {
+        return `₹${(amountInPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatDate = (isoString: string) => {
+        if (!isoString) return 'N/A';
+        return new Date(isoString).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    const shouldShowKPIsAndLedger = (hasAccount && isActive) || transfers.length > 0 || (summary && (summary.processed > 0 || summary.pending > 0 || summary.failed > 0));
 
     return (
         <div className="space-y-6">
@@ -914,6 +947,209 @@ function PayoutsTabContent() {
                     </CardContent>
                 </Card>
             </form>
+
+            {/* Payout Summary KPI Row & History Table */}
+            {shouldShowKPIsAndLedger && (
+                <div className="space-y-6">
+                    {/* KPI Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Card className="border-border/50">
+                            <CardContent className="p-4 flex flex-col justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">Total Received All Time</p>
+                                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+                                    {formatPaise(summary?.totalReceivedAllTime || 0)}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-1">Net amount settled to account</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50">
+                            <CardContent className="p-4 flex flex-col justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">Processed Transfers</p>
+                                <p className="text-2xl font-bold text-foreground mt-2">
+                                    {summary?.processed || 0}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-1">Completed settlements</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50">
+                            <CardContent className="p-4 flex flex-col justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">Pending Transfers</p>
+                                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-2">
+                                    {summary?.pending || 0}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-1">Awaiting settlement processing</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50">
+                            <CardContent className="p-4 flex flex-col justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">Failed Transfers</p>
+                                <p className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-2">
+                                    {summary?.failed || 0}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-1">Transfers requiring attention</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Transfers Ledger Table */}
+                    <Card className="border-border/50">
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
+                            <div>
+                                <CardTitle className="text-xl font-bold">Payout History</CardTitle>
+                                <CardDescription>View transaction-level fee breakdown and settlement status</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Filter className="h-4 w-4 text-muted-foreground" />
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => {
+                                        setStatusFilter(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="PROCESSED">PROCESSED</option>
+                                    <option value="PENDING">PENDING</option>
+                                    <option value="FAILED">FAILED</option>
+                                    <option value="REVERSED">REVERSED</option>
+                                </select>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-0">
+                            {transfersQuery.isLoading ? (
+                                <div className="flex h-36 items-center justify-center">
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                </div>
+                            ) : transfers.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground space-y-2">
+                                    <p className="text-sm font-medium">No payouts yet</p>
+                                    <p className="text-xs max-w-md mx-auto">
+                                        This will populate once your first paid contest closes registrations and a transfer is processed.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-muted/40 text-xs font-semibold text-muted-foreground border-b border-border/50">
+                                            <tr>
+                                                <th className="px-4 py-3">Date</th>
+                                                <th className="px-4 py-3">Contest</th>
+                                                <th className="px-4 py-3 text-right">Gross</th>
+                                                <th className="px-4 py-3 text-right">Commission</th>
+                                                <th className="px-4 py-3 text-right">Gateway Fee</th>
+                                                <th className="px-4 py-3 text-right">GST</th>
+                                                <th className="px-4 py-3 text-right font-bold">Net Received</th>
+                                                <th className="px-4 py-3">Status</th>
+                                                <th className="px-4 py-3">Transfer ID</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/50">
+                                            {transfers.map((item) => (
+                                                <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">
+                                                        {formatDate(item.createdAt)}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-medium text-foreground">
+                                                        {item.contestTitle}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                                                        {formatPaise(item.grossAmount)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap text-xs text-muted-foreground">
+                                                        {formatPaise(item.commissionAmount)}
+                                                        <span className="block text-[10px] text-muted-foreground/70">({item.commissionPercent}%)</span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap text-xs text-muted-foreground">
+                                                        {formatPaise(item.gatewayFeeAmount)}
+                                                        <span className="block text-[10px] text-muted-foreground/70">({item.gatewayFeePercent}%)</span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap text-xs text-muted-foreground">
+                                                        {formatPaise(item.gstAmount)}
+                                                        <span className="block text-[10px] text-muted-foreground/70">({item.gstPercent}%)</span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap font-bold text-emerald-600 dark:text-emerald-400">
+                                                        {formatPaise(item.transferAmount)}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {item.status === 'PROCESSED' && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                                                <CheckCircle2 className="h-3 w-3" /> PROCESSED
+                                                            </span>
+                                                        )}
+                                                        {item.status === 'PENDING' && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                                <Clock className="h-3 w-3" /> PENDING
+                                                            </span>
+                                                        )}
+                                                        {item.status === 'FAILED' && (
+                                                            <div>
+                                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                                                                    <AlertTriangle className="h-3 w-3" /> FAILED
+                                                                </span>
+                                                                {item.failureReason && (
+                                                                    <p className="text-[11px] text-rose-500 mt-0.5 max-w-[180px] truncate" title={item.failureReason}>
+                                                                        {item.failureReason}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {item.status === 'REVERSED' && (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
+                                                                <Ban className="h-3 w-3" /> REVERSED
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                                                        {item.razorpayTransferId || '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </CardContent>
+
+                        {/* Pagination Footer */}
+                        {transfersTotal > limit && (
+                            <div className="flex items-center justify-between px-4 py-3 border-t border-border/50 bg-muted/20">
+                                <p className="text-xs text-muted-foreground">
+                                    Showing {((page - 1) * limit) + 1}–{Math.min(page * limit, transfersTotal)} of {transfersTotal} transfers
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                        className="h-8 gap-1 text-xs"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                                    </Button>
+                                    <span className="text-xs text-muted-foreground font-medium">
+                                        Page {page} of {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={page >= totalPages}
+                                        className="h-8 gap-1 text-xs"
+                                    >
+                                        Next <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
+

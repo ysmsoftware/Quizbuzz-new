@@ -80,6 +80,8 @@ export class PayoutRepository {
     razorpayLinkedAccountId?: string | undefined;
     grossAmount: number;
     platformFeeAmount: number;
+    gatewayFeeAmount: number;
+    gstAmount: number;
     transferAmount: number;
     currency?: string;
     status?: RouteTransferStatus;
@@ -96,6 +98,8 @@ export class PayoutRepository {
         razorpayLinkedAccountId: data.razorpayLinkedAccountId || null,
         grossAmount: data.grossAmount,
         platformFeeAmount: data.platformFeeAmount,
+        gatewayFeeAmount: data.gatewayFeeAmount,
+        gstAmount: data.gstAmount,
         transferAmount: data.transferAmount,
         currency: data.currency || "INR",
         status: data.status || RouteTransferStatus.PENDING,
@@ -127,11 +131,73 @@ export class PayoutRepository {
     });
   }
 
-  async listTransfersByOrgId(organizationId: string, limit = 50) {
+  async listTransfersByOrgId(
+    organizationId: string,
+    params: { page: number; limit: number; status: string }
+  ) {
+    const where = {
+      organizationId,
+      ...(params.status !== "all" && { status: params.status as RouteTransferStatus }),
+    };
+    const [rows, total] = await Promise.all([
+      prisma.paymentRouteTransfer.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (params.page - 1) * params.limit,
+        take: params.limit,
+        include: { payment: { include: { contest: { select: { title: true } } } } },
+      }),
+      prisma.paymentRouteTransfer.count({ where }),
+    ]);
+    return { rows, total };
+  }
+
+  /**
+   * Reconciliation query: PENDING transfers with no failureReason (i.e. not the
+   * legitimate "org has no active account yet" case) that are older than the grace
+   * period. These are almost certainly interrupted attempts — createRouteTransferForPayment
+   * will resume them correctly once re-invoked (see its stuck-transfer classification),
+   * but if the job that would re-invoke it was itself lost, nothing calls it again
+   * without this sweep finding it.
+   */
+  async findStuckPendingTransfers(olderThanMs: number, limit = 200) {
+    const cutoff = new Date(Date.now() - olderThanMs);
     return prisma.paymentRouteTransfer.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: "desc" },
+      where: {
+        status: RouteTransferStatus.PENDING,
+        failureReason: null,
+        createdAt: { lt: cutoff },
+      },
+      orderBy: { createdAt: "asc" },
       take: limit,
     });
   }
+
+  async getTransferSummaryByOrgId(organizationId: string) {
+    const [statusCounts, totalProcessedSum] = await Promise.all([
+      prisma.paymentRouteTransfer.groupBy({
+        by: ["status"],
+        where: { organizationId },
+        _count: { status: true },
+      }),
+      prisma.paymentRouteTransfer.aggregate({
+        where: { organizationId, status: RouteTransferStatus.PROCESSED },
+        _sum: { transferAmount: true },
+      }),
+    ]);
+
+    const counts: Record<string, number> = {};
+    for (const item of statusCounts) {
+      counts[item.status] = item._count.status;
+    }
+
+    return {
+      processed: counts[RouteTransferStatus.PROCESSED] || 0,
+      pending: counts[RouteTransferStatus.PENDING] || 0,
+      failed: counts[RouteTransferStatus.FAILED] || 0,
+      totalReceivedAllTime: totalProcessedSum._sum.transferAmount || 0,
+      currency: "INR",
+    };
+  }
 }
+

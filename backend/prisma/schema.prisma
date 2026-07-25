@@ -615,8 +615,10 @@ model PaymentRouteTransfer {
   razorpayTransferId      String?              @unique
   razorpayLinkedAccountId String?
   grossAmount             Int
-  platformFeeAmount       Int
-  transferAmount          Int
+  platformFeeAmount       Int                  // platform commission only (config.payout.commissionPercent)
+  gatewayFeeAmount        Int                  @default(0) // Razorpay TDR (config.payout.gatewayFeePercent)
+  gstAmount               Int                  @default(0) // GST on the gateway fee (config.payout.gstPercent)
+  transferAmount          Int                  // grossAmount - platformFeeAmount - gatewayFeeAmount - gstAmount
   currency                String               @default("INR")
   status                  RouteTransferStatus  @default(PENDING)
   failureReason           String?
@@ -628,8 +630,8 @@ model PaymentRouteTransfer {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   payment      Payment      @relation(fields: [paymentId], references: [id])
 
-  @@index([organizationId])
-  @@index([status])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
   @@map("payment_route_transfers")
 }
 

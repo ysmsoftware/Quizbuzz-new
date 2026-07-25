@@ -6,6 +6,7 @@ export enum MessageTemplate {
     REGISTRATION_SUCCESSFUL     = "REGISTRATION_SUCCESSFUL",
     WORKSHOP_REMINDER_MESSAGE   = "WORKSHOP_REMINDER_MESSAGE",
     PAYMENT_CONFIRMATION_MESSAGE = "PAYMENT_CONFIRMATION_MESSAGE",
+    PAYOUT_TRANSFER_CONFIRMATION = "PAYOUT_TRANSFER_CONFIRMATION",
 
     // Admin / system templates (email-only — no Aisensy campaign)
     EMAIL_VERIFICATION       = "EMAIL_VERIFICATION",
@@ -31,6 +32,7 @@ export const CONTACT_ONLY_TEMPLATES = new Set<MessageTemplate>([
     MessageTemplate.PASSWORD_RESET,
     MessageTemplate.ORG_INVITE,
     MessageTemplate.ADMIN_EMAIL_OTP,
+    MessageTemplate.PAYOUT_TRANSFER_CONFIRMATION,
 ]);
 
 /**

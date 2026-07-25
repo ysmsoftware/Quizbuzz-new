@@ -44,6 +44,13 @@ export interface IPaymentRepository {
 
     updateForRetry(data: { participantId: string; razorpayOrderId: string; }): Promise<Payment>;
 
+    /**
+     * Reconciliation query: SUCCESS payments with no PaymentRouteTransfer row at all,
+     * older than the grace period. This is the "the enqueue itself never happened"
+     * failure mode — there's no transfer row to inspect, so this is the only way to
+     * find these.
+     */
+    findSuccessPaymentsMissingTransfer(olderThanMs: number, limit?: number): Promise<Payment[]>;
 }
 
 
@@ -107,10 +114,16 @@ export class PaymentRepository implements IPaymentRepository {
         });
     }
 
-    // webhook success
+    // webhook success — guarded the same way markFailed already is: only write if the
+    // row isn't already SUCCESS. Two concurrent webhook redeliveries for the same order
+    // (Razorpay does redeliver) can both read PENDING before either writes; without this
+    // guard both would proceed to markSuccess, both fire the confirmation email and the
+    // registration-confirm side effect a second time. Prisma throws P2025 ("record not
+    // found") when the WHERE clause matches zero rows — the caller treats that as "a
+    // concurrent delivery already won this", not an error.
     async markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment> {
         return await prisma.payment.update({
-            where: { razorpayOrderId: data.razorpayOrderId },
+            where: { razorpayOrderId: data.razorpayOrderId, status: { not: PaymentStatus.SUCCESS } },
             data: {
                 razorpayPaymentId: data.razorpayPaymentId,
                 paidAt: data.paidAt,
@@ -187,6 +200,20 @@ export class PaymentRepository implements IPaymentRepository {
                 failureReason: null
             }
         })
+    }
+
+    async findSuccessPaymentsMissingTransfer(olderThanMs: number, limit = 200): Promise<Payment[]> {
+        const cutoff = new Date(Date.now() - olderThanMs);
+        return prisma.payment.findMany({
+            where: {
+                status: PaymentStatus.SUCCESS,
+                razorpayPaymentId: { not: null },
+                createdAt: { lt: cutoff },
+                routeTransfer: null,
+            },
+            orderBy: { createdAt: "asc" },
+            take: limit,
+        });
     }
 
     async allPayments(params: {
