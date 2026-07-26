@@ -46,3 +46,7 @@ terraform/scripts/setup-ssm.sh
 
 # Load Testing
 load-testing/
+
+
+# Agents
+.agent/*

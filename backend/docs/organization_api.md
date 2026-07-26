@@ -1,24 +1,37 @@
 # 🏢 Organization Module API Documentation
 
-This document provides details for all 6 endpoints related to organization management, team member invitations, and role configuration.
+This document provides details for all endpoints related to organization management, team member invitations, and role configuration.
 
 ---
 
 ## 📑 Table of Contents
-1. [Update Organization](#1-update-organization)
-2. [Get Members](#2-get-members)
-3. [Invite Member](#3-invite-member)
-4. [Update Member Role](#4-update-member-role)
-5. [Remove Member](#5-remove-member)
-6. [Accept Invitation](#6-accept-invitation)
+1. [Get Organization](#1-get-organization)
+2. [Update Organization](#2-update-organization)
+3. [Update Organization Profile](#3-update-organization-profile)
+4. [Get Members](#4-get-members)
+5. [Invite Member](#5-invite-member)
+6. [Update Member Role](#6-update-member-role)
+7. [Remove Member](#7-remove-member)
+8. [Accept Invitation](#8-accept-invitation)
 
 ---
 
-## 1. Update Organization
-Modify the core details of your organization.
+## 1. Get Organization
+**Description:** Retrieve the details of a specific organization.
+**Business Logic:** Fetches the core details of an organization using its unique ID, returning its profile and configuration. 
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/org/:orgId`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 2. Update Organization
+**Description:** Update the core details of an organization.
+**Business Logic:** Modifies the fundamental properties of the organization, such as its name, logo, or website. Requires Admin authorization.
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/v1/org`
+- **Endpoint:** `/api/v1/org/:orgId`
 - **Auth:** Admin (Organization JWT)
 
 ### Request Body (JSON)
@@ -38,23 +51,35 @@ Modify the core details of your organization.
 
 ---
 
-## 2. Get Members
-List all team members currently associated with the organization.
+## 3. Update Organization Profile
+**Description:** Update the profile settings of an organization.
+**Business Logic:** Allows fine-grained updates to the organization's extended profile details. Handled separately from core details for isolation.
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/v1/org/:orgId/profile`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 4. Get Members
+**Description:** List all team members in the organization.
+**Business Logic:** Retrieves an array of all members associated with the specified organization along with their respective roles.
 
 - **Method:** `GET`
-- **Endpoint:** `/api/v1/org/members`
-- **Auth:** Admin
+- **Endpoint:** `/api/v1/org/:orgId/members`
+- **Auth:** Admin (Organization JWT)
 
 **Response Body:** Returns an array of member objects containing `userId`, `email`, `role`, and `name`.
 
 ---
 
-## 3. Invite Member
-Send an invitation link to a new team member via email.
+## 5. Invite Member
+**Description:** Send an invitation link to a new team member.
+**Business Logic:** Creates an invitation token and dispatches an email to the invitee, specifying their future role (e.g., OWNER, ADMIN, VIEWER).
 
 - **Method:** `POST`
-- **Endpoint:** `/api/v1/org/members/invite`
-- **Auth:** Admin
+- **Endpoint:** `/api/v1/org/:orgId/members/invite`
+- **Auth:** Admin (Organization JWT)
 
 ### Request Body (JSON)
 | Field | Type | Required | Description |
@@ -71,12 +96,13 @@ Send an invitation link to a new team member via email.
 
 ---
 
-## 4. Update Member Role
-Change the permissions of an existing team member.
+## 6. Update Member Role
+**Description:** Change the role permissions of an existing team member.
+**Business Logic:** Updates a specific member's access level within the organization, altering their privileges based on the newly assigned role.
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/v1/org/members/:userId/role`
-- **Auth:** Admin
+- **Endpoint:** `/api/v1/org/:orgId/members/:memberId/role`
+- **Auth:** Admin (Organization JWT)
 
 ### Request Body (JSON)
 | Field | Type | Required | Description |
@@ -85,20 +111,22 @@ Change the permissions of an existing team member.
 
 ---
 
-## 5. Remove Member
-Revoke a user's access to the organization.
+## 7. Remove Member
+**Description:** Revoke a user's access to the organization.
+**Business Logic:** Removes the specified member from the organization entirely, stripping them of all access and permissions immediately.
 
 - **Method:** `DELETE`
-- **Endpoint:** `/api/v1/org/members/:userId`
-- **Auth:** Admin
+- **Endpoint:** `/api/v1/org/:orgId/members/:memberId`
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 6. Accept Invitation
-Finalize the onboarding of a new member using their unique invitation token.
+## 8. Accept Invitation
+**Description:** Finalize the onboarding of a new member.
+**Business Logic:** Consumes the unique invitation token received via email and adds the user to the organization with the predefined role.
 
 - **Method:** `POST`
-- **Endpoint:** `/api/v1/org/members/invite/accept`
+- **Endpoint:** `/api/v1/org/invite/accept`
 - **Auth:** **Public**
 
 ### Request Body (JSON)

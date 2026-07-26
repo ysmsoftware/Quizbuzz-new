@@ -18,7 +18,8 @@ This document covers all 9 endpoints for managing the master list of potential p
 ---
 
 ## 1. Create Contact
-Manually add a person to the organization's database.
+**Description:** Manually add a person to the organization's contact database.
+**Business Logic:** Validates the contact's email or phone, ensuring uniqueness within the organization's scope, and stores their profile (name, college, city) for future event registrations or marketing.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contacts`
@@ -47,11 +48,12 @@ Manually add a person to the organization's database.
 ---
 
 ## 2. Lookup Contact
-Quickly find a contact by their unique identifiers (email or phone).
+**Description:** Find a specific contact by their email address or phone number.
+**Business Logic:** Performs an exact match query against the organization's contact list using the provided identifiers. Used to quickly check if a user is already in the database before creating a new entry.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts/lookup`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ### Query Parameters
 | Parameter | Type | Required | Description |
@@ -62,11 +64,12 @@ Quickly find a contact by their unique identifiers (email or phone).
 ---
 
 ## 3. List Contacts
-Fetch the entire contact list with advanced filtering.
+**Description:** Fetch the organization's entire contact list with optional advanced filtering.
+**Business Logic:** Supports paginated queries, fuzzy searching on name/email/phone, and exact filtering by institution or city to help admins manage and segment their audience.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ### Query Parameters
 | Parameter | Type | Default | Description |
@@ -80,53 +83,59 @@ Fetch the entire contact list with advanced filtering.
 ---
 
 ## 4. Get Contact by ID
-Retrieve the full profile and custom fields for a single contact.
+**Description:** Retrieve the full profile and custom fields for a single contact.
+**Business Logic:** Queries the database for the complete contact record matching the given ID, ensuring it belongs to the authenticated admin's organization.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts/:id`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 5. Update Contact
-Modify contact information.
+**Description:** Modify an existing contact's profile information.
+**Business Logic:** Applies partial updates to the contact's demographic data (name, phone, college, etc.) while ensuring the changes don't violate uniqueness constraints within the org.
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/v1/contacts/:id`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 6. Delete Contact
-Soft-delete a contact. This removes them from active lists but retains historical contest records.
+**Description:** Soft-delete a contact from the database.
+**Business Logic:** Flags the contact as deleted rather than permanently erasing the record. This hides them from active lists but retains referential integrity for historical contest records and logs.
 
 - **Method:** `DELETE`
 - **Endpoint:** `/api/v1/contacts/:id`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 7. Get Contact Registrations
-List all contests this contact has registered for.
+**Description:** List all contests this contact has registered for.
+**Business Logic:** Queries the participants/registrations table filtering by the specific contact ID to show a history of their engagement across the organization's events.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts/:id/contests`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 8. Get Contact Message History
-List all Email/WhatsApp communications sent to this specific contact.
+**Description:** List all Email and WhatsApp communications sent to this specific contact.
+**Business Logic:** Aggregates message logs tied to the contact's email or phone number to provide a complete audit trail of the organization's outreach to them.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts/:id/messages`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 9. Get Contact Certificates
-Fetch all certificates issued to this contact across different contests.
+**Description:** Fetch all certificates issued to this contact across different contests.
+**Business Logic:** Retrieves the metadata and download links for all digital certificates the contact has successfully earned within the organization's events.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contacts/:id/certificates`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)

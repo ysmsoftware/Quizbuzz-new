@@ -1,6 +1,6 @@
 # 📥 Submission Module API Documentation
 
-This document covers all 8 endpoints for managing participant submissions, grading, and status tracking.
+This document covers all endpoints for managing participant submissions, grading, and status tracking.
 
 ---
 
@@ -17,7 +17,8 @@ This document covers all 8 endpoints for managing participant submissions, gradi
 ---
 
 ## 1. Submit Quiz (Participant)
-The final step for a participant. Mark the quiz as complete and finalize answers.
+**Description:** The final step for a participant to manually complete their quiz.
+**Business Logic:** Closes the participant's active quiz session, tallies their stored answers from Redis, and transitions their state to SUBMITTED, making them eligible for evaluation.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/:contestId/submit`
@@ -27,7 +28,8 @@ The final step for a participant. Mark the quiz as complete and finalize answers
 ---
 
 ## 2. Get My Submission (Participant)
-Check if a submission was successful and retrieve basic results (if configured by the admin to be visible).
+**Description:** Retrieve confirmation and basic result data for a participant's own submission.
+**Business Logic:** Returns the submission metadata to the participant, optionally including their final score and certificate link if the admin has published the results.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/submissions/me/:participantId`
@@ -36,7 +38,8 @@ Check if a submission was successful and retrieve basic results (if configured b
 ---
 
 ## 3. List Contest Submissions (Admin)
-Audit and filter all entries for a specific contest.
+**Description:** Audit and filter all entries for a specific contest.
+**Business Logic:** Serves a paginated view of all completed quizzes within a contest, allowing the admin to filter by status or minimum score to evaluate performance.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/admin/contests/:contestId/submissions`
@@ -51,44 +54,49 @@ Audit and filter all entries for a specific contest.
 ---
 
 ## 4. Get Submission Stats (Admin)
-Retrieve a breakdown of submission counts per status for a contest.
+**Description:** Retrieve a breakdown of submission counts per status for a contest.
+**Business Logic:** Performs an aggregate query to provide summary metrics (e.g., how many quizzes are pending evaluation versus fully graded) for the admin dashboard.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/admin/contests/:contestId/submissions/stats`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 5. Get Submission by ID (Admin)
-Detailed view of a single participant's work, including specific answers and question-level scores.
+**Description:** Detailed view of a single participant's work and question-level scores.
+**Business Logic:** Fetches the full JSON payload of a specific submission, including the exact answers selected, timestamps, and correctness booleans for granular auditing.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/admin/submissions/:submissionId`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 6. Bulk Evaluation (Admin)
-Trigger the grading engine to process all submitted quizzes for a contest. This uses background workers.
+**Description:** Trigger the grading engine to process all submitted quizzes for a contest.
+**Business Logic:** Dispatches a background job that cross-references all submitted answers against the correct options, calculates final scores, and generates the leaderboard.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/admin/contests/:contestId/submissions/evaluate`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 7. Invalidate Submission (Admin)
-Manually mark a submission as invalid (e.g., due to cheating or admin policy). This prevents the score from being included in leaderboards.
+**Description:** Manually mark a submission as invalid to exclude it from results.
+**Business Logic:** Modifies the submission's status to INVALIDATED (often due to cheating or policy breaches), completely removing their score from the public leaderboard.
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/v1/admin/submissions/:submissionId/invalidate`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
 ## 8. List Contact Submissions (Admin)
-Historical view of all quizzes taken by a specific contact across all contests in the organization.
+**Description:** View all quizzes historically taken by a specific contact across the organization.
+**Business Logic:** Aggregates a user's entire contest participation history within the organization's bounds, useful for long-term tracking of their performance.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/admin/contacts/:contactId/submissions`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)

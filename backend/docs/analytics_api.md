@@ -8,11 +8,13 @@ This document covers endpoints for retrieving performance insights, leaderboards
 1. [Get Contest Analytics](#1-get-contest-analytics)
 2. [Get Live Analytics](#2-get-live-analytics)
 3. [Refresh Analytics](#3-refresh-analytics)
+4. [Get Score Distribution](#4-get-score-distribution)
 
 ---
 
 ## 1. Get Contest Analytics
-Retrieve a comprehensive report of a completed or ongoing contest. Includes average scores, completion rates, and the full leaderboard.
+**Description:** Retrieve a comprehensive report of a completed or ongoing contest.
+**Business Logic:** Aggregates participant performance, average scores, completion rates, and compiles the full leaderboard. It is used to present the final overview of a contest's success metrics.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/analytics/:id`
@@ -40,11 +42,12 @@ Retrieve a comprehensive report of a completed or ongoing contest. Includes aver
 ---
 
 ## 2. Get Live Analytics
-Fetch real-time participation statistics during a live quiz. Useful for "War Room" dashboards.
+**Description:** Fetch real-time participation statistics during a live quiz.
+**Business Logic:** Queries active sessions, submission velocity, and proctoring alerts over a sliding window. Ideal for live "War Room" dashboards monitoring ongoing contests.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/analytics/:id/live`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ### Data Points Returned:
 - **Active Sessions:** Number of participants currently taking the quiz.
@@ -55,8 +58,19 @@ Fetch real-time participation statistics during a live quiz. Useful for "War Roo
 ---
 
 ## 3. Refresh Analytics
-Force the system to re-calculate the leaderboard and aggregated statistics. This is typically handled by background workers but can be manually triggered if data looks stale.
+**Description:** Force the system to recalculate leaderboard and aggregated statistics.
+**Business Logic:** Enqueues a background job to rebuild the analytics materialized views and invalidates the current cache. Often triggered manually if live data appears stale.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/analytics/:id/refresh`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 4. Get Score Distribution
+**Description:** Retrieve the score distribution histogram for a contest.
+**Business Logic:** Calculates the number of participants falling into specific score buckets (e.g., 0-10, 11-20). Used to visualize the performance curve of the cohort.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/analytics/:id/score-distribution`
+- **Auth:** Admin (Organization JWT)

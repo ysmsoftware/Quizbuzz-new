@@ -28,11 +28,13 @@ QuizBuzz uses a dual-token system for maximum security:
 8. [Logout (Single & All)](#8-logout-single--all)
 9. [Get Current User (Me)](#9-get-current-user-me)
 10. [Switch Organization](#10-switch-organization)
+11. [Get Socket Token](#11-get-socket-token)
 
 ---
 
 ## 1. Register Admin
-Create a new administrator account. This automatically creates a default organization for the user.
+**Description:** Create a new administrator account.
+**Business Logic:** This automatically creates a default organization for the user and assigns them the OWNER role. An OTP is generated and emailed to the user for verification.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/register`
@@ -46,24 +48,11 @@ Create a new administrator account. This automatically creates a default organiz
 | `firstName` | `string` | Yes | 2-50 characters. |
 | `lastName` | `string` | Yes | 2-50 characters. |
 
-### Expected Response (201 Created)
-```json
-{
-  "success": true,
-  "message": "Account created. Please verify your email",
-  "data": {
-    "id": "user_01H2...",
-    "email": "admin@example.com",
-    "isEmailVerified": false
-  },
-  "requestId": "req_..."
-}
-```
-
 ---
 
 ## 2. Login Admin
-Authenticate and establish a session. Sets `accessToken` and `refreshToken` cookies.
+**Description:** Authenticate an administrator and establish a session.
+**Business Logic:** Validates the credentials, tracks the device metadata (IP, user agent), and generates a new pair of Access and Refresh tokens. The tokens are attached as HTTP-only cookies in the response.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/login`
@@ -77,54 +66,21 @@ Authenticate and establish a session. Sets `accessToken` and `refreshToken` cook
 }
 ```
 
-### Expected Response (200 OK)
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "user": {
-      "id": "user_...",
-      "email": "admin@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    },
-    "tokens": {
-      "accessToken": "ey...",
-      "refreshToken": "ey..."
-    },
-    "currentOrganization": {
-      "id": "org_...",
-      "name": "John's Org",
-      "role": "OWNER"
-    }
-  }
-}
-```
-
 ---
 
 ## 3. Refresh Token
-Exchange a refresh token for a new access token.
+**Description:** Exchange a valid refresh token for a new access token.
+**Business Logic:** Consumes the refresh token stored in the strict-scoped cookie, validates its expiration and status, and issues a fresh set of tokens to extend the active session securely.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/refresh`
 - **Auth:** **Public** (Requires `refreshToken` cookie)
 
-### Expected Response (200 OK)
-```json
-{
-  "success": true,
-  "message": "Token refreshed",
-  "requestId": "req_..."
-}
-```
-*Note: The new tokens are automatically updated in the browser/Postman cookies.*
-
 ---
 
 ## 4. Verify Email (OTP)
-Verify the account using the 6-digit numeric OTP sent via email.
+**Description:** Verify the admin account using a 6-digit numeric OTP.
+**Business Logic:** Compares the provided OTP against the hashed OTP in the database. If correct and not expired, it marks the account's email as verified.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/verify-email`
@@ -141,7 +97,8 @@ Verify the account using the 6-digit numeric OTP sent via email.
 ---
 
 ## 5. Resend Verification
-Request a new OTP if the original expired (15-minute TTL).
+**Description:** Request a new verification OTP.
+**Business Logic:** Generates a new OTP, updates the expiration time (usually 15 minutes TTL) in the database, and sends a new verification email to the user.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/resend-verification`
@@ -150,7 +107,8 @@ Request a new OTP if the original expired (15-minute TTL).
 ---
 
 ## 6. Forgot Password
-Trigger a password reset workflow.
+**Description:** Trigger a password reset workflow.
+**Business Logic:** Validates the existence of the user, generates a secure password reset token, and sends it to the user's registered email address.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/forgot-password`
@@ -164,7 +122,8 @@ Trigger a password reset workflow.
 ---
 
 ## 7. Reset Password
-Update the password using the token received in the reset email.
+**Description:** Update the password using the reset token.
+**Business Logic:** Verifies the cryptographic token received via email and securely hashes and saves the new password, terminating all existing sessions to enforce security.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/reset-password`
@@ -181,15 +140,15 @@ Update the password using the token received in the reset email.
 ---
 
 ## 8. Logout (Single & All)
+**Description:** Invalidate one or all administrator sessions.
+**Business Logic:** The single logout deletes the current token pair. The 'logout-all' option increments a token version flag in the database, invalidating every active session across all devices.
 
 ### Single Logout
-Invalidates the current session and clears local cookies.
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/logout`
 - **Auth:** **Admin**
 
 ### Logout All
-Invalidates all sessions across all devices (Security reset).
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/logout-all`
 - **Auth:** **Admin**
@@ -197,31 +156,18 @@ Invalidates all sessions across all devices (Security reset).
 ---
 
 ## 9. Get Current User (Me)
-Retrieve the full profile of the authenticated administrator.
+**Description:** Retrieve the full profile of the authenticated administrator.
+**Business Logic:** Uses the access token to fetch the user's data, along with all their associated organizations, roles, and the currently active organizational context.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/auth/admin/me`
 - **Auth:** **Admin**
 
-### Expected Response
-```json
-{
-  "success": true,
-  "data": {
-    "user": { ... },
-    "organizations": [
-      { "id": "org_1", "name": "Org A", "role": "OWNER" },
-      { "id": "org_2", "name": "Org B", "role": "ADMIN" }
-    ],
-    "activeOrganizationId": "org_1"
-  }
-}
-```
-
 ---
 
 ## 10. Switch Organization
-Change the active organizational context for the current session.
+**Description:** Change the active organizational context for the current session.
+**Business Logic:** Validates that the user belongs to the requested organization and modifies the current session state/token payload to reflect the newly active organization ID.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/auth/admin/switch-org`
@@ -233,6 +179,16 @@ Change the active organizational context for the current session.
   "organizationId": "org_01H3..."
 }
 ```
+
+---
+
+## 11. Get Socket Token
+**Description:** Retrieve a token for WebSocket connections.
+**Business Logic:** Generates a short-lived, signed JWT specifically designed for authenticating real-time WebSocket connections (e.g. for notifications or proctoring) for this user.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/auth/admin/socket-token`
+- **Auth:** **Admin**
 
 ---
 

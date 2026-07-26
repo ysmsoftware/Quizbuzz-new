@@ -7,11 +7,13 @@ This document provides a comprehensive list of all API endpoints available in th
 ### 📚 Detailed Module Guides
 - [🔐 Auth & Identity](auth_api.md)
 - [🏢 Organization Management](organization_api.md)
+- [🚀 Onboarding](onboarding_api.md)
+- [💸 Payout](payout_api.md)
 - [🏆 Contest Management](contest_api.md)
 - [❓ Question Bank](question_api.md)
 - [👤 Contact Database](contact_api.md)
 - [👥 Participant Management](participant_api.md)
-- [⚡ Live Quiz & Handshake](quiz_api.md)
+- [⚡ Quiz & Real-Time](quiz_api.md)
 - [📥 Submissions & Evaluation](submission_api.md)
 - [🛡️ Proctoring & Integrity](proctoring_api.md)
 - [💳 Payments (Razorpay)](payment_api.md)
@@ -47,15 +49,7 @@ Endpoints for administrator registration, login, and session management.
 | POST | `/auth/admin/logout-all` | Admin | Invalidate all active sessions for the user. |
 | GET | `/auth/admin/me` | Admin | Get details of the currently logged-in user. |
 | POST | `/auth/admin/switch-org` | Admin | Switch the active organization context. |
-
-### Example: Admin Login
-`POST /auth/admin/login`
-```json
-{
-  "email": "admin@example.com",
-  "password": "Password123!"
-}
-```
+| GET | `/auth/admin/socket-token` | Admin | Retrieve a token for WebSocket connections. |
 
 ---
 
@@ -64,25 +58,43 @@ Management of organization profile and team members.
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| PATCH | `/org` | Admin | Update organization details (name, logo, website). |
-| GET | `/org/members` | Admin | List all members of the organization. |
-| POST | `/org/members/invite` | Admin | Invite a new member to the organization. |
-| PATCH | `/org/members/:userId/role` | Admin | Update a member's role (OWNER, ADMIN, VIEWER). |
-| DELETE | `/org/members/:userId` | Admin | Remove a member from the organization. |
+| GET | `/org/:orgId` | Admin | Get organization details. |
+| PATCH | `/org/:orgId/profile` | Admin | Update organization details (name, logo, website). |
+| GET | `/org/:orgId/members` | Admin | List all members of the organization. |
+| POST | `/org/:orgId/members/invite` | Admin | Invite a new member to the organization. |
+| PATCH | `/org/:orgId/members/:memberId/role` | Admin | Update a member's role (OWNER, ADMIN, VIEWER). |
+| DELETE | `/org/:orgId/members/:memberId` | Admin | Remove a member from the organization. |
 | POST | `/org/members/invite/accept` | Public | Accept an invitation using the invite token. |
-
-### Example: Invite Member
-`POST /org/members/invite`
-```json
-{
-  "email": "newmember@example.com",
-  "role": "ADMIN"
-}
-```
 
 ---
 
-## 3. Contact Module
+## 3. Onboarding Module
+Initial setup and plan selection flow for new organizations.
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| GET | `/onboarding/status` | Admin | Retrieve the current completion state. |
+| PATCH | `/onboarding/step/:step` | Admin | Persist data for a specific setup step. |
+| POST | `/onboarding/complete` | Admin | Finalize onboarding and activate the organization. |
+| GET | `/onboarding/plans` | Admin | Fetch available billing plans. |
+| POST | `/onboarding/handoff` | Admin | Generate a secure handoff link for external billing. |
+
+---
+
+## 4. Payout Module
+Managing organization payout accounts and tracking revenue transfers.
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/payout/setup` | Admin | Initialize a payout account configuration. |
+| GET | `/payout/account` | Admin | Retrieve the current payout account details. |
+| PATCH | `/payout/link` | Admin | Finalize linkage of an external payout account. |
+| GET | `/payout/transfers` | Admin | Fetch a ledger of all automated revenue transfers. |
+| GET | `/payout/summary` | Admin | Retrieve aggregated metrics of revenue payouts. |
+
+---
+
+## 5. Contact Module
 Manage the master database of participants (Contacts).
 
 | Method | Endpoint | Auth | Description |
@@ -99,76 +111,104 @@ Manage the master database of participants (Contacts).
 
 ---
 
-## 4. Contest Module
+## 6. Contest Module
 Endpoints for the complete contest lifecycle.
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | POST | `/contests` | Admin | Create a new contest (Draft status). |
-| GET | `/contests` | Admin | List all contests owned by the organization. |
-| POST | `/contests/register/:contestSlug` | Public | Public registration endpoint for participants. |
+| GET | `/contests` | Admin | List all active contests owned by the organization. |
+| POST | `/contests/upload-banner` | Admin | Upload a promotional banner image. |
+| POST | `/contests/register/:contestSlug` | Public | Register for a contest via public slug. |
+| GET | `/contests/public` | Public | Fetch all publicly accessible and published contests. |
+| GET | `/contests/public/:slug` | Public | Fetch detailed public information about a contest. |
+| GET | `/contests/archived` | Admin | Fetch all archived contests. |
 | GET | `/contests/:contestId` | Admin | Get detailed contest configuration. |
-| PATCH | `/contests/:contestId` | Admin | Update contest settings (while in Draft). |
-| DELETE | `/contests/:contestId` | Admin | Delete a draft contest. |
-| POST | `/contests/:contestId/publish` | Admin | Publish contest and generate Join Code. |
-| GET | `/contests/:contestId/participants` | Admin | List all registered participants for a contest. |
+| PATCH | `/contests/:contestId` | Admin | Update contest settings. |
+| DELETE | `/contests/:contestId` | Admin | Soft-delete a draft contest. |
+| PATCH | `/contests/:contestId/archive` | Admin | Move a contest to the archive. |
+| POST | `/contests/:contestId/publish` | Admin | Publish contest and open for registration. |
+| POST | `/contests/:contestId/close-registration` | Admin | Manually close the registration window early. |
+| GET | `/contests/:contestId/participants` | Admin | List all participants for a contest. |
+| GET | `/contests/:contestId/participants/status-summary`| Admin | Get aggregated participant status counts. |
 | GET | `/contests/:contestId/participants/:participantId` | Admin | Get specific participant details. |
-| PATCH | `/contests/:contestId/participants/:participantId/disqualify` | Admin | Disqualify a participant with a reason. |
-| POST | `/contests/:contestId/evaluate` | Admin | Trigger bulk evaluation of all submissions. |
-| POST | `/contests/:contestId/declare-results` | Admin | Publish leaderboard and notify participants. |
-| GET | `/contests/:contestId/leaderboard` | Public | Get the published leaderboard for a contest. |
+| PATCH | `/contests/:contestId/participants/:participantId/disqualify` | Admin | Disqualify a participant. |
+| POST | `/contests/:contestId/evaluate` | Admin | Trigger evaluation of all submissions. |
+| GET | `/contests/:contestId/results-info` | Admin | Retrieve pre-declaration insights. |
+| POST | `/contests/:contestId/declare-results` | Admin | Declare final results and publish leaderboard. |
+| GET | `/contests/:contestId/leaderboard` | Public | Retrieve rankings for a public contest. |
+| GET | `/contests/:contestId/admin-leaderboard`| Admin | Retrieve complete leaderboard for admin review. |
 
 ---
 
-## 5. Question Module
+## 7. Question Module
 Manage the organizational question bank and contest assignments.
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| POST | `/questions` | Admin | Create a single question with options. |
 | GET | `/questions` | Admin | List organization's questions. |
+| POST | `/questions` | Admin | Create a single question with options. |
+| POST | `/questions/bulk` | Admin | Bulk import questions. |
+| GET | `/questions/tags` | Admin | Get distinct tags used in organization questions. |
 | GET | `/questions/:id` | Admin | Get detailed question info. |
 | PATCH | `/questions/:id` | Admin | Update question or its options. |
 | DELETE | `/questions/:id` | Admin | Soft delete a question. |
-| POST | `/questions/bulk` | Admin | Bulk import questions from JSON. |
-| POST | `/questions/assign/:contestId` | Admin | Link questions to a specific contest. |
-| POST | `/questions/reorder/:contestId` | Admin | Change the display order of questions in a contest. |
-| PATCH | `/questions/contest-questions/:id` | Admin | Update marks/negative marks for a specific link. |
-| GET | `/questions/tags` | Admin | Get distinct tags used in organization questions. |
+| GET | `/questions/contests/:contestId/questions` | Admin | Retrieve all questions assigned to a contest. |
+| POST | `/questions/contests/:contestId/assign-questions` | Admin | Link questions to a specific contest. |
+| POST | `/questions/contests/:contestId/auto-generate` | Admin | Use AI to automatically generate questions. |
+| DELETE | `/questions/contests/:contestId/questions/:questionId` | Admin | Unlink a specific question from a contest. |
+| PATCH | `/questions/contests/:contestId/questions/:questionId` | Admin | Update scoring/ordering within one contest. |
 
 ---
 
-## 6. Submission Module
+## 8. Participant Module
+Management and auditing of contest participants.
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| GET | `/contests/:contestId/participants` | Admin | Fetch all users registered for a contest. |
+| GET | `/contests/:contestId/participants/status-summary`| Admin | Aggregated counts of participants by status. |
+| POST | `/contests/:contestId/participants/bulk-status` | Admin | Force update status of multiple participants. |
+| GET | `/contests/:contestId/participants/:participantId` | Admin | Retrieve detailed information about a participant. |
+| PATCH | `/contests/:contestId/participants/:participantId/disqualify` | Admin | Manually remove a participant from the contest. |
+| POST | `/contests/:contestId/participants/export` | Admin | Initiate a background job to export participant data. |
+| GET | `/contests/:contestId/participants/export/:exportId` | Admin | Check status or retrieve download link for export. |
+
+---
+
+## 9. Submission Module
 Endpoints for handling participant quiz entries.
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | GET | `/admin/contests/:contestId/submissions` | Admin | List all submissions for a contest. |
 | GET | `/admin/contests/:contestId/submissions/stats` | Admin | Get status breakdown of submissions. |
-| POST | `/admin/contests/:contestId/submissions/evaluate` | Admin | Trigger evaluation (redundant with Contest Evaluate). |
+| POST | `/admin/contests/:contestId/submissions/evaluate` | Admin | Trigger bulk grading evaluation. |
 | GET | `/admin/submissions/:submissionId` | Admin | Get full details of a submission (with scores). |
 | PATCH | `/admin/submissions/:submissionId/invalidate` | Admin | Invalidate a submission (admin override). |
 | GET | `/admin/contacts/:contactId/submissions` | Admin | Get all submissions for a specific contact. |
-| POST | `/:contestId/submit` | Partic. | Submit quiz answers (REST fallback). |
+| POST | `/:contestId/submit` | Partic. | Submit quiz answers. |
 | GET | `/submissions/me/:participantId` | Partic. | Get own submission results. |
 
 ---
 
-## 7. Messaging Module
+## 10. Messaging Module
 Communications management (Email/WhatsApp).
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| GET | `/messaging/:id` | Admin | Get details and delivery status of a message. |
-| POST | `/messaging/send` | Admin | Send an ad-hoc message using a template. |
-| POST | `/messaging/:id/retry` | Admin | Retry a failed message delivery. |
+| GET | `/messaging/templates` | Admin | Retrieve all available message templates. |
+| POST | `/messaging/send` | Admin | Send an ad-hoc message. |
+| GET | `/messaging/:id` | Admin | Get delivery status of a specific message. |
+| POST | `/messaging/:id/retry` | Admin | Retry a specific failed message. |
 | POST | `/messaging/retry-failed` | Admin | Bulk retry all failed messages in org. |
 | GET | `/messaging/contact/:contactId` | Admin | Message history for a contact. |
 | GET | `/messaging/contest/:contestId` | Admin | All messages sent for a specific contest. |
+| GET | `/messaging/contest/:contestId/contact/:contactId` | Admin | Messages for contact in contest. |
 
 ---
 
-## 8. Payment Module
+## 11. Payment Module
 Integration with Razorpay for contest entry fees.
 
 | Method | Endpoint | Auth | Description |
@@ -176,6 +216,7 @@ Integration with Razorpay for contest entry fees.
 | POST | `/payment/create-order` | Partic. | Create a new Razorpay order for registration. |
 | POST | `/payment/verify` | Partic. | Verify payment signature after success. |
 | POST | `/payment/retry` | Partic. | Retry a failed payment order. |
+| GET | `/payment/status/:participantId` | Partic. | Check real-time payment status of participant. |
 | GET | `/payment/events/:contestId` | Admin | List all payments for a contest. |
 | GET | `/payment` | Admin | List all payments in organization. |
 | GET | `/payment/:paymentId` | Admin | Get specific payment transaction details. |
@@ -183,7 +224,7 @@ Integration with Razorpay for contest entry fees.
 
 ---
 
-## 9. Certificate Module
+## 12. Certificate Module
 Automated certificate generation and delivery.
 
 | Method | Endpoint | Auth | Description |
@@ -199,7 +240,7 @@ Automated certificate generation and delivery.
 
 ---
 
-## 10. Proctoring Module
+## 13. Proctoring Module
 Real-time monitoring and violation auditing.
 
 | Method | Endpoint | Auth | Description |
@@ -208,46 +249,54 @@ Real-time monitoring and violation auditing.
 | GET | `/proctoring/contests/:contestId/flagged` | Admin | List participants with high violation counts. |
 | GET | `/proctoring/contests/:contestId/participants/:participantId/events` | Admin | Detailed audit log of violations for a user. |
 | PATCH | `/proctoring/scores/:scoreId/status` | Admin | Dismiss or confirm a specific violation. |
+| GET | `/proctoring/contests/:contestId/participants/:participantId/captures` | Admin | Retrieve webcam snapshots captured. |
 
 ---
 
-## 11. Analytics Module
+## 14. Analytics Module
 Performance insights and live reporting.
 
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | GET | `/analytics/:id` | Admin | Get full analytics report for a contest. |
-| GET | `/analytics/:id/live` | Admin | Real-time funnel analytics (Waiting -> In-Quiz -> Submitted). |
+| GET | `/analytics/:id/live` | Admin | Real-time funnel analytics. |
 | POST | `/analytics/:id/refresh` | Admin | Force refresh cached analytics data. |
 
 ---
 
-## 12. Quiz Module (WebSocket API)
-Quiz interaction happens over WebSockets for real-time performance.
+## 15. Quiz & Real-Time Module
+REST endpoints for live quiz interaction and WebSocket references.
 
+### REST Endpoints
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/auth/quiz/request-otp` | Public | Request an OTP for a participant to login. |
+| POST | `/auth/quiz/verify-otp` | Public | Verify the provided OTP to authenticate. |
+| POST | `/auth/quiz/participant-login` | Public | Login via credentials instead of OTP. |
+| POST | `/quiz-proctoring/presigned-url` | Partic. | Request secure upload link for capture. |
+| PUT | `/quiz-proctoring/local-upload` | Public | Local upload fallback for captures. |
+| POST | `/quiz-proctoring/confirm` | Partic. | Confirm capture upload finished. |
+
+### WebSocket API
 **Namespace:** `/participant`
-**Auth Handshake:** Pass JWT as `token` in `auth` object.
+**Auth Handshake:** Extract `participantId` and `contestId` from `socket.data`
 
 | Event (Client Emit) | Payload | Description |
 | :--- | :--- | :--- |
-| `quiz:v1:join` | `{}` | Join the waiting room for the contest. |
+| `quiz:v1:join` | `{}` | Join the waiting room or resume session. |
 | `quiz:v1:heartbeat` | `{}` | Keep session alive and track presence. |
-| `quiz:v1:answer` | `{ "questionId": "...", "selectedOptionId": "...", "answeredAt": "..." }` | Save an answer to Redis (Auto-save). |
+| `quiz:v1:answer` | `{ "questionId": "...", "selectedOptionId": "...", "answeredAt": "..." }` | Save an answer to Redis. |
+| `quiz:v1:skip` | `{ "questionId": "..." }` | Explicitly skip a question. |
 | `quiz:v1:violation` | `{ "type": "TAB_SWITCH", "severity": "MEDIUM" }` | Report a detected violation. |
 | `quiz:v1:submit` | `{}` | Final submission of the quiz. |
 
 | Event (Server Emit) | Payload | Description |
 | :--- | :--- | :--- |
+| `quiz:v1:waiting_room_status`| `{ "status": "WAITING" }` | Updates pre-quiz status. |
 | `quiz:v1:start` | `{ "questions": [...], "totalTimeMs": 3600000 }` | Quiz has started for the user. |
+| `quiz:v1:answer_saved` | `{ "questionId": "..." }` | Confirmation answer persisted. |
 | `quiz:v1:time_warning` | `{ "secondsRemaining": 300 }` | Time threshold alert. |
 | `quiz:v1:auto_submit` | `{ "reason": "TIME_UP" }` | Force submission by server. |
 | `quiz:v1:capture_request`| `{ "captureType": "RANDOM" }` | Trigger camera snapshot on client. |
-
----
-
-## 🛠️ Postman Collection Tips
-
-1.  **Environment Variables**: Create an environment in Postman with `baseUrl` and `adminToken`.
-2.  **Inheritance**: Set the Authorization to `Bearer Token` at the Collection level using `{{adminToken}}`.
-3.  **JSON Body**: All POST/PATCH requests use `Content-Type: application/json`.
-4.  **Registration Ref**: After registration, store the `registrationRef` to use in participant-facing endpoints.
+| `quiz:v1:violation_update`| `{ "count": 2 }` | Informs client of updated violation count. |
+| `quiz:v1:submit_success` | `{ "submissionRef": "..." }` | Confirms successful manual submission. |

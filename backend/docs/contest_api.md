@@ -1,28 +1,38 @@
 # 🏆 Contest Module API Documentation
 
-This document provides a detailed breakdown of all 13 routes within the Contest module. This module manages the lifecycle of a contest, from creation and question assignment to participant registration and results declaration.
+This document provides a detailed breakdown of all routes within the Contest module. This module manages the lifecycle of a contest, from creation and question assignment to participant registration and results declaration.
 
 ---
 
 ## 📑 Table of Contents
 1. [Create Contest](#1-create-contest)
 2. [List Contests](#2-list-contests)
-3. [Register Participant (Public)](#3-register-participant-public)
-4. [Get Contest by ID](#4-get-contest-by-id)
-5. [Update Contest](#5-update-contest)
-6. [Delete Contest](#6-delete-contest)
-7. [Publish Contest](#7-publish-contest)
-8. [List Participants (Admin)](#8-list-participants-admin)
-9. [Get Participant Details (Admin)](#9-get-participant-details-admin)
-10. [Disqualify Participant (Admin)](#10-disqualify-participant-admin)
-11. [Trigger Evaluation](#11-trigger-evaluation)
-12. [Declare Results](#12-declare-results)
-13. [Get Leaderboard (Public)](#13-get-leaderboard-public)
+3. [Upload Banner](#3-upload-banner)
+4. [Register Participant (Public)](#4-register-participant-public)
+5. [List Public Contests](#5-list-public-contests)
+6. [Get Public Contest by Slug](#6-get-public-contest-by-slug)
+7. [List Archived Contests](#7-list-archived-contests)
+8. [Get Contest by ID](#8-get-contest-by-id)
+9. [Update Contest](#9-update-contest)
+10. [Delete Contest](#10-delete-contest)
+11. [Archive Contest](#11-archive-contest)
+12. [Publish Contest](#12-publish-contest)
+13. [Close Registration](#13-close-registration)
+14. [List Participants (Admin)](#14-list-participants-admin)
+15. [Get Participant Status Summary](#15-get-participant-status-summary)
+16. [Get Participant Details (Admin)](#16-get-participant-details-admin)
+17. [Disqualify Participant (Admin)](#17-disqualify-participant-admin)
+18. [Trigger Evaluation](#18-trigger-evaluation)
+19. [Get Results Info](#19-get-results-info)
+20. [Declare Results](#20-declare-results)
+21. [Get Leaderboard (Public)](#21-get-leaderboard-public)
+22. [Get Admin Leaderboard](#22-get-admin-leaderboard)
 
 ---
 
 ## 1. Create Contest
-Initialize a new contest in `DRAFT` status.
+**Description:** Initialize a new contest in `DRAFT` status.
+**Business Logic:** Validates all contest configuration parameters and creates a new database record under the admin's organization, allowing further editing before publication.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contests`
@@ -48,178 +58,212 @@ Initialize a new contest in `DRAFT` status.
 | `showResultsAfter`| `number` | No | Hours after end time to show leaderboard (default 24). |
 | `prizes` | `array` | No | Array of prize objects (rank ranges and amounts). |
 
-```json
-{
-  "title": "Tech Wizards 2024",
-  "description": "Annual tech challenge",
-  "duration": 45,
-  "startTime": "2024-12-01T10:00:00Z",
-  "registrationDeadline": "2024-11-30T23:59:59Z",
-  "topics": ["React", "NodeJS", "System Design"],
-  "rules": ["No cheating", "Single attempt only"],
-  "shuffleQuestions": true
-}
-```
-
 ---
 
 ## 2. List Contests
-Fetch all contests belonging to the admin's organization.
+**Description:** Fetch all active contests belonging to the organization.
+**Business Logic:** Returns a paginated list of non-archived contests filtered by query parameters like status or search terms to populate the admin dashboard.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contests`
 - **Auth:** Admin (Organization JWT)
 
-### Query Parameters
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `status` | `string` | - | Filter by status (`DRAFT`, `PUBLISHED`, `LIVE`, `COMPLETED`, `CANCELLED`). |
-| `page` | `number` | `1` | Pagination page. |
-| `limit` | `number` | `20` | Results per page (max 100). |
-| `search` | `string` | - | Fuzzy search on title. |
+---
+
+## 3. Upload Banner
+**Description:** Upload a promotional banner image for a contest.
+**Business Logic:** Accepts a multipart form data upload, processes the image file, saves it to a cloud storage bucket, and returns the public URL for the banner.
+
+- **Method:** `POST`
+- **Endpoint:** `/api/v1/contests/upload-banner`
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 3. Register Participant (Public)
-Public endpoint for users to register for a contest via its slug.
+## 4. Register Participant (Public)
+**Description:** Allow a user to register for a contest via its public slug.
+**Business Logic:** Verifies the `contactToken`, checks if the contest is published and within the registration deadline, and creates a participant registration record.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contests/register/:contestSlug`
 - **Auth:** **Public** (Requires valid `contactToken` from OTP verification)
 
-### Path Parameters
-| Parameter | Description |
-| :--- | :--- |
-| `:contestSlug` | The URL-friendly version of the contest title (e.g., `tech-wizards-2024`). |
+---
 
-### Request Body (JSON)
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `contactToken` | `string` | Yes | JWT obtained after verifying Phone/Email OTP. |
-| `email` | `string` | Yes | Must match the email in `contactToken`. |
-| `firstName` | `string` | Yes | Participant's first name. |
-| `phone` | `string` | No | E.164 format (e.g. +919876543210). |
-| `college` | `string` | No | Name of institution. |
-| `city` | `string` | No | Location details. |
+## 5. List Public Contests
+**Description:** Fetch all publicly accessible and published contests.
+**Business Logic:** Retrieves a paginated feed of live or upcoming contests across organizations that are open for public viewing and registration.
 
-```json
-{
-  "contactToken": "eyJhbG...",
-  "email": "alice@example.com",
-  "firstName": "Alice",
-  "lastName": "Smith",
-  "college": "MIT",
-  "city": "Boston"
-}
-```
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/public`
+- **Auth:** **Public**
 
 ---
 
-## 4. Get Contest by ID
-Retrieve full configuration and status of a single contest.
+## 6. Get Public Contest by Slug
+**Description:** Fetch detailed public information about a contest using its slug.
+**Business Logic:** Loads the full public profile (rules, topics, timing, prizes) of a contest required to render its registration landing page.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/public/:slug`
+- **Auth:** **Public**
+
+---
+
+## 7. List Archived Contests
+**Description:** Fetch all archived contests for the organization.
+**Business Logic:** Retrieves a paginated list of contests that have been explicitly archived, removing them from the main active views but retaining historical data.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/archived`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 8. Get Contest by ID
+**Description:** Retrieve full configuration and status of a single contest.
+**Business Logic:** Fetches the complete contest payload, including all configurations and current state, verifying the admin's organization access privileges.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contests/:contestId`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 5. Update Contest
-Modify contest settings. Only allowed while status is `DRAFT`.
+## 9. Update Contest
+**Description:** Modify contest settings.
+**Business Logic:** Applies a partial update to the contest's configuration, enforcing constraints (e.g. major configuration changes are usually restricted if the contest is not DRAFT).
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/v1/contests/:contestId`
-- **Auth:** Admin
-- **Request Body:** Partial of [Create Contest](#1-create-contest).
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 6. Delete Contest
-Soft-delete a contest. Only allowed if status is `DRAFT`.
+## 10. Delete Contest
+**Description:** Soft-delete a DRAFT contest.
+**Business Logic:** Completely removes or soft-deletes a contest record. This is strictly prohibited if the contest is already published and has participants.
 
 - **Method:** `DELETE`
 - **Endpoint:** `/api/v1/contests/:contestId`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 7. Publish Contest
-Moves a contest from `DRAFT` to `PUBLISHED`. Generates the `joinCode` and makes the contest available for public registration.
+## 11. Archive Contest
+**Description:** Move a completed or cancelled contest to the archive.
+**Business Logic:** Flags the contest as archived, hiding it from active dashboards to reduce clutter while preserving all historical data and analytics.
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/v1/contests/:contestId/archive`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 12. Publish Contest
+**Description:** Move a contest from `DRAFT` to `PUBLISHED`.
+**Business Logic:** Validates that all prerequisites (e.g. sufficient questions, correct timing) are met, generates access codes, and opens the contest for public registration.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contests/:contestId/publish`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 8. List Participants (Admin)
-List all users who have registered for a specific contest.
+## 13. Close Registration
+**Description:** Manually close the registration window early.
+**Business Logic:** Modifies the contest state to reject any further participant registrations, overriding the original automatic registration deadline.
+
+- **Method:** `POST`
+- **Endpoint:** `/api/v1/contests/:contestId/close-registration`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 14. List Participants (Admin)
+**Description:** List all users who have registered for a specific contest.
+**Business Logic:** Returns a paginated list of participants associated with a specific contest, allowing filtering by their registration or evaluation status.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contests/:contestId/participants`
-- **Auth:** Admin
-
-### Query Parameters
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `status` | `string` | - | Filter by `REGISTERED`, `DISQUALIFIED`, etc. |
-| `page` | `number` | `1` | Pagination page. |
-| `limit` | `number` | `50` | Results per page. |
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 9. Get Participant Details (Admin)
-Get detailed info about a specific participant, including their registration status and registration reference.
+## 15. Get Participant Status Summary
+**Description:** Get aggregated counts of participants by their current status.
+**Business Logic:** Calculates a summary distribution (e.g. 50 REGISTERED, 10 COMPLETED, 2 DISQUALIFIED) to provide a quick health check on contest attendance.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/:contestId/participants/status-summary`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 16. Get Participant Details (Admin)
+**Description:** Get detailed information about a specific participant.
+**Business Logic:** Retrieves the comprehensive participant profile, including their registration timestamps, proctoring flags, and current contest state.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contests/:contestId/participants/:participantId`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 10. Disqualify Participant (Admin)
-Manually disqualify a participant. Prevents them from joining the quiz or receiving a certificate.
+## 17. Disqualify Participant (Admin)
+**Description:** Manually disqualify a participant from the contest.
+**Business Logic:** Updates the participant's status to DISQUALIFIED, recording a reason, which prevents them from taking the quiz or appearing on the leaderboard.
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/v1/contests/:contestId/participants/:participantId/disqualify`
-- **Auth:** Admin
-
-### Request Body (JSON)
-```json
-{
-  "reason": "Suspicious activity detected in proctoring logs."
-}
-```
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 11. Trigger Evaluation
-Manually trigger the evaluation engine for all submitted entries. This calculates scores based on correct/incorrect answers and timing.
+## 18. Trigger Evaluation
+**Description:** Manually trigger the evaluation engine for all submitted entries.
+**Business Logic:** Submits a background job to cross-reference participant answers with correct options, compute final scores, and update leaderboard tables.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contests/:contestId/evaluate`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 12. Declare Results
-Official declaration of results. Moves the contest to `COMPLETED` and publishes the final rankings to the public leaderboard.
+## 19. Get Results Info
+**Description:** Retrieve pre-declaration insights about the evaluation.
+**Business Logic:** Serves a summary of the evaluation outcomes (e.g. top scores, average scores) to the admin before they officially commit to declaring results.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/:contestId/results-info`
+- **Auth:** Admin (Organization JWT)
+
+---
+
+## 20. Declare Results
+**Description:** Officially declare the final results of the contest.
+**Business Logic:** Locks the contest state to COMPLETED, finalizes all scores, triggers email notifications to participants, and publishes the public leaderboard.
 
 - **Method:** `POST`
 - **Endpoint:** `/api/v1/contests/:contestId/declare-results`
-- **Auth:** Admin
+- **Auth:** Admin (Organization JWT)
 
 ---
 
-## 13. Get Leaderboard (Public)
-Retrieve the rankings and scores for a contest.
+## 21. Get Leaderboard (Public)
+**Description:** Retrieve the rankings and scores for a public contest.
+**Business Logic:** Returns the publicly visible, paginated leaderboard showing participant ranks and scores. It enforces that results must be declared before data is returned.
 
 - **Method:** `GET`
 - **Endpoint:** `/api/v1/contests/:contestId/leaderboard`
-- **Auth:** **Public** (But only works if results have been declared)
+- **Auth:** **Public**
 
-### Query Parameters
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `page` | `number` | `1` | Pagination page. |
-| `limit` | `number` | `50` | Results per page. |
+---
+
+## 22. Get Admin Leaderboard
+**Description:** Retrieve the complete leaderboard for admin review.
+**Business Logic:** Similar to the public leaderboard but bypasses the "results declared" check, allowing admins to inspect full rankings internally before public release.
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/contests/:contestId/admin-leaderboard`
+- **Auth:** Admin (Organization JWT)
