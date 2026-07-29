@@ -1,7 +1,19 @@
 import { z } from "zod";
 import dotenv from "dotenv";
+import path from "path";
 
-dotenv.config();
+// In test runs (Jest sets NODE_ENV=test by default, and CI passes it
+// explicitly), load the committed .env.test file instead of the local,
+// git-ignored .env. This keeps unit tests config-driven without requiring
+// real secrets in CI, and keeps the schema itself the single source of
+// truth for what "valid config" means — no test-only bypass of validation.
+dotenv.config({
+    path: path.resolve(
+        __dirname,
+        "../../",
+        process.env.NODE_ENV === "test" ? ".env.test" : ".env"
+    ),
+});
 
 /**
  * ----------------------------------------
