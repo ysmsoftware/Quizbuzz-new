@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useOnboardingPlans } from '@/lib/hooks/useOnboarding';
 import { createBillingHandoff, PlanOption } from '@/lib/api/onboarding.api';
+import { isPaidPlan, startingPrice, startingPriceIsMonthly } from '@/lib/utils/plan-pricing';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -26,7 +27,7 @@ export function UpgradePromptModal({ open, onClose }: UpgradePromptModalProps) {
     if (!activePlan) return;
     setError(null);
 
-    if (activePlan.price > 0) {
+    if (isPaidPlan(activePlan)) {
       try {
         setLoading(true);
         const res = await createBillingHandoff(activePlan.slug);
@@ -102,10 +103,22 @@ export function UpgradePromptModal({ open, onClose }: UpgradePromptModalProps) {
                         {plan.description}
                       </p>
                       <div className="mb-4">
-                        <span className="text-3xl font-extrabold text-primary">
-                          {plan.price === 0 ? 'Free' : `₹${plan.price}`}
-                        </span>
-                        {plan.price > 0 && <span className="text-xs text-muted-foreground ml-1">/mo</span>}
+                        {(() => {
+                          const price = startingPrice(plan);
+                          const isMonthly = startingPriceIsMonthly(plan);
+                          return (
+                            <>
+                              <span className="text-3xl font-extrabold text-primary">
+                                {price === null || price === 0 ? 'Free' : `₹${price.toLocaleString('en-IN')}`}
+                              </span>
+                              {price !== null && price > 0 && (
+                                <span className="text-xs text-muted-foreground ml-1">
+                                  /{isMonthly ? 'mo' : 'yr'}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <ul className="space-y-2 border-t border-border/40 pt-4">
@@ -145,7 +158,7 @@ export function UpgradePromptModal({ open, onClose }: UpgradePromptModalProps) {
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : activePlan && activePlan.price > 0 ? (
+              ) : activePlan && isPaidPlan(activePlan) ? (
                 <>
                   <CreditCard className="h-4 w-4" />
                   Proceed to Checkout

@@ -168,29 +168,37 @@ export function ProctoringManager({
     }, [handleCaptureAndUpload, socket]);
 
     // 1. REQUEST + ENFORCE FULLSCREEN
+    //
+    // As of Safari 17.4 (iPhone), the real Fullscreen API works for ordinary
+    // page content, not just <video> — so we no longer special-case iPhone
+    // into a permanently-simulated "isFullscreen: true". Instead we always
+    // attempt the real thing via store.enterFullscreen(), which itself
+    // handles the iPhone case: try the real API first, and only fall back to
+    // simulating success if the device genuinely has no Fullscreen API at
+    // all (very old iOS). This mount-time attempt has no user gesture behind
+    // it, so on iPhone it will typically fail here (Safari requires the tap
+    // to happen directly inside a click handler) — that's expected and
+    // handled: if an earlier gesture (the system-check page's "Start System
+    // Checks" tap) already achieved real fullscreen and it survived the
+    // client-side navigation into this page, document.fullscreenElement is
+    // already truthy and we just reflect that. If not,
+    // FullscreenReturnOverlay renders (isFullscreen is false) and its
+    // "Enter Fullscreen" button click IS a valid gesture, so tapping it will
+    // actually succeed via store.enterFullscreen() -> handleReturnFullscreen.
     useEffect(() => {
-        const isIOS = typeof navigator !== "undefined" &&
-          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-          !(window as any).MSStream;
-
-        if (isIOS) {
-            store.setFullscreen(true);
-            return;
-        }
-
-        const requestFullscreen = async () => {
-            try {
-                if (!document.fullscreenElement) {
-                    await document.documentElement.requestFullscreen();
-                    store.setFullscreen(true);
-                }
-            } catch {
+        const attemptFullscreen = async () => {
+            if (document.fullscreenElement) {
+                store.setFullscreen(true);
+                return;
+            }
+            const ok = await store.enterFullscreen();
+            if (!ok) {
                 setShowFullscreenRequest(true);
             }
         };
 
         // Attempt fullscreen on mount
-        requestFullscreen();
+        attemptFullscreen();
 
         const handleFullscreenChange = () => {
             const isCurrentlyFullscreen = !!document.fullscreenElement;

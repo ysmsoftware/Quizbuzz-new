@@ -40,13 +40,18 @@ export interface OnboardingStatus {
   profile:     OnboardingProfile | null;
 }
 
+// Shape matches the live ops billing-portal catalog response — per-cycle
+// pricing (monthlyPrice/annualPrice), not a single flat `price`.
 export interface PlanOption {
-  slug:        string;
-  name:        string;
-  description: string;
-  price:       number;
-  currency:    string;
-  features:    string[];
+  slug:          string;
+  name:          string;
+  description:   string;
+  currency:      string;
+  allowsMonthly: boolean;
+  allowsAnnual:  boolean;
+  monthlyPrice:  number | null;
+  annualPrice:   number | null;
+  features:      string[];
 }
 
 // ─── API functions ────────────────────────────────────────────────────────────

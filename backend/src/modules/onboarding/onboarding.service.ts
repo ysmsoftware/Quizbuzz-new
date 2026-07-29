@@ -24,14 +24,20 @@ function nextStep(current: OnboardingStep): OnboardingStep {
 }
 
 
-// Static plan stub — will be replaced by real ops-subscription call later
+// Offline fallback only — used when the ops catalog can't be reached
+// (network failure, ops app down, OPS_BASE_URL misconfigured). Shape must
+// match PlanOption / the live ops response exactly, or callers relying on
+// monthlyPrice/annualPrice will misrender whichever source they got.
 const STATIC_PLANS: PlanOption[] = [
     {
-        slug:        "free",
-        name:        "Free",
-        description: "Perfect for getting started with unlimited contests and up to 100 participants.",
-        price:       0,
-        currency:    "INR",
+        slug:          "free",
+        name:          "Free",
+        description:   "Perfect for getting started with unlimited contests and up to 100 participants.",
+        currency:      "INR",
+        allowsMonthly: true,
+        allowsAnnual:  false,
+        monthlyPrice:  0,
+        annualPrice:   null,
         features: [
             "Unlimited contests",
             "Up to 100 participants per contest",

@@ -13,10 +13,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CheckCircle2, AlertTriangle, Clock, Ban, Mail, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, Wallet, CreditCard, CheckCircle2, AlertTriangle, Clock, Ban, Mail, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipSelect } from '@/components/shared/ChipSelect';
 import { USE_CASES, ORG_SIZES, CONTEST_VOLUMES, PARTICIPANT_VOLUMES, HEARD_SOURCES } from '@/lib/constants/org-profile-options';
+import { PlanBillingTabContent } from '@/components/features/organization/PlanBillingTabContent';
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -27,6 +28,7 @@ export default function SettingsPage() {
 
     const [isSaving, setIsSaving] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [activeTab, setActiveTab] = useState('general');
     const [formData, setFormData] = useState({
         orgName: '',
         website: '',
@@ -90,6 +92,9 @@ export default function SettingsPage() {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get('tab');
+            if (tabParam) setActiveTab(tabParam);
+
             const subStatus = params.get('subscription');
             if (subStatus === 'success') {
                 toast.success('Subscription updated successfully! Your new plan features are now active.');
@@ -230,8 +235,8 @@ export default function SettingsPage() {
             </header>
 
             <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-                <Tabs defaultValue="general" className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-4 max-w-2xl mx-auto">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-5 max-w-3xl mx-auto">
                         <TabsTrigger value="general" className="gap-2">
                             <Globe className="h-4 w-4" />
                             <span>General</span>
@@ -239,6 +244,10 @@ export default function SettingsPage() {
                         <TabsTrigger value="profile" className="gap-2">
                             <Building2 className="h-4 w-4" />
                             <span>Profile Details</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="billing" className="gap-2">
+                            <CreditCard className="h-4 w-4" />
+                            <span>Plan & Billing</span>
                         </TabsTrigger>
                         <TabsTrigger value="payouts" className="gap-2">
                             <Wallet className="h-4 w-4" />
@@ -610,6 +619,11 @@ export default function SettingsPage() {
                                 </CardContent>
                             </Card>
                         </form>
+                    </TabsContent>
+
+                    {/* Plan & Billing Settings Tab */}
+                    <TabsContent value="billing">
+                        <PlanBillingTabContent org={org} />
                     </TabsContent>
 
                     {/* Appearance Settings Tab */}

@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProctoringStore } from "@/lib/stores/proctoring-store";
 import { useQuizStore } from "@/lib/stores/quiz-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
+import { isIphoneBrowser } from "@/lib/utils/device";
  
 interface SystemCheck {
   id: string;
@@ -40,12 +41,9 @@ export default function SystemCheckPage() {
   const { setCameraStream, setFullscreenEnabled, setCameraEnabled } = useProctoringStore();
   const proctoringEnabled = useQuizStore((s) => s.proctoringEnabled);
 
-  // iOS detection
-  const isIOS = useRef(
-    typeof navigator !== "undefined" &&
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    !(window as any).MSStream
-  );
+  // iPhone-only detection (not iPad, not desktop Safari, not Android) —
+  // see lib/utils/device.ts for why this leniency is scoped this way.
+  const isIOS = useRef(isIphoneBrowser());
 
   const [checksStarted, setChecksStarted] = useState(false);
  
@@ -153,13 +151,30 @@ export default function SystemCheckPage() {
   const checkFullscreen = async () => {
     updateCheckStatus("fullscreen", "checking");
     await new Promise((r) => setTimeout(r, 450));
- 
+
     if (isIOS.current) {
-      setFullscreenEnabled(true);
-      updateCheckStatus("fullscreen", "passed");
-      return true;
+      // The real requestFullscreen() attempt (Safari 17.4+ supports it on
+      // iPhone now) already happened synchronously inside the button tap
+      // that triggered this check run — see handleStartChecks/retryCheck
+      // below. It can't be (re)triggered here: mobile Safari only honors
+      // requestFullscreen() called directly inside a user-gesture handler,
+      // and this function runs after an artificial delay for the
+      // "checking..." animation, which breaks that link. Just report
+      // whatever the store already resolved to — real success, or the
+      // graceful simulated fallback for a pre-17.4 iOS version.
+      const passed = useProctoringStore.getState().isFullscreen;
+      if (passed) {
+        updateCheckStatus("fullscreen", "passed");
+      } else {
+        updateCheckStatus(
+          "fullscreen",
+          "failed",
+          "Tap “Start System Checks” again to grant fullscreen access."
+        );
+      }
+      return passed;
     }
- 
+
     try {
       if (!document.fullscreenEnabled) {
         updateCheckStatus(
@@ -236,7 +251,15 @@ export default function SystemCheckPage() {
     try {
       let ok = false;
       if (id === "camera" || id === "microphone") ok = await checkDevices();
-      else if (id === "fullscreen") ok = await checkFullscreen();
+      else if (id === "fullscreen") {
+        if (isIOS.current) {
+          // This "Retry" button click is itself a valid user gesture — fire
+          // the real fullscreen request directly here, same reasoning as
+          // handleStartChecks below.
+          useProctoringStore.getState().enterFullscreen();
+        }
+        ok = await checkFullscreen();
+      }
       else if (id === "network") ok = await checkNetwork();
       
       setChecks((prev) => {
@@ -263,9 +286,27 @@ export default function SystemCheckPage() {
       setIsProceeding(false);
     }
   };
- 
+
+  // Fires the real browser fullscreen request synchronously, directly inside
+  // this click — Safari (mobile especially) rejects requestFullscreen() if
+  // there's any await/delay between the tap and the call. This is why it
+  // can't live inside checkFullscreen(), which has a cosmetic delay for the
+  // "checking..." animation. Not used on non-iOS since that path doesn't
+  // attempt real fullscreen at this stage at all (only a capability check —
+  // real entry happens later, in the live quiz room).
+  const handleStartChecks = () => {
+    if (isIOS.current) {
+      useProctoringStore.getState().enterFullscreen();
+    }
+    runAllChecks();
+  };
+
   useEffect(() => {
-    if (!isIOS.current || !proctoringEnabled) {
+    // Any iPhone (camera-proctored or not) requires the manual "Start System
+    // Checks" tap — it's the only reliable place to get a genuine user
+    // gesture for the fullscreen request above, even when there's no camera
+    // permission prompt to also justify it.
+    if (!isIOS.current) {
       runAllChecks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -449,24 +490,27 @@ export default function SystemCheckPage() {
               </Alert>
             )}
  
-            {/* iOS manual start overlay */}
-            {isIOS.current && proctoringEnabled && !checksStarted && (
+            {/* iPhone manual start overlay — also the required gesture for the real fullscreen request */}
+            {isIOS.current && !checksStarted && (
               <Alert className="rounded-2xl border-primary/20 bg-primary/5 text-primary">
                 <AlertTriangle className="h-4 w-4 text-primary" />
                 <AlertTitle className="font-bold text-xs">Action Required</AlertTitle>
                 <AlertDescription className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                  iOS Safari requires a **user gesture** to initialize the webcam. Click <strong>Start System Checks</strong> below to continue.
+                  {proctoringEnabled
+                    ? "iPhone requires a user gesture to initialize the webcam and enable fullscreen mode."
+                    : "iPhone requires a user gesture to enable fullscreen mode."}{" "}
+                  Click <strong>Start System Checks</strong> below to continue.
                 </AlertDescription>
               </Alert>
             )}
- 
+
             {/* Action buttons */}
             <div className="flex gap-4">
               <Button
                 variant="outline"
                 className="flex-1 h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
                 disabled={isRetrying}
-                onClick={() => runAllChecks()}
+                onClick={handleStartChecks}
               >
                 {isRetrying ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>
@@ -494,8 +538,8 @@ export default function SystemCheckPage() {
  
             <p className="text-[11px] text-center text-muted-foreground/80 leading-normal">
               {proctoringEnabled
-                ? `By continuing, you agree to keep your camera on${isIOS.current ? "." : " and remain in fullscreen mode during the entire quiz session."}`
-                : `By continuing, you agree to remain in fullscreen mode${isIOS.current ? "" : " and avoid switching tabs"} during the entire quiz session.`}
+                ? "By continuing, you agree to keep your camera on and remain in fullscreen mode during the entire quiz session."
+                : "By continuing, you agree to remain in fullscreen mode and avoid switching tabs during the entire quiz session."}
             </p>
           </div>
         </motion.div>

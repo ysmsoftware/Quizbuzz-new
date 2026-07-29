@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isIphoneBrowser } from '../utils/device';
 
 // ============================================
 // Types
@@ -176,47 +177,58 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
     },
 
     // ─── Fullscreen ─────────────────────────────
-    setFullscreen: (value) => set({ isFullscreen: value }),
-    setFullscreenEnabled: (value) => set({ isFullscreen: value }),
+    // Bail out and return the exact same state reference when the value
+    // hasn't actually changed. Zustand skips the update entirely when a
+    // setter returns the same object it was given (Object.is check), so this
+    // stops redundant re-renders — important because at least one consumer
+    // (ProctoringManager's fullscreen effect) has `store` itself in its
+    // dependency array, so any state change here re-triggers that effect.
+    setFullscreen: (value) => set((state) => (state.isFullscreen === value ? state : { isFullscreen: value })),
+    setFullscreenEnabled: (value) => set((state) => (state.isFullscreen === value ? state : { isFullscreen: value })),
 
+    // Always attempts the real Fullscreen API first — as of Safari 17.4,
+    // iPhone genuinely supports requestFullscreen() for ordinary page
+    // content, not just <video>, so we no longer assume iPhone can't do it.
+    // Only if the real attempt fails (no API at all on this device, e.g. a
+    // pre-17.4 iPhone, OR this call happened without a live user gesture —
+    // Safari requires the tap to be direct, not deferred) do we fall back to
+    // simulating success, and only on iPhone. This must be called directly
+    // inside a user gesture handler (a click) whenever possible — on iPhone
+    // specifically, calling it from an automatic effect will typically fail
+    // and hit the simulated fallback instead of real fullscreen.
     enterFullscreen: async () => {
+      const iPhone = isIphoneBrowser();
       try {
-        // iOS Safari and Chrome on iOS do not support the Fullscreen API.
-        // We simulate fullscreen state so the rest of the app works normally.
-        const isIOS = typeof navigator !== 'undefined' &&
-          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-          !(window as any).MSStream;
-
-        if (isIOS) {
-          set({ isFullscreen: true });
-          return true;
-        }
-
         if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
-          set({ isFullscreen: true });
+          set((state) => (state.isFullscreen ? state : { isFullscreen: true }));
+          return true;
+        }
+        if (iPhone) {
+          // No Fullscreen API on this iOS version at all — simulate so the
+          // quiz still works rather than blocking the participant.
+          set((state) => (state.isFullscreen ? state : { isFullscreen: true }));
           return true;
         }
         return false;
       } catch {
+        if (iPhone) {
+          // Real attempt exists but failed — most likely no user gesture
+          // behind this particular call. Fall back to simulated fullscreen
+          // so the participant isn't blocked; a later genuine tap (e.g. the
+          // FullscreenReturnOverlay button) will retry the real request.
+          set((state) => (state.isFullscreen ? state : { isFullscreen: true }));
+          return true;
+        }
         return false;
       }
     },
 
     exitFullscreen: async () => {
       try {
-        const isIOS = typeof navigator !== 'undefined' &&
-          /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-          !(window as any).MSStream;
-
-        if (isIOS) {
-          set({ isFullscreen: false });
-          return;
-        }
-
         if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
           await document.exitFullscreen();
-          set({ isFullscreen: false });
+          set((state) => (!state.isFullscreen ? state : { isFullscreen: false }));
         }
       } catch {
         // Ignore errors

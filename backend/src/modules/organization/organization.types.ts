@@ -48,6 +48,12 @@ export interface OrganizationResult {
     website: string | null;
     isActive: boolean;
     createdAt: Date;
+    // Synced by ops on every plan assign/change/renewal — see
+    // quizbuzz-ops-next's entitlements.service.ts::syncOrgPlanLimitsCache.
+    // planLimitsCache carries billingCycle/currentPeriodEnd/etc. as JSON.
+    planSlug: string | null;
+    planStatus: string | null;
+    planLimitsCache: Record<string, any> | null;
 }
 
 export interface OrgMemberResult {

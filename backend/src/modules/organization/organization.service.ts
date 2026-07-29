@@ -303,6 +303,9 @@ export class OrganizationService {
         website: string | null;
         isActive: boolean;
         createdAt: Date;
+        planSlug?: string | null;
+        planStatus?: string | null;
+        planLimitsCache?: unknown;
     }): OrganizationResult {
         return {
             id: org.id,
@@ -312,6 +315,9 @@ export class OrganizationService {
             website: org.website,
             isActive: org.isActive,
             createdAt: org.createdAt,
+            planSlug: org.planSlug ?? null,
+            planStatus: org.planStatus ?? null,
+            planLimitsCache: (org.planLimitsCache as Record<string, any> | null) ?? null,
         };
     }
 }

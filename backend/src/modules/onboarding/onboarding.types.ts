@@ -80,13 +80,19 @@ export type StepInput =
     | ContactLocaleStepInput
     | PlanSelectionStepInput;
 
-// ─── Plans (stub) ─────────────────────────────────────────────────────────────
+// ─── Plans ──────────────────────────────────────────────────────────────────
+// Shape matches the live ops billing-portal catalog response
+// (GET /api/v1/billing-portal/plans in quizbuzz-ops-next) — per-cycle pricing,
+// not a single flat `price`. Kept in sync with STATIC_PLANS' fallback shape.
 
 export interface PlanOption {
-    slug:        string;
-    name:        string;
-    description: string;
-    price:       number;
-    currency:    string;
-    features:    string[];
+    slug:          string;
+    name:          string;
+    description:   string;
+    currency:      string;
+    allowsMonthly: boolean;
+    allowsAnnual:  boolean;
+    monthlyPrice:  number | null;
+    annualPrice:   number | null;
+    features:      string[];
 }

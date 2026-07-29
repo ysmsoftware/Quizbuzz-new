@@ -1,5 +1,7 @@
 'use client';
 
+import { isIphoneBrowser } from '../utils/device';
+
 type ViolationType = 'TAB_SWITCH' | 'FULLSCREEN_EXIT' | 'WINDOW_BLUR' | 'SCREEN_RESIZE';
 
 interface ProctoringConfig {
@@ -14,8 +16,8 @@ interface ProctoringConfig {
 export function startProctoring({ onViolation, enabled, fullscreenRequired }: ProctoringConfig) {
   if (!enabled || typeof window === 'undefined') return () => {};
 
-  // iOS Safari and Chrome on iOS do not support the Fullscreen API.
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  // iPhone only (not iPad) — see lib/utils/device.ts.
+  const isIOS = isIphoneBrowser();
 
   const handleVisibilityChange = () => {
     if (document.hidden) {
@@ -66,11 +68,9 @@ export function startProctoring({ onViolation, enabled, fullscreenRequired }: Pr
  */
 export async function enterFullscreen() {
   try {
-    const isIOS = typeof navigator !== 'undefined' &&
-      /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-      !(window as any).MSStream;
+    const isIOS = isIphoneBrowser();
 
-    // iOS does not support the Fullscreen API — return true so callers proceed.
+    // iPhone does not support the Fullscreen API — return true so callers proceed.
     if (isIOS) return true;
 
     const el = document.documentElement as any;
