@@ -177,7 +177,9 @@ jobs:
   # decodes and executes it. This avoids JSON-array quoting entirely.
   #
   # The script on EC2:
-  #   1. Patches NODE_OPTIONS + HEALTH_HEAP_THRESHOLD_PCT into /app/.env
+  #   1. Patches NODE_OPTIONS + HEALTH_HEAP_THRESHOLD_PCT + OPS_BASE_URL
+  #      into /app/.env (the file Terraform's userdata script generated at
+  #      boot and docker-compose's env_file actually loads)
   #   2. Saves current tag as PREV_TAG for rollback
   #   3. Pulls new images from GHCR
   #   4. Updates /app/docker-compose.yml tags
@@ -274,6 +276,15 @@ jobs:
             || echo 'HEALTH_HEAP_THRESHOLD_PCT=80' >> /app/.env
           echo "NODE_OPTIONS   : $(grep NODE_OPTIONS /app/.env)"
           echo "Heap threshold : $(grep HEALTH_HEAP_THRESHOLD_PCT /app/.env)"
+          echo ""
+
+          # 1b. Same file (/app/.env) — guard OPS_BASE_URL the same way. Without
+          #     it, the backend's getPlans() falls back to a static single
+          #     "Free" plan instead of the real ops-configured catalog.
+          grep -q '^OPS_BASE_URL=' /app/.env \
+            && sed -i 's|^OPS_BASE_URL=.*|OPS_BASE_URL=https://ops.ysmquizbuzz.com|' /app/.env \
+            || echo 'OPS_BASE_URL=https://ops.ysmquizbuzz.com' >> /app/.env
+          echo "OPS_BASE_URL   : $(grep OPS_BASE_URL /app/.env)"
           echo ""
 
           # 2. Save previous tag for rollback

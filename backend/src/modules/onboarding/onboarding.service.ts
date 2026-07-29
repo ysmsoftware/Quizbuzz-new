@@ -169,17 +169,23 @@ export class OnboardingService {
     // ─── GET /onboarding/plans ────────────────────────────────────────────────
 
     async getPlans(): Promise<PlanOption[]> {
+        const opsUrl = config.billing.opsBaseUrl;
         try {
-            const opsUrl = config.billing.opsBaseUrl;
             const res = await fetch(`${opsUrl}/api/v1/billing-portal/plans`);
             if (res.ok) {
                 const json = (await res.json()) as { success?: boolean; data?: PlanOption[] };
                 if (json.success && Array.isArray(json.data)) {
                     return json.data;
                 }
+                console.warn(
+                    `Ops catalog at ${opsUrl} responded 200 but with an unexpected shape (expected { success: true, data: PlanOption[] }), falling back to static stub:`,
+                    json,
+                );
+            } else {
+                console.warn(`Ops catalog at ${opsUrl} responded with status ${res.status}, falling back to static stub.`);
             }
         } catch (error) {
-            console.warn("Failed to fetch live catalog plans from Ops, falling back to static stub:", error);
+            console.warn(`Failed to reach ops catalog at ${opsUrl}, falling back to static stub:`, error);
         }
         return STATIC_PLANS;
     }
