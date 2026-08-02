@@ -115,36 +115,15 @@ const envSchema = z.object({
     RAZORPAY_KEY_SECRET: z.string(),
     RAZORPAY_WEBHOOK_SECRET: z.string(),
     PAYMENT_CURRENCY: z.string().default("INR"),
+    PAYMENT_ORDER_REUSE_WINDOW_MS: z.coerce.number().min(0).default(10 * 60 * 1000),
     RAZORPAY_ROUTE_ENABLED: z.coerce.boolean().default(false),
     RAZORPAY_ROUTE_ONBOARDING_MODE: z.enum(["MANUAL", "API"]).default("MANUAL"),
-    // Platform's own cut. Kept separate from the mandatory gateway pass-through costs below.
     PLATFORM_COMMISSION_PERCENT: z.coerce.number().min(0).max(100).default(2),
-    // Razorpay's TDR on domestic payments (2% standard) — this is a pass-through cost,
-    // not platform revenue, and must always be deducted before a Route transfer.
     RAZORPAY_GATEWAY_FEE_PERCENT: z.coerce.number().min(0).max(100).default(2),
-    // GST charged on the gateway fee itself (18% standard), not on the gross payment.
     RAZORPAY_GST_ON_FEE_PERCENT: z.coerce.number().min(0).max(100).default(18),
-    // Safety window between a payment being marked SUCCESS and the Route transfer
-    // actually firing — gives ops a buffer to catch anomalies before funds leave
-    // the primary account. Applied as a BullMQ job delay, not a blocking sleep.
     RAZORPAY_ROUTE_TRANSFER_DELAY_MS: z.coerce.number().min(0).default(5 * 60 * 1000),
     PAYOUT_MAX_PAGE_SIZE: z.coerce.number().int().min(1).default(100),
-    // A PaymentRouteTransfer row can sit in PENDING for one of two reasons: the org
-    // genuinely has no active payout account yet (failureReason is set), or a prior
-    // attempt was interrupted (worker crash/restart) before it reached PROCESSED or
-    // FAILED — failureReason is null in that case. This is how long we wait before
-    // treating the latter as abandoned and safe to resume, rather than assuming another
-    // attempt is still actively in flight. Comfortably longer than BullMQ's default
-    // stalled-job detection window and typical Razorpay API latency.
     PAYOUT_STUCK_TRANSFER_RESUME_AFTER_MS: z.coerce.number().min(0).default(3 * 60 * 1000),
-    // Safety net for the case createRouteTransferForPayment's own idempotency check can't
-    // cover: a payment marked SUCCESS for which the transfer job never even got created
-    // (e.g. Redis briefly unreachable at the exact moment the webhook tried to enqueue it).
-    // There's no PaymentRouteTransfer row to find in that case, so nothing about that
-    // payment self-heals — a periodic sweep is the only way to catch it. Runs every
-    // PAYOUT_RECONCILIATION_INTERVAL_MINUTES, re-enqueuing anything SUCCESS for longer
-    // than this grace period with no transfer row, or stuck PENDING past its own grace
-    // window with no active job driving it.
     PAYOUT_RECONCILIATION_INTERVAL_MINUTES: z.coerce.number().min(1).default(15),
     PAYOUT_RECONCILIATION_GRACE_PERIOD_MS: z.coerce.number().min(0).default(10 * 60 * 1000),
 
@@ -370,6 +349,19 @@ export const config = {
             webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
         },
         currency: env.PAYMENT_CURRENCY,
+        orderReuseWindowMs: env.PAYMENT_ORDER_REUSE_WINDOW_MS,
+
+        // Deliberately NOT env-driven — this is an internal cleanup cadence, not
+        // something that needs to vary per deployment, so it's set globally here
+        // instead of growing the env schema for a small housekeeping knob.
+        // A Payment still PENDING/CREATED this long after its last update (i.e. no
+        // webhook confirmation, no retry, nobody came back) is treated as abandoned
+        // and closed out to FAILED by the periodic sweep — see payment-cleanup.worker.ts.
+        abandonedCloseAfterMs: 24 * 60 * 60 * 1000, // 24 hours
+        // How often the sweep itself runs. Hourly is frequent enough given the
+        // 24h threshold above — worst case something sits FAILED-eligible for up
+        // to an hour past the mark before the sweep catches it.
+        abandonedSweepIntervalMs: 60 * 60 * 1000, // 1 hour
     },
 
     payout: {

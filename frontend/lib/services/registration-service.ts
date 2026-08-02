@@ -23,6 +23,17 @@ export interface RazorpayOrderResult {
 
 export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 
+export interface ExistingRegistrationInfo {
+  participantId: string;
+  registrationRef: string;
+  status: 'REGISTERED' | 'PENDING_PAYMENT';
+  payment?: {
+    status: string;
+    ageMs: number;
+    resumable: boolean;
+  };
+}
+
 export interface PaymentStatusResult {
   status: PaymentStatus;
   webhookConfirmed: boolean;
@@ -60,6 +71,18 @@ class RegistrationService {
       success: boolean;
       data: { contactToken: string; expiresIn: number };
     }>('/auth/quiz/verify-otp', { email, otp });
+    return res.data;
+  }
+
+  /** Check existing registration status using contactToken */
+  async checkRegistrationStatus(
+    contestSlug: string,
+    contactToken: string
+  ): Promise<{ existing: ExistingRegistrationInfo | null }> {
+    const res = await publicPost<{
+      success: boolean;
+      data: { existing: ExistingRegistrationInfo | null };
+    }>(`/contests/register-status/${contestSlug}`, { contactToken });
     return res.data;
   }
 

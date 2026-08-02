@@ -11,7 +11,7 @@ import logger from "../../config/logger";
 
 import { PaymentListResult, PaymentDetailResult } from "./payment.types";
 import { PayoutService } from "../payout/payout.service";
-import { routeTransferQueue, RouteTransferJobPayload } from "../../queues";
+import { routeTransferQueue, RouteTransferJobPayload, paymentCleanupQueue } from "../../queues";
 import { config } from "../../config";
 
 
@@ -49,13 +49,13 @@ export class PaymentService {
         }
 
 
-        const config = contest.paymentConfig;
-        if (!config || !config.amount) {
+        const paymentConfig = contest.paymentConfig;
+        if (!paymentConfig || !paymentConfig.amount) {
             throw new BadRequestError("Invalid payment configuration for this contest");
         }
 
-        const amount = config.amount * 100 // paise
-        const currency = (config.currency || 'INR').toUpperCase();
+        const amount = paymentConfig.amount * 100 // paise
+        const currency = (paymentConfig.currency || 'INR').toUpperCase();
 
         const existingOrder = await this.paymentRepo.findByParticipantId(params.participantId);
 
@@ -63,14 +63,43 @@ export class PaymentService {
             throw new BadRequestError("Payment already completed");
         }
 
-        if (existingOrder && existingOrder?.status !== "FAILED" && existingOrder.razorpayOrderId) {
-            return {
-                orderId: existingOrder.razorpayOrderId,
-                amount: existingOrder.amount,
-                currency: existingOrder.currency,
-                keyId: this.razorpay.getPublicKey(),
-                paymentId: existingOrder.id
+        if (existingOrder && existingOrder.razorpayOrderId) {
+            const ageMs = Date.now() - existingOrder.createdAt.getTime();
+            if (existingOrder.status !== "FAILED" && ageMs < config.payment.orderReuseWindowMs) {
+                return {
+                    orderId: existingOrder.razorpayOrderId,
+                    amount: existingOrder.amount,
+                    currency: existingOrder.currency,
+                    keyId: this.razorpay.getPublicKey(),
+                    paymentId: existingOrder.id
+                };
             }
+
+            // Existing order is either FAILED or older than the reuse window — refresh order in-place
+            const retryReceiptSuffix = params.participantId.replace(/-/g, "").slice(0, 27);
+            const order = await this.razorpay.createOrder({
+                amount,
+                currency,
+                receipt: `rcpt_r_${retryReceiptSuffix}`,
+                notes: {
+                    participantId: params.participantId,
+                    contestId: contest.id,
+                    retry: "true",
+                }
+            });
+
+            const updatedPayment = await this.paymentRepo.updateForRetry({
+                participantId: params.participantId,
+                razorpayOrderId: order.id
+            });
+
+            return {
+                orderId: order.id,
+                amount,
+                currency,
+                keyId: this.razorpay.getPublicKey(),
+                paymentId: updatedPayment.id
+            };
         }
 
         const receiptSuffix = params.participantId.replace(/-/g, "").slice(0, 30);
@@ -284,36 +313,6 @@ export class PaymentService {
                     }).catch((err) => {
                         logger.error(`[payment] Failed to enqueue payment confirmation: ${(err as Error).message}`);
                     });
-                }
-
-                // Enqueue the Razorpay Route payout transfer — deliberately NOT an inline
-                // fire-and-forget call. The webhook is the single source of truth for
-                // payment state and must stay fast/reliable under registration-traffic
-                // bursts; an in-process promise here would silently drop the transfer
-                // (no retry, no record) if the process crashed between webhook response
-                // and promise completion. Queuing gets durability, automatic retries
-                // (config.queue.retryAttempts/backoff), and a scheduling delay
-                // (config.payout.transferDelayMs) as a safety window before funds leave
-                // the primary account. jobId dedupes concurrent webhook redeliveries.
-                if (this.payoutService) {
-                    try {
-                        await routeTransferQueue.add(
-                            "create-route-transfer",
-                            {
-                                paymentId: payment.id,
-                                organizationId: payment.organizationId,
-                                amount: payment.amount,
-                                razorpayPaymentId: paymentEntity.id,
-                                currency: payment.currency,
-                            },
-                            {
-                                jobId: `route-transfer-${payment.id}`,
-                                delay: config.payout.transferDelayMs,
-                            }
-                        );
-                    } catch (err) {
-                        logger.error(`[payment] Failed to enqueue route transfer: ${(err as Error).message}`, { paymentId: payment.id });
-                    }
                 }
                 break;
 
@@ -595,6 +594,47 @@ export class PaymentService {
         );
 
         logger.info(`[payment-service] Recurring payout reconciliation scheduled every ${config.payout.reconciliationIntervalMinutes} minutes`);
+    }
+
+    /**
+     * Closes out abandoned payments — see payment.repository.ts:closeAbandoned.
+     * Called on a schedule by payment-cleanup.worker.ts, not from any user-facing
+     * path. Never blocks or interferes with an active resume-or-fresh attempt:
+     * that flow reads/refreshes based on config.payment.orderReuseWindowMs (10 min
+     * default), this sweep only touches rows stale well beyond that, by
+     * config.payment.abandonedCloseAfterMs (24h default).
+     */
+    async closeAbandonedPayments(): Promise<{ closedCount: number }> {
+        const closedCount = await this.paymentRepo.closeAbandoned(config.payment.abandonedCloseAfterMs);
+        if (closedCount > 0) {
+            logger.info(`[payment-cleanup] Closed ${closedCount} abandoned payment(s) to FAILED`);
+        }
+        return { closedCount };
+    }
+
+    /** Registers the recurring BullMQ job that drives closeAbandonedPayments on a schedule. */
+    async ensurePaymentCleanupRecurringJob(): Promise<void> {
+        const jobId = "periodic-payment-cleanup";
+        const intervalMs = config.payment.abandonedSweepIntervalMs;
+
+        const repeatables = await paymentCleanupQueue.getRepeatableJobs();
+        const existing = repeatables.find((repeatable) => repeatable.id === jobId);
+        if (existing) {
+            await paymentCleanupQueue.removeRepeatableByKey(existing.key);
+        }
+
+        await paymentCleanupQueue.add(
+            "close-abandoned-payments",
+            {},
+            {
+                jobId,
+                repeat: { every: intervalMs },
+                removeOnComplete: true,
+                removeOnFail: true,
+            }
+        );
+
+        logger.info(`[payment-service] Recurring payment cleanup sweep scheduled every ${intervalMs / 60000} minutes`);
     }
 
     async getAllPayments(params: {

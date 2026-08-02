@@ -22,6 +22,7 @@ export interface IPaymentRepository {
     markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment>;
     markFailed(razorpayOrderId: string, reason?: string): Promise<Payment>;
     markCancelled(paymentId: string): Promise<Payment>;
+    closeAbandoned(olderThanMs: number): Promise<number>;
 
 
     findByEventIdPaginated(params: {
@@ -155,6 +156,29 @@ export class PaymentRepository implements IPaymentRepository {
             where: { id: paymentId },
             data: { status: PaymentStatus.CANCELLED }
         });
+    }
+
+    /**
+     * Bulk-closes abandoned payments: still PENDING/CREATED (never resolved by a
+     * webhook, never picked back up via resume-or-fresh) with no activity in the
+     * last `olderThanMs`. `updatedAt` is the right anchor, not `createdAt` — a
+     * retry via updateForRetry() bumps `updatedAt`, so someone who came back
+     * recently is correctly left alone even if their original attempt is old.
+     * Single bulk update, no history kept — the row itself is never deleted.
+     */
+    async closeAbandoned(olderThanMs: number): Promise<number> {
+        const cutoff = new Date(Date.now() - olderThanMs);
+        const result = await prisma.payment.updateMany({
+            where: {
+                status: { in: [PaymentStatus.PENDING, PaymentStatus.CREATED] },
+                updatedAt: { lt: cutoff },
+            },
+            data: {
+                status: PaymentStatus.FAILED,
+                failureReason: "Abandoned — no payment confirmation received within the cleanup window",
+            },
+        });
+        return result.count;
     }
 
 

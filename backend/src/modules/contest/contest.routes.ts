@@ -10,6 +10,7 @@ contestRouter.post("/",              authenticatedOrgMiddleware, (req, res, next
 contestRouter.get("/",               authenticatedOrgMiddleware, (req, res, next) => ctrl().listContests(req, res, next));
 contestRouter.post("/upload-banner", authenticatedOrgMiddleware, (req, res, next) => ctrl().uploadBanner(req, res, next));
 contestRouter.post("/register/:contestSlug",                     (req, res, next) => ctrl().registerParticipant(req, res, next));
+contestRouter.post("/register-status/:contestSlug",              (req, res, next) => ctrl().getRegisterStatus(req, res, next));
 
 // Public Routes (no auth)
 contestRouter.get("/public",       (req, res, next) => ctrl().listPublicContests(req, res, next));

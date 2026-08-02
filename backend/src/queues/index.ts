@@ -172,3 +172,23 @@ export const routeTransferQueue = new Queue<RouteTransferJobPayload>("route-tran
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+// ─── Payment Cleanup ──────────────────────────────────────────────────────────
+
+/**
+ * Payment cleanup queue.
+ * Producers : PaymentService.ensurePaymentCleanupRecurringJob (repeatable, no per-payment payload)
+ * Consumers : payment-cleanup.worker.ts
+ *
+ * Periodic sweep that closes out abandoned Payment rows — still PENDING/CREATED
+ * with no activity in the last config.payment.abandonedCloseAfterMs (default 24h) —
+ * to FAILED, so a contest's registration list never shows an indefinitely-ambiguous
+ * "pending" entry for someone who registered, abandoned checkout, and never came
+ * back. Does not touch anyone actively retrying — the resume-or-fresh flow
+ * (PaymentService.createOrder) already handles those via config.payment.orderReuseWindowMs.
+ */
+export const paymentCleanupQueue = new Queue("payment-cleanup-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

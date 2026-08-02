@@ -82,6 +82,10 @@ export const RegisterParticipantSchema = z.object({
     state: z.string().max(100).optional(),
 });
 
+export const RegisterStatusSchema = z.object({
+    contactToken: z.string().min(1),
+});
+
 
 // QUERY SCHEMAS
 
@@ -139,6 +143,7 @@ export type CreateContestInput = z.infer<typeof CreateContestSchema>;
 export type UpdateContestInput = z.infer<typeof UpdateContestSchema>;
 export type ListContestsQueryInput = z.infer<typeof ListContestsQuerySchema>;
 export type RegisterParticipantInput = z.infer<typeof RegisterParticipantSchema>;
+export type RegisterStatusInput = z.infer<typeof RegisterStatusSchema>;
 export type AssignQuestionsInput = z.infer<typeof AssignQuestionsSchema>;
 export type ReorderQuestionsInput = z.infer<typeof ReorderQuestionsSchema>;
 export type GenerateCertificatesInput = z.infer<typeof GenerateCertificatesSchema>;

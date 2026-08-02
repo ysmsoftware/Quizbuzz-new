@@ -5,6 +5,7 @@ import {
     UpdateContestSchema,
     ListContestsQuerySchema,
     RegisterParticipantSchema,
+    RegisterStatusSchema,
     AssignQuestionsSchema,
     ReorderQuestionsSchema,
     GenerateCertificatesSchema,
@@ -216,6 +217,20 @@ export class ContestController {
             );
 
             res.status(201).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getRegisterStatus = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const dto = RegisterStatusSchema.parse(req.body);
+            const result = await this.contestService.getRegisterStatus(
+                req.params.contestSlug as string,
+                dto.contactToken
+            );
+
+            res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

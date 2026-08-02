@@ -11,7 +11,7 @@ import "./analytics.worker";
 import "./leaderboard.worker";
 import "./capture-metadata.worker";
 import "./export.worker";
-import "./route-transfer.worker";
+import "./payment-cleanup.worker";
 
 export function startWorkers() {
     logger.info("Starting background workers...");

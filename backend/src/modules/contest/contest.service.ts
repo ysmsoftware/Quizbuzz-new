@@ -1,4 +1,4 @@
-import { ContestStatus, ParticipantStatus, SubmissionStatus, PayoutAccountStatus } from "@prisma/client";
+import { ContestStatus, ParticipantStatus, SubmissionStatus } from "@prisma/client";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { ContestRepository } from "./contest.repository";
 import { ParticipantService } from "../participant/participant.service";
@@ -6,7 +6,6 @@ import { LeaderboardRepository } from "./leaderboard.repository";
 import { MessagingService } from "../messaging/messaging.service";
 import { SubmissionService } from "../submission/submission.service";
 import { QuizSchedulerService } from "../quiz/quiz-scheduler.service";
-import { PayoutRepository } from "../payout/payout.repository";
 import {
     CreateContestInput,
     UpdateContestInput,
@@ -25,6 +24,10 @@ import { rankRows } from "../../workers/leaderboard.worker";
 import logger from "../../config/logger";
 
 
+import { IParticipantRepository } from "../participant/participant.repository";
+import { IPaymentRepository } from "../payment/payment.repository";
+
+
 export class ContestService {
     constructor(
         private readonly orgRepo: OrganizationRepository,
@@ -35,7 +38,8 @@ export class ContestService {
         private readonly messagingService: MessagingService,
         private readonly submissionService: SubmissionService,
         private readonly schedulerService: QuizSchedulerService,
-        private readonly payoutRepo?: PayoutRepository,
+        private readonly participantRepo?: IParticipantRepository,
+        private readonly paymentRepo?: IPaymentRepository,
     ) { }
 
     // ─── Contest CRUD ─────────────────────────────────────────────────────────
@@ -49,13 +53,6 @@ export class ContestService {
 
         if (!org?.isActive) {
             throw new ForbiddenError("Organization is not active, and cannot create contests");
-        }
-
-        if (input.paymentEnabled && this.payoutRepo) {
-            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
-            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
-                throw new BadRequestError("Set up payouts before enabling paid registration for this contest");
-            }
         }
 
 
@@ -174,13 +171,6 @@ export class ContestService {
             throw new BadRequestError("Contest can only be edited while in DRAFT, PUBLISHED, or REGISTRATION_CLOSED status");
         }
 
-        if (dto.paymentEnabled === true && this.payoutRepo) {
-            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
-            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
-                throw new BadRequestError("Set up payouts before enabling paid registration for this contest");
-            }
-        }
-
         // Once registration has been manually closed, only the participant cap may still be raised
         if (contest.status === ContestStatus.REGISTRATION_CLOSED) {
             const allowedFields = new Set(["maxParticipants"]);
@@ -280,13 +270,6 @@ export class ContestService {
 
         if (contest.status !== ContestStatus.DRAFT) {
             throw new BadRequestError("Only DRAFT contests can be published");
-        }
-
-        if (contest.paymentEnabled && this.payoutRepo) {
-            const payoutAccount = await this.payoutRepo.findPayoutAccountByOrgId(organizationId);
-            if (!payoutAccount || payoutAccount.status !== PayoutAccountStatus.ACTIVE) {
-                throw new BadRequestError("Set up payouts before publishing a paid contest");
-            }
         }
 
         if (new Date(contest.registrationDeadline) <= new Date()) {
@@ -390,6 +373,76 @@ export class ContestService {
 
     // ─── Registration ─────────────────────────────────────────────────────────
 
+    async getRegisterStatus(contestSlug: string, contactToken: string) {
+        const tokenPayload = await verifyContactToken(contactToken);
+        const email = tokenPayload.email;
+
+        const contest = await this.contestRepo.findBySlugPublic(contestSlug);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        const contact = await this.contactService.findByEmailOrPhone(
+            contest.organizationId,
+            email
+        );
+        if (!contact) {
+            return { existing: null };
+        }
+
+        if (!this.participantRepo) {
+            return { existing: null };
+        }
+
+        const participant = await this.participantRepo.findByContactId(
+            contest.organizationId,
+            contest.id,
+            contact.id
+        );
+
+        if (!participant) {
+            return { existing: null };
+        }
+
+        if (participant.status === ParticipantStatus.REGISTERED) {
+            return {
+                existing: {
+                    participantId: participant.id,
+                    registrationRef: participant.registrationRef,
+                    status: "REGISTERED",
+                },
+            };
+        }
+
+        if (participant.status === ParticipantStatus.PENDING_PAYMENT) {
+            let resumable = false;
+            let paymentStatus = "PENDING";
+            let ageMs = 0;
+
+            if (this.paymentRepo) {
+                const payment = await this.paymentRepo.findByParticipantId(participant.id);
+                if (payment) {
+                    paymentStatus = payment.status;
+                    ageMs = Date.now() - payment.createdAt.getTime();
+                    resumable = payment.status !== "SUCCESS" && ageMs < config.payment.orderReuseWindowMs;
+                }
+            }
+
+            return {
+                existing: {
+                    participantId: participant.id,
+                    registrationRef: participant.registrationRef,
+                    status: "PENDING_PAYMENT",
+                    payment: {
+                        status: paymentStatus,
+                        ageMs,
+                        resumable,
+                    },
+                },
+            };
+        }
+
+        return { existing: null };
+    }
+
     async registerParticipant(contestSlug: string, dto: RegisterParticipantInput) {
         // 1. Verify the OTP contact token so we know the phone/email is real
         const tokenPayload = await verifyContactToken(dto.contactToken);
@@ -441,29 +494,47 @@ export class ContestService {
             contactId = newContact.id;
         }
 
-        // 4. Create Participant — wrap in P2002 guard to handle the race condition
-        // where two concurrent requests pass the duplicate check above simultaneously.
-        // The @@unique([contactId, contestId]) constraint catches it at DB level;
-        // we translate it to a clean 409 instead of letting a 500 escape.
-        const registrationRef = generateRegistrationRef();
+        // 4. Create or reuse Participant — check existing record first
         let participant;
-        try {
-            participant = await this.participantService.registerParticipant({
-                organizationId: contest.organizationId,
-                contestId: contest.id,
-                contactId,
-                registrationRef,
-                // Paid contests: hold the seat as PENDING_PAYMENT until the
-                // Razorpay webhook confirms the payment was captured.
-                status: contest.paymentEnabled
-                    ? ParticipantStatus.PENDING_PAYMENT
-                    : ParticipantStatus.REGISTERED,
-            });
-        } catch (err: any) {
-            if (err?.code === "P2002") {
+        let existingParticipant = null;
+        if (this.participantRepo) {
+            existingParticipant = await this.participantRepo.findByContactId(
+                contest.organizationId,
+                contest.id,
+                contactId
+            );
+        }
+
+        if (existingParticipant) {
+            if (existingParticipant.status === ParticipantStatus.REGISTERED) {
                 throw new ConflictError("You are already registered for this contest");
             }
-            throw err;
+            if (existingParticipant.status === ParticipantStatus.PENDING_PAYMENT) {
+                // Reuse existing PENDING_PAYMENT row (order refresh happens in createOrder if needed)
+                participant = existingParticipant;
+            }
+        }
+
+        if (!participant) {
+            const registrationRef = generateRegistrationRef();
+            try {
+                participant = await this.participantService.registerParticipant({
+                    organizationId: contest.organizationId,
+                    contestId: contest.id,
+                    contactId,
+                    registrationRef,
+                    // Paid contests: hold the seat as PENDING_PAYMENT until the
+                    // Razorpay webhook confirms the payment was captured.
+                    status: contest.paymentEnabled
+                        ? ParticipantStatus.PENDING_PAYMENT
+                        : ParticipantStatus.REGISTERED,
+                });
+            } catch (err: any) {
+                if (err?.code === "P2002") {
+                    throw new ConflictError("You are already registered for this contest");
+                }
+                throw err;
+            }
         }
 
         // 5. Free contest — done
@@ -492,7 +563,7 @@ export class ContestService {
             });
 
             return {
-                registrationRef,
+                registrationRef: participant.registrationRef,
                 participantId: participant.id,
                 paymentRequired: false,
                 status: "REGISTERED",
@@ -501,7 +572,7 @@ export class ContestService {
 
 
         return {
-            registrationRef,
+            registrationRef: participant.registrationRef,
             participantId: participant.id,
             paymentRequired: true,
             payment: {

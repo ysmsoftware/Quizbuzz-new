@@ -14,7 +14,6 @@ import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import { Prisma } from "@prisma/client";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { leaderboardRepository } from "../container";
 import { LeaderboardBuildPayload } from "../queues";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
@@ -31,20 +30,13 @@ interface ScoredRow {
     timeTakenMs: number | null;
 }
 
-/**
- * Sorts rows by score DESC, then timeTakenSecs ASC (faster = higher rank on tie).
- * Returns the same rows with a 1-based rank field attached.
- * Pure function — fully unit-testable with no mocking.
- */
 export function rankRows(
     rows: ScoredRow[],
 ): Array<ScoredRow & { rank: number }> {
     const sorted = [...rows].sort((a, b) => {
-        // Primary: score descending
         const scoreDiff = new Prisma.Decimal(b.score).minus(a.score).toNumber();
         if (scoreDiff !== 0) return scoreDiff > 0 ? 1 : -1;
 
-        // Tiebreaker: time Taken Ms ascending (faster = better)
         const aTime = a.timeTakenMs ?? Number.MAX_SAFE_INTEGER;
         const bTime = b.timeTakenMs ?? Number.MAX_SAFE_INTEGER;
         return aTime - bTime;
@@ -57,6 +49,7 @@ export function rankRows(
 
 async function buildLeaderboard(job: Job<LeaderboardBuildPayload>): Promise<void> {
     const { contestId, organizationId } = job.data;
+    const { leaderboardRepository } = require("../container");
 
     logger.info(`[leaderboard-worker] Building leaderboard for contest ${contestId}`);
 

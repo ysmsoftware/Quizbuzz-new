@@ -33,7 +33,7 @@ export interface IParticipantRepository {
         organizationId: string,
         contestId: string,
         contactId: string
-    ): Promise<boolean>;
+    ): Promise<Participant | null>;
 
     findEligibleForCertificate(
         contestId: string,
@@ -152,11 +152,10 @@ export class ParticipantRepository implements IParticipantRepository {
         organizationId: string,
         contestId: string,
         contactId: string
-    ): Promise<boolean> {
-        const count = await prisma.participant.count({
+    ): Promise<Participant | null> {
+        return prisma.participant.findFirst({
             where: { organizationId, contestId, contactId },
         });
-        return count > 0;
     }
 
     async findEligibleForCertificate(

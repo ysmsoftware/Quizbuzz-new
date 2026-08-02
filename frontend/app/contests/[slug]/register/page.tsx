@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { contestService } from "@/lib/services/contest-service";
-import { registrationService } from "@/lib/services/registration-service";
+import { registrationService, type ExistingRegistrationInfo } from "@/lib/services/registration-service";
 import { useRazorpay } from "@/lib/hooks/usePayment";
 import type { PublicContestDetail } from "@/lib/types/public-contest";
 
@@ -44,11 +44,13 @@ type DetailsFormData = z.infer<typeof detailsSchema>;
 
 // ─── Step Type ──────────────────────────────────────────────────────────────
 
-type Step = "email" | "otp" | "details" | "payment" | "success";
+type Step = "email" | "otp" | "resume-or-fresh" | "already-registered" | "details" | "payment" | "success";
 
 const STEP_LABELS: Record<Step, string> = {
   email: "Email",
   otp: "Verify",
+  "resume-or-fresh": "Resume",
+  "already-registered": "Status",
   details: "Details",
   payment: "Payment",
   success: "Done",
@@ -71,6 +73,7 @@ export default function RegisterPage() {
   const [otpError, setOtpError] = useState("");
   const [registrationRef, setRegistrationRef] = useState("");
   const [participantId, setParticipantId] = useState("");
+  const [existingInfo, setExistingInfo] = useState<ExistingRegistrationInfo | null>(null);
   const [apiError, setApiError] = useState("");
   const [razorpayOrder, setRazorpayOrder] = useState<{
     amount: number;
@@ -180,7 +183,24 @@ export default function RegisterPage() {
     try {
       const result = await registrationService.verifyOtp(email, otp);
       setContactToken(result.contactToken);
-      setStep("details");
+
+      // Check for an existing registration attempt
+      const statusRes = await registrationService.checkRegistrationStatus(slug, result.contactToken);
+      if (statusRes.existing) {
+        setExistingInfo(statusRes.existing);
+        setParticipantId(statusRes.existing.participantId);
+        setRegistrationRef(statusRes.existing.registrationRef);
+
+        if (statusRes.existing.status === "REGISTERED") {
+          setStep("already-registered");
+        } else if (statusRes.existing.status === "PENDING_PAYMENT") {
+          setStep("resume-or-fresh");
+        } else {
+          setStep("details");
+        }
+      } else {
+        setStep("details");
+      }
     } catch (err: any) {
       setOtpError(err.message || "Invalid OTP. Please try again.");
     }
@@ -235,15 +255,7 @@ export default function RegisterPage() {
 
   const handleRetryPayment = async () => {
     if (!contest || !participantId) return;
-    await retryPayment(participantId, {
-      amount: razorpayOrder?.amount || 0,
-      currency: razorpayOrder?.currency || "INR",
-      eventTitle: contest.title,
-      contactName: `${detailsForm.getValues("firstName")} ${detailsForm.getValues("lastName") ?? ""}`.trim(),
-      contactEmail: email,
-      contactPhone: detailsForm.getValues("phone") ?? "",
-      callbackQueryParams: { ref: registrationRef }
-    });
+    await handlePayment();
   };
 
   // ─── OTP Input Helpers ──────────────────────────────────────────────────────
@@ -481,6 +493,90 @@ export default function RegisterPage() {
                     Resend
                   </button>
                 </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* ── Step: Already Registered ─────────────────────────────────────── */}
+        {step === "already-registered" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-emerald-600">
+                  <CheckCircle className="h-6 w-6" />
+                  Already Registered
+                </CardTitle>
+                <CardDescription>
+                  You are already registered for {contest?.title}.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 text-center">
+                <div className="rounded-lg bg-muted p-4 space-y-1">
+                  <p className="text-xs text-muted-foreground">Registration Reference</p>
+                  <p className="text-lg font-mono font-bold text-foreground">{registrationRef}</p>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Your seat is confirmed. You can access the quiz when it goes live.
+                </p>
+                <Button asChild className="w-full">
+                  <Link href={`/quiz/${slug}/join`}>Go to Quiz Page</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* ── Step: Resume or Fresh ────────────────────────────────────────── */}
+        {step === "resume-or-fresh" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Existing Registration Found</CardTitle>
+                <CardDescription>
+                  You started registering for {contest?.title} earlier.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {existingInfo?.payment?.resumable ? (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+                    <h4 className="font-medium text-foreground">Active Payment Window Available</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Your payment order is still valid. You can resume checkout immediately without re-entering your details.
+                    </p>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        if (!contest) return;
+                        setRazorpayOrder({
+                          amount: Number(contest.paymentConfig?.amount || 0),
+                          currency: contest.paymentConfig?.currency || "INR",
+                          description: `Registration fee for ${contest.title}`,
+                        });
+                        setStep("payment");
+                      }}
+                    >
+                      Resume Payment (₹{contest?.paymentConfig?.amount})
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border bg-muted p-4 space-y-2">
+                    <h4 className="font-medium text-foreground">Payment Session Timed Out</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Your previous payment order window has expired. Proceeding will issue a fresh payment order for your registration.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2 border-t">
+                  <Button
+                    variant={existingInfo?.payment?.resumable ? "outline" : "default"}
+                    className="w-full"
+                    onClick={() => setStep("details")}
+                  >
+                    Start Fresh / Review Details
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
