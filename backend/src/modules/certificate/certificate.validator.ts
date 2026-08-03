@@ -7,6 +7,7 @@ export const issueCertificateSchema = z
         participantId: z.string().trim().optional(),
         contactId:     z.string().trim().optional(),
         contestId:     z.string().trim().optional(),
+        templateId:    z.string().trim().optional(),   // NEW
     })
     .refine(
         (d) => !!d.participantId || (!!d.contactId && !!d.contestId),
@@ -16,7 +17,8 @@ export const issueCertificateSchema = z
 // ─── Bulk issue for a whole contest ──────────────────────────────────────────
 
 export const bulkIssueCertificateSchema = z.object({
-    contestId: z.string().trim().min(1, "contestId is required"),
+    contestId:  z.string().trim().min(1, "contestId is required"),
+    templateId: z.string().trim().optional(),   // NEW
 });
 
 // ─── Pagination ───────────────────────────────────────────────────────────────

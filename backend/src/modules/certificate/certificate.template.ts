@@ -484,3 +484,32 @@ function medalEmoji(rank: number): string {
     if (rank === 3) return "🥉";
     return "";
 }
+
+// ─── Custom template rendering (admin-uploaded HTML) ──────────────────────────
+
+/**
+ * Renders an admin-uploaded HTML template by substituting {{variable}} placeholders
+ * with values from the same CertificateRenderContext used by the built-in templates —
+ * this is what guarantees a custom template gets exactly the same dynamic fields
+ * (score, rank, percentage, issuedAt, contestDate, orgName/logo/color, certificateId,
+ * timeTakenSecs, participantName, contestTitle) resolved the exact same way.
+ *
+ * Any {{placeholder}} that doesn't match a known context key is left blank rather than
+ * leaking the raw "{{...}}" text into the rendered certificate — the admin should have
+ * already caught this via the preview step before saving the template.
+ */
+export function renderCustomTemplateHtml(
+    htmlTemplate:  string,
+    meta:          CertificateMetadata,
+    certificateId: string
+): string {
+    const ctx = buildRenderContext(meta, certificateId);
+
+    let out = htmlTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+        const value = (ctx as unknown as Record<string, unknown>)[key];
+        return value === undefined || value === null ? "" : String(value);
+    });
+
+    return out;
+}
+

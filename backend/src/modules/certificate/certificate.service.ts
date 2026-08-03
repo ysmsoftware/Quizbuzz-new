@@ -1,5 +1,6 @@
 import { CertificateRepository } from "./certificate.repository";
 import { ParticipantRepository } from "../participant/participant.repository";
+import { CertificateTemplateRepository } from "../certificate-template/certificate-template.repository";
 import { certificateQueue } from "../../queues";
 import { NotFoundError, BadRequestError, ConflictError } from "../../error/http-errors";
 import {
@@ -16,6 +17,7 @@ export class CertificateService {
     constructor(
         private readonly certificateRepo: CertificateRepository,
         private readonly participantRepo: ParticipantRepository,
+        private readonly certificateTemplateRepo: CertificateTemplateRepository,
     ) { }
 
     // ── Reads ─────────────────────────────────────────────────────────────────
@@ -195,6 +197,13 @@ export class CertificateService {
             // per-contest in the future by storing them on the Contest model.
         };
 
+        // 5b. If a custom template was requested, validate it belongs to this org and attach it
+        if (dto.templateId) {
+            const template = await this.certificateTemplateRepo.findById(dto.templateId, organizationId);
+            if (!template) throw new NotFoundError("Certificate template not found");
+            metadata.templateId = template.id;
+        }
+
         // 6. Create certificate row in QUEUED status
         const cert = await this.certificateRepo.create({
             organizationId,
@@ -228,8 +237,14 @@ export class CertificateService {
      */
     async bulkIssueCertificates(
         contestId: string,
-        organizationId: string
+        organizationId: string,
+        templateId?: string,
     ): Promise<{ queued: number; skipped: number }> {
+        if (templateId) {
+            const template = await this.certificateTemplateRepo.findById(templateId, organizationId);
+            if (!template) throw new NotFoundError("Certificate template not found");
+        }
+
         // 1. Find all eligible participants without a certificate
         const eligible = await this.certificateRepo
             .findEligibleParticipantsWithoutCertificate(contestId, organizationId);
@@ -257,6 +272,7 @@ export class CertificateService {
                 rank: p.leaderboard?.rank ?? undefined,
                 timeTakenSecs: p.submission?.timeTakenSecs ?? undefined,
                 issuedAt: new Date().toISOString(),
+                ...(templateId && { templateId }),
             } as any,
         }));
 

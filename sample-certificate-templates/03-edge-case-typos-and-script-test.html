@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Certificate — {{participantName}}</title>
+
+<!-- INTENTIONAL TEST: this <script> tag should be stripped by the backend's
+     sanitizeHtml() before the template is ever saved. After uploading this file,
+     open your browser devtools on the preview iframe (or re-fetch the saved
+     template via GET /certificate-templates/:id) and confirm this tag is gone
+     from the stored/rendered HTML — it should never appear, and the alert()
+     should never fire. -->
+<script>alert('If you see this alert, sanitization is NOT working — script tags should be stripped.');</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* No @page rule — defaults to A4 landscape, same as Template 1. This template's
+     focus is placeholder handling, not page sizing. */
+  html, body {
+    width: 297mm;
+    height: 210mm;
+    overflow: hidden;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #fff;
+  }
+  .page {
+    width: 297mm;
+    height: 210mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cert {
+    width: 260mm;
+    height: 185mm;
+    border: 3px dashed #b23b3b;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px 48px;
+    text-align: center;
+  }
+  .title { font-size: 26px; font-weight: bold; color: #333; }
+  .name { font-size: 30px; font-weight: bold; color: {{primaryColor}}; margin: 6px 0; }
+  .row { font-size: 13px; color: #444; margin-top: 4px; }
+  .label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #999; margin-top: 14px; }
+  .known { color: #1a7f37; font-weight: bold; }
+  .unknown { color: #b23b3b; font-weight: bold; background: #fdeaea; padding: 1px 6px; border-radius: 3px; }
+  .note { font-size: 10.5px; color: #888; max-width: 480px; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="cert">
+      <h1 class="title">Placeholder &amp; Sanitization Test Certificate</h1>
+
+      <p class="label">Correctly spelled — known — placeholders (should fill in real data)</p>
+      <p class="row known">{{participantName}} — {{contestTitle}} — Rank #{{rank}} — {{percentage}}%</p>
+
+      <p class="name">{{participantName}}</p>
+
+      <p class="label">Deliberately misspelled / unsupported placeholders (should render BLANK below, not "{{...}}")</p>
+      <!-- "particpantName" is a typo of participantName.
+           "customAwardTitle" is a plausible one-off custom field — NOT supported
+           in v1 (system fields only, per the org's own design decision) — so it
+           should also render blank, same as any typo. -->
+      <p class="row">
+        Typo test: [{{particpantName}}] &nbsp;|&nbsp; Unsupported custom field test: [{{customAwardTitle}}]
+      </p>
+
+      <p class="note">
+        Expected result: the "known" line above shows real participant/contest/rank/score data.
+        The typo/unsupported line shows empty brackets <span class="unknown">[ ]</span> — the raw
+        <code>&#123;&#123;particpantName&#125;&#125;</code> and <code>&#123;&#123;customAwardTitle&#125;&#125;</code>
+        text should NOT leak through. In the upload preview screen, both of these should also show up
+        as amber "unrecognized placeholder" badges before you save.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

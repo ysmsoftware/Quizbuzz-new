@@ -47,7 +47,7 @@ export function useParticipants(contestId: string, options: { page: number; limi
 
   // Bulk issue certificates mutation
   const bulkIssueMutation = useMutation({
-    mutationFn: () => certificatesApi.bulkIssueCertificates(contestId),
+    mutationFn: (templateId?: string) => certificatesApi.bulkIssueCertificates(contestId, { templateId }),
     onSuccess: () => {
       toast.success('Bulk certificate generation successfully queued');
       queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });
@@ -59,7 +59,8 @@ export function useParticipants(contestId: string, options: { page: number; limi
 
   // Individual participant certificate issue mutation
   const singleIssueMutation = useMutation({
-    mutationFn: (participantId: string) => certificatesApi.issueCertificate(contestId, { participantId }),
+    mutationFn: ({ participantId, templateId }: { participantId: string; templateId?: string }) =>
+      certificatesApi.issueCertificate(contestId, { participantId, templateId }),
     onSuccess: () => {
       toast.success('Certificate queued for participant');
       queryClient.invalidateQueries({ queryKey: ['certificates-paginated', contestId] });

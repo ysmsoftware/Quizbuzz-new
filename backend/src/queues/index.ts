@@ -1,8 +1,8 @@
-import { Queue } from "bullmq";
+import { Queue, QueueEvents } from "bullmq";
 import { redis } from "../config/redis";
 import { config } from "../config";
 import { SubmissionJobPayload, EvaluationJobPayload } from "../modules/submission/submission.types";
-import { CertificateJobPayload } from "../modules/certificate/certificate.types";
+import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 
 /**
  * Shared default job options derived from config.
@@ -44,14 +44,30 @@ export const evaluationQueue = new Queue<EvaluationJobPayload>("evaluation-queue
 
 /**
  * Certificate generation queue.
- * Producers : CertificateService (single issue + bulk issue)
+ * Producers : CertificateService (single issue + bulk issue),
+ *             CertificateTemplateService.testGenerate (one-off admin "Test Generate PDF")
  * Consumers : certificate.worker.ts
- * JobId     : certificateId  ← deduplication; safe to call addJob twice
+ * JobId     : certificateId for real jobs (dedup); `test-{testId}` for test jobs
+ *
+ * CertificateQueueJobData is a union — the worker discriminates real vs. test jobs by
+ * job name ("generate-certificate" vs "generate-certificate-test"), not by payload shape.
  */
-export const certificateQueue = new Queue<CertificateJobPayload>("certificate-queue", {
+export type CertificateQueueJobData = CertificateJobPayload | CertificateTestJobPayload;
+
+export const certificateQueue = new Queue<CertificateQueueJobData>("certificate-queue", {
     connection: redis,
     prefix: config.queue.prefix,
     defaultJobOptions,
+});
+
+/**
+ * QueueEvents companion for certificateQueue — required by BullMQ's Job.waitUntilFinished(),
+ * used only by CertificateTemplateService.testGenerate() to synchronously await a single
+ * one-off test job's completion (a few seconds) instead of the frontend having to poll.
+ */
+export const certificateQueueEvents = new QueueEvents("certificate-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
 });
 
 /**

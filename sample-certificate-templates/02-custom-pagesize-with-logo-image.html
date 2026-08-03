@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Certificate — {{participantName}}</title>
+<style>
+  /* This template DECLARES its own page size — "letter landscape" (279mm x 216mm),
+     deliberately NOT the A4-landscape default. This is the fidelity test: the
+     preview canvas and the final PDF should both come out at 279mm x 216mm,
+     not be silently forced into A4 landscape. */
+  @page { size: letter landscape; margin: 0; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 279mm;
+    height: 216mm;
+    overflow: hidden;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+  }
+  .page {
+    width: 279mm;
+    height: 216mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(150deg, #101d34 0%, {{primaryColor}} 120%);
+  }
+  .cert {
+    width: 250mm;
+    height: 190mm;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 26px 46px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .cert::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 10px;
+    background: linear-gradient(90deg, {{primaryColor}}, #101d34);
+  }
+  /* Logo sourced from the org's own branding field — a real <img>, not a placeholder.
+     Tests that {{orgLogoUrl}} substitution still works inside a plain <img src>. */
+  .org-logo {
+    max-height: 46px;
+    max-width: 170px;
+    object-fit: contain;
+  }
+  /* Second image — a hardcoded external URL (NOT a {{variable}}) to prove any
+     arbitrary <img src> in admin-uploaded HTML loads at render time, not just
+     the built-in orgLogoUrl field. */
+  .decor-badge {
+    position: absolute;
+    top: 22px;
+    right: 28px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+  }
+  .title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #101d34;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #8a8f98;
+  }
+  .name {
+    font-size: 34px;
+    font-weight: 800;
+    color: {{primaryColor}};
+    border-bottom: 3px solid {{primaryColor}};
+    padding-bottom: 8px;
+    margin: 8px 0;
+  }
+  .body-text {
+    font-size: 13px;
+    color: #555;
+    max-width: 460px;
+    line-height: 1.6;
+  }
+  .contest {
+    font-size: 18px;
+    font-weight: bold;
+    color: #101d34;
+  }
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 6px;
+  }
+  .pill {
+    font-size: 12px;
+    background: #101d34;
+    color: #fff;
+    border-radius: 20px;
+    padding: 5px 16px;
+  }
+  .footer {
+    position: absolute;
+    bottom: 14px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 26px;
+    font-size: 8.5px;
+    color: #bbb;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="cert">
+      <img class="decor-badge" src="https://placehold.co/64x64/f5c542/101d34?text=%E2%98%85" alt="Award badge" />
+
+      <img class="org-logo" src="{{orgLogoUrl}}" alt="{{orgName}} logo" />
+
+      <p class="subtitle">{{orgName}} presents</p>
+      <h1 class="title">Certificate of Merit</h1>
+      <p class="name">{{participantName}}</p>
+      <p class="body-text">In recognition of exceptional performance and dedication demonstrated in</p>
+      <p class="contest">{{contestTitle}}</p>
+      <div class="stats">
+        <span class="pill">Score {{percentage}}%</span>
+        <span class="pill">Rank #{{rank}}</span>
+      </div>
+      <div class="footer">
+        <span>Issued {{issuedAt}}</span>
+        <span>{{certificateId}}</span>
+        <span>{{orgName}}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

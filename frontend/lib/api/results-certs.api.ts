@@ -118,10 +118,10 @@ export const certificatesApi = {
     getCertificateById: (id: string) =>
         get<any>(`/certificates/${id}`),
 
-    issueCertificate: (contestId: string, body: { participantId: string; templateData?: any }) =>
+    issueCertificate: (contestId: string, body: { participantId: string; templateId?: string }) =>
         post<any>(`/certificates/issue`, { ...body, contestId }),
 
-    bulkIssueCertificates: (contestId: string, body?: { cutoffPercentage?: number }) =>
+    bulkIssueCertificates: (contestId: string, body?: { templateId?: string }) =>
         post<any>(`/certificates/bulk-issue`, { ...body, contestId }),
 
     retryCertificate: (certificateId: string) =>

@@ -39,6 +39,11 @@ export default function AdminCertificatesPage() {
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <Button variant="outline" asChild className="rounded-xl h-11">
+                        <Link href="/org/certificates/templates">
+                            <Award className="mr-2 h-4 w-4" /> Manage Templates
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild className="rounded-xl h-11">
                         <Link href="/org/contests">
                             <ChevronLeft className="mr-2 h-4 w-4" /> Back to Contests
                         </Link>

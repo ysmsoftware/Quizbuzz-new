@@ -21,6 +21,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { useParticipants } from '@/lib/hooks/useParticipantCertificate';
+import { useCertificateTemplates } from '@/lib/hooks/useCertificateTemplates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,9 @@ export default function CertificatesManagementPage() {
 
   // Single Issuing form state
   const [issueParticipantId, setIssueParticipantId] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+
+  const { data: templates = [] } = useCertificateTemplates();
 
   // Custom hook for participant & certificate queries/mutations
   const {
@@ -114,7 +118,7 @@ export default function CertificatesManagementPage() {
   };
 
   const handleBulkIssue = () => {
-    bulkIssueMutation.mutate();
+    bulkIssueMutation.mutate(selectedTemplateId);
   };
 
   const handleSingleIssueSubmit = (e: React.FormEvent) => {
@@ -123,7 +127,7 @@ export default function CertificatesManagementPage() {
       toast.error('Please provide a valid participant ID');
       return;
     }
-    singleIssueMutation.mutate(issueParticipantId, {
+    singleIssueMutation.mutate({ participantId: issueParticipantId, templateId: selectedTemplateId }, {
       onSuccess: () => {
         setIssueParticipantId('');
       }
@@ -149,6 +153,23 @@ export default function CertificatesManagementPage() {
         </div>
         
         <div className="flex items-center gap-3">
+
+          <Select
+            value={selectedTemplateId ?? "default"}
+            onValueChange={(val) => setSelectedTemplateId(val === "default" ? undefined : val)}
+          >
+            <SelectTrigger className="w-56 h-10 rounded-xl bg-background border-border text-xs">
+              <SelectValue placeholder="Default (built-in design)" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
+              <SelectItem value="default" className="cursor-pointer">Default (built-in design)</SelectItem>
+              {templates.map((tpl) => (
+                <SelectItem key={tpl.id} value={tpl.id} className="cursor-pointer">
+                  {tpl.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Button variant="outline" className="rounded-xl" onClick={() => refetch()}>
             <RefreshCcw className="h-4 w-4 mr-2" />
@@ -370,7 +391,7 @@ export default function CertificatesManagementPage() {
                                     variant="outline" 
                                     size="sm" 
                                     className="h-7 px-2.5 rounded-lg border-amber-500/30 hover:border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-xs transition-all duration-200 animate-in fade-in duration-200"
-                                    onClick={() => singleIssueMutation.mutate(record.participant.id)}
+                                    onClick={() => singleIssueMutation.mutate({ participantId: record.participant.id, templateId: selectedTemplateId })}
                                     disabled={singleIssueMutation.isPending}
                                   >
                                     <Zap className="h-3 w-3 fill-current" />
@@ -405,7 +426,7 @@ export default function CertificatesManagementPage() {
                                     )}
                                     {record.certStatus === 'NOT_GENERATED' && (
                                       <DropdownMenuItem 
-                                        onClick={() => singleIssueMutation.mutate(record.participant.id)}
+                                        onClick={() => singleIssueMutation.mutate({ participantId: record.participant.id, templateId: selectedTemplateId })}
                                         className="cursor-pointer gap-2 text-amber-500 hover:text-amber-400"
                                         disabled={singleIssueMutation.isPending}
                                       >

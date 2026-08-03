@@ -22,10 +22,11 @@ import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import puppeteer, { Browser } from "puppeteer";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { certificateService } from "../container";
+import { certificateService, certificateTemplateService } from "../container";
 import { storageService } from "../services/storage.service";
-import { CertificateJobPayload } from "../modules/certificate/certificate.types";
-import { renderCertificateHtml } from "../modules/certificate/certificate.template";
+import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
+import { CertificateQueueJobData } from "../queues";
+import { renderCertificateHtml, renderCustomTemplateHtml } from "../modules/certificate/certificate.template";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -68,18 +69,27 @@ async function getBrowser(): Promise<Browser> {
 
 // ─── PDF generation ───────────────────────────────────────────────────────────
 
-async function generatePdf(html: string): Promise<Buffer> {
+async function generatePdf(html: string, disableScripts: boolean = false): Promise<Buffer> {
     const b    = await getBrowser();
     const page = await b.newPage();
 
     try {
+        if (disableScripts) await page.setJavaScriptEnabled(false);
         await page.setContent(html, { waitUntil: "load" });
 
         const pdf = await page.pdf({
-            format:          "A4",
-            landscape:       true,
-            printBackground: true,
-            margin:          { top: "0", right: "0", bottom: "0", left: "0" },
+            // format/landscape below are the FALLBACK only — preferCSSPageSize means
+            // any `@page { size: ... }` declared in the HTML's own CSS wins instead.
+            // The built-in templates already declare `@page { size: A4 landscape; margin: 0; }`
+            // (see certificate.template.ts), so this is a no-op for them — byte-identical
+            // output. For admin-uploaded custom templates, this is what stops their layout
+            // from being silently forced into A4 landscape if they designed for a different
+            // canvas size.
+            format:            "A4",
+            landscape:         true,
+            preferCSSPageSize: true,
+            printBackground:   true,
+            margin:            { top: "0", right: "0", bottom: "0", left: "0" },
         });
 
         return Buffer.from(pdf);
@@ -90,7 +100,59 @@ async function generatePdf(html: string): Promise<Buffer> {
 
 // ─── Worker processor ─────────────────────────────────────────────────────────
 
-async function processCertificate(job: Job<CertificateJobPayload>): Promise<void> {
+/**
+ * Single entry point for the "certificate-queue" — dispatches to the real-certificate
+ * path or the test-generation path based on job name, since both share the same queue,
+ * worker process, and Puppeteer browser instance.
+ */
+async function processCertificate(job: Job<CertificateQueueJobData>): Promise<{ url: string; key: string } | void> {
+    if (job.name === "generate-certificate-test") {
+        return processTestCertificate(job as Job<CertificateTestJobPayload>);
+    }
+    return processRealCertificate(job as Job<CertificateJobPayload>);
+}
+
+/**
+ * One-off "Test Generate PDF" job triggered by an admin from the template library
+ * (CertificateTemplateService.testGenerate). Runs the exact same render → PDF →
+ * upload steps as a real certificate, but there is no Certificate DB row to update —
+ * no real participant/contest exists for it — so markGenerating/markGenerated/
+ * markFailed are all deliberately skipped here. The job's return value (resolved via
+ * BullMQ's Job.waitUntilFinished on the caller's side) is the download URL.
+ */
+async function processTestCertificate(
+    job: Job<CertificateTestJobPayload>
+): Promise<{ url: string; key: string }> {
+    const { testId, organizationId, templateId, metadata } = job.data;
+
+    if (!testId || !organizationId || !templateId || !metadata?.participantName) {
+        throw new UnrecoverableError(
+            `[certificate-worker] Invalid test payload: testId=${testId} template=${templateId}`
+        );
+    }
+
+    logger.info(`[certificate-worker] Test job ${job.id} started — template: ${templateId}`);
+
+    const template = await certificateTemplateService.getTemplate(templateId, organizationId);
+    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`);
+
+    let pdfBuffer: Buffer;
+    try {
+        // Test-generated PDFs always come from a custom template — same JS-disabled
+        // rendering path a real custom-template certificate would use.
+        pdfBuffer = await generatePdf(html, true);
+    } catch (err: any) {
+        throw new Error(`[certificate-worker] Test PDF generation failed for template ${templateId}: ${err.message}`);
+    }
+
+    const storageKey = `certificate-template-tests/${organizationId}/${templateId}/${testId}.pdf`;
+    const uploadResult = await storageService.upload(storageKey, pdfBuffer, "application/pdf");
+
+    logger.info(`[certificate-worker] Test job ${job.id} complete — uploaded to ${uploadResult.url}`);
+    return uploadResult;
+}
+
+async function processRealCertificate(job: Job<CertificateJobPayload>): Promise<void> {
     const { certificateId, organizationId, contestId, participantId, metadata } = job.data;
 
     logger.info(
@@ -116,16 +178,22 @@ async function processCertificate(job: Job<CertificateJobPayload>): Promise<void
     await certificateService.markGenerating(certificateId, organizationId);
 
     // ── Step 3: Render HTML ───────────────────────────────────────────────────
-    // renderCertificateHtml is imported from certificate.template.ts
-    // It receives the full metadata + certificateId to build the context.
+    let html: string;
+    let usesCustomTemplate = false;
 
-    const html = renderCertificateHtml(metadata, certificateId);
+    if (metadata.templateId) {
+        const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
+        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId);
+        usesCustomTemplate = true;
+    } else {
+        html = renderCertificateHtml(metadata, certificateId);
+    }
 
     // ── Step 4: Generate PDF via Puppeteer ────────────────────────────────────
 
     let pdfBuffer: Buffer;
     try {
-        pdfBuffer = await generatePdf(html);
+        pdfBuffer = await generatePdf(html, usesCustomTemplate);
     } catch (err: any) {
         // Puppeteer errors (browser crash, render timeout) are retryable
         throw new Error(`[certificate-worker] PDF generation failed for cert ${certificateId}: ${err.message}`);
@@ -169,7 +237,7 @@ async function processCertificate(job: Job<CertificateJobPayload>): Promise<void
 
 export class CertificateWorker implements Worker {
     name = "certificate-worker";
-    private worker?: BullMQWorker<CertificateJobPayload>;
+    private worker?: BullMQWorker<CertificateQueueJobData>;
 
     start() {
         // Certificate generation is CPU + memory intensive — use a lower concurrency
@@ -179,7 +247,7 @@ export class CertificateWorker implements Worker {
             Math.floor(config.queue.concurrency / 4)
         );
 
-        this.worker = new BullMQWorker<CertificateJobPayload>(
+        this.worker = new BullMQWorker<CertificateQueueJobData>(
             "certificate-queue",
             processCertificate,
             {
@@ -202,8 +270,10 @@ export class CertificateWorker implements Worker {
                 `[certificate-worker] Job ${job?.id} failed (${permanent ? "permanent" : `attempt ${job?.attemptsMade}`}): ${err.message}`
             );
 
-            // Mark the DB row as FAILED so admin can see it and trigger a retry
-            if (job?.data?.certificateId) {
+            // Mark the DB row as FAILED so admin can see it and trigger a retry.
+            // Test-generation jobs have no `certificateId` (no Certificate DB row exists
+            // for them) — this guard naturally skips them, nothing else needed.
+            if (job?.data && "certificateId" in job.data && job.data.certificateId) {
                 try {
                     await certificateService.markFailed(
                         job.data.certificateId,

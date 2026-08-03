@@ -100,10 +100,11 @@ export class CertificateController {
 
     bulkIssueCertificates = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { contestId } = bulkIssueCertificateSchema.parse(req.body);
+            const { contestId, templateId } = bulkIssueCertificateSchema.parse(req.body);
             const result = await this.certificateService.bulkIssueCertificates(
                 contestId,
-                req.user!.organizationId as string
+                req.user!.organizationId as string,
+                templateId,
             );
             res.status(202).json({
                 success: true,

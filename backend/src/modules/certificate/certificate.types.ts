@@ -86,8 +86,11 @@ export interface CertificateMetadata {
     templateVariant?: string | undefined;
 
     /**
-     * Legacy field — kept for backward compatibility.
-     * Use `templateVariant` for new code.
+     * ID of an admin-uploaded CertificateTemplate (see modules/certificate-template).
+     * When set, certificate.worker.ts renders this custom HTML template via
+     * {{variable}} substitution instead of the three built-in PARTICIPATION /
+     * ACHIEVEMENT / MERIT variants. Left undefined → built-in rendering (unchanged
+     * default behaviour for every org that hasn't uploaded a custom template).
      */
     templateId?:      string | undefined;
 
@@ -112,11 +115,13 @@ export interface IssueCertificateDTO {
     participantId?: string | undefined;
     contactId?:     string | undefined;
     contestId?:     string | undefined;
+    templateId?:    string | undefined;   // NEW — optional CertificateTemplate id
 }
 
 /** Input for bulk issue via HTTP */
 export interface BulkIssueCertificateDTO {
-    contestId: string;
+    contestId:   string;
+    templateId?: string | undefined;      // NEW
 }
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
@@ -170,6 +175,23 @@ export interface CertificateJobPayload {
     organizationId: string;
     contestId:      string;
     participantId:  string;
+    metadata:       CertificateMetadata;
+}
+
+/**
+ * Placed on the SAME certificate-queue by CertificateTemplateService.testGenerate() —
+ * a one-off "Test Generate PDF" job an admin triggers from the template library, run
+ * through the real queue + worker + Puppeteer pipeline so it's a true test of what a
+ * real certificate would look like (and doubles as a health check of the queue/worker
+ * themselves). Distinguished from a real CertificateJobPayload by job name
+ * ("generate-certificate-test") — there is no Certificate DB row backing this, since
+ * there's no real participant/contest to attach it to, so the worker must skip every
+ * markGenerating/markGenerated/markFailed DB call for this job type.
+ */
+export interface CertificateTestJobPayload {
+    testId:         string;
+    organizationId: string;
+    templateId:     string;
     metadata:       CertificateMetadata;
 }
 

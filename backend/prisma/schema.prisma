@@ -239,6 +239,7 @@ model Organization {
   answers              Answer[]
   leaderboard          LeaderboardEntry[]
   certificates         Certificate[]
+  certificateTemplates CertificateTemplate[]
   proctoringEvents     ProctoringEvent[]
   proctoringScores     ProctoringScore[]
   messageLogs          MessageLog[]
@@ -780,6 +781,23 @@ model Certificate {
   @@index([organizationId])
   @@index([contestId, status])
   @@map("certificates")
+}
+
+model CertificateTemplate {
+  id             String   @id @default(ulid())
+  organizationId String
+  name           String
+  description    String?
+  htmlContent    String   // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
+  variables      Json     // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("certificate_templates")
 }
 
 // PROCTORING

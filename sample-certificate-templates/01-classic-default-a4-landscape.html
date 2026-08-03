@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Certificate — {{participantName}}</title>
+<style>
+  /* No @page rule on purpose — this template tests the DEFAULT page size
+     fallback (A4 landscape, 297mm x 210mm), same as every built-in certificate. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 297mm;
+    height: 210mm;
+    overflow: hidden;
+    background: #fdfdfd;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .page {
+    width: 297mm;
+    height: 210mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cert {
+    width: 265mm;
+    height: 192mm;
+    border: 2px solid {{primaryColor}};
+    border-radius: 6px;
+    background: linear-gradient(135deg, #ffffff 0%, #f4f7fb 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px 50px;
+    text-align: center;
+    position: relative;
+  }
+  .cert::before {
+    content: "";
+    position: absolute;
+    top: 10px; left: 10px; right: 10px; bottom: 10px;
+    border: 1px solid {{primaryColor}};
+    opacity: 0.35;
+    border-radius: 3px;
+    pointer-events: none;
+  }
+  .org-name {
+    font-family: Arial, sans-serif;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: {{primaryColor}};
+  }
+  .title {
+    font-size: 30px;
+    font-weight: bold;
+    color: {{primaryColor}};
+  }
+  .subtitle {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #888;
+  }
+  .name {
+    font-size: 32px;
+    font-weight: bold;
+    color: #1a1a1a;
+    border-bottom: 2px solid {{primaryColor}};
+    padding-bottom: 8px;
+    margin: 6px 0;
+  }
+  .body-text {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: #555;
+    max-width: 420px;
+    line-height: 1.6;
+  }
+  .contest {
+    font-size: 17px;
+    font-weight: bold;
+    color: {{primaryColor}};
+  }
+  .date {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    color: #777;
+  }
+  .stats {
+    display: flex;
+    gap: 18px;
+    margin-top: 4px;
+  }
+  .pill {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    background: #eef2f8;
+    border: 1px solid #d7e0ec;
+    border-radius: 20px;
+    padding: 4px 16px;
+    color: #333;
+  }
+  .pill strong { color: {{primaryColor}}; }
+  .footer {
+    position: absolute;
+    bottom: 14px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-family: Arial, sans-serif;
+    font-size: 8.5px;
+    color: #bbb;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="cert">
+      <p class="org-name">{{orgName}}</p>
+      <h1 class="title">Certificate of Achievement</h1>
+      <p class="subtitle">This certifies that</p>
+      <p class="name">{{participantName}}</p>
+      <p class="body-text">has successfully completed and demonstrated outstanding performance in</p>
+      <p class="contest">{{contestTitle}}</p>
+      <p class="date">{{contestDate}}</p>
+      <div class="stats">
+        <span class="pill">Score: <strong>{{percentage}}%</strong></span>
+        <span class="pill">Rank: <strong>#{{rank}}</strong></span>
+        <span class="pill">Time: <strong>{{timeTakenSecs}}s</strong></span>
+      </div>
+      <div class="footer">
+        <span>Issued: {{issuedAt}}</span>
+        <span>Cert ID: {{certificateId}}</span>
+        <span>{{orgName}}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
