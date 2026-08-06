@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuestions, useQuestionTags } from '@/lib/hooks/useQuestions';
 import { useContestQuestions } from '@/lib/hooks/useContestQuestions';
+import * as questionsApi from '@/lib/api/questions.api';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MultiStepLoader } from '@/components/ui/multi-step-loader';
+import { useStepChecklist, type ChecklistStep } from '@/lib/hooks/useStepChecklist';
+import { computeRuleTargets, computeDifficultyTargets } from '@/lib/utils/autoGenerateMath';
 
 // ────────────────────────────────────────────────────────────────
 // NegativeMarkPicker
@@ -220,6 +224,13 @@ export default function QuestionBankModal({
 
     const { assignMutation } = useContestQuestions(contestId);
 
+    // Preflight checklist: before an auto-generate request ever reaches the
+    // backend, we verify (a) the bank has enough unassigned questions overall,
+    // then (b) each rule's tag/difficulty pool individually — visibly, one at
+    // a time — so a shortfall is reported as "which pool, how short" instead
+    // of silently returning fewer questions than requested.
+    const autoGenerateChecklist = useStepChecklist();
+
     useEffect(() => {
         if (isOpen) {
             setSelectedIds([]);
@@ -238,7 +249,9 @@ export default function QuestionBankModal({
                     difficultyDistribution: { EASY: 40, MEDIUM: 40, HARD: 20 },
                 }
             ]);
+            autoGenerateChecklist.reset();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     const toggleSelect = (id: string) => {
@@ -484,28 +497,89 @@ export default function QuestionBankModal({
 
     const isAutoFormValid = totalQuestions > 0 && isRulePercentageValid && isDiffBreakdownValid && rules.length > 0;
 
+    // Builds the full checklist: one "is there enough overall" step, then one
+    // step per (rule x difficulty) combination that actually needs questions,
+    // then a final gated step that performs the real auto-generate call.
+    // Target counts are computed with the exact same math the backend uses
+    // (see lib/utils/autoGenerateMath.ts) so we're checking against the same
+    // numbers it will actually try to select.
+    const buildAutoGenerateSteps = (): ChecklistStep[] => {
+        const steps: ChecklistStep[] = [];
+
+        steps.push({
+            label: `Checking question bank availability (need ${totalQuestions} total)`,
+            run: async () => {
+                const res = await questionsApi.listQuestions({ unassignedFor: contestId, page: 1, limit: 1 });
+                const available = res.data?.pagination?.total ?? 0;
+                if (available < totalQuestions) {
+                    return {
+                        ok: false,
+                        detail: `Only ${available} unassigned question${available === 1 ? '' : 's'} available in your question bank, but ${totalQuestions} requested.`,
+                    };
+                }
+                return { ok: true };
+            },
+        });
+
+        const ruleTargets = computeRuleTargets(totalQuestions, rules);
+        ruleTargets.forEach(({ rule, target: ruleTarget }) => {
+            if (ruleTarget <= 0) return;
+            const poolLabel = rule.tags.length > 0 ? rule.tags.join(', ') : 'All Questions';
+            const diffTargets = computeDifficultyTargets(ruleTarget, rule.difficultyDistribution);
+
+            diffTargets.forEach(({ difficulty, target }) => {
+                if (target <= 0) return;
+                steps.push({
+                    label: `Checking "${poolLabel}" — ${difficulty} (need ${target})`,
+                    run: async () => {
+                        const res = await questionsApi.listQuestions({
+                            tags: rule.tags.length > 0 ? rule.tags : undefined,
+                            difficulty,
+                            unassignedFor: contestId,
+                            page: 1,
+                            limit: 1,
+                        });
+                        const available = res.data?.pagination?.total ?? 0;
+                        if (available < target) {
+                            return {
+                                ok: false,
+                                detail: `Only ${available} of ${target} needed "${difficulty}" question${target === 1 ? '' : 's'} available for "${poolLabel}".`,
+                            };
+                        }
+                        return { ok: true };
+                    },
+                });
+            });
+        });
+
+        steps.push({
+            label: `Generating and assigning ${totalQuestions} question set to contest`,
+            requiresAllPrevious: true,
+            run: async () => {
+                const res = await autoGenerateMutation.mutateAsync({
+                    contestId,
+                    body: { totalQuestions, defaultMarks, defaultNegativeMarks, rules },
+                });
+                return { ok: true, data: res?.data };
+            },
+        });
+
+        return steps;
+    };
+
     const handleAutoGenerate = async () => {
         if (!isAutoFormValid) return;
 
-        setIsAssigning(true);
-        try {
-            const result = await autoGenerateMutation.mutateAsync({
-                contestId,
-                body: {
-                    totalQuestions,
-                    defaultMarks,
-                    defaultNegativeMarks,
-                    rules
-                }
-            });
+        const steps = buildAutoGenerateSteps();
+        const { allPassed, results } = await autoGenerateChecklist.run(steps);
 
-            toast.success(result.message || `Successfully auto-generated and assigned ${result.data?.assignedCount || totalQuestions} questions!`);
+        if (allPassed) {
+            const submission = results[results.length - 1]?.data as { assignedCount?: number } | undefined;
+            toast.success(`Successfully auto-generated and assigned ${submission?.assignedCount ?? totalQuestions} questions!`);
+            autoGenerateChecklist.reset();
             onClose();
-        } catch (err: any) {
-            const errMsg = err?.response?.data?.message || err?.message || 'Failed to auto-generate questions';
-            toast.error(errMsg);
-        } finally {
-            setIsAssigning(false);
+        } else {
+            toast.error("Some question pools don't have enough questions — see details below.");
         }
     };
 
@@ -939,6 +1013,31 @@ export default function QuestionBankModal({
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Pool-availability report, populated after "Auto Generate Set" runs
+                                                    its preflight checklist. Only shown once the checklist has finished
+                                                    and something didn't have enough matching questions. */}
+                                                {!autoGenerateChecklist.isRunning &&
+                                                    autoGenerateChecklist.statuses.includes('error') && (
+                                                        <div className="p-2.5 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] space-y-1.5">
+                                                            <div className="flex gap-1.5 items-start font-bold">
+                                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                                Not Enough Questions Available
+                                                            </div>
+                                                            <ul className="space-y-1 pl-5 list-disc">
+                                                                {autoGenerateChecklist.steps.map((step, i) =>
+                                                                    autoGenerateChecklist.statuses[i] === 'error' ? (
+                                                                        <li key={i} className="opacity-90 font-semibold">
+                                                                            {autoGenerateChecklist.details[i]}
+                                                                        </li>
+                                                                    ) : null
+                                                                )}
+                                                            </ul>
+                                                            <p className="opacity-80 italic font-medium pt-0.5">
+                                                                Lower the total, adjust the allocation/difficulty split, or add more questions to your bank, then try again.
+                                                            </p>
+                                                        </div>
+                                                    )}
                                             </div>
                                         </div>
                                     </div>
@@ -1107,7 +1206,7 @@ export default function QuestionBankModal({
 
                 {/* Shared Action Dialog Footer */}
                 <div className="px-5 py-3 border-t bg-muted/10 flex items-center justify-end gap-2 shrink-0">
-                    <Button variant="ghost" onClick={onClose} disabled={isAssigning}>Cancel</Button>
+                    <Button variant="ghost" onClick={onClose} disabled={isAssigning || autoGenerateChecklist.isRunning}>Cancel</Button>
                     {activeTab === 'manual' ? (
                         <Button
                             onClick={handleAssign}
@@ -1126,16 +1225,16 @@ export default function QuestionBankModal({
                     ) : (
                         <Button
                             onClick={handleAutoGenerate}
-                            disabled={!isAutoFormValid || isAssigning}
+                            disabled={!isAutoFormValid || autoGenerateChecklist.isRunning}
                             className={cn(
                                 "px-5 h-9 font-bold relative overflow-hidden group shadow-md transition-all active:scale-95",
                                 isAutoFormValid ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""
                             )}
                         >
-                            {isAssigning ? (
+                            {autoGenerateChecklist.isRunning ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Generating Set...
+                                    Verifying & Generating...
                                 </>
                             ) : (
                                 <>
@@ -1147,6 +1246,13 @@ export default function QuestionBankModal({
                     )}
                 </div>
             </DialogContent>
+
+            <MultiStepLoader
+                loadingStates={autoGenerateChecklist.steps.map((s) => ({ text: s.label }))}
+                loading={autoGenerateChecklist.isRunning}
+                statuses={autoGenerateChecklist.statuses}
+                details={autoGenerateChecklist.details}
+            />
         </Dialog>
     );
 }

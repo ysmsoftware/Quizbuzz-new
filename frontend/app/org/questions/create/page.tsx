@@ -21,6 +21,10 @@ import {
 import { useQuestions, useQuestionTags } from '@/lib/hooks/useQuestions';
 import { toast } from 'sonner';
 import { parseQuestionFile as parseFile } from '@/lib/utils/question-parser';
+import { useBatchUpload, type BatchStep } from '@/lib/hooks/useBatchUpload';
+import { MultiStepLoader } from '@/components/ui/multi-step-loader';
+import { chunkArray } from '@/lib/utils';
+import { BULK_UPLOAD_BATCH_SIZE, BULK_UPLOAD_MAX_TOTAL } from '@/lib/constants/bulk-upload';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +57,8 @@ export default function CreateQuestionPage() {
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
-  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const batchUpload = useBatchUpload();
+  const isBulkSubmitting = batchUpload.status === 'running';
   const [isDragging, setIsDragging] = useState(false);
   const [categoryInput, setCategoryInput] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -203,26 +208,66 @@ export default function CreateQuestionPage() {
     processFile(file);
   }, []);
 
+  // Bulk uploads are always sent in fixed-size batches (BULK_UPLOAD_BATCH_SIZE),
+  // even when the file is small — this keeps the resume-on-failure behaviour
+  // consistent regardless of how many questions were uploaded.
+  //
+  // NB: this takes `steps` as a parameter rather than reading `batchUpload.steps`
+  // — the hook's return value here is a snapshot from the render that kicked the
+  // upload off (before `start()` populated it), so reading it directly reports
+  // 0 created/failed even though every batch actually succeeded.
+  const finalizeBulkUpload = (steps: BatchStep[]) => {
+    let created = 0;
+    let failed = 0;
+    steps.forEach((_, i) => {
+      const r = batchUpload.getResult(i) as { created?: number; failed?: number } | undefined;
+      created += r?.created ?? 0;
+      failed += r?.failed ?? 0;
+    });
+    toast.success(`Bulk upload complete: ${created} created${failed ? `, ${failed} failed` : ''}`);
+    setCsvPreview([]);
+    setCsvErrors([]);
+    setCsvWarnings([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    batchUpload.reset();
+    router.push('/org/questions');
+  };
+
   const handleBulkSubmit = async () => {
     if (csvPreview.length === 0) {
       toast.error('No valid questions to upload');
       return;
     }
-    setIsBulkSubmitting(true);
-    try {
-      const result = await bulkCreateMutation.mutateAsync(csvPreview);
-      const data = (result as any)?.data;
-      toast.success(`Bulk upload complete: ${data?.created ?? csvPreview.length} created, ${data?.failed ?? 0} failed`);
-      setCsvPreview([]);
-      setCsvErrors([]);
-      setCsvWarnings([]);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      router.push('/org/questions');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Bulk upload failed');
-    } finally {
-      setIsBulkSubmitting(false);
-    }
+
+    const batches = chunkArray(csvPreview, BULK_UPLOAD_BATCH_SIZE);
+    const steps: BatchStep[] = batches.map((batch, i) => ({
+      label: `Uploading batch ${i + 1} of ${batches.length} (${batch.length} question${batch.length === 1 ? '' : 's'})`,
+      run: async () => {
+        const res: any = await bulkCreateMutation.mutateAsync(batch);
+        const data = res?.data;
+        // The backend creates a batch in a single transaction — it's all-or-nothing,
+        // so `created === 0` means this whole batch failed and should be retried.
+        if (!data || data.created === 0) {
+          throw new Error(data?.errors?.[0]?.reason ?? `Batch ${i + 1} failed to upload`);
+        }
+        return data;
+      },
+    }));
+
+    const outcome = await batchUpload.start(steps);
+    if (outcome.completed) finalizeBulkUpload(steps);
+  };
+
+  const handleResumeBulkUpload = async () => {
+    const outcome = await batchUpload.resume();
+    // Safe to read batchUpload.steps here — this closure comes from the render
+    // triggered by the user clicking "Resume", by which point the hook's state
+    // already reflects the in-progress steps array (unlike the initial submit).
+    if (outcome.completed) finalizeBulkUpload(batchUpload.steps);
+  };
+
+  const handleCancelBulkUpload = () => {
+    batchUpload.reset();
   };
 
   return (
@@ -299,7 +344,7 @@ export default function CreateQuestionPage() {
                   {isDragging ? 'Drop your file here!' : 'Choose CSV, Excel or Sheets File'}
                 </h3>
                 <p className="text-muted-foreground text-sm">
-                  Drag and drop or click to browse (Max 100 questions per file)
+                  Drag and drop or click to browse (Max {BULK_UPLOAD_MAX_TOTAL} questions per file — uploaded in batches of {BULK_UPLOAD_BATCH_SIZE})
                 </p>
               </div>
 
@@ -373,23 +418,47 @@ export default function CreateQuestionPage() {
                       </tbody>
                     </table>
                   </div>
-                  <Button
-                    onClick={handleBulkSubmit}
-                    className="w-full gap-2"
-                    disabled={isBulkSubmitting || csvErrors.length > 0}
-                  >
-                    {isBulkSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" />
-                        Import {csvPreview.length} Questions
-                      </>
-                    )}
-                  </Button>
+                  {batchUpload.status === 'error' ? (
+                    <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="flex items-center gap-2 text-destructive font-semibold text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        Batch {batchUpload.currentIndex + 1} of {batchUpload.steps.length} failed
+                      </div>
+                      <p className="text-sm text-muted-foreground">{batchUpload.error}</p>
+                      {batchUpload.currentIndex > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Batches 1–{batchUpload.currentIndex} already uploaded and saved to your question bank — resuming only retries what&apos;s left, nothing will be duplicated.
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={handleCancelBulkUpload}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleResumeBulkUpload} className="gap-2">
+                          <Upload className="h-4 w-4" />
+                          Resume Upload
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleBulkSubmit}
+                      className="w-full gap-2"
+                      disabled={isBulkSubmitting || csvErrors.length > 0}
+                    >
+                      {isBulkSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          Import {csvPreview.length} Questions
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -545,6 +614,13 @@ export default function CreateQuestionPage() {
           </div>
         )}
       </main>
+
+      <MultiStepLoader
+        loadingStates={batchUpload.steps.map((s) => ({ text: s.label }))}
+        loading={batchUpload.status === 'running'}
+        value={batchUpload.currentIndex}
+        errorIndex={batchUpload.status === 'error' ? batchUpload.currentIndex : null}
+      />
     </div>
   );
 }

@@ -8,7 +8,6 @@ import {
 } from '@/lib/hooks/useCertificateTemplates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { CertificateTemplateThumbnail } from '@/components/features/certificates/CertificateTemplateThumbnail';
 import {
     DropdownMenu,
@@ -111,96 +110,80 @@ export default function CertificateTemplatesPage() {
                     </CardHeader>
 
                     <CardContent>
-                        {templates.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Award className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                                <p className="text-muted-foreground mb-4">No custom templates uploaded yet.</p>
-                                <Button onClick={handleOpenCreate} className="gap-2">
-                                    <Plus className="h-4 w-4" /> Create your first template
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                                {templates.map((tpl) => {
-                                    const visibleVars = tpl.variables.slice(0, 4);
-                                    const extraVarCount = tpl.variables.length - visibleVars.length;
-                                    return (
-                                        <div
-                                            key={tpl.id}
-                                            className="group flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-200"
-                                        >
-                                            {/* Certificate preview thumbnail */}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenEdit(tpl.id)}
-                                                className="block p-3 pb-0 text-left cursor-pointer"
-                                                title="Click to edit this template"
-                                            >
-                                                <CertificateTemplateThumbnail templateId={tpl.id} />
-                                            </button>
-
-                                            {/* Card body */}
-                                            <div className="flex flex-1 flex-col gap-2.5 p-4">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="min-w-0">
-                                                        <h3 className="font-semibold text-sm text-foreground truncate" title={tpl.name}>
-                                                            {tpl.name}
-                                                        </h3>
-                                                        {tpl.description && (
-                                                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                                                                {tpl.description}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg">
-                                                                <MoreVertical className="h-4 w-4" />
-                                                                <span className="sr-only">Actions</span>
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-48">
-                                                            <DropdownMenuItem onClick={() => handleOpenEdit(tpl.id)} className="gap-2 cursor-pointer">
-                                                                <Edit2 className="h-4 w-4 text-muted-foreground" /> Edit Template
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => setTestGenerateId(tpl.id)} className="gap-2 cursor-pointer">
-                                                                <FlaskConical className="h-4 w-4 text-muted-foreground" /> Test Generate PDF
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => setDeleteId(tpl.id)} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
-                                                                <Trash2 className="h-4 w-4" /> Delete Template
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-1">
-                                                    {tpl.variables.length === 0 ? (
-                                                        <span className="text-xs text-muted-foreground">No detected variables</span>
-                                                    ) : (
-                                                        <>
-                                                            {visibleVars.map((v) => (
-                                                                <Badge key={v} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
-                                                                    {`{{${v}}}`}
-                                                                </Badge>
-                                                            ))}
-                                                            {extraVarCount > 0 && (
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                                                    +{extraVarCount} more
-                                                                </Badge>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
-
-                                                <div className="mt-auto pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
-                                                    Updated {new Date(tpl.updatedAt).toLocaleDateString()}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        {templates.length === 0 && (
+                            <p className="text-sm text-muted-foreground mb-4">
+                                No custom templates uploaded yet — click the tile below to create your first one.
+                            </p>
                         )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                            {/* Always-present "Add New Template" tile — first row, first column */}
+                            <button
+                                type="button"
+                                onClick={handleOpenCreate}
+                                className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border/70 bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all duration-200 min-h-[220px] text-muted-foreground hover:text-primary cursor-pointer"
+                            >
+                                <div className="h-11 w-11 rounded-full bg-background border border-border/70 flex items-center justify-center">
+                                    <Plus className="h-5 w-5" />
+                                </div>
+                                <span className="text-sm font-medium">Add New Template</span>
+                            </button>
+
+                            {templates.map((tpl) => (
+                                <div
+                                    key={tpl.id}
+                                    className="group flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-200"
+                                >
+                                    {/* Certificate preview thumbnail */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenEdit(tpl.id)}
+                                        className="block p-3 pb-0 text-left cursor-pointer"
+                                        title="Click to edit this template"
+                                    >
+                                        <CertificateTemplateThumbnail templateId={tpl.id} />
+                                    </button>
+
+                                    {/* Card body */}
+                                    <div className="flex flex-1 flex-col gap-2.5 p-4">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <h3 className="font-semibold text-sm text-foreground truncate" title={tpl.name}>
+                                                    {tpl.name}
+                                                </h3>
+                                                {tpl.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                                        {tpl.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                        <span className="sr-only">Actions</span>
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem onClick={() => handleOpenEdit(tpl.id)} className="gap-2 cursor-pointer">
+                                                        <Edit2 className="h-4 w-4 text-muted-foreground" /> Edit Template
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setTestGenerateId(tpl.id)} className="gap-2 cursor-pointer">
+                                                        <FlaskConical className="h-4 w-4 text-muted-foreground" /> Test Generate PDF
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setDeleteId(tpl.id)} className="gap-2 text-destructive focus:text-destructive cursor-pointer">
+                                                        <Trash2 className="h-4 w-4" /> Delete Template
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+
+                                        <div className="mt-auto pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
+                                            Updated {new Date(tpl.updatedAt).toLocaleDateString()}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
             </WidgetErrorBoundary>

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { BULK_UPLOAD_MAX_TOTAL } from '@/lib/constants/bulk-upload';
 
 export interface ParsedOption {
   text: string;
@@ -25,7 +26,10 @@ export interface ParseResult {
 
 /**
  * Parses files (.csv, .xlsx, .xls) using SheetJS, supports case-insensitive column headers,
- * enforces a limit of 100 questions, and drops extra rows with a clear validation warning.
+ * enforces a limit of BULK_UPLOAD_MAX_TOTAL questions (mirrors the backend's bulk import
+ * limit), and drops extra rows with a clear validation warning. Uploads are sent to the
+ * backend in smaller batches (see lib/hooks/useBatchUpload.ts) regardless of total size —
+ * this limit only bounds how many questions a single file may contain.
  */
 export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseResult {
   const errors: string[] = [];
@@ -41,8 +45,27 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
     }
 
     const worksheet = workbook.Sheets[firstSheetName];
-    // Convert to raw JSON rows (array of arrays)
-    const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+    // Convert to raw JSON rows (array of arrays).
+    // defval: '' ensures cells that couldn't be evaluated return an empty string rather
+    // than undefined/null, keeping index-based access safe throughout the parser.
+    const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' });
+
+    // Patch formula/error cells: SheetJS treats any CSV cell whose value begins with '='
+    // as an Excel formula (e.g. '=== checks type and value without coercion').
+    // - If the formula is syntactically valid but evaluates to nothing, the cell type is
+    //   'f' and cell.f holds the expression after the leading '='.
+    // - If the formula expression is syntactically invalid (e.g. '===' prefix), SheetJS
+    //   stores the cell with type 'e' (error) but still preserves cell.f.
+    // In both cases we recover the original literal string by re-prepending '='.
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < (rows[r]?.length ?? 0); c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = worksheet[addr];
+        if (cell && (cell.t === 'f' || cell.t === 'e') && typeof cell.f === 'string') {
+          rows[r][c] = '=' + cell.f;
+        }
+      }
+    }
 
     if (rows.length < 2) {
       errors.push('The file must contain a header row and at least one question row.');
@@ -99,9 +122,11 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
     const totalQuestions = rows.length - 1;
     let rowsToParse = rows.slice(1);
 
-    if (totalQuestions > 100) {
-      warnings.push('LIMIT ENFORCED: This file contains ' + totalQuestions + ' questions, but a maximum of 100 questions can be uploaded at a time. The extra ' + (totalQuestions - 100) + ' questions have been skipped automatically.');
-      rowsToParse = rowsToParse.slice(0, 100);
+    if (totalQuestions > BULK_UPLOAD_MAX_TOTAL) {
+      warnings.push(
+        `LIMIT ENFORCED: This file contains ${totalQuestions} questions, but a maximum of ${BULK_UPLOAD_MAX_TOTAL} questions can be uploaded at a time. The extra ${totalQuestions - BULK_UPLOAD_MAX_TOTAL} questions have been skipped automatically.`
+      );
+      rowsToParse = rowsToParse.slice(0, BULK_UPLOAD_MAX_TOTAL);
     }
 
     for (let i = 0; i < rowsToParse.length; i++) {

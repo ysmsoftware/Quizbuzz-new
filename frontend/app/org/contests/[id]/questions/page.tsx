@@ -63,6 +63,10 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/api/queryClient';
 import { parseQuestionFile } from '@/lib/utils/question-parser';
+import { useBatchUpload, type BatchStep } from '@/lib/hooks/useBatchUpload';
+import { MultiStepLoader } from '@/components/ui/multi-step-loader';
+import { chunkArray } from '@/lib/utils';
+import { BULK_UPLOAD_BATCH_SIZE } from '@/lib/constants/bulk-upload';
 
 export default function QuestionsTabPage() {
     const { id } = useParams() as { id: string };
@@ -664,8 +668,7 @@ function ImportCSVModal({
     currentCount: number;
 }) {
     const [step, setStep] = useState<'upload' | 'preview'>('upload');
-    const [isImporting, setIsImporting] = useState(false);
-    const [progress, setProgress] = useState(0);
+    const batchUpload = useBatchUpload();
     const [dragActive, setDragActive] = useState(false);
     const [parsedQuestions, setParsedQuestions] = useState<ParsedQuestion[]>([]);
     const [fileError, setFileError] = useState<string | null>(null);
@@ -685,8 +688,9 @@ function ImportCSVModal({
             setCsvErrors([]);
             setCsvWarnings([]);
             setUploadedFileName(null);
-            setProgress(0);
+            batchUpload.reset();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     const handleDrag = (e: React.DragEvent) => {
@@ -845,72 +849,119 @@ function ImportCSVModal({
         document.body.removeChild(link);
     };
 
+    // Every import is split into fixed-size batches (BULK_UPLOAD_BATCH_SIZE), each
+    // made of two steps — "create" then "assign to contest" — so that if assignment
+    // fails after creation succeeded, resuming only retries the assign call instead
+    // of re-creating (and duplicating) questions that are already saved.
+    //
+    // NB: this takes `steps` as a parameter rather than reading `batchUpload.steps`
+    // — right after `await batchUpload.start(...)` resolves, this closure's view of
+    // the hook is a snapshot from before the run started (still `[]`), so reading it
+    // directly would report 0 created/assigned even though everything succeeded.
+    const finalizeImport = (steps: BatchStep[]) => {
+        let createdTotal = 0;
+        let failedTotal = 0;
+        steps.forEach((_, i) => {
+            if (i % 2 === 0) { // even indices are the "create" steps
+                const r = batchUpload.getResult(i) as { created?: number; failed?: number } | undefined;
+                createdTotal += r?.created ?? 0;
+                failedTotal += r?.failed ?? 0;
+            }
+        });
+
+        queryClient.invalidateQueries({
+            queryKey: queryKeys.questions.contestQuestions(contestId),
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+
+        if (failedTotal > 0) {
+            toast.warning(`Imported ${createdTotal} questions, but ${failedTotal} questions failed.`);
+        } else {
+            toast.success(`Successfully imported ${createdTotal} questions!`);
+        }
+        batchUpload.reset();
+        onClose();
+    };
+
+    const buildImportSteps = (): BatchStep[] => {
+        const questionsPayload = parsedQuestions.map((q) => ({
+            questionText: q.questionText,
+            difficulty: q.difficulty,
+            hint: q.hint || undefined,
+            explanation: q.explanation || undefined,
+            tags: q.tags || [],
+            options: q.options.map((o, idx) => ({
+                text: o.text,
+                isCorrect: o.isCorrect,
+                position: idx,
+            })),
+        }));
+
+        const batches = chunkArray(questionsPayload, BULK_UPLOAD_BATCH_SIZE);
+        const originalBatches = chunkArray(parsedQuestions, BULK_UPLOAD_BATCH_SIZE);
+
+        const steps: BatchStep[] = [];
+        batches.forEach((batch, i) => {
+            const createStepIndex = steps.length;
+            const batchStartIndex = i * BULK_UPLOAD_BATCH_SIZE;
+
+            steps.push({
+                label: `Batch ${i + 1} of ${batches.length}: Creating ${batch.length} question${batch.length === 1 ? '' : 's'}`,
+                run: async () => {
+                    const res = await questionsApi.bulkCreateQuestions(batch);
+                    const data = res?.data;
+                    // bulkCreateQuestions runs each batch as a single DB transaction —
+                    // created === 0 means the whole batch failed and should be retried.
+                    if (!data || data.created === 0) {
+                        throw new Error(data?.errors?.[0]?.reason ?? `Batch ${i + 1} failed to create`);
+                    }
+                    return data; // { created, failed, errors, ids }
+                },
+            });
+
+            steps.push({
+                label: `Batch ${i + 1} of ${batches.length}: Assigning to contest`,
+                run: async (getResult) => {
+                    const createResult = getResult(createStepIndex) as { ids?: string[] } | undefined;
+                    const ids = createResult?.ids ?? [];
+                    if (ids.length === 0) return { assigned: 0 };
+
+                    const originalBatch = originalBatches[i];
+                    const assignPayload = ids.map((questionId, localIdx) => ({
+                        questionId,
+                        // 1-based indexing to satisfy the positive-position constraint,
+                        // offset by how many questions the contest already had.
+                        position: currentCount + batchStartIndex + localIdx + 1,
+                        marks: originalBatch[localIdx].marks,
+                        negativeMark: originalBatch[localIdx].negativeMark,
+                    }));
+
+                    await questionsApi.assignQuestionsToContest(contestId, assignPayload);
+                    return { assigned: ids.length };
+                },
+            });
+        });
+
+        return steps;
+    };
+
     const handleImport = async () => {
         if (parsedQuestions.length === 0) return;
-        setIsImporting(true);
-        setProgress(15);
+        const steps = buildImportSteps();
+        const outcome = await batchUpload.start(steps);
+        if (outcome.completed) finalizeImport(steps);
+    };
 
-        try {
-            // 1. Prepare questions payload with position for options
-            const questionsPayload = parsedQuestions.map((q) => ({
-                questionText: q.questionText,
-                difficulty: q.difficulty,
-                hint: q.hint || undefined,
-                explanation: q.explanation || undefined,
-                tags: q.tags || [],
-                options: q.options.map((o, idx) => ({
-                    text: o.text,
-                    isCorrect: o.isCorrect,
-                    position: idx,
-                })),
-            }));
+    const handleResumeImport = async () => {
+        const outcome = await batchUpload.resume();
+        // Safe to read batchUpload.steps here — this closure is from the render
+        // triggered by the "Resume" click, by which point the hook's state already
+        // reflects the in-progress steps array (unlike the initial import call).
+        if (outcome.completed) finalizeImport(batchUpload.steps);
+    };
 
-            setProgress(40);
-
-            // 2. Bulk create questions in one transaction
-            const bulkRes = await questionsApi.bulkCreateQuestions(questionsPayload);
-
-            const createdIds: string[] = bulkRes.data?.ids ?? [];
-            const failedCount = bulkRes.data?.failed ?? 0;
-
-            if (failedCount > 0 && createdIds.length === 0) {
-                throw new Error('All questions failed to import');
-            }
-
-            setProgress(70);
-
-            // 3. Prepare assignment payload matching success IDs back to original parsed items
-            const assignedQuestionsList = createdIds.map((id, index) => {
-                const q = parsedQuestions[index];
-                return {
-                    questionId: id,
-                    position: currentCount + index + 1, // 1-based indexing to satisfy positive constraint (>0)
-                    marks: q.marks,
-                    negativeMark: q.negativeMark,
-                };
-            });
-
-            // 4. Bulk assign newly created question IDs to the contest
-            await questionsApi.assignQuestionsToContest(contestId, assignedQuestionsList);
-
-            setProgress(100);
-
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.questions.contestQuestions(contestId),
-            });
-            queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
-
-            if (failedCount > 0) {
-                toast.warning(`Imported ${createdIds.length} questions, but ${failedCount} questions failed.`);
-            } else {
-                toast.success(`Successfully imported ${parsedQuestions.length} questions!`);
-            }
-            onClose();
-        } catch (err: any) {
-            toast.error(err.message || 'Import failed');
-        } finally {
-            setIsImporting(false);
-        }
+    const handleCancelImport = () => {
+        batchUpload.reset();
     };
 
     return (
@@ -931,7 +982,7 @@ function ImportCSVModal({
                     onChange={handleFileChange}
                 />
 
-                {step === 'upload' && !isImporting && (
+                {step === 'upload' && batchUpload.status === 'idle' && (
                     <div className="space-y-6 py-6">
                         <div
                             onDragEnter={handleDrag}
@@ -950,7 +1001,7 @@ function ImportCSVModal({
                             <p className="text-sm font-medium">
                                 {dragActive ? "Drop files here!" : "Drag CSV, Excel, or JSON file here or click to browse"}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1">Accepts .csv, .xlsx, .xls, .json (Max 50MB)</p>
+                            <p className="text-xs text-muted-foreground mt-1">Accepts .csv, .xlsx, .xls, .json (Max 50MB) — large imports are uploaded in batches of {BULK_UPLOAD_BATCH_SIZE}</p>
                             {uploadedFileName && (
                                 <div className="mt-3 px-3 py-1 bg-primary/10 rounded-full border border-primary/20 text-xs font-semibold text-primary flex items-center gap-1.5 animate-pulse">
                                     <span>Selected: {uploadedFileName}</span>
@@ -992,7 +1043,7 @@ function ImportCSVModal({
                     </div>
                 )}
 
-                {step === 'preview' && !isImporting && (
+                {step === 'preview' && batchUpload.status === 'idle' && (
                     <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1 min-h-[300px] max-h-[55vh]">
                         <div className="flex justify-between items-center bg-muted/40 p-3 rounded-lg border text-xs font-semibold">
                             <span className="text-muted-foreground">Uploaded File: <span className="text-foreground">{uploadedFileName}</span></span>
@@ -1059,40 +1110,55 @@ function ImportCSVModal({
                     </div>
                 )}
 
-                {isImporting && (
-                    <div className="space-y-5 py-12 flex flex-col items-center justify-center">
-                        <div className="flex flex-col items-center gap-3">
-                            <span className="text-sm font-semibold text-primary animate-pulse">Importing {parsedQuestions.length} Questions...</span>
-                            <span className="text-2xl font-bold text-foreground">{progress}%</span>
+                {step === 'preview' && batchUpload.status === 'error' && (
+                    <div className="space-y-4 py-6">
+                        <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex items-center gap-2 text-destructive font-semibold text-sm">
+                                <AlertCircle className="h-4 w-4" />
+                                {batchUpload.steps[batchUpload.currentIndex]?.label ?? 'A step'} failed
+                            </div>
+                            <p className="text-sm text-muted-foreground">{batchUpload.error}</p>
+                            {batchUpload.currentIndex > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Everything before this step is already saved to your contest — resuming only retries what&apos;s left, nothing will be re-created or duplicated.
+                                </p>
+                            )}
                         </div>
-                        <div className="h-2 w-[80%] bg-muted rounded-full overflow-hidden border">
-                            <motion.div
-                                className="h-full bg-primary rounded-full"
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progress}%` }}
-                                transition={{ duration: 0.1 }}
-                            />
-                        </div>
-                        <p className="text-xs text-muted-foreground">Uploading questions globally and assigning to your contest...</p>
                     </div>
                 )}
 
                 <DialogFooter className={cn(step === 'preview' ? "border-t pt-3" : "")}>
-                    {step === 'upload' && !isImporting && (
+                    {step === 'upload' && batchUpload.status === 'idle' && (
                         <Button onClick={() => setStep('preview')} disabled={parsedQuestions.length === 0}>
                             Continue to Preview
                         </Button>
                     )}
-                    {step === 'preview' && !isImporting && (
+                    {step === 'preview' && batchUpload.status === 'idle' && (
                         <div className="flex gap-3 w-full">
                             <Button variant="ghost" onClick={() => setStep('upload')}>Back</Button>
-                            <Button className="flex-1 bg-primary text-primary-foreground" onClick={handleImport} disabled={isImporting}>
+                            <Button className="flex-1 bg-primary text-primary-foreground" onClick={handleImport}>
                                 Import {parsedQuestions.length} Questions
+                            </Button>
+                        </div>
+                    )}
+                    {step === 'preview' && batchUpload.status === 'error' && (
+                        <div className="flex gap-3 w-full">
+                            <Button variant="ghost" onClick={handleCancelImport}>Cancel</Button>
+                            <Button className="flex-1 gap-2" onClick={handleResumeImport}>
+                                <Upload className="h-4 w-4" />
+                                Resume Import
                             </Button>
                         </div>
                     )}
                 </DialogFooter>
             </DialogContent>
+
+            <MultiStepLoader
+                loadingStates={batchUpload.steps.map((s) => ({ text: s.label }))}
+                loading={batchUpload.status === 'running'}
+                value={batchUpload.currentIndex}
+                errorIndex={batchUpload.status === 'error' ? batchUpload.currentIndex : null}
+            />
         </Dialog>
     );
 }
