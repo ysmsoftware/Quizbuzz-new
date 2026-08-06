@@ -2,17 +2,39 @@ import { Metadata } from 'next';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { ContestGrid } from '@/components/contests/contest-grid';
+import { BreadcrumbJsonLd } from '@/lib/seo/json-ld';
+import { SITE_URL } from '@/lib/seo/config';
 
 export const metadata: Metadata = {
   title: 'Browse Contests',
-  description: 'Discover and join exciting quizzes and contests across various categories.',
+  description: 'Discover and join exciting quizzes and contests across various categories. Filter by category, difficulty, or search for specific topics on QuizBuzz.',
+  alternates: {
+    canonical: '/contests',
+  },
+  openGraph: {
+    title: 'Browse Contests | QuizBuzz',
+    description: 'Discover and join exciting quizzes and contests across various categories.',
+    url: `${SITE_URL}/contests`,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Browse Contests | QuizBuzz',
+    description: 'Discover and join exciting quizzes and contests across various categories.',
+  },
 };
 
 export default function ContestsPage() {
   return (
     <div className="flex min-h-screen flex-col">
+      <BreadcrumbJsonLd
+        items={[
+          { name: 'Home', url: SITE_URL },
+          { name: 'Browse Contests', url: `${SITE_URL}/contests` },
+        ]}
+      />
       <Header />
-      
+
       <main className="flex-1">
         {/* Page Header */}
         <section className="border-b bg-secondary/20 py-12">

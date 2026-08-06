@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { BookOpen, Mail, Twitter, Github, Linkedin } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_URL } from '@/lib/seo/config';
 
 const footerLinks = {
     product: [
@@ -22,10 +24,11 @@ const footerLinks = {
 };
 
 const socialLinks = [
-    { name: 'Twitter', href: '#', icon: Twitter },
-    { name: 'GitHub', href: '#', icon: Github },
-    { name: 'LinkedIn', href: '#', icon: Linkedin },
-    { name: 'Email', href: 'mailto:hello@QuizBuzz.pro', icon: Mail },
+    // Twitter/X, GitHub, and LinkedIn were placeholder ('#') links with no
+    // real destination — removed until real profile URLs exist. Add them
+    // back here once you have them.
+    { name: 'Email', href: `mailto:${SUPPORT_EMAIL}`, icon: Mail, external: false },
+    { name: 'WhatsApp', href: SUPPORT_WHATSAPP_URL, icon: WhatsAppIcon, external: true },
 ];
 
 export function Footer() {
@@ -36,9 +39,7 @@ export function Footer() {
                     {/* Brand */}
                     <div className="col-span-2 lg:col-span-2">
                         <Link href="/" className="flex items-center gap-2">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                                <BookOpen className="h-5 w-5 text-primary-foreground" />
-                            </div>
+                            <img src="/qbfavicon.png" alt="QuizBuzz" className="h-9 w-9 rounded-lg" width={36} height={36} />
                             <span className="text-xl font-bold tracking-tight">
                                 Quiz<span className="text-primary">Buzz</span>
                             </span>
@@ -51,6 +52,7 @@ export function Footer() {
                                 <a
                                     key={item.name}
                                     href={item.href}
+                                    {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                                     className="text-muted-foreground transition-colors hover:text-foreground"
                                 >
                                     <span className="sr-only">{item.name}</span>

@@ -1,75 +1,83 @@
 // scripts/generate-icons.js
+//
+// Regenerates every favicon / PWA / OG image asset in `public/` from the
+// two source brand assets:
+//   - public/qbfavicon.png   — square app mark (rounded bg baked in), used
+//                              for favicon.ico, apple-icon, and PWA icons.
+//   - public/quizBuzz-logo.png — transparent wordmark, used for the OG/social
+//                              share image.
+//
+// Run with: node scripts/generate-icons.js
+// (requires the `sharp` and `png-to-ico` dev dependencies)
+
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+// png-to-ico ships as an ESM-interop CJS build; `.default` is the callable export.
+const toIco = require('png-to-ico').default || require('png-to-ico');
 
-const WORKSPACE_DIR = path.join(__dirname, '..');
-const PUBLIC_DIR = path.join(WORKSPACE_DIR, 'public');
+const ROOT_DIR = path.join(__dirname, '..');
+const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const ICONS_DIR = path.join(PUBLIC_DIR, 'icons');
 
-// Source image from conversation assets
-const CONVERSATION_SOURCE_IMAGE = 'C:/Users/austi/.gemini/antigravity-ide/brain/49cfcf9b-5737-4837-9dab-5696c7fbbde8/media__1783880095759.png';
-const SOURCE_PNG_PATH = path.join(PUBLIC_DIR, 'icon.png');
+const FAVICON_SOURCE = path.join(PUBLIC_DIR, 'qbfavicon.png');
+const LOGO_SOURCE = path.join(PUBLIC_DIR, 'quizBuzz-logo.png');
 
-// 1. Copy source image to the repository if it exists
-if (fs.existsSync(CONVERSATION_SOURCE_IMAGE)) {
-  fs.copyFileSync(CONVERSATION_SOURCE_IMAGE, SOURCE_PNG_PATH);
-  console.log(`Copied new source logo to repository: ${SOURCE_PNG_PATH}`);
-} else if (!fs.existsSync(SOURCE_PNG_PATH)) {
-  console.error(`Source image not found! Checked: \n- ${CONVERSATION_SOURCE_IMAGE}\n- ${SOURCE_PNG_PATH}`);
-  process.exit(1);
-}
-
-// Ensure target directories exist
-if (!fs.existsSync(ICONS_DIR)) {
-  fs.mkdirSync(ICONS_DIR, { recursive: true });
-}
+const MASKABLE_BG = '#0d9488'; // matches the app's --primary teal
+const OG_BG = '#f0fdfa';
 
 async function generate() {
-  console.log('Generating PWA icons from new source image public/icon.png...');
+  for (const src of [FAVICON_SOURCE, LOGO_SOURCE]) {
+    if (!fs.existsSync(src)) {
+      console.error(`Missing source image: ${src}`);
+      process.exit(1);
+    }
+  }
 
-  // 1. Standard 192x192
-  await sharp(SOURCE_PNG_PATH)
-    .resize(192, 192)
-    .png()
-    .toFile(path.join(ICONS_DIR, 'icon-192.png'));
-  console.log('Created: icons/icon-192.png');
+  if (!fs.existsSync(ICONS_DIR)) {
+    fs.mkdirSync(ICONS_DIR, { recursive: true });
+  }
 
-  // 2. Standard 512x512
-  await sharp(SOURCE_PNG_PATH)
-    .resize(512, 512)
-    .png()
-    .toFile(path.join(ICONS_DIR, 'icon-512.png'));
-  console.log('Created: icons/icon-512.png');
+  console.log('Generating icons from public/qbfavicon.png and public/quizBuzz-logo.png...');
 
-  // 3. Apple Touch Icon (180x180)
-  await sharp(SOURCE_PNG_PATH)
+  await sharp(FAVICON_SOURCE).resize(32, 32).png().toFile(path.join(PUBLIC_DIR, 'icon.png'));
+  console.log('Created: icon.png (32x32)');
+
+  await sharp(FAVICON_SOURCE)
     .resize(180, 180)
+    .flatten({ background: '#fafafa' })
     .png()
     .toFile(path.join(PUBLIC_DIR, 'apple-icon.png'));
-  console.log('Created: apple-icon.png');
+  console.log('Created: apple-icon.png (180x180)');
 
-  // 4. Maskable Icon (512x512)
-  // We extract a 90x90 region from the 155x156 source (which lies completely within the green background)
-  // to avoid leaking off-white background corners when cropped by the OS.
-  const croppedBookBuffer = await sharp(SOURCE_PNG_PATH)
-    .extract({ left: 32, top: 33, width: 90, height: 90 })
-    .resize(380, 380)
+  await sharp(FAVICON_SOURCE).resize(192, 192).png().toFile(path.join(ICONS_DIR, 'icon-192.png'));
+  console.log('Created: icons/icon-192.png');
+
+  await sharp(FAVICON_SOURCE).resize(512, 512).png().toFile(path.join(ICONS_DIR, 'icon-512.png'));
+  console.log('Created: icons/icon-512.png');
+
+  // Maskable icon needs the artwork padded into the safe zone (~center 80%)
+  // on a solid background, since the OS applies its own mask/crop shape.
+  const innerLogo = await sharp(FAVICON_SOURCE).resize(410, 410).toBuffer();
+  await sharp({ create: { width: 512, height: 512, channels: 4, background: MASKABLE_BG } })
+    .composite([{ input: innerLogo, gravity: 'center' }])
     .png()
-    .toBuffer();
-
-  await sharp({
-    create: {
-      width: 512,
-      height: 512,
-      channels: 4,
-      background: '#008c75' // Teal-green background color detected from source
-    }
-  })
-  .composite([{ input: croppedBookBuffer, gravity: 'center' }])
-  .png()
-  .toFile(path.join(ICONS_DIR, 'icon-512-maskable.png'));
+    .toFile(path.join(ICONS_DIR, 'icon-512-maskable.png'));
   console.log('Created: icons/icon-512-maskable.png (maskable spec compliant)');
+
+  const [png16, png32, png48] = await Promise.all(
+    [16, 32, 48].map((size) => sharp(FAVICON_SOURCE).resize(size, size).png().toBuffer())
+  );
+  const icoBuffer = await toIco([png16, png32, png48]);
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.ico'), icoBuffer);
+  console.log('Created: favicon.ico (16/32/48 multi-res)');
+
+  const logoForOg = await sharp(LOGO_SOURCE).resize({ width: 520 }).toBuffer();
+  await sharp({ create: { width: 1200, height: 630, channels: 4, background: OG_BG } })
+    .composite([{ input: logoForOg, gravity: 'center' }])
+    .png()
+    .toFile(path.join(PUBLIC_DIR, 'og-image.png'));
+  console.log('Created: og-image.png (1200x630 social share image)');
 
   console.log('All icons generated successfully!');
 }

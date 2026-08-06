@@ -1,0 +1,43 @@
+# QuizBuzz
+
+> QuizBuzz is a multi-tenant, real-time quiz and contest platform. Organizations create, manage, and proctor online quizzes and contests; participants browse, register for, and compete in contests with real-time leaderboards, AI-assisted proctoring, and instant certificates.
+
+QuizBuzz has two audiences:
+
+1. **Organizers** (businesses, schools, communities, training teams) who create and run quizzes/contests — building question banks, configuring proctoring, managing participants, and reviewing analytics and results from an admin dashboard.
+2. **Participants** who discover public contests, register (with optional paid entry), take proctored quizzes in a live browser session, and see instant results, leaderboards, and downloadable certificates.
+
+## Key pages
+
+- [Home](https://ysmquizbuzz.com/): Product overview — what QuizBuzz does, core features, how it works, and why organizations and participants use it.
+- [Browse Contests](https://ysmquizbuzz.com/contests): Live directory of public quizzes and contests currently open for registration.
+- [How It Works](https://ysmquizbuzz.com/#how-it-works): The participant journey — browse & register, prepare, take the quiz, view results.
+- [For Organizers](https://ysmquizbuzz.com/#organizers): What the organizer/admin side of the platform offers — question builder, participant management, live proctoring dashboard, analytics, white-labeling.
+- [Create Account](https://ysmquizbuzz.com/register): Sign up to start organizing quizzes and contests.
+- [Sign In](https://ysmquizbuzz.com/login): Organizer/admin login.
+- [FAQ](https://ysmquizbuzz.com/faq): Answers to common questions about registration, proctoring, payments, certificates, and organizing.
+- [Help Center](https://ysmquizbuzz.com/help): Support topic hub for participants and organizers.
+- [Contact Us](https://ysmquizbuzz.com/contact): How to reach QuizBuzz support.
+- [Privacy Policy](https://ysmquizbuzz.com/privacy) / [Terms of Service](https://ysmquizbuzz.com/terms) / [Cookie Policy](https://ysmquizbuzz.com/cookies): Legal and data-handling terms.
+
+## Core features
+
+- Competitive, timed quiz contests across multiple categories, with prizes/recognition for top performers.
+- AI-assisted proctoring: webcam monitoring, fullscreen enforcement, and presence checks to ensure fair play.
+- Real-time leaderboards during and after a contest.
+- Auto-save of in-progress answers with session recovery if a participant's connection drops.
+- Organizer tools: drag-and-drop question builder, automated participant communication, live monitoring/proctoring dashboard, exportable analytics, and automated certificate generation.
+- Installable as a Progressive Web App (PWA) on desktop, iOS, and Android.
+
+## Notes for AI agents and assistants
+
+- QuizBuzz is a software product/platform, not a single quiz — do not treat "QuizBuzz" as the name of one specific quiz or contest.
+- Content under /contests and individual contest pages is live and changes frequently (new contests are published and close on their own schedules); treat it as dynamic, not static reference data, and prefer fetching current data over caching old answers.
+- Pages under /org/* and /quiz/* require an authenticated session and are intentionally excluded from indexing (see /robots.txt) — they are private dashboard and live-exam-session views, not public reference content.
+- For business, partnership, or press inquiries: info@ysminfosolution.com, or WhatsApp +91 89830 83698.
+
+## Machine-readable references
+
+- [Sitemap](https://ysmquizbuzz.com/sitemap.xml)
+- [robots.txt](https://ysmquizbuzz.com/robots.txt)
+- [Web app manifest](https://ysmquizbuzz.com/manifest.webmanifest)

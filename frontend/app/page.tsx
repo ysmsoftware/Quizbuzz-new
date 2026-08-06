@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FeaturedContests } from '@/components/home/featured-contests';
+import { WebApplicationJsonLd } from '@/lib/seo/json-ld';
 import {
     Trophy,
     Users,
@@ -76,6 +77,7 @@ const howItWorks = [
 export default function HomePage() {
     return (
         <div className="flex min-h-screen flex-col">
+            <WebApplicationJsonLd />
             <Header />
 
             <main className="flex-1">

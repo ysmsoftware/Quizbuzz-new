@@ -5,6 +5,7 @@ import { AlertOctagon, ShieldAlert, Home, HelpCircle, Mail } from 'lucide-react'
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { SUPPORT_EMAIL } from '@/lib/seo/config';
 
 export default function QuizDisqualifiedPage() {
   const { slug } = useParams() as { slug: string };
@@ -49,7 +50,7 @@ export default function QuizDisqualifiedPage() {
                   <Button 
                     variant="outline" 
                     className="flex-1 h-12 rounded-xl gap-2"
-                    onClick={() => window.location.href = 'mailto:support@quizbuzz.com'}
+                    onClick={() => window.location.href = `mailto:${SUPPORT_EMAIL}`}
                   >
                     <Mail className="h-4 w-4" />
                     Contact Support

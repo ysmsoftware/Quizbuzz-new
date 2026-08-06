@@ -9,7 +9,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Menu, X, ChevronDown, Trophy, BookOpen, Users, HelpCircle, Download } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Users, HelpCircle, Download } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 
 const navigation = [
@@ -43,9 +43,7 @@ export function Header() {
             <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                        <BookOpen className="h-5 w-5 text-primary-foreground" />
-                    </div>
+                    <img src="/qbfavicon.png" alt="QuizBuzz" className="h-9 w-9 rounded-lg" width={36} height={36} />
                     <span className="text-xl font-bold tracking-tight">
                         Quiz<span className="text-primary">Buzz</span>
                     </span>
