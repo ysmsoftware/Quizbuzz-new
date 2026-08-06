@@ -8,8 +8,8 @@ import {
 } from '@/lib/hooks/useCertificateTemplates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { CertificateTemplateThumbnail } from '@/components/features/certificates/CertificateTemplateThumbnail';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -120,47 +120,41 @@ export default function CertificateTemplatesPage() {
                                 </Button>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[25%] font-semibold">Template Name</TableHead>
-                                            <TableHead className="w-[50%] font-semibold">Detected Variables</TableHead>
-                                            <TableHead className="w-[15%] font-semibold">Updated</TableHead>
-                                            <TableHead className="w-[10%] text-right font-semibold">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {templates.map((tpl) => (
-                                            <TableRow key={tpl.id}>
-                                                <TableCell className="font-medium">
-                                                    <div className="font-semibold text-foreground">{tpl.name}</div>
-                                                    {tpl.description && (
-                                                        <div className="text-xs font-normal text-muted-foreground mt-0.5 line-clamp-1 max-w-xs">
-                                                            {tpl.description}
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {tpl.variables.length === 0 ? (
-                                                            <span className="text-xs text-muted-foreground">None</span>
-                                                        ) : (
-                                                            tpl.variables.map((v) => (
-                                                                <Badge key={v} variant="secondary" className="text-xs font-mono">
-                                                                    {`{{${v}}}`}
-                                                                </Badge>
-                                                            ))
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                                {templates.map((tpl) => {
+                                    const visibleVars = tpl.variables.slice(0, 4);
+                                    const extraVarCount = tpl.variables.length - visibleVars.length;
+                                    return (
+                                        <div
+                                            key={tpl.id}
+                                            className="group flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-200"
+                                        >
+                                            {/* Certificate preview thumbnail */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenEdit(tpl.id)}
+                                                className="block p-3 pb-0 text-left cursor-pointer"
+                                                title="Click to edit this template"
+                                            >
+                                                <CertificateTemplateThumbnail templateId={tpl.id} />
+                                            </button>
+
+                                            {/* Card body */}
+                                            <div className="flex flex-1 flex-col gap-2.5 p-4">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <h3 className="font-semibold text-sm text-foreground truncate" title={tpl.name}>
+                                                            {tpl.name}
+                                                        </h3>
+                                                        {tpl.description && (
+                                                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                                                {tpl.description}
+                                                            </p>
                                                         )}
                                                     </div>
-                                                </TableCell>
-                                                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                                                    {new Date(tpl.updatedAt).toLocaleDateString()}
-                                                </TableCell>
-                                                <TableCell className="text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-lg">
                                                                 <MoreVertical className="h-4 w-4" />
                                                                 <span className="sr-only">Actions</span>
                                                             </Button>
@@ -177,11 +171,34 @@ export default function CertificateTemplatesPage() {
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-1">
+                                                    {tpl.variables.length === 0 ? (
+                                                        <span className="text-xs text-muted-foreground">No detected variables</span>
+                                                    ) : (
+                                                        <>
+                                                            {visibleVars.map((v) => (
+                                                                <Badge key={v} variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                                                                    {`{{${v}}}`}
+                                                                </Badge>
+                                                            ))}
+                                                            {extraVarCount > 0 && (
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                                                    +{extraVarCount} more
+                                                                </Badge>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                <div className="mt-auto pt-2 border-t border-border/50 text-[11px] text-muted-foreground">
+                                                    Updated {new Date(tpl.updatedAt).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>
