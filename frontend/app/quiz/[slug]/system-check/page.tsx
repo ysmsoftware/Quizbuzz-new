@@ -325,13 +325,17 @@ export default function SystemCheckPage() {
     }
   };
 
+  // Camera preview only exists for proctored contests once checks have run —
+  // drives the two-column desktop layout below.
+  const showCameraPanel = proctoringEnabled && checksStarted;
+
   return (
     <div className="min-h-screen w-full bg-background text-foreground relative overflow-hidden flex flex-col justify-center">
       {/* Ambient background glows */}
       <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[130px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-primary/10 blur-[130px] pointer-events-none" />
 
-      <div className="w-full max-w-[440px] mx-auto min-h-screen relative flex flex-col justify-center p-4 py-10 z-10">
+      <div className="w-full max-w-[440px] lg:max-w-4xl mx-auto min-h-screen relative flex flex-col justify-center p-4 py-10 z-10">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -351,19 +355,25 @@ export default function SystemCheckPage() {
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
-            {/* Camera feed validation widget */}
-            {proctoringEnabled && checksStarted && (
-              <div className="p-4 rounded-2xl bg-muted/40 border border-border">
-                <CameraCheckWidget
-                  onProceed={() => {
-                    updateCheckStatus("camera", "passed");
-                    updateCheckStatus("microphone", "passed");
-                  }}
-                  onRetryCamera={() => checkDevices()}
-                />
-              </div>
-            )}
- 
+            {/* On lg+ the camera preview sits beside the checklist/actions so the
+                card doesn't become one very tall column on desktop. Below lg (and
+                whenever there's no camera preview) everything stacks in one column. */}
+            <div className={showCameraPanel ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start space-y-6 lg:space-y-0" : ""}>
+              {/* Camera feed validation widget */}
+              {showCameraPanel && (
+                <div className="p-4 rounded-2xl bg-muted/40 border border-border">
+                  <CameraCheckWidget
+                    onProceed={() => {
+                      updateCheckStatus("camera", "passed");
+                      updateCheckStatus("microphone", "passed");
+                    }}
+                    onRetryCamera={() => checkDevices()}
+                    showProceedButton={false}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-6">
             {/* Status Checklist cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {checks
@@ -420,55 +430,6 @@ export default function SystemCheckPage() {
                 </motion.div>
               ))}
             </div>
- 
-            {deviceCheckFailed && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="rounded-2xl border border-warning/20 bg-warning/5 p-5 space-y-4"
-              >
-                <div className="flex items-start gap-3">
-                  <ShieldAlert className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-sm text-warning">Permissions Required</h4>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      Camera and microphone permissions are strict requirements for this quiz. Please use these settings:
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-foreground">
-                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
-                    <p className="font-bold text-foreground flex items-center gap-1">📱 iOS Safari</p>
-                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
-                      <li>Open **Settings**</li>
-                      <li>Select **Safari**</li>
-                      <li>Change **Camera & Mic**</li>
-                      <li>Set to **Allow**</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
-                    <p className="font-bold text-foreground flex items-center gap-1">🤖 Android Chrome</p>
-                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
-                      <li>Tap 🔒 URL lock icon</li>
-                      <li>Go to **Site Settings**</li>
-                      <li>Find **Camera & Mic**</li>
-                      <li>Set to **Allow**</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
-                    <p className="font-bold text-foreground flex items-center gap-1">💻 Desktop browsers</p>
-                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
-                      <li>Click 🔒 lock icon</li>
-                      <li>Enable **Camera & Mic**</li>
-                      <li>Reload the page</li>
-                    </ol>
-                  </div>
-                </div>
-              </motion.div>
-            )}
  
             {hasFailedChecks && !deviceCheckFailed && (
               <Alert className="rounded-2xl border-destructive/20 bg-destructive/5 text-destructive">
@@ -535,7 +496,61 @@ export default function SystemCheckPage() {
                 )}
               </Button>
             </div>
- 
+              </div>
+            </div>
+
+            {/* Permissions troubleshooting guide — moved below the primary actions so the
+                Retest / Enter waiting room buttons stay reachable without scrolling.
+                Full-width: sits under both columns on desktop. */}
+            {deviceCheckFailed && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="rounded-2xl border border-warning/20 bg-warning/5 p-5 space-y-4"
+              >
+                <div className="flex items-start gap-3">
+                  <ShieldAlert className="h-5 w-5 text-warning mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-sm text-warning">Permissions Required</h4>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Camera and microphone permissions are strict requirements for this quiz. Please use these settings:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-foreground">
+                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
+                    <p className="font-bold text-foreground flex items-center gap-1">📱 iOS Safari</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
+                      <li>Open **Settings**</li>
+                      <li>Select **Safari**</li>
+                      <li>Change **Camera & Mic**</li>
+                      <li>Set to **Allow**</li>
+                    </ol>
+                  </div>
+
+                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
+                    <p className="font-bold text-foreground flex items-center gap-1">🤖 Android Chrome</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
+                      <li>Tap 🔒 URL lock icon</li>
+                      <li>Go to **Site Settings**</li>
+                      <li>Find **Camera & Mic**</li>
+                      <li>Set to **Allow**</li>
+                    </ol>
+                  </div>
+
+                  <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
+                    <p className="font-bold text-foreground flex items-center gap-1">💻 Desktop browsers</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
+                      <li>Click 🔒 lock icon</li>
+                      <li>Enable **Camera & Mic**</li>
+                      <li>Reload the page</li>
+                    </ol>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             <p className="text-[11px] text-center text-muted-foreground/80 leading-normal">
               {proctoringEnabled
                 ? "By continuing, you agree to keep your camera on and remain in fullscreen mode during the entire quiz session."

@@ -29,7 +29,7 @@ export function HintButton({ question, questionIndex }: HintButtonProps) {
           onClick={() => revealHint(questionIndex)}
           className="
             flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg
-            text-white/50 hover:text-amber-400 hover:bg-white/5
+            text-muted-foreground hover:text-warning hover:bg-muted/50
             transition-colors duration-150
           "
           title="Using a hint is recorded"
@@ -38,7 +38,7 @@ export function HintButton({ question, questionIndex }: HintButtonProps) {
           Show Hint
         </button>
       ) : (
-        <span className="flex items-center gap-1.5 text-xs text-amber-400/60 px-3 py-1.5 cursor-default">
+        <span className="flex items-center gap-1.5 text-xs text-warning/70 px-3 py-1.5 cursor-default">
           <Lightbulb className="w-3.5 h-3.5" />
           Hint used
         </span>
@@ -54,18 +54,12 @@ export function HintButton({ question, questionIndex }: HintButtonProps) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden mt-3"
           >
-            <div
-              className="rounded-xl p-4 border"
-              style={{
-                background: 'rgba(234,179,8,0.1)',
-                borderColor: 'rgba(234,179,8,0.3)',
-              }}
-            >
+            <div className="rounded-xl p-4 border bg-warning/10 border-warning/30">
               <div className="flex items-center gap-1.5 mb-2">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-xs font-semibold text-amber-400">Hint</span>
+                <Lightbulb className="w-3.5 h-3.5 text-warning" />
+                <span className="text-xs font-semibold text-warning">Hint</span>
               </div>
-              <p className="text-sm text-white/80 leading-relaxed">{question.hint}</p>
+              <p className="text-sm text-foreground/80 leading-relaxed">{question.hint}</p>
             </div>
           </motion.div>
         )}

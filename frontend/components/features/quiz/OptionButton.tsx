@@ -31,33 +31,33 @@ export function OptionButton({
   const getStyles = () => {
     if (isCorrect) {
       return {
-        bg: 'bg-emerald-500/10 backdrop-blur-md',
-        border: 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)]',
-        circleBg: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white border-emerald-300/40 shadow-[0_3px_0_#065f46]',
-        textClass: 'text-emerald-200',
+        bg: 'bg-success/10 backdrop-blur-md',
+        border: 'border-success',
+        circleBg: 'bg-gradient-to-br from-success to-success/80 text-success-foreground border-success/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        textClass: 'text-success',
       };
     }
     if (isWrong) {
       return {
-        bg: 'bg-rose-500/10 backdrop-blur-md',
-        border: 'border-rose-500/80 shadow-[0_0_20px_rgba(244,63,94,0.1)]',
-        circleBg: 'bg-gradient-to-br from-rose-400 to-rose-600 text-white border-rose-300/40 shadow-[0_3px_0_#9f1239]',
-        textClass: 'text-rose-200 line-through opacity-70',
+        bg: 'bg-destructive/10 backdrop-blur-md',
+        border: 'border-destructive/80',
+        circleBg: 'bg-gradient-to-br from-destructive to-destructive/80 text-destructive-foreground border-destructive/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        textClass: 'text-destructive line-through opacity-70',
       };
     }
     if (isSelected) {
       return {
-        bg: 'bg-indigo-500/10 backdrop-blur-xl',
-        border: 'border-indigo-500 shadow-[0_0_25px_rgba(99,102,241,0.2)]',
-        circleBg: 'bg-gradient-to-b from-indigo-400 to-indigo-600 text-white border-indigo-300/40 shadow-[0_3px_0_#3730a3]',
-        textClass: 'text-indigo-200 font-semibold',
+        bg: 'bg-primary/10 backdrop-blur-xl',
+        border: 'border-primary',
+        circleBg: 'bg-gradient-to-b from-primary to-primary/80 text-primary-foreground border-primary/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        textClass: 'text-primary font-semibold',
       };
     }
     return {
-      bg: 'bg-slate-900/40 backdrop-blur-md',
-      border: 'border-slate-800/80 hover:border-slate-700/80',
-      circleBg: 'bg-slate-950/80 text-slate-400 border border-slate-800 shadow-[0_3px_0_#1e293b]',
-      textClass: 'text-slate-300',
+      bg: 'bg-card/40 backdrop-blur-md',
+      border: 'border-border/80 hover:border-border',
+      circleBg: 'bg-muted text-muted-foreground border border-border shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+      textClass: 'text-foreground/90',
     };
   };
 
@@ -76,7 +76,7 @@ export function OptionButton({
         styles.bg,
         styles.border,
         disabled ? 'cursor-default opacity-50' : 'cursor-pointer',
-        !isSelected && !isCorrect && !isWrong && !isAnswered && 'hover:bg-slate-800/30'
+        !isSelected && !isCorrect && !isWrong && !isAnswered && 'hover:bg-muted/30'
       )}
       aria-pressed={isSelected}
       aria-label={`Option ${optionLabel}: ${option.text}`}
@@ -98,13 +98,13 @@ export function OptionButton({
 
       {/* Check/Status Indicators */}
       {isSelected && !isCorrect && !isWrong && (
-        <div className="p-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex-shrink-0">
-          <Check className="w-4 h-4 text-indigo-400" />
+        <div className="p-1 rounded-full bg-primary/20 border border-primary/30 flex-shrink-0">
+          <Check className="w-4 h-4 text-primary" />
         </div>
       )}
       {isCorrect && (
-        <div className="p-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex-shrink-0 animate-pulse">
-          <Check className="w-4 h-4 text-emerald-400" />
+        <div className="p-1 rounded-full bg-success/20 border border-success/30 flex-shrink-0 animate-pulse">
+          <Check className="w-4 h-4 text-success" />
         </div>
       )}
     </motion.button>

@@ -4,6 +4,7 @@ import { MessageTemplate } from "../types/message-template.enum";
 import { MessageTemplateResolver } from "../templates/message-template-resolver";
 import logger from "../config/logger";
 import { config } from "../config";
+import { renderEmailLayout, emailButton, linkFallback, P, SMALL } from "../templates/email-layout";
 
 export interface IEmailProvider {
     send<T extends MessageTemplate>(
@@ -79,35 +80,25 @@ export async function sendResetPasswordEmail(
     const provider = getEmailProvider();
 
     // Build the HTML inline — this is a transactional auth email,
-    // not a campaign template, so it lives here not in the template resolver
-    const html = `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-            <h2 style="color:#1a1a1a;">Reset your password</h2>
-            <p>Hi ${name},</p>
-            <p>We received a request to reset your SmartFormFlow password.</p>
-            <p>Click the button below. This link expires in <strong>15 minutes</strong>.</p>
-            <a href="${resetLink}"
-               style="display:inline-block;padding:12px 24px;background:#6d28d9;
-                      color:#fff;border-radius:6px;text-decoration:none;font-weight:600;
-                      margin:16px 0;">
-                Reset Password
-            </a>
-            <p style="color:#666;font-size:13px;">
-                If you didn't request this, you can safely ignore this email.
-                Your password will not change.
-            </p>
-            <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-            <p style="color:#999;font-size:12px;">
-                Or copy this link into your browser:<br/>
-                <span style="word-break:break-all;">${resetLink}</span>
-            </p>
-        </div>
-    `;
+    // not a campaign template, so it lives here not in the template resolver.
+    // Uses the shared branded layout so it looks consistent with every
+    // other QuizBuzz email.
+    const html = renderEmailLayout({
+        preheader: "Reset your QuizBuzz password",
+        heading: "Reset your password",
+        bodyHtml: `
+            <p style="${P}">Hi ${name},</p>
+            <p style="${P}">We received a request to reset your QuizBuzz password. Click the button below — this link expires in <strong>15 minutes</strong>.</p>
+            ${emailButton("Reset Password", resetLink)}
+            <p style="${SMALL}">If you didn't request this, you can safely ignore this email. Your password will not change.</p>
+            ${linkFallback(resetLink)}
+        `,
+    });
 
     await provider.transporter.sendMail({
         from: `<${config.messaging.smtp.user}>`,
         to,
-        subject: "Reset your password",
+        subject: "Reset your password — QuizBuzz",
         html,
     });
 

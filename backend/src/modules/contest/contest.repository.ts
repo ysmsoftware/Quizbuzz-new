@@ -149,6 +149,10 @@ export class ContestRepository implements IContestRepository {
                 paymentConfig: true,
                 organization: { select: { name: true, logoUrl: true } },
                 _count: { select: { participants: true, questions: true } },
+                // Per-question marks — used to compute the contest's totalMarks below.
+                // Not exposed to clients directly; contest.service strips this array
+                // and returns only the aggregated sum.
+                questions: { select: { marks: true } },
             },
         });
     }

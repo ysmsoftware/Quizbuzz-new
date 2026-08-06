@@ -14,26 +14,26 @@ export function QuizLoadingScreen() {
   const totalQuestions = useQuizStore((s) => s.questions.length);
 
   return (
-    <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center" style={{ background: '#0F172A' }}>
+    <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center text-center max-w-xs">
         {/* Logo area */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-12 border border-white/10"
+          className="w-12 h-12 rounded-xl bg-muted/40 flex items-center justify-center mb-12 border border-border"
         >
-          <ShieldCheck className="w-6 h-6 text-white/40" />
+          <ShieldCheck className="w-6 h-6 text-muted-foreground" />
         </motion.div>
 
         {/* Spinner */}
         <div className="relative mb-8">
-          <Loader2 className="w-12 h-12 text-orange-500 animate-spin" strokeWidth={2} />
+          <Loader2 className="w-12 h-12 text-primary animate-spin" strokeWidth={2} />
         </div>
 
         <motion.h2
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-white text-lg font-bold mb-1"
+          className="text-foreground text-lg font-bold mb-1"
         >
           Preparing your quiz...
         </motion.h2>
@@ -42,7 +42,7 @@ export function QuizLoadingScreen() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-white/40 text-sm"
+          className="text-muted-foreground text-sm"
         >
           {totalQuestions > 0 ? `Loading ${totalQuestions} questions` : 'Connecting to secure server...'}
         </motion.p>
@@ -51,7 +51,7 @@ export function QuizLoadingScreen() {
       {/* Bottom WS status */}
       <div className="absolute bottom-12 flex flex-col items-center gap-3">
         <WSConnectionStatus status={wsStatus} variant="compact" />
-        <div className="flex items-center gap-2 text-[10px] text-white/20 uppercase tracking-widest font-medium">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 uppercase tracking-widest font-medium">
           <Wifi className="w-3 h-3" />
           Encrypted Connection
         </div>

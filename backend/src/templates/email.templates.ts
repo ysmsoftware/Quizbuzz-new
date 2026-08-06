@@ -1,5 +1,20 @@
 import { MessageTemplate } from "../types/message-template.enum";
 import { TemplateParamsMap } from "../types/message-template";
+import {
+    renderEmailLayout,
+    emailButton,
+    otpBox,
+    linkFallback,
+    signOff,
+    infoTable,
+    ledgerTable,
+    calloutBox,
+    pill,
+    P,
+    SMALL,
+    LINK_STYLE,
+    COLORS,
+} from "./email-layout";
 
 export const EmailTemplates: {
     [K in MessageTemplate]?: {
@@ -12,123 +27,141 @@ export const EmailTemplates: {
     [MessageTemplate.OTP_VERIFICATION_CODE]: {
         build: (params) => ({
             subject: `Your OTP for YSM Info Solution`,
-            html: `
-                <p>Your One-Time Password (OTP) is: <strong>${params.otp}</strong></p>
-                <p>This OTP is valid for the next 10 minutes. Please do not share it with anyone.</p>
-                <p>If you did not request this OTP, please ignore this email.</p>
-                <p>Thank You!<br/> - Team YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Your verification code is ${params.otp}`,
+                heading: "Your verification code",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">Use the code below to complete your verification. It's valid for the next <strong>10 minutes</strong>.</p>
+                    ${otpBox(params.otp)}
+                    <p style="${SMALL}">Please don't share this code with anyone. If you didn't request this, you can safely ignore this email.</p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
     [MessageTemplate.BIRTHDAY_WISHES_YSM]: {
         build: (params) => ({
             subject: `Happy Birthday from YSM Info Solution! 🎂`,
-            html: `
-                <p>Hello ${params.name},</p>
-                <p>Team <strong>YSM Info Solution</strong> wishes you a very <strong>Happy Birthday!</strong> 🎉</p>
-                <p>May this year bring you success, growth and new opportunities.</p>
-                <p>Keep shining and keep learning!<br/> - Team YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Wishing you a very happy birthday, ${params.name}!`,
+                heading: `Happy Birthday, ${params.name}! 🎂`,
+                bodyHtml: `
+                    ${pill("🎉 Wishing you a wonderful day")}
+                    <p style="${P}">Team <strong>YSM Info Solution</strong> wishes you a very <strong>Happy Birthday!</strong></p>
+                    <p style="${P}">May this year bring you success, growth and new opportunities.</p>
+                    <p style="${P}">Keep shining and keep learning!</p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.FEEDBACK_COLLECTION_MESSAGE]: {
         build: (params) => ({
             subject: `We Value Your Feedback - ${params.name}`,
-            html: `
-                <p>Dear ${params.name},</p>
-                <p>Thank you for being part of <strong>${params.eventName}</strong>.</p>
-                <p>Please share your feedback: <a href="https://g.page/r/CbW3sg1807sqEBM/review">Click here</a></p>
-                <p>Your input helps us improve and serve students better.<br/> - Team YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Tell us how ${params.eventName} went`,
+                heading: "We'd love your feedback",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">Thank you for being part of <strong>${params.eventName}</strong>.</p>
+                    <p style="${P}">Your input helps us improve and serve students better — it only takes a minute.</p>
+                    ${emailButton("Share your feedback", "https://g.page/r/CbW3sg1807sqEBM/review")}
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.CERTIFICATE_ISSUED]: {
         build: (params) => ({
             subject: `Certificate Issued - ${params.eventName}`,
-            html: `
-                <p>Hello ${params.name},</p>
-                <p>Your certificate for <strong>${params.eventName}</strong> has been issued.</p>
-                <p><a href="${params.link}">Download Certificate</a></p>
-                <p>Keep learning & growing!<br/> - YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Your certificate for ${params.eventName} is ready`,
+                heading: "Your certificate is ready 🎓",
+                bodyHtml: `
+                    <p style="${P}">Hello ${params.name},</p>
+                    <p style="${P}">Your certificate for <strong>${params.eventName}</strong> has been issued.</p>
+                    ${emailButton("Download Certificate", params.link)}
+                    <p style="${P}">Keep learning &amp; growing!</p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
     [MessageTemplate.REGISTRATION_SUCCESSFUL]: {
         build: (params) => ({
             subject: `Registration Successful - ${params.eventName}`,
-            html: `
-                <p>Dear ${params.name},</p>
-                <p>Thank you for registering for <strong>${params.eventName}</strong> at YSM Info Solution.</p>
-                <p>📅 <strong>Date:</strong> ${params.date}</p>
-                <p>⏰ <strong>Time:</strong> ${params.time}</p>
-                <p>🔑 <strong>Join Code:</strong> <code>${params.joinCode}</code></p>
-                <p>📍 <strong>Location/Link:</strong> <a href="${params.link}">${params.link}</a></p>
-                <p>We look forward to your participation. For queries, contact: +91 898 308 3698<br/> - Team YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `You're registered for ${params.eventName}`,
+                heading: "You're registered! ✅",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">Thank you for registering for <strong>${params.eventName}</strong> at YSM Info Solution.</p>
+                    ${infoTable([
+                        { label: "Date", value: params.date },
+                        { label: "Time", value: params.time },
+                        { label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark },
+                        { label: "Location / Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
+                    ])}
+                    <p style="${P}">We look forward to your participation. For queries, contact: <strong>+91 898 308 3698</strong></p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.WORKSHOP_REMINDER_MESSAGE]: {
         build: (params) => ({
             subject: `Reminder: ${params.eventName} is Coming Up!`,
-            html: `
-                <p>Dear ${params.name},</p>
-                <p>This is a reminder for your registered program: <strong>${params.eventName}</strong></p>
-                <p>📅 <strong>Date:</strong> ${params.date}</p>
-                <p>⏰ <strong>Time:</strong> ${params.time}</p>
-                <p>📍 <strong>Venue/Link:</strong> <a href="${params.link}">${params.link}</a></p>
-                <p>Kindly be available 10 minutes before the scheduled time.</p>
-                <p>We look forward to your participation.<br/> - Team YSM Info Solution</p>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `${params.eventName} starts soon`,
+                heading: "Reminder: your session is coming up",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">This is a reminder for your registered program: <strong>${params.eventName}</strong></p>
+                    ${infoTable([
+                        { label: "Date", value: params.date },
+                        { label: "Time", value: params.time },
+                        ...(params.joinCode ? [{ label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark }] : []),
+                        { label: "Join Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
+                    ])}
+                    <p style="${P}">Kindly be available 10 minutes before the scheduled time.</p>
+                    <p style="${P}">We look forward to your participation.</p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.PAYOUT_TRANSFER_CONFIRMATION]: {
         build: (params) => ({
             subject: `Payout transferred — ${params.transferAmount} credited to your account`,
-            html: `
-                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
-                    <h2 style="color:#1a1a1a;">Payout transferred</h2>
-                    <p>Hi ${params.name},</p>
-                    <p>A payment has been received and your share has been transferred to your linked payout account. Here's the full breakdown:</p>
-                    <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
-                        <tr>
-                            <td style="padding:8px 0;color:#666;">Gross payment received</td>
-                            <td style="padding:8px 0;text-align:right;font-weight:600;">${params.grossAmount}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px 0;color:#666;">Platform commission (${params.commissionPercent})</td>
-                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.commissionAmount}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px 0;color:#666;">Payment gateway fee (${params.gatewayFeePercent})</td>
-                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.gatewayFeeAmount}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px 0;color:#666;">GST on gateway fee (${params.gstPercent})</td>
-                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.gstAmount}</td>
-                        </tr>
-                        <tr style="border-top:1px solid #eee;">
-                            <td style="padding:8px 0;color:#666;">Total deducted</td>
-                            <td style="padding:8px 0;text-align:right;color:#c0392b;">− ${params.totalDeducted}</td>
-                        </tr>
-                        <tr style="border-top:2px solid #1a1a1a;">
-                            <td style="padding:12px 0;font-weight:700;">Amount transferred to you</td>
-                            <td style="padding:12px 0;text-align:right;font-weight:700;color:#1a7a3c;">${params.transferAmount}</td>
-                        </tr>
-                    </table>
-                    <p style="color:#999;font-size:12px;">
-                        The payment gateway fee and GST are charges levied by Razorpay on every transaction and are passed through as-is — QuizBuzz does not profit from this portion.
-                    </p>
-                    <p style="color:#999;font-size:12px;">Transfer reference: ${params.transferId}</p>
-                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-                    <p style="color:#999;font-size:12px;">
-                        This is an automated payout notification from QuizBuzz.
-                    </p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                preheader: `${params.transferAmount} has been transferred to your payout account`,
+                heading: "Payout transferred 💸",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">A payment has been received and your share has been transferred to your linked payout account. Here's the full breakdown:</p>
+                    ${ledgerTable([
+                        { label: "Gross payment received", value: params.grossAmount },
+                        { label: `Platform commission (${params.commissionPercent})`, value: `− ${params.commissionAmount}`, tone: "negative" },
+                        { label: `Payment gateway fee (${params.gatewayFeePercent})`, value: `− ${params.gatewayFeeAmount}`, tone: "negative" },
+                        { label: `GST on gateway fee (${params.gstPercent})`, value: `− ${params.gstAmount}`, tone: "negative" },
+                        { label: "Total deducted", value: `− ${params.totalDeducted}`, tone: "negative", divider: true },
+                        { label: "Amount transferred to you", value: params.transferAmount, tone: "positive", strong: true, divider: true },
+                    ])}
+                    <p style="${SMALL}">The payment gateway fee and GST are charges levied by Razorpay on every transaction and are passed through as-is — QuizBuzz does not profit from this portion.</p>
+                    <p style="${SMALL}">Transfer reference: ${params.transferId}</p>
+                `,
+            }),
         }),
     },
 
@@ -137,94 +170,64 @@ export const EmailTemplates: {
     [MessageTemplate.EMAIL_VERIFICATION]: {
         build: (params) => ({
             subject: `Verify your email — QuizBuzz`,
-            html: `
-                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-                    <h2 style="color:#1a1a1a;">Verify your email</h2>
-                    <p>Hi ${params.name},</p>
-                    <p>Please verify your email address to complete your QuizBuzz registration.</p>
-                    <a href="${params.verificationLink}"
-                       style="display:inline-block;padding:12px 24px;background:#6d28d9;
-                              color:#fff;border-radius:6px;text-decoration:none;font-weight:600;
-                              margin:16px 0;">
-                        Verify Email
-                    </a>
-                    <p style="color:#666;font-size:13px;">
-                        This link expires in 24 hours. If you didn't create an account, ignore this email.
-                    </p>
-                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-                    <p style="color:#999;font-size:12px;">
-                        Or copy this link into your browser:<br/>
-                        <span style="word-break:break-all;">${params.verificationLink}</span>
-                    </p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                preheader: "Verify your email to finish setting up QuizBuzz",
+                heading: "Verify your email",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">Please verify your email address to complete your QuizBuzz registration.</p>
+                    ${emailButton("Verify Email", params.verificationLink)}
+                    <p style="${SMALL}">This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>
+                    ${linkFallback(params.verificationLink)}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.PASSWORD_RESET]: {
         build: (params) => ({
             subject: `Reset your password — QuizBuzz`,
-            html: `
-                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-                    <h2 style="color:#1a1a1a;">Reset your password</h2>
-                    <p>Hi ${params.name},</p>
-                    <p>We received a request to reset your QuizBuzz password.</p>
-                    <p>Click the button below. This link expires in <strong>15 minutes</strong>.</p>
-                    <a href="${params.resetLink}"
-                       style="display:inline-block;padding:12px 24px;background:#6d28d9;
-                              color:#fff;border-radius:6px;text-decoration:none;font-weight:600;
-                              margin:16px 0;">
-                        Reset Password
-                    </a>
-                    <p style="color:#666;font-size:13px;">
-                        If you didn't request this, you can safely ignore this email.
-                        Your password will not change.
-                    </p>
-                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-                    <p style="color:#999;font-size:12px;">
-                        Or copy this link into your browser:<br/>
-                        <span style="word-break:break-all;">${params.resetLink}</span>
-                    </p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                preheader: "Reset your QuizBuzz password",
+                heading: "Reset your password",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">We received a request to reset your QuizBuzz password. Click the button below — this link expires in <strong>15 minutes</strong>.</p>
+                    ${emailButton("Reset Password", params.resetLink)}
+                    <p style="${SMALL}">If you didn't request this, you can safely ignore this email. Your password will not change.</p>
+                    ${linkFallback(params.resetLink)}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.ORG_INVITE]: {
         build: (params) => ({
             subject: `You've been invited to join ${params.orgName} on QuizBuzz`,
-            html: `
-                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
-                    <h2 style="color:#1a1a1a;">Organization Invitation</h2>
-                    <p>Hi ${params.name},</p>
-                    <p>You've been invited to join <strong>${params.orgName}</strong> on QuizBuzz.</p>
-                    <a href="${params.inviteLink}"
-                       style="display:inline-block;padding:12px 24px;background:#6d28d9;
-                              color:#fff;border-radius:6px;text-decoration:none;font-weight:600;
-                              margin:16px 0;">
-                        Accept Invitation
-                    </a>
-                    <p style="color:#666;font-size:13px;">
-                        This invitation expires in 3 days. If you were not expecting this, ignore this email.
-                    </p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                preheader: `You've been invited to join ${params.orgName}`,
+                heading: "Organization invitation",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">You've been invited to join <strong>${params.orgName}</strong> on QuizBuzz.</p>
+                    ${emailButton("Accept Invitation", params.inviteLink)}
+                    <p style="${SMALL}">This invitation expires in 3 days. If you weren't expecting this, you can ignore this email.</p>
+                `,
+            }),
         }),
     },
     [MessageTemplate.ADMIN_EMAIL_OTP]: {
         build: (params) => ({
             subject: `${params.otp} is your QuizBuzz verification code`,
-            html: `
-                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;text-align:center;padding:40px 20px;border:1px solid #eee;border-radius:12px;">
-                    <h2 style="color:#1a1a1a;margin-bottom:24px;">Verify your email</h2>
-                    <p style="color:#666;font-size:16px;margin-bottom:32px;">Hi ${params.name}, use the following code to verify your QuizBuzz account:</p>
-                    <div style="background:#f3f0ff;border-radius:12px;padding:24px;margin-bottom:32px;">
-                        <span style="font-size:40px;font-weight:bold;letter-spacing:8px;color:#6d28d9;font-family:monospace;">${params.otp}</span>
-                    </div>
-                    <p style="color:#999;font-size:14px;margin-bottom:8px;">This code expires in <strong>15 minutes</strong>.</p>
-                    <p style="color:#999;font-size:14px;">If you didn't request this, you can safely ignore this email.</p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                preheader: `Your QuizBuzz verification code is ${params.otp}`,
+                heading: "Verify your email",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name}, use the following code to verify your QuizBuzz account:</p>
+                    ${otpBox(params.otp)}
+                    <p style="${SMALL}">This code expires in <strong>15 minutes</strong>. If you didn't request this, you can safely ignore this email.</p>
+                `,
+            }),
         }),
     },
 
@@ -233,40 +236,85 @@ export const EmailTemplates: {
     [MessageTemplate.DISQUALIFICATION_NOTICE]: {
         build: (params) => ({
             subject: `Disqualification Notice — ${params.eventName}`,
-            html: `
-                <p>Dear ${params.name},</p>
-                <p>We regret to inform you that you have been disqualified from <strong>${params.eventName}</strong>.</p>
-                <p><strong>Reason:</strong> ${params.reason}</p>
-                <p>If you believe this was an error, please contact the contest organizer.</p>
-                <p>Regards,<br/> - Team QuizBuzz</p>
-            `,
+            html: renderEmailLayout({
+                preheader: `You have been disqualified from ${params.eventName}`,
+                heading: "Disqualification notice",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">We regret to inform you that you have been disqualified from <strong>${params.eventName}</strong>.</p>
+                    ${calloutBox(`<strong>Reason:</strong> ${params.reason}`, "danger")}
+                    <p style="${P}">If you believe this was an error, please contact the contest organizer.</p>
+                    ${signOff("QuizBuzz", "Regards")}
+                `,
+            }),
         }),
     },
 
     [MessageTemplate.RESULTS_PUBLISHED]: {
         build: (params) => ({
             subject: `Results are out! — ${params.eventName}`,
-            html: `
-                <p>Hello ${params.name},</p>
-                <p>The results for <strong>${params.eventName}</strong> have been published!</p>
-                <p><a href="${params.link}">View Leaderboard & Your Results</a></p>
-                <p>Thank you for participating.<br/> - Team QuizBuzz</p>
-            `,
+            html: renderEmailLayout({
+                preheader: `Results for ${params.eventName} have been published`,
+                heading: "Results are out! 🏆",
+                bodyHtml: `
+                    <p style="${P}">Hello ${params.name},</p>
+                    <p style="${P}">The results for <strong>${params.eventName}</strong> have been published!</p>
+                    ${emailButton("View Leaderboard & Your Results", params.link)}
+                    <p style="${P}">Thank you for participating.</p>
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
+    [MessageTemplate.CONTEST_RESCHEDULED]: {
+        build: (params) => ({
+            subject: `Rescheduled: ${params.eventName} is now on ${params.date}`,
+            html: renderEmailLayout({
+                preheader: `${params.eventName} has a new date: ${params.date} at ${params.time}`,
+                heading: "Contest rescheduled",
+                bodyHtml: `
+                    <p style="${P}">Hello ${params.name},</p>
+                    <p style="${P}"><strong>${params.eventName}</strong> has been rescheduled.</p>
+                    ${infoTable([
+                        { label: "Previously", value: `<s style="color:${COLORS.textFaint};">${params.previousDate}</s>` },
+                        { label: "New date & time", value: `${params.date} at ${params.time}`, strong: true, valueColor: COLORS.primaryDark },
+                    ])}
+                    ${params.reason ? calloutBox(`<strong>Reason:</strong> ${params.reason}`, "warning") : ""}
+                    <p style="${P}">Your registration remains valid — no action is needed.</p>
+                    ${emailButton("View Contest Details", params.link)}
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
+    [MessageTemplate.CONTEST_CANCELLED]: {
+        build: (params) => ({
+            subject: `Cancelled: ${params.eventName}`,
+            html: renderEmailLayout({
+                preheader: `${params.eventName} has been cancelled`,
+                heading: "Contest cancelled",
+                bodyHtml: `
+                    <p style="${P}">Hello ${params.name},</p>
+                    <p style="${P}">We're sorry to let you know that <strong>${params.eventName}</strong>, scheduled for ${params.date} at ${params.time}, has been cancelled.</p>
+                    ${calloutBox(`<strong>Reason:</strong> ${params.reason}`, "danger")}
+                    <p style="${P}">You do not need to do anything. If you have any questions, please reply to the organisers.</p>
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
         }),
     },
     [MessageTemplate.CUSTOM]: {
         build: (params) => ({
             subject: params.subject || `Notification from YSM Info Solution`,
-            html: `
-                <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee;border-radius:12px;color:#333;">
-                    <h2 style="color:#1a1a1a;margin-bottom:16px;">${params.subject || 'Announcement'}</h2>
-                    <p style="white-space:pre-wrap;line-height:1.6;">${params.body || ''}</p>
-                    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
-                    <p style="color:#999;font-size:12px;">
-                        This email was sent by YSM Info Solution. Please do not reply directly to this email.
-                    </p>
-                </div>
-            `,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: params.subject || "Announcement",
+                heading: params.subject || "Announcement",
+                bodyHtml: `
+                    <p style="${P}white-space:pre-wrap;">${params.body || ""}</p>
+                `,
+                footerNote: "This email was sent by YSM Info Solution. Please do not reply directly to this email.",
+            }),
         }),
     },
 };

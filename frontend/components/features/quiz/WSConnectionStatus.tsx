@@ -13,17 +13,17 @@ export function WSConnectionStatus({
 }: WSConnectionStatusProps) {
   const statusConfig = {
     connected: {
-      color: 'bg-green-500',
+      color: 'bg-success',
       text: 'Connected',
       pulse: false,
     },
     reconnecting: {
-      color: 'bg-amber-500 animate-pulse',
+      color: 'bg-warning animate-pulse',
       text: 'Reconnecting...',
       pulse: true,
     },
     disconnected: {
-      color: 'bg-red-500',
+      color: 'bg-destructive',
       text: 'Disconnected',
       pulse: false,
     },
@@ -33,7 +33,7 @@ export function WSConnectionStatus({
 
   if (variant === 'compact') {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-border">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border">
         <div className={`w-2 h-2 rounded-full ${config.color}`} />
         <span className="text-sm font-medium text-foreground">{config.text}</span>
       </div>
@@ -41,7 +41,7 @@ export function WSConnectionStatus({
   }
 
   return (
-    <div className="flex items-center gap-3 p-4 rounded-lg bg-surface-2 border border-border">
+    <div className="flex items-center gap-3 p-4 rounded-lg bg-muted border border-border">
       <div className={`w-3 h-3 rounded-full ${config.color}`} />
       <div className="flex-1">
         <p className="text-sm font-medium text-foreground">

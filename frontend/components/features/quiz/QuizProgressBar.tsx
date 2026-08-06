@@ -11,12 +11,12 @@ export function QuizProgressBar() {
     <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-white/60 font-medium">Progress</span>
-          <span className="text-xs text-white/60 font-mono">{answered}/{total} answered</span>
+          <span className="text-xs text-muted-foreground font-medium">Progress</span>
+          <span className="text-xs text-muted-foreground font-mono">{answered}/{total} answered</span>
         </div>
-        <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-border/40 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-300 ease-out"
+            className="h-full bg-primary transition-all duration-300 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>

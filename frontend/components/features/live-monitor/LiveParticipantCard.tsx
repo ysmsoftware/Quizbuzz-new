@@ -34,7 +34,7 @@ export function LiveParticipantCard({
       'bg-orange-500',
       'bg-red-500',
       'bg-cyan-500',
-      'bg-indigo-500'
+      'bg-teal-500'
     ];
     const hash = participant.participantId.charCodeAt(0);
     return colors[hash % colors.length];

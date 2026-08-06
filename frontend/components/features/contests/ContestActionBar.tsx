@@ -21,9 +21,14 @@ import {
   ShieldAlert,
   Loader2,
   Zap,
-  ChevronRight
+  ChevronRight,
+  CalendarClock
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { RescheduleContestModal } from './RescheduleContestModal';
+import { useCancelContest, useForceEndContest } from '@/lib/hooks/useContestLifecycle';
+import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
+import { splitPersistableContestFields } from '@/lib/utils/contest';
 import { 
   Dialog, 
   DialogContent, 
@@ -90,9 +95,37 @@ export function ContestActionBar({
   const publishingActive = isPublishingProp || localIsPublishing;
   const [isConfirmingPublish, setIsConfirmingPublish] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [confirmText, setConfirmText] = useState('');
+
+  const cancelMutation = useCancelContest(contest.id);
+  const forceEndMutation = useForceEndContest(contest.id);
+  const updateMutation = useUpdateContest(contest.id);
+
+  const handleCancelContest = async () => {
+    try {
+      await cancelMutation.mutateAsync({ reason: cancelReason });
+      toast.success('Contest cancelled — registered participants have been notified');
+      setIsCancelModalOpen(false);
+      setCancelReason('');
+      onCancel?.(cancelReason);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel contest');
+    }
+  };
+
+  const handleForceEnd = async () => {
+    try {
+      const res = await forceEndMutation.mutateAsync({});
+      const submitted = res?.data?.submitted ?? 0;
+      toast.success(`Contest ended — ${submitted} submission${submitted === 1 ? '' : 's'} captured`);
+      setConfirmText('');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to end contest');
+    }
+  };
   const [isSendMessageOpen, setIsSendMessageOpen] = useState(false);
   const [localIsDeclaringResults, setLocalIsDeclaringResults] = useState(false);
   const [isEarlyDeclareModalOpen, setIsEarlyDeclareModalOpen] = useState(false);
@@ -256,6 +289,10 @@ export function ContestActionBar({
         <Copy className="mr-2 h-4 w-4" />
         Copy Link
       </Button>
+      <Button variant="outline" size="sm" onClick={() => setIsRescheduleOpen(true)}>
+        <CalendarClock className="mr-2 h-4 w-4" />
+        Reschedule
+      </Button>
       <Button variant="outline" size="sm" onClick={() => setIsEditDetailsOpen(true)}>
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
@@ -271,6 +308,10 @@ export function ContestActionBar({
     <div className="flex items-center gap-3">
       <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
         Cancel Contest
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => setIsRescheduleOpen(true)}>
+        <CalendarClock className="mr-2 h-4 w-4" />
+        Reschedule
       </Button>
       <Button variant="outline" size="sm" onClick={() => setIsEditDetailsOpen(true)}>
         <Settings className="mr-2 h-4 w-4" />
@@ -289,10 +330,9 @@ export function ContestActionBar({
 
   const renderLiveActions = () => (
     <div className="flex items-center gap-3">
-      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
-        Cancel Contest
-      </Button>
-      
+      {/* No "Cancel Contest" here — a running contest must be force-ended so
+          participants' in-progress answers are submitted, not discarded. */}
+
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="outline" size="sm" className="text-amber-600 border-amber-200 hover:bg-amber-50">
@@ -318,15 +358,12 @@ export function ContestActionBar({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setConfirmText('')}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              disabled={confirmText !== 'END CONTEST'}
+            <AlertDialogAction
+              disabled={confirmText !== 'END CONTEST' || forceEndMutation.isPending}
               className="bg-amber-600 hover:bg-amber-700"
-              onClick={() => {
-                toast.info('Contest ending process started...');
-                setConfirmText('');
-              }}
+              onClick={handleForceEnd}
             >
-              End Contest Now
+              {forceEndMutation.isPending ? 'Ending...' : 'End Contest Now'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -472,60 +509,54 @@ export function ContestActionBar({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              {contestPhase === 'LIVE' ? 'Cancel a LIVE contest?' : `Cancel "${contest.title}"?`}
+              Cancel &ldquo;{contest.title}&rdquo;?
             </DialogTitle>
             <DialogDescription className="space-y-4 pt-4">
-              {contestPhase === 'LIVE' ? (
-                <div className="space-y-3">
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive font-medium text-xs space-y-2">
-                    <p>• Stop the quiz for all active participants</p>
-                    <p>• Auto-submit their current answers</p>
-                    <p>• Notify {contest._count?.participants || 0} participants via WhatsApp</p>
-                    <p>• Offer refunds to paid participants</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Type CANCEL LIVE CONTEST to confirm</Label>
-                    <Input 
-                      placeholder="CANCEL LIVE CONTEST" 
-                      value={confirmText} 
-                      onChange={(e) => setConfirmText(e.target.value)}
-                    />
-                  </div>
+              {/* No LIVE branch: a running contest cannot be cancelled, because
+                  participants' in-progress answers must be submitted rather than
+                  discarded. "End Contest Now" handles that case. */}
+              <div className="space-y-4">
+                <div className="p-4 bg-warning/10 rounded-xl border border-warning/20 text-xs text-foreground font-medium">
+                  {contest._count?.participants || 0} registered participant
+                  {(contest._count?.participants || 0) === 1 ? '' : 's'} will be emailed the
+                  cancellation and the reason below. Scheduled reminders are removed.
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 font-medium">
-                    {contest._count?.participants || 0} participants are registered. They will be notified via WhatsApp.
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Reason for cancellation (shown to participants)</Label>
-                    <Textarea 
-                      placeholder="e.g. Unforeseen technical issues..."
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="min-h-[100px]"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground">Reason for cancellation (shown to participants)</Label>
+                  <Textarea
+                    placeholder="e.g. Unforeseen technical issues..."
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className="min-h-[100px]"
+                  />
                 </div>
-              )}
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCancelModalOpen(false)}>Back</Button>
-            <Button 
-              variant="destructive" 
-              disabled={contestPhase === 'LIVE' ? confirmText !== 'CANCEL LIVE CONTEST' : !cancelReason}
-              onClick={() => {
-                if (onCancel) onCancel(cancelReason);
-                setIsCancelModalOpen(false);
-                toast.error('Contest has been cancelled');
-              }}
+            <Button
+              variant="destructive"
+              disabled={cancelReason.trim().length < 5 || cancelMutation.isPending}
+              onClick={handleCancelContest}
             >
-              I understand, cancel this contest
+              {cancelMutation.isPending ? 'Cancelling...' : 'I understand, cancel this contest'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reschedule Modal — the only supported way to move timing post-publish */}
+      <RescheduleContestModal
+        open={isRescheduleOpen}
+        onOpenChange={setIsRescheduleOpen}
+        contestId={contest.id}
+        contestTitle={contest.title}
+        startTime={contest.startTime}
+        registrationDeadline={contest.registrationDeadline}
+        durationMinutes={contest.durationMinutes}
+        registeredCount={contest._count?.participants || 0}
+      />
 
       {/* Edit Contest Details Modal */}
       <EditContestDetailsModal
@@ -533,9 +564,21 @@ export function ContestActionBar({
         isOpen={isEditDetailsOpen}
         onOpenChange={setIsEditDetailsOpen}
         onSave={async (updates) => {
-          // Call the parent's onUpdate handler if available
-          // For now, just show a success message
-          toast.success('Contest details updated');
+          const { persisted, dropped } = splitPersistableContestFields(updates);
+
+          if (Object.keys(persisted).length > 0) {
+            await updateMutation.mutateAsync(persisted);
+          }
+
+          if (dropped.length > 0) {
+            // Told plainly rather than swallowed — these controls edit fields that have
+            // no column on Contest, so the values genuinely cannot be saved.
+            toast.warning(
+              `Saved. Not stored on the server: ${dropped.join(', ')} — these fields aren't part of the contest model yet.`,
+            );
+          } else {
+            toast.success('Contest details updated');
+          }
         }}
       />
 

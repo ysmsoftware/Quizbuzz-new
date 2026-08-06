@@ -70,6 +70,53 @@ export async function closeRegistration(contestId: string): Promise<ApiResponse<
   return post<{ status: string }>(`/contests/${contestId}/close-registration`);
 }
 
+// ─── Lifecycle operations ────────────────────────────────────────────────────
+// Separate endpoints rather than PATCH fields: the server decides whether to notify
+// participants based on which operation was called, so timing changes can never slip
+// through unannounced.
+
+/**
+ * POST /contests/:contestId/reschedule
+ * Atomic timing change. Allowed only before the contest goes LIVE.
+ */
+export async function rescheduleContest(
+  contestId: string,
+  body: {
+    startTime: string;
+    registrationDeadline?: string;
+    duration?: number;
+    reason?: string;
+    notifyParticipants?: boolean;
+  },
+): Promise<ApiResponse> {
+  return post(`/contests/${contestId}/reschedule`, body);
+}
+
+/**
+ * POST /contests/:contestId/cancel
+ * Blocked once LIVE — use forceEndContest so answers are preserved.
+ */
+export async function cancelContest(
+  contestId: string,
+  body: { reason: string; notifyParticipants?: boolean },
+): Promise<ApiResponse<{ status: string }>> {
+  return post<{ status: string }>(`/contests/${contestId}/cancel`, body);
+}
+
+/**
+ * POST /contests/:contestId/force-end
+ * Stops a LIVE contest, submitting every active participant's answers.
+ */
+export async function forceEndContest(
+  contestId: string,
+  body?: { reason?: string },
+): Promise<ApiResponse<{ status: string; submitted: number; errors: number }>> {
+  return post<{ status: string; submitted: number; errors: number }>(
+    `/contests/${contestId}/force-end`,
+    body ?? {},
+  );
+}
+
 /**
  * PATCH /contests/:contestId/archive
  */

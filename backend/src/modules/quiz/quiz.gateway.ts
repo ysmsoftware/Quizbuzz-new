@@ -333,6 +333,23 @@ export class QuizGateway {
         this.emitSocket("participant", `contest:${cid}`, "quiz:v1:time_warning", { secondsRemaining: seconds });
     }
 
+    /**
+     * Tell everyone currently sitting in the waiting room that the schedule moved.
+     * Without this their countdown keeps running to the old startTime, reaches zero,
+     * polls for a LIVE status that never arrives, and strands them on 00:00:00.
+     * `serverTime` lets the client re-anchor its clock offset in the same round trip.
+     */
+    emitContestRescheduled(cid: string, payload: { startTime: string; endTime: string; reason?: string }) {
+        this.emitSocket("participant", `contest:${cid}`, "quiz:v1:rescheduled", {
+            ...payload,
+            serverTime: new Date().toISOString(),
+        });
+    }
+
+    emitContestCancelled(cid: string, payload: { reason: string }) {
+        this.emitSocket("participant", `contest:${cid}`, "quiz:v1:cancelled", payload);
+    }
+
     async emitAutoSubmit(pid: string, cid: string, reason: string) {
         try {
             const result = await this.quizService.submitQuiz(cid, pid, "AUTO");

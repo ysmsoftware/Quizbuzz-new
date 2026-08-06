@@ -20,6 +20,11 @@ import { quizTimerQueue } from "../queues";
 import type { QuizTimerJobPayload } from "../queues";
 import type { PrismaClient } from "@prisma/client";
 import { QuizSession } from "../modules/quiz/quiz.session";
+import { QuizSchedulerService } from "../modules/quiz/quiz-scheduler.service";
+
+// Stateless — safe to instantiate directly rather than threading through the
+// injection setter, which exists only to break the gateway/service import cycle.
+const quizScheduler = new QuizSchedulerService();
 
 // ─── Late-bound references ────────────────────────────────────────────────────
 // The gateway and services are initialized in container.ts and injected at
@@ -100,6 +105,58 @@ async function processTimerJob(job: Job<QuizTimerJobPayload>): Promise<void> {
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Guards a lifecycle job against a schedule that changed after the job was queued.
+ *
+ * An admin editing a contest's startTime/duration cancels and re-adds these jobs,
+ * but that cancel is not guaranteed: BullMQ `add()` silently no-ops when a job with
+ * the same jobId still exists, so a failed removal leaves the ORIGINAL job in place
+ * with its ORIGINAL delay. It then fires at the old time and starts (or auto-submits)
+ * the contest early — with no error anywhere.
+ *
+ * Rather than trusting queue state, every timer job re-reads the contest and checks
+ * itself against the CURRENT scheduled time. If it woke up too early, it re-queues
+ * itself for the correct moment and does nothing else. This makes the schedule
+ * self-healing regardless of what the queue contains.
+ *
+ * @returns `true` if the job should proceed, `false` if it was stale and rescheduled.
+ */
+async function isDueOrReschedule(
+    contestId: string,
+    scheduledFor: Date,
+    jobId: string,
+    payload: QuizTimerJobPayload,
+): Promise<boolean> {
+    const toleranceMs = config.quiz.timerDriftTolerance * 1000;
+    const earlyByMs = scheduledFor.getTime() - Date.now();
+
+    if (earlyByMs <= toleranceMs) return true;
+
+    logger.warn(
+        `[quiz-timer] STALE ${payload.type} for contest ${contestId} — fired ` +
+        `${Math.round(earlyByMs / 1000)}s before its current scheduled time ` +
+        `(${scheduledFor.toISOString()}). The contest schedule was most likely edited ` +
+        `after this job was queued. Re-scheduling and skipping this run.`,
+    );
+
+    try {
+        const existing = await quizTimerQueue.getJob(jobId);
+        if (existing) await existing.remove();
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(`[quiz-timer] Could not remove stale job ${jobId}: ${msg}`);
+    }
+
+    await quizTimerQueue.add("quiz-timer", payload, {
+        jobId,
+        delay: earlyByMs,
+        removeOnComplete: true,
+        removeOnFail: { count: 100 },
+    });
+
+    return false;
+}
+
 async function handleContestStart(contestId: string, organizationId: string): Promise<void> {
     if (!quizService || !quizGateway || !prisma) {
         logger.error(
@@ -108,6 +165,33 @@ async function handleContestStart(contestId: string, organizationId: string): Pr
         );
         return;
     }
+
+    // 0. Validate against the contest's CURRENT schedule before starting anything.
+    //    Starting a contest early is unrecoverable for participants, so this check
+    //    must happen before the status flips to LIVE.
+    const scheduled = await prisma.contest.findUnique({
+        where: { id: contestId },
+        select: { startTime: true, status: true },
+    });
+
+    if (!scheduled) {
+        logger.warn(`[quiz-timer] CONTEST_START aborted — contest ${contestId} not found`);
+        return;
+    }
+
+    if (scheduled.status === "CANCELLED" || scheduled.status === "COMPLETED") {
+        logger.warn(
+            `[quiz-timer] CONTEST_START aborted — contest ${contestId} is ${scheduled.status}`,
+        );
+        return;
+    }
+
+    const due = await isDueOrReschedule(contestId, scheduled.startTime, `start-${contestId}`, {
+        contestId,
+        organizationId,
+        type: "CONTEST_START",
+    });
+    if (!due) return;
 
     // 1. Update contest status to LIVE
     await prisma.contest.update({
@@ -183,6 +267,31 @@ async function handleTimeWarning(contestId: string, secondsRemaining: number): P
 async function handleAutoSubmit(contestId: string, organizationId: string): Promise<void> {
     if (!quizService || !quizGateway) return;
 
+    // Same staleness guard as CONTEST_START — a leftover job from a pre-edit
+    // schedule would force-submit every active participant mid-quiz.
+    if (prisma) {
+        const scheduled = await prisma.contest.findUnique({
+            where: { id: contestId },
+            select: { endTime: true, status: true },
+        });
+
+        if (!scheduled) {
+            logger.warn(`[quiz-timer] AUTO_SUBMIT aborted — contest ${contestId} not found`);
+            return;
+        }
+        if (scheduled.status === "CANCELLED") {
+            logger.warn(`[quiz-timer] AUTO_SUBMIT aborted — contest ${contestId} is CANCELLED`);
+            return;
+        }
+
+        const due = await isDueOrReschedule(contestId, scheduled.endTime, `autosubmit-${contestId}`, {
+            contestId,
+            organizationId,
+            type: "AUTO_SUBMIT",
+        });
+        if (!due) return;
+    }
+
     const { submitted, errors } = await quizService.handleTimeExpiry(contestId);
 
     // Notify each submitted participant
@@ -205,21 +314,9 @@ async function handleAutoSubmit(contestId: string, organizationId: string): Prom
         `[quiz-timer] Auto-submit for contest ${contestId}: ${submitted.length} submitted, ${errors.length} errors`,
     );
 
-    // Enqueue MARK_ABSENT delayed job (delay of 10 minutes to allow workers to flush and persist submissions)
+    // Shared with the admin force-end path so the grace period cannot diverge.
     try {
-        await quizTimerQueue.add(
-            "mark-absent",
-            {
-                contestId,
-                organizationId,
-                type: "MARK_ABSENT",
-            },
-            {
-                jobId: `MARK_ABSENT-${contestId}`,
-                delay: 600000, // 10 minutes in ms
-            }
-        );
-        logger.info(`[quiz-timer] Enqueued MARK_ABSENT job for contest ${contestId} with 10-minute delay`);
+        await quizScheduler.scheduleMarkAbsent(contestId, organizationId);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(`[quiz-timer] Failed to enqueue MARK_ABSENT job for contest ${contestId}: ${msg}`);

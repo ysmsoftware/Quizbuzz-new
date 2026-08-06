@@ -11,10 +11,19 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
-async function publicGet<T>(path: string): Promise<{ success: true; data: T }> {
+async function publicGet<T>(
+  path: string,
+  opts?: { fresh?: boolean },
+): Promise<{ success: true; data: T }> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
-    next: { revalidate: 60 }, // Next.js ISR — re-fetch every 60s
+    // `fresh` bypasses the ISR cache entirely. Required for live-critical reads
+    // (waiting-room status polling, server clock sync) — a 60s-stale response
+    // would make a 3s poll interval meaningless and would hand back a stale
+    // `serverTime`, breaking clock-offset math.
+    ...(opts?.fresh
+      ? { cache: 'no-store' as const }
+      : { next: { revalidate: 60 } }), // Next.js ISR — re-fetch every 60s
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -49,9 +58,13 @@ class ContestService {
   /**
    * Fetch a single contest by slug — for the public detail page.
    */
-  async getContestBySlug(slug: string) {
+  /**
+   * @param opts.fresh — bypass the ISR cache. Pass `true` from the waiting room
+   * and any other place that needs live contest status or an accurate serverTime.
+   */
+  async getContestBySlug(slug: string, opts?: { fresh?: boolean }) {
     try {
-      const res = await publicGet<PublicContestDetail>(`/contests/public/${slug}`);
+      const res = await publicGet<PublicContestDetail>(`/contests/public/${slug}`, opts);
       return { success: true as const, data: res.data };
     } catch {
       return { success: false as const, data: undefined, error: 'Contest not found' };

@@ -21,11 +21,21 @@ import type { DetectionResult } from '@/lib/proctoring/types';
 interface CameraCheckWidgetProps {
   onProceed: () => void;
   onRetryCamera: () => void;
+  /**
+   * Whether to render the widget's own "Proceed to Quiz" CTA.
+   * Set to false when the host screen already has its own primary
+   * action button (e.g. system-check's "Enter waiting room"), so we
+   * don't show two competing forward buttons on the same screen.
+   * Defaults to true for hosts (like /join) that rely on this button
+   * as their only forward action for the camera step.
+   */
+  showProceedButton?: boolean;
 }
 
 export function CameraCheckWidget({
   onProceed,
   onRetryCamera,
+  showProceedButton = true,
 }: CameraCheckWidgetProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -194,15 +204,17 @@ export function CameraCheckWidget({
         />
       </div>
 
-      {/* Proceed */}
-      <Button
-        onClick={onProceed}
-        disabled={!allChecksPass}
-        className="w-full h-[52px] text-base font-semibold"
-        title={!allChecksPass ? 'Fix camera issues above before proceeding' : undefined}
-      >
-        {allChecksPass ? 'Proceed to Quiz' : 'Fix issues above to proceed'}
-      </Button>
+      {/* Proceed — only rendered when this widget owns the forward action */}
+      {showProceedButton && (
+        <Button
+          onClick={onProceed}
+          disabled={!allChecksPass}
+          className="w-full h-[52px] text-base font-semibold"
+          title={!allChecksPass ? 'Fix camera issues above before proceeding' : undefined}
+        >
+          {allChecksPass ? 'Proceed to Quiz' : 'Fix issues above to proceed'}
+        </Button>
+      )}
     </div>
   );
 }

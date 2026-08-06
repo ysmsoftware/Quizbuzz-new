@@ -134,7 +134,7 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
 
     requestCameraPermission: async () => {
       const { videoStream, cameraStatus } = get();
-      
+
       // If already active, return true immediately (do NOT call getUserMedia again)
       if (cameraStatus === 'active' && videoStream) {
         return true;

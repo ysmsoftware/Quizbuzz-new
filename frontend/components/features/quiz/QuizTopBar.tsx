@@ -26,19 +26,14 @@ export function QuizTopBar({ contestTitle, onSubmitClick }: QuizTopBarProps) {
     <>
       {/* ─── Desktop Top Bar ──────────────────────── */}
       <header
-        className="hidden sm:flex h-[56px] items-center justify-between px-4 shrink-0 border-b z-40"
-        style={{
-          background: 'rgba(15,32,64,0.95)',
-          backdropFilter: 'blur(8px)',
-          borderColor: 'rgba(255,255,255,0.08)',
-        }}
+        className="hidden sm:flex h-[56px] items-center justify-between px-4 shrink-0 border-b z-40 bg-card/95 backdrop-blur-md border-border"
       >
         {/* Left: Title + Question badge */}
         <div className="flex items-center gap-3">
-          <span className="text-white text-sm font-medium truncate max-w-[200px] lg:max-w-[280px]">
+          <span className="text-foreground text-sm font-medium truncate max-w-[200px] lg:max-w-[280px]">
             {contestTitle}
           </span>
-          <span className="bg-white/10 text-white/70 text-[10px] rounded-full px-2 py-0.5 font-mono">
+          <span className="bg-muted text-muted-foreground text-[10px] rounded-full px-2 py-0.5 font-mono">
             Q {currentIndex + 1} / {totalQuestions}
           </span>
         </div>
@@ -52,10 +47,10 @@ export function QuizTopBar({ contestTitle, onSubmitClick }: QuizTopBarProps) {
         <div className="flex items-center gap-3">
           <ProctoringStatusChip />
 
-          <Button 
-            onClick={onSubmitClick} 
-            size="sm" 
-            className="bg-orange-500 hover:bg-orange-600 text-white text-xs h-9 rounded-lg px-6 font-semibold shadow-lg shadow-orange-500/20"
+          <Button
+            onClick={onSubmitClick}
+            size="sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9 rounded-lg px-6 font-semibold shadow-lg shadow-primary/20"
           >
             Submit Quiz
           </Button>
@@ -63,20 +58,20 @@ export function QuizTopBar({ contestTitle, onSubmitClick }: QuizTopBarProps) {
       </header>
 
       {/* ─── Mobile Top Bar ───────────────────────── */}
-      <header className="sm:hidden shrink-0 z-40" style={{ background: 'rgba(15,32,64,0.95)' }}>
+      <header className="sm:hidden shrink-0 z-40 bg-card/95 backdrop-blur-md">
         <div className="h-[44px] flex items-center justify-between px-3">
-          <span className="text-white/70 text-sm font-mono">
+          <span className="text-muted-foreground text-sm font-mono">
             Q{currentIndex + 1}/{totalQuestions}
           </span>
           <QuizCountdownDisplay timeRemaining={timeRemaining} />
-          <button type="button" onClick={onSubmitClick} className="text-white p-1">
+          <button type="button" onClick={onSubmitClick} className="text-foreground p-1">
             <CheckSquare className="w-5 h-5" />
           </button>
         </div>
         {/* Progress bar */}
-        <div className="h-0.5 w-full bg-white/10">
+        <div className="h-0.5 w-full bg-border/40">
           <div
-            className="h-full bg-orange-500 transition-all duration-300 ease-out"
+            className="h-full bg-primary transition-all duration-300 ease-out"
             style={{ width: `${totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0}%` }}
           />
         </div>

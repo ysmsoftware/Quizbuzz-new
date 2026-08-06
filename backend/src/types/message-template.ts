@@ -31,7 +31,10 @@ export type TemplateParamsMap = {
         eventName: string,
         date: string,
         time: string,
+        /** Participant-specific join link for the quiz (/quiz/{slug}/join), not the generic contest info page. */
         link: string,
+        /** Optional — shown alongside the join link when the join code is already known. */
+        joinCode?: string,
     },
     [MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE]: {
         name: string,
@@ -83,6 +86,24 @@ export type TemplateParamsMap = {
         name: string,
         eventName: string,
         link: string,
+    },
+    [MessageTemplate.CONTEST_RESCHEDULED]: {
+        name: string,
+        eventName: string,
+        /** New start date/time — bulk-notify derives these from the updated contest. */
+        date: string,
+        time: string,
+        /** Where the contest was scheduled before the change. */
+        previousDate: string,
+        reason: string,
+        link: string,
+    },
+    [MessageTemplate.CONTEST_CANCELLED]: {
+        name: string,
+        eventName: string,
+        date: string,
+        time: string,
+        reason: string,
     },
     [MessageTemplate.CUSTOM]: {
         name: string,

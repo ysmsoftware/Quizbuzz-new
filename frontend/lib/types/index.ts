@@ -452,6 +452,9 @@ export interface ServerContest {
     joinCode: string | null;
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
+    /** Real column on Contest (defaults true) — was missing here, so the client mapper
+     *  hardcoded `false` and every admin screen showed the wrong proctoring state. */
+    proctoringEnabled?: boolean;
     showResultsAfter: number;
     bannerImage?: string | null;
     prizes?: Array<{

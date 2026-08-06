@@ -878,10 +878,10 @@ export default function QuestionBankModal({
                                                                     <div
                                                                         style={{ width: `${r.percentage}%` }}
                                                                         className={cn("h-full transition-all duration-150 cursor-help",
-                                                                            i === 0 ? "bg-primary" :
-                                                                                i === 1 ? "bg-violet-500" :
-                                                                                    i === 2 ? "bg-indigo-500" :
-                                                                                        i === 3 ? "bg-fuchsia-500" : "bg-teal-500"
+                                                                            i === 0 ? "bg-chart-1" :
+                                                                                i === 1 ? "bg-chart-2" :
+                                                                                    i === 2 ? "bg-chart-3" :
+                                                                                        i === 3 ? "bg-chart-4" : "bg-chart-5"
                                                                         )}
                                                                     />
                                                                 </TooltipTrigger>
@@ -897,10 +897,10 @@ export default function QuestionBankModal({
                                                     {rules.map((r, i) => (
                                                         <div key={i} className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground">
                                                             <div className={cn("h-1.5 w-1.5 rounded-full",
-                                                                i === 0 ? "bg-primary" :
-                                                                    i === 1 ? "bg-violet-500" :
-                                                                        i === 2 ? "bg-indigo-500" :
-                                                                            i === 3 ? "bg-fuchsia-500" : "bg-teal-500"
+                                                                i === 0 ? "bg-chart-1" :
+                                                                    i === 1 ? "bg-chart-2" :
+                                                                        i === 2 ? "bg-chart-3" :
+                                                                            i === 3 ? "bg-chart-4" : "bg-chart-5"
                                                             )} />
                                                             Rule {i + 1} ({r.percentage}%)
                                                         </div>
@@ -911,8 +911,8 @@ export default function QuestionBankModal({
                                             {/* Validation feedback block */}
                                             <div className="space-y-1.5 pt-0.5">
                                                 {isRulePercentageValid ? (
-                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-green-500/20 bg-green-500/5 text-green-700 text-[11px] items-start">
-                                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-600" />
+                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-success/20 bg-success/5 text-success text-[11px] items-start">
+                                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-success" />
                                                         <div>
                                                             <p className="font-bold">Allocations Balanced</p>
                                                             <p className="opacity-90 mt-0.5 font-semibold">Pool rules sum up to exactly 100%.</p>
@@ -961,10 +961,10 @@ export default function QuestionBankModal({
                                                         <div className="flex items-center justify-between border-b pb-1.5">
                                                             <div className="flex items-center gap-2">
                                                                 <div className={cn("h-5 w-5 rounded-full font-bold text-[10px] flex items-center justify-center text-white",
-                                                                    idx === 0 ? "bg-primary" :
-                                                                        idx === 1 ? "bg-violet-500" :
-                                                                            idx === 2 ? "bg-indigo-500" :
-                                                                                idx === 3 ? "bg-fuchsia-500" : "bg-teal-500"
+                                                                    idx === 0 ? "bg-chart-1" :
+                                                                        idx === 1 ? "bg-chart-2" :
+                                                                            idx === 2 ? "bg-chart-3" :
+                                                                                idx === 3 ? "bg-chart-4" : "bg-chart-5"
                                                                 )}>
                                                                     {idx + 1}
                                                                 </div>
@@ -1129,7 +1129,7 @@ export default function QuestionBankModal({
                             disabled={!isAutoFormValid || isAssigning}
                             className={cn(
                                 "px-5 h-9 font-bold relative overflow-hidden group shadow-md transition-all active:scale-95",
-                                isAutoFormValid ? "bg-gradient-to-r from-primary to-violet-600 hover:from-primary/90 hover:to-violet-600/90 text-white" : ""
+                                isAutoFormValid ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""
                             )}
                         >
                             {isAssigning ? (

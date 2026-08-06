@@ -16,7 +16,7 @@ export default function TemplatesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const { templates, loading } = useMessageTemplates('org-1');
+  const { templates, loading } = useMessageTemplates();
 
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -36,7 +36,7 @@ export default function TemplatesPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Message Templates</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Message Templates</h1>
           <p className="text-muted-foreground mt-1">
             System defined templates for transactional notifications, emails and WhatsApp alerts.
           </p>
@@ -62,7 +62,7 @@ export default function TemplatesPage() {
               placeholder="Search by template name, ID or subject..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-11 rounded-xl border-slate-200 focus-visible:ring-indigo-500 bg-white"
+              className="pl-10 h-11 rounded-xl border-slate-200 focus-visible:ring-primary bg-white"
             />
           </div>
         </CardContent>
@@ -71,7 +71,7 @@ export default function TemplatesPage() {
       {/* Templates Grid */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <p className="text-sm text-slate-500 animate-pulse">Loading templates from backend...</p>
         </div>
       ) : filteredTemplates.length > 0 ? (
@@ -79,12 +79,12 @@ export default function TemplatesPage() {
           {filteredTemplates.map((template) => (
             <Card 
               key={template.id} 
-              className="border-slate-100 hover:border-indigo-100 hover:shadow-md transition-all duration-300 rounded-2xl group flex flex-col justify-between bg-white"
+              className="border-slate-100 hover:border-primary/20 hover:shadow-md transition-all duration-300 rounded-2xl group flex flex-col justify-between bg-white"
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1 min-w-0">
-                    <CardTitle className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                    <CardTitle className="text-lg font-bold text-slate-900 group-hover:text-primary transition-colors truncate">
                       {template.name}
                     </CardTitle>
                     <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md w-fit">
@@ -142,7 +142,7 @@ export default function TemplatesPage() {
                       {template.variables.map((variable) => (
                         <span 
                           key={variable} 
-                          className="text-[10px] font-semibold font-mono bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full transition-colors"
+                          className="text-[10px] font-semibold font-mono bg-primary/5 hover:bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded-full transition-colors"
                         >
                           {`{{${variable}}}`}
                         </span>

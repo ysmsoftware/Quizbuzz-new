@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -51,6 +51,14 @@ export default function WaitingRoomPage() {
     const [contest, setContest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
+    // Server-clock offset (serverNow - clientNow), in ms. The contest starts on the
+    // SERVER's schedule, so every countdown here is computed against server time.
+    // Without this, a browser clock running even a minute fast/slow shows a
+    // countdown that disagrees with reality — the classic symptom being the
+    // participant getting pushed into the quiz while the timer still reads > 0.
+    const [clockOffsetMs, setClockOffsetMs] = useState(0);
+    const serverNow = useCallback(() => Date.now() + clockOffsetMs, [clockOffsetMs]);
+
     // Countdown
     const [timeToStart, setTimeToStart] = useState<TimeDiff>({ d: 0, h: 0, m: 0, s: 0 });
     const [showAllRules, setShowAllRules] = useState(false);
@@ -64,6 +72,8 @@ export default function WaitingRoomPage() {
         clearBroadcast,
         showStartingOverlay,
         contestStartTime,
+        rescheduledServerTime,
+        cancellation,
     } = useWaitingRoomSocket(
         contestId || contest?.id || '',
         participantId,
@@ -86,14 +96,36 @@ export default function WaitingRoomPage() {
     // ─── Load contest ───────────────────────────────
     useEffect(() => {
         const load = async () => {
-            const res = await contestService.getContestBySlug(slug);
+            // `fresh` — must bypass ISR here: a cached response would carry a stale
+            // serverTime (up to 60s off) and defeat the whole point of the offset.
+            const requestedAt = Date.now();
+            const res = await contestService.getContestBySlug(slug, { fresh: true });
             if (res.success && res.data) {
                 setContest(res.data);
+
+                if (res.data.serverTime) {
+                    const serverMs = new Date(res.data.serverTime).getTime();
+                    if (!Number.isNaN(serverMs)) {
+                        // Compensate for round-trip: assume the server generated the
+                        // timestamp roughly halfway through the request.
+                        const rtt = Date.now() - requestedAt;
+                        setClockOffsetMs(serverMs + rtt / 2 - Date.now());
+                    }
+                }
             }
             setLoading(false);
         };
         load();
     }, [slug, contestId]);
+
+    // ─── Re-anchor the clock when a reschedule arrives mid-wait ───────────────
+    useEffect(() => {
+        if (!rescheduledServerTime) return;
+        const serverMs = new Date(rescheduledServerTime).getTime();
+        if (!Number.isNaN(serverMs)) {
+            setClockOffsetMs(serverMs - Date.now());
+        }
+    }, [rescheduledServerTime]);
 
     // ─── Redirect to play, submitted, or disqualified screen based on status ───
     useEffect(() => {
@@ -149,10 +181,12 @@ export default function WaitingRoomPage() {
 
         const startPolling = () => {
             if (pollInterval || redirected) return;
-            // Poll every 3s — if WS missed quiz:v1:start, redirect via REST fallback
+            // Poll every 3s — if WS missed quiz:v1:start, redirect via REST fallback.
+            // `fresh` is required: the default ISR cache holds responses for 60s, which
+            // would make this 3s poll return the same stale status over and over.
             pollInterval = setInterval(async () => {
                 try {
-                    const res = await contestService.getContestBySlug(slug);
+                    const res = await contestService.getContestBySlug(slug, { fresh: true });
                     if (res.success && res.data?.status === 'LIVE' && !redirected) {
                         redirected = true;
                         clearInterval(pollInterval!);
@@ -165,7 +199,7 @@ export default function WaitingRoomPage() {
         };
 
         const tick = () => {
-            const diffMs = target.getTime() - Date.now();
+            const diffMs = target.getTime() - serverNow();
             if (diffMs <= 0) {
                 setTimeToStart({ d: 0, h: 0, m: 0, s: 0 });
                 // Timer hit zero but WS hasn't pushed quiz:v1:start yet — start polling
@@ -186,7 +220,7 @@ export default function WaitingRoomPage() {
             clearInterval(id);
             if (pollInterval) clearInterval(pollInterval);
         };
-    }, [loading, contest, contestStartTime, slug, router]);
+    }, [loading, contest, contestStartTime, slug, router, serverNow]);
 
     // ─── Mask identifier ────────────────────────────
     const maskedContact = useMemo(() => {
@@ -208,28 +242,59 @@ export default function WaitingRoomPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#0A0F1D] text-slate-100">
+            <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="w-10 h-10 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
-                    <span className="text-sm font-medium text-slate-400 animate-pulse">Entering Waiting Room...</span>
+                    <div className="w-10 h-10 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    <span className="text-sm font-medium text-muted-foreground animate-pulse">Entering Waiting Room...</span>
+                </div>
+            </div>
+        );
+    }
+
+    // Contest called off while this participant was waiting. Terminal — replaces the
+    // room entirely rather than leaving a countdown ticking toward nothing.
+    if (cancellation) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-4">
+                <div className="max-w-md w-full text-center space-y-6">
+                    <div className="w-20 h-20 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center mx-auto">
+                        <AlertTriangle className="w-10 h-10 text-destructive" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold">Contest Cancelled</h1>
+                        <p className="text-muted-foreground text-sm leading-relaxed">
+                            {contest?.title ? `“${contest.title}” has been cancelled by the organiser.` : "This contest has been cancelled by the organiser."}
+                        </p>
+                    </div>
+                    <div className="bg-muted/40 border border-border rounded-2xl p-4 text-left">
+                        <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Reason</p>
+                        <p className="text-sm text-foreground">{cancellation.reason}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => router.push("/contests")}
+                        className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-colors"
+                    >
+                        Browse other contests
+                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#0A0F1D] text-slate-100 relative overflow-hidden flex flex-col justify-start">
+        <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col justify-start">
             {/* Ambient background glows */}
-            <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-600/10 blur-[130px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-violet-600/10 blur-[130px] pointer-events-none" />
+            <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-primary/10 blur-[130px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[130px] pointer-events-none" />
 
             {/* ─── Top Bar ──────────────────────────────── */}
-            <header className="fixed top-0 left-0 right-0 z-40 h-[56px] flex items-center justify-between px-4 sm:px-6 bg-slate-900/40 border-b border-slate-800/80 backdrop-blur-md">
+            <header className="fixed top-0 left-0 right-0 z-40 h-[56px] flex items-center justify-between px-4 sm:px-6 bg-card/40 border-b border-border/80 backdrop-blur-md">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                        <Shield className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                        <Shield className="w-4 h-4 text-primary-foreground" />
                     </div>
-                    <span className="text-sm font-bold text-white tracking-tight">QuizBuzz</span>
+                    <span className="text-sm font-bold text-foreground tracking-tight">QuizBuzz</span>
                 </div>
                 <WSConnectionStatus 
                     status={
@@ -258,24 +323,23 @@ export default function WaitingRoomPage() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center"
-                        style={{ background: "radial-gradient(circle at center, rgba(15, 23, 42, 0.98) 0%, rgba(10, 15, 29, 0.99) 100%)", backdropFilter: "blur(16px)" }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-2xl"
                     >
                         <div className="text-center space-y-8 max-w-md px-6">
                             <motion.div
                                 initial={{ scale: 0.5, rotate: -10 }}
                                 animate={{ scale: 1, rotate: 0 }}
                                 transition={{ type: "spring", damping: 15 }}
-                                className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center mx-auto shadow-2xl shadow-orange-500/30 border border-orange-400/30"
+                                className="w-20 h-20 rounded-3xl bg-warning flex items-center justify-center mx-auto shadow-2xl shadow-warning/30 border border-warning/30"
                             >
-                                <Play className="w-8 h-8 text-white ml-1" fill="white" />
+                                <Play className="w-8 h-8 text-warning-foreground ml-1" fill="currentColor" />
                             </motion.div>
-                            
+
                             <div className="space-y-3">
-                                <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-200 tracking-tight uppercase">
+                                <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/70 tracking-tight uppercase">
                                     Contest is Starting!
                                </h2>
-                               <p className="text-slate-400 text-sm font-medium">
+                               <p className="text-muted-foreground text-sm font-medium">
                                    Please do not close or refresh this tab.
                                </p>
                             </div>
@@ -289,7 +353,7 @@ export default function WaitingRoomPage() {
                                             animate={{ opacity: 1, scale: 1, rotate: 0 }}
                                             exit={{ opacity: 0, scale: 1.5, rotate: 15 }}
                                             transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                                            className="text-8xl sm:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-400 to-orange-600 font-mono drop-shadow-[0_10px_20px_rgba(245,158,11,0.2)]"
+                                            className="text-8xl sm:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-warning to-warning/70 font-mono"
                                         >
                                             {startCountdown > 0 ? startCountdown : "GO!"}
                                         </motion.div>
@@ -297,7 +361,7 @@ export default function WaitingRoomPage() {
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider animate-pulse">
+                            <div className="flex items-center justify-center gap-2 text-primary text-xs font-semibold uppercase tracking-wider animate-pulse">
                                 <Sparkles className="w-4 h-4" />
                                 <span>Initializing Secure Environment...</span>
                             </div>
@@ -309,41 +373,41 @@ export default function WaitingRoomPage() {
             {/* ─── Main Content ─────────────────────────── */}
             <WidgetErrorBoundary name="Waiting Room Details">
                 <main className="flex flex-col items-center pt-24 sm:pt-32 pb-24 px-4 w-full max-w-4xl mx-auto z-10">
-                    <div className="px-4 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-6 flex items-center gap-2 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                    <div className="px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-6 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                         Waiting Room
                     </div>
 
-                    <h1 className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-200 text-center max-w-2xl leading-tight mb-2 tracking-tight">
+                    <h1 className="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/70 text-center max-w-2xl leading-tight mb-2 tracking-tight">
                         {contest?.title || "Quiz"}
                     </h1>
 
-                    <p className="text-slate-400 text-sm mb-8 font-medium">Contest begins in</p>
+                    <p className="text-muted-foreground text-sm mb-8 font-medium">Contest begins in</p>
 
                     <CountdownDisplay time={timeToStart} />
 
-                    <div className="mt-8 flex items-center gap-2.5 bg-slate-900/60 border border-slate-800/80 px-4 py-2 rounded-full shadow-[0_2px_15px_rgba(0,0,0,0.1)] relative">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping absolute left-4" />
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <div className="mt-8 flex items-center gap-2.5 bg-card/60 border border-border/80 px-4 py-2 rounded-full shadow-sm relative">
+                        <div className="w-2 h-2 rounded-full bg-success animate-ping absolute left-4" />
+                        <div className="w-2 h-2 rounded-full bg-success" />
                         <motion.span
                             key={participantCount}
                             initial={{ opacity: 0.5, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-sm font-medium text-slate-300"
+                            className="text-sm font-medium text-foreground"
                         >
-                            <strong className="text-emerald-400 font-semibold">{participantCount.toLocaleString()}</strong> participants in the waiting room
+                            <strong className="text-success font-semibold">{participantCount.toLocaleString()}</strong> participants in the waiting room
                         </motion.span>
                     </div>
 
                     <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
                         {/* Verified Details */}
-                        <div className="backdrop-blur-xl bg-slate-900/40 border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(99,102,241,0.05)] rounded-2xl p-6 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/50 via-emerald-400/20 to-transparent" />
+                        <div className="backdrop-blur-xl bg-card/40 border border-border/80 rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-success/50 via-success/20 to-transparent" />
                             <div className="flex items-center gap-2.5 mb-5">
-                                <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <div className="p-1.5 rounded-lg bg-success/10 border border-success/20">
+                                    <CheckCircle2 className="w-4 h-4 text-success" />
                                 </div>
-                                <span className="text-sm font-bold text-slate-200 uppercase tracking-wider">Verification Details</span>
+                                <span className="text-sm font-bold text-foreground uppercase tracking-wider">Verification Details</span>
                             </div>
                             <div className="space-y-4">
                                 <InfoField label="Participant ID" value={participantId || "—"} mono />
@@ -353,24 +417,24 @@ export default function WaitingRoomPage() {
                         </div>
 
                         {/* What to Expect / Rules */}
-                        <div className="backdrop-blur-xl bg-slate-900/40 border border-slate-800/80 shadow-[0_0_60px_-15px_rgba(99,102,241,0.05)] rounded-2xl p-6 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500/50 via-indigo-400/20 to-transparent" />
+                        <div className="backdrop-blur-xl bg-card/40 border border-border/80 rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/50 via-primary/20 to-transparent" />
                             <div className="flex items-center gap-2.5 mb-5">
-                                <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                                    <Clock className="w-4 h-4 text-indigo-400" />
+                                <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                                    <Clock className="w-4 h-4 text-primary" />
                                 </div>
-                                <span className="text-sm font-bold text-slate-200 uppercase tracking-wider">What to Expect</span>
+                                <span className="text-sm font-bold text-foreground uppercase tracking-wider">What to Expect</span>
                             </div>
                             <div className="space-y-4">
                                 <InfoField label="Questions" value={`${contest?.totalQuestions || "—"} questions`} />
                                 <InfoField label="Total Marks" value={`${contest?.totalMarks || "—"} marks`} />
                             </div>
 
-                            <div className="mt-5 pt-4 border-t border-slate-800/80">
-                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Rules & Guidelines</p>
+                            <div className="mt-5 pt-4 border-t border-border/80">
+                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-2">Rules & Guidelines</p>
                                 <div className="space-y-2">
-                                    <div className="flex gap-2 text-sm text-slate-300">
-                                        <span className="text-indigo-400 font-bold">•</span>
+                                    <div className="flex gap-2 text-sm text-foreground/90">
+                                        <span className="text-primary font-bold">•</span>
                                         <span>{rules[0]}</span>
                                     </div>
                                     {rules.length > 1 && (
@@ -384,8 +448,8 @@ export default function WaitingRoomPage() {
                                                         className="overflow-hidden space-y-2"
                                                     >
                                                         {rules.slice(1).map((rule: string, i: number) => (
-                                                             <div key={i} className="flex gap-2 text-sm text-slate-300">
-                                                                 <span className="text-indigo-400 font-bold">•</span>
+                                                             <div key={i} className="flex gap-2 text-sm text-foreground/90">
+                                                                 <span className="text-primary font-bold">•</span>
                                                                  <span>{rule}</span>
                                                              </div>
                                                          ))}
@@ -395,7 +459,7 @@ export default function WaitingRoomPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setShowAllRules(!showAllRules)}
-                                                className="flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 mt-3 transition-colors"
+                                                className="flex items-center gap-1 text-xs font-bold text-primary hover:text-primary/80 mt-3 transition-colors"
                                             >
                                                 {showAllRules ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                                 {showAllRules ? "Show less" : `View all ${rules.length} rules`}
@@ -425,26 +489,26 @@ function CountdownDisplay({ time }: { time: TimeDiff }) {
             {units.map((unit, i) => (
                 <div key={unit.label} className="flex items-center gap-3 sm:gap-4">
                     <div className="flex flex-col items-center">
-                        <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center border border-slate-800/80 bg-slate-900/50 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+                        <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center border border-border/80 bg-card/50 backdrop-blur-md shadow-sm relative overflow-hidden group">
                             {/* Inner soft glow */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-50 pointer-events-none" />
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50 pointer-events-none" />
                             <motion.span
                                 key={`${unit.label}-${unit.value}`}
                                 initial={{ y: 8, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                className="text-2xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 font-mono tracking-tight"
+                                className="text-2xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/70 font-mono tracking-tight"
                             >
                                 {String(unit.value).padStart(2, "0")}
                             </motion.span>
                         </div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-2.5 font-bold">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-2.5 font-bold">
                             {unit.label}
                         </span>
                     </div>
 
                     {i < units.length - 1 && (
-                        <div className="text-slate-700 text-xl sm:text-3xl font-extrabold self-start mt-6 sm:mt-10 animate-pulse">:</div>
+                        <div className="text-muted-foreground/40 text-xl sm:text-3xl font-extrabold self-start mt-6 sm:mt-10 animate-pulse">:</div>
                     )}
                 </div>
             ))}
@@ -473,21 +537,21 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
     }, [onDismiss]);
 
     const bgMap = {
-        info: "rgba(30,41,59,0.95)",
-        warning: "rgba(120,53,4,0.95)",
-        urgent: "rgba(153,27,27,0.95)",
+        info: "bg-card/95",
+        warning: "bg-warning/15",
+        urgent: "bg-destructive/15",
     };
 
     const borderMap = {
-        info: "border-blue-500/30 text-blue-400",
-        warning: "border-amber-500/30 text-amber-400",
-        urgent: "border-red-500/30 text-red-400",
+        info: "border-primary/30 text-primary",
+        warning: "border-warning/40 text-warning",
+        urgent: "border-destructive/40 text-destructive",
     };
 
     const progressBarMap = {
-        info: "bg-blue-500",
-        warning: "bg-amber-500",
-        urgent: "bg-red-500",
+        info: "bg-primary",
+        warning: "bg-warning",
+        urgent: "bg-destructive",
     };
 
     const iconMap = {
@@ -506,16 +570,15 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
             className="fixed top-[56px] left-0 right-0 z-50 px-4 mt-2 max-w-2xl mx-auto"
         >
             <div
-                className={`backdrop-blur-md rounded-xl border p-3 flex items-center gap-3 shadow-lg ${borderMap[message.type]}`}
-                style={{ background: bgMap[message.type] }}
+                className={`backdrop-blur-md rounded-xl border p-3 flex items-center gap-3 shadow-lg ${bgMap[message.type]} ${borderMap[message.type]}`}
             >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm text-slate-100 flex-1">{message.text}</span>
-                <button type="button" onClick={onDismiss} className="text-white/60 hover:text-white transition-colors">
+                <span className="text-sm text-foreground flex-1">{message.text}</span>
+                <button type="button" onClick={onDismiss} className="text-muted-foreground hover:text-foreground transition-colors">
                     <X className="w-4 h-4" />
                 </button>
             </div>
-            <div className="h-[3px] rounded-b-xl overflow-hidden mt-[-3px] mx-[1px]" style={{ background: "rgba(255,255,255,0.05)" }}>
+            <div className="h-[3px] rounded-b-xl overflow-hidden mt-[-3px] mx-[1px] bg-border/20">
                 <div className={`h-full transition-all duration-100 ${progressBarMap[message.type]}`} style={{ width: `${progress}%` }} />
             </div>
         </motion.div>
@@ -524,9 +587,9 @@ function BroadcastBanner({ message, onDismiss }: { message: BroadcastMessage; on
 
 function InfoField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
     return (
-        <div className="bg-slate-950/30 border border-slate-800/40 rounded-xl p-3">
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1">{label}</p>
-            <p className={`text-sm text-slate-200 font-medium ${mono ? "font-mono text-xs break-all" : ""}`}>{value}</p>
+        <div className="bg-muted/30 border border-border/40 rounded-xl p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">{label}</p>
+            <p className={`text-sm text-foreground font-medium ${mono ? "font-mono text-xs break-all" : ""}`}>{value}</p>
         </div>
     );
 }

@@ -17,6 +17,8 @@ export enum MessageTemplate {
     // Contest lifecycle
     DISQUALIFICATION_NOTICE  = "DISQUALIFICATION_NOTICE",
     RESULTS_PUBLISHED        = "RESULTS_PUBLISHED",
+    CONTEST_RESCHEDULED      = "CONTEST_RESCHEDULED",
+    CONTEST_CANCELLED        = "CONTEST_CANCELLED",
 
     CUSTOM                   = "CUSTOM",
 }
@@ -48,4 +50,6 @@ export const EVENT_REQUIRED_TEMPLATES = new Set<MessageTemplate>([
     MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE,
     MessageTemplate.DISQUALIFICATION_NOTICE,
     MessageTemplate.RESULTS_PUBLISHED,
+    MessageTemplate.CONTEST_RESCHEDULED,
+    MessageTemplate.CONTEST_CANCELLED,
 ]);

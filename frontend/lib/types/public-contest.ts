@@ -68,6 +68,16 @@ export interface PublicContestDetail extends PublicContestSummary {
     name: string;
     logoUrl: string | null;
   };
+  /** Same value as _count.questions, exposed under the name the pre-quiz flow reads. */
+  totalQuestions: number;
+  /** Sum of ContestQuestion.marks across all questions assigned to this contest. */
+  totalMarks: number;
+  /**
+   * Server clock (ISO) at response time. Clients should anchor countdowns to this
+   * rather than to their own clock, since the quiz starts on the server's schedule.
+   * Only meaningful on an uncached read — see getContestBySlug({ fresh: true }).
+   */
+  serverTime: string;
 }
 
 /**

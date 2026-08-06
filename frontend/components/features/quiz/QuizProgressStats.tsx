@@ -14,11 +14,11 @@ export function QuizProgressStats() {
 
   return (
     <div className="flex items-center gap-0 text-xs">
-      <StatChip label="Answered" value={answered} valueClass="text-green-400" />
+      <StatChip label="Answered" value={answered} valueClass="text-success" />
       <Separator />
-      <StatChip label="Flagged" value={flaggedCount} valueClass="text-amber-400" />
+      <StatChip label="Flagged" value={flaggedCount} valueClass="text-warning" />
       <Separator />
-      <StatChip label="Remaining" value={remaining} valueClass="text-white/80" />
+      <StatChip label="Remaining" value={remaining} valueClass="text-foreground/80" />
     </div>
   );
 }
@@ -33,7 +33,7 @@ function StatChip({
   valueClass: string;
 }) {
   return (
-    <span className="text-white/50 px-2">
+    <span className="text-muted-foreground px-2">
       {label}:{' '}
       <span className={`font-semibold ${valueClass}`}>{value}</span>
     </span>
@@ -41,5 +41,5 @@ function StatChip({
 }
 
 function Separator() {
-  return <span className="text-white/15">|</span>;
+  return <span className="text-border">|</span>;
 }

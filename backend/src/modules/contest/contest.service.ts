@@ -10,6 +10,10 @@ import {
     CreateContestInput,
     UpdateContestInput,
     RegisterParticipantInput,
+    RescheduleContestInput,
+    CancelContestInput,
+    ForceEndContestInput,
+    TIMING_FIELDS,
 } from "./contest.validator";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../error/http-errors";
 import { createSlug } from "../../utils/slug";
@@ -27,6 +31,29 @@ import logger from "../../config/logger";
 import { IParticipantRepository } from "../participant/participant.repository";
 import { IPaymentRepository } from "../payment/payment.repository";
 
+/**
+ * The slice of the socket gateway this service depends on — announcing lifecycle
+ * changes to participants already connected to a contest room.
+ *
+ * Declared as its own port rather than taking QuizGateway directly: the gateway
+ * depends on QuizService, so a direct dependency would create an import cycle, and
+ * ContestService has no business knowing about sockets, rooms or namespaces.
+ * Bound in container.ts via setBroadcaster(), mirroring injectTimerWorkerDeps().
+ */
+export interface IContestBroadcaster {
+    emitContestRescheduled(contestId: string, payload: { startTime: string; endTime: string; reason?: string }): void;
+    emitContestCancelled(contestId: string, payload: { reason: string }): void;
+}
+
+/**
+ * The slice of quiz runtime + gateway behaviour force-end needs. Same reasoning as
+ * IContestBroadcaster — force-end reuses the AUTO_SUBMIT path rather than
+ * reimplementing submission logic.
+ */
+export interface IContestQuizTerminator {
+    handleTimeExpiry(contestId: string): Promise<{ submitted: string[]; errors: Array<{ participantId: string; error: string }> }>;
+    emitAutoSubmit(participantId: string, contestId: string, reason: string): Promise<void>;
+}
 
 export class ContestService {
     constructor(
@@ -41,6 +68,18 @@ export class ContestService {
         private readonly participantRepo?: IParticipantRepository,
         private readonly paymentRepo?: IPaymentRepository,
     ) { }
+
+    // ─── Late-bound collaborators (see IContestBroadcaster) ───────────────────
+    private broadcaster?: IContestBroadcaster;
+    private quizTerminator?: IContestQuizTerminator;
+
+    setBroadcaster(broadcaster: IContestBroadcaster): void {
+        this.broadcaster = broadcaster;
+    }
+
+    setQuizTerminator(terminator: IContestQuizTerminator): void {
+        this.quizTerminator = terminator;
+    }
 
     // ─── Contest CRUD ─────────────────────────────────────────────────────────
 
@@ -154,11 +193,22 @@ export class ContestService {
         if (!contest) {
             throw new NotFoundError("Contest not found or not publicly available");
         }
-        // Strip joinCode for security — never expose to public
-        const { joinCode, ...safeContest } = contest as any;
+        // Strip joinCode (security) and the raw per-question `questions` array
+        // (internal join rows — clients only need the aggregated totals below).
+        const { joinCode, questions, ...safeContest } = contest as any;
+        const totalMarks = Array.isArray(questions)
+            ? questions.reduce((sum: number, q: { marks: number }) => sum + (q.marks ?? 0), 0)
+            : 0;
         return {
             ...safeContest,
             joinCodeRequired: !!joinCode,
+            totalQuestions: safeContest._count?.questions ?? 0,
+            totalMarks,
+            // Server's clock at the moment this payload was built. The waiting room
+            // anchors its countdown to this instead of the browser clock — the quiz
+            // actually starts on the SERVER's schedule, so a client whose clock drifts
+            // would otherwise still show "1 min to go" while being pushed into the quiz.
+            serverTime: new Date().toISOString(),
         };
     }
 
@@ -169,6 +219,20 @@ export class ContestService {
         const editableStatuses: ContestStatus[] = [ContestStatus.DRAFT, ContestStatus.PUBLISHED, ContestStatus.REGISTRATION_CLOSED];
         if (!editableStatuses.includes(contest.status)) {
             throw new BadRequestError("Contest can only be edited while in DRAFT, PUBLISHED, or REGISTRATION_CLOSED status");
+        }
+
+        // Timing changes on a published contest must go through rescheduleContest():
+        // it applies the whole new schedule atomically and notifies registrants.
+        // Allowing them here would let a timing change slip through unnotified, and
+        // one-field-at-a-time PATCHes re-run the cancel/reschedule cycle per request.
+        if (contest.status !== ContestStatus.DRAFT) {
+            const attemptedTimingFields = TIMING_FIELDS.filter((f) => (dto as Record<string, unknown>)[f] !== undefined);
+            if (attemptedTimingFields.length > 0) {
+                throw new BadRequestError(
+                    `Cannot change ${attemptedTimingFields.join(", ")} on a ${contest.status} contest. ` +
+                    `Use POST /contests/${contestId}/reschedule so participants are notified.`,
+                );
+            }
         }
 
         // Once registration has been manually closed, only the participant cap may still be raised
@@ -206,62 +270,10 @@ export class ContestService {
         const newDuration = dto.duration ?? contest.duration;
         const newEndTime = new Date(newStartTime.getTime() + newDuration * 60 * 1000);
 
-        const isPublished = contest.status === ContestStatus.PUBLISHED;
-        const timingChanged =
-            (dto.startTime !== undefined && new Date(dto.startTime).getTime() !== new Date(contest.startTime).getTime()) ||
-            (dto.registrationDeadline !== undefined && new Date(dto.registrationDeadline).getTime() !== new Date(contest.registrationDeadline).getTime()) ||
-            (dto.duration !== undefined && dto.duration !== contest.duration) ||
-            (dto.showResultsAfter !== undefined && dto.showResultsAfter !== contest.showResultsAfter);
-
-        const updatedContest = await this.contestRepo.update(contestId, organizationId, { ...dto, endTime: newEndTime } as any);
-
-        if (isPublished && timingChanged) {
-            // 1. Cancel existing jobs
-            await this.schedulerService.cancelContestJobs(contestId);
-
-            const reminderJobIds = [`reminder-24h-${contestId}`, `reminder-1h-${contestId}`];
-            for (const jobId of reminderJobIds) {
-                try {
-                    const job = await messageQueue.getJob(jobId);
-                    if (job) {
-                        await job.remove();
-                    }
-                } catch {
-                    // ignore
-                }
-            }
-
-            // 2. Schedule reminder notifications with new timings
-            const now = Date.now();
-            const startMs = new Date(updatedContest.startTime).getTime();
-
-            const delay24h = startMs - 24 * 60 * 60 * 1000 - now;
-            const delay1h = startMs - 60 * 60 * 1000 - now;
-
-            if (delay24h > 0) {
-                await messageQueue.add('bulk-notify', {
-                    contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
-                }, { delay: delay24h, jobId: `reminder-24h-${contestId}` });
-                logger.info(`[contest] Rescheduled 24h reminder for contest ${contestId}`);
-            }
-            if (delay1h > 0) {
-                await messageQueue.add('bulk-notify', {
-                    contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
-                }, { delay: delay1h, jobId: `reminder-1h-${contestId}` });
-                logger.info(`[contest] Rescheduled 1h reminder for contest ${contestId}`);
-            }
-
-            // 3. Reschedule automated lifecycle (start, warnings, auto-submit)
-            await this.schedulerService.scheduleContestLifecycle(
-                contestId,
-                organizationId,
-                new Date(updatedContest.startTime),
-                new Date(updatedContest.endTime),
-                updatedContest.showResultsAfter ?? 24,
-            );
-        }
-
-        return updatedContest;
+        // No job (re)scheduling here: timing fields are rejected above for anything
+        // past DRAFT, and a DRAFT contest has no lifecycle jobs yet — they are created
+        // by publishContest(). Post-publish timing changes go through rescheduleContest().
+        return this.contestRepo.update(contestId, organizationId, { ...dto, endTime: newEndTime } as any);
     }
 
     async publishContest(contestId: string, organizationId: string) {
@@ -285,28 +297,7 @@ export class ContestService {
 
         const updated = await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.PUBLISHED, joinCode);
 
-        // Schedule reminder notifications as delayed BullMQ jobs
-        const now = Date.now();
-        const startMs = new Date(contest.startTime).getTime();
-
-        const delay24h = startMs - 24 * 60 * 60 * 1000 - now;
-        const delay1h = startMs - 60 * 60 * 1000 - now;
-
-        if (delay24h > 0) {
-            await messageQueue.add('bulk-notify', {
-                contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
-            }, { delay: delay24h, jobId: `reminder-24h-${contestId}` });
-            logger.info(`[contest] Scheduled 24h reminder for contest ${contestId}`);
-        }
-        if (delay1h > 0) {
-            await messageQueue.add('bulk-notify', {
-                contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE,
-            }, { delay: delay1h, jobId: `reminder-1h-${contestId}` });
-            logger.info(`[contest] Scheduled 1h reminder for contest ${contestId}`);
-        }
-
-        // Schedule automated lifecycle (start, warnings, auto-submit)
-        await this.schedulerService.scheduleContestLifecycle(
+        await this.applySchedule(
             contestId,
             organizationId,
             new Date(contest.startTime),
@@ -315,6 +306,37 @@ export class ContestService {
         );
 
         return { status: updated.status, joinCode };
+    }
+
+    /**
+     * Install the full timer + reminder schedule for a contest.
+     *
+     * Single place where "what jobs should exist for this schedule" is expressed, so
+     * publish and reschedule cannot drift apart. Both underlying scheduler calls
+     * already evict any existing job of the same id before adding, which is what makes
+     * this safe to re-run on an already-scheduled contest.
+     */
+    private async applySchedule(
+        contestId: string,
+        organizationId: string,
+        startTime: Date,
+        endTime: Date,
+        showResultsAfter: number,
+    ): Promise<void> {
+        await this.schedulerService.scheduleContestLifecycle(
+            contestId,
+            organizationId,
+            startTime,
+            endTime,
+            showResultsAfter,
+        );
+        await this.schedulerService.scheduleReminders(contestId, organizationId, startTime);
+    }
+
+    /** Remove every scheduled job for a contest — used by cancel and force-end. */
+    private async clearSchedule(contestId: string): Promise<void> {
+        await this.schedulerService.cancelContestJobs(contestId);
+        await this.schedulerService.cancelReminders(contestId);
     }
 
 
@@ -335,6 +357,213 @@ export class ContestService {
         logger.info(`[contest] Registration manually closed early for contest ${contestId}`);
 
         return { status: updated.status };
+    }
+
+    // ─── Lifecycle operations ─────────────────────────────────────────────────
+    //
+    // Reschedule / cancel / force-end are separate endpoints rather than flags on
+    // updateContest because notification is driven by *which operation was called*,
+    // never by diffing which fields changed. Diffing is ambiguous (a duration change
+    // is also an endTime change) and would let a material change go unannounced.
+
+    /** Statuses from which the schedule may still be moved — i.e. before it starts. */
+    private static readonly RESCHEDULABLE: ReadonlyArray<ContestStatus> = [
+        ContestStatus.PUBLISHED,
+        ContestStatus.REGISTRATION_CLOSED,
+    ];
+
+    /** Statuses from which a contest may be called off outright. */
+    private static readonly CANCELLABLE: ReadonlyArray<ContestStatus> = [
+        ContestStatus.DRAFT,
+        ContestStatus.PUBLISHED,
+        ContestStatus.REGISTRATION_CLOSED,
+    ];
+
+    /**
+     * Move a contest's schedule atomically and tell registrants.
+     *
+     * The whole new schedule is validated together and written once, unlike PATCH
+     * which sends one field per request — that path rejects valid final intents
+     * because it validates each intermediate state (e.g. moving startTime earlier
+     * before moving the registration deadline).
+     *
+     * Deliberately not permitted once LIVE: participants would already be mid-exam,
+     * and supporting it would mean purging Redis session state and regressing status,
+     * which is a materially riskier operation. Force-end is the escape hatch there.
+     */
+    async rescheduleContest(contestId: string, organizationId: string, input: RescheduleContestInput) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        if (!ContestService.RESCHEDULABLE.includes(contest.status)) {
+            throw new ConflictError(
+                contest.status === ContestStatus.LIVE
+                    ? "A live contest cannot be rescheduled. Use force-end to stop it early."
+                    : `Cannot reschedule a ${contest.status} contest`,
+            );
+        }
+
+        const startTime = new Date(input.startTime);
+        const registrationDeadline = input.registrationDeadline
+            ? new Date(input.registrationDeadline)
+            : contest.registrationDeadline;
+        const duration = input.duration ?? contest.duration;
+        const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+
+        if (startTime <= new Date()) {
+            throw new BadRequestError("Start time must be in the future");
+        }
+        if (registrationDeadline >= startTime) {
+            throw new BadRequestError("Registration deadline must be before the start time");
+        }
+
+        const previousStartTime = contest.startTime;
+
+        const updated = await this.contestRepo.update(contestId, organizationId, {
+            startTime,
+            registrationDeadline,
+            duration,
+            endTime,
+        } as any);
+
+        // Reinstall every timer + reminder against the new schedule. Both scheduler
+        // calls evict same-id jobs first, so no stale job can survive with its old delay.
+        await this.applySchedule(
+            contestId,
+            organizationId,
+            startTime,
+            endTime,
+            updated.showResultsAfter ?? 24,
+        );
+
+        // Anyone already waiting gets the new time pushed over their existing socket.
+        this.broadcaster?.emitContestRescheduled(contestId, {
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            ...(input.reason ? { reason: input.reason } : {}),
+        });
+
+        if (input.notifyParticipants && contest.status !== ContestStatus.DRAFT) {
+            await this.notifyParticipants(contestId, organizationId, MessageTemplate.CONTEST_RESCHEDULED, {
+                previousDate: this.formatForParticipant(previousStartTime),
+                reason: input.reason ?? "",
+            });
+        }
+
+        logger.info(
+            `[contest] Rescheduled ${contestId}: ${previousStartTime.toISOString()} → ${startTime.toISOString()} ` +
+            `(duration ${duration}m, notify=${input.notifyParticipants})`,
+        );
+
+        return updated;
+    }
+
+    /**
+     * Call a contest off before it starts.
+     *
+     * Blocked once LIVE: participants are mid-exam and their answers must be preserved
+     * and submitted, which is force-end's job — cancelling would discard them.
+     */
+    async cancelContest(contestId: string, organizationId: string, input: CancelContestInput) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        // Idempotent: re-cancelling is a no-op rather than an error, so a retried
+        // request (or a double-click that slipped past idempotency) stays safe.
+        if (contest.status === ContestStatus.CANCELLED) {
+            return { status: contest.status };
+        }
+
+        if (!ContestService.CANCELLABLE.includes(contest.status)) {
+            throw new ConflictError(
+                contest.status === ContestStatus.LIVE
+                    ? "A live contest cannot be cancelled. Use force-end so participants' answers are submitted."
+                    : `Cannot cancel a ${contest.status} contest`,
+            );
+        }
+
+        const updated = await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.CANCELLED);
+
+        await this.clearSchedule(contestId);
+
+        this.broadcaster?.emitContestCancelled(contestId, { reason: input.reason });
+
+        // A DRAFT has no registrants, so there is nobody to tell.
+        if (input.notifyParticipants && contest.status !== ContestStatus.DRAFT) {
+            await this.notifyParticipants(contestId, organizationId, MessageTemplate.CONTEST_CANCELLED, {
+                reason: input.reason,
+            });
+        }
+
+        logger.info(`[contest] Cancelled ${contestId} (was ${contest.status}): ${input.reason}`);
+
+        return { status: updated.status };
+    }
+
+    /**
+     * Stop a running contest immediately, preserving and submitting every active
+     * participant's answers.
+     *
+     * This is the on-demand form of the scheduled AUTO_SUBMIT job and reuses the exact
+     * same runtime path (handleTimeExpiry → emitAutoSubmit → triggerEvaluation) so the
+     * two can't diverge. The only difference is the trigger.
+     */
+    async forceEndContest(contestId: string, organizationId: string, input: ForceEndContestInput) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        if (contest.status !== ContestStatus.LIVE) {
+            throw new ConflictError(`Only a LIVE contest can be force-ended (current status: ${contest.status})`);
+        }
+
+        if (!this.quizTerminator) {
+            throw new BadRequestError("Quiz runtime is unavailable — cannot force-end the contest");
+        }
+
+        const { submitted, errors } = await this.quizTerminator.handleTimeExpiry(contestId);
+
+        for (const participantId of submitted) {
+            await this.quizTerminator.emitAutoSubmit(participantId, contestId, "force_ended");
+        }
+
+        // No further timers should fire for this contest — the AUTO_SUBMIT job it would
+        // otherwise still hold would re-run this whole path at the original endTime.
+        await this.clearSchedule(contestId);
+
+        // Same absentee sweep the scheduled end performs, so a force-ended contest
+        // reaches the same final participant states as one that ran to completion.
+        await this.schedulerService.scheduleMarkAbsent(contestId, organizationId);
+
+        await this.triggerEvaluation(contestId, organizationId);
+
+        logger.info(
+            `[contest] Force-ended ${contestId}: ${submitted.length} submitted, ${errors.length} errors` +
+            (input.reason ? ` — ${input.reason}` : ""),
+        );
+
+        return { status: ContestStatus.EVALUATION, submitted: submitted.length, errors: errors.length };
+    }
+
+    /**
+     * Fan out a contest-scoped template to every registrant via the existing
+     * bulk-notify pipeline (the same one that sends the 24h/1h reminders).
+     */
+    private async notifyParticipants(
+        contestId: string,
+        organizationId: string,
+        template: MessageTemplate,
+        extraParams: Record<string, string>,
+    ): Promise<void> {
+        await messageQueue.add("bulk-notify", { contestId, organizationId, template, extraParams });
+        logger.info(`[contest] Queued ${template} notification for contest ${contestId}`);
+    }
+
+    private formatForParticipant(date: Date): string {
+        return new Date(date).toLocaleString("en-IN", {
+            dateStyle: "long",
+            timeStyle: "short",
+            timeZone: "Asia/Kolkata",
+        });
     }
 
     async deleteContest(contestId: string, organizationId: string) {

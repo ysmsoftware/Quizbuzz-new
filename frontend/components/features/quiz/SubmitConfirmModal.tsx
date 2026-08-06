@@ -28,46 +28,46 @@ export function SubmitConfirmModal({ isOpen, onClose, onConfirm, isSubmitting }:
 
   return (
     <Dialog open={isOpen} onOpenChange={(val) => !isSubmitting && !val && onClose()}>
-      <DialogContent className="max-w-md bg-slate-900 border-white/10 text-white shadow-2xl">
+      <DialogContent className="max-w-md bg-card border-border text-foreground shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Submit Your Quiz?</DialogTitle>
-          <DialogDescription className="text-white/50">
+          <DialogDescription className="text-muted-foreground">
             Please review before submitting. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
 
         {/* Summary Table */}
         <div className="space-y-2 my-4">
-          <SummaryRow 
-            icon={<CheckCircle2 className="w-4 h-4 text-green-400" />}
+          <SummaryRow
+            icon={<CheckCircle2 className="w-4 h-4 text-success" />}
             label="Answered"
             value={`${answeredCount} / ${total}`}
-            bg="bg-green-500/10"
+            bg="bg-success/10"
           />
           {flaggedCount > 0 && (
-            <SummaryRow 
-              icon={<Flag className="w-4 h-4 text-amber-400" />}
+            <SummaryRow
+              icon={<Flag className="w-4 h-4 text-warning" />}
               label="Flagged for review"
               value={flaggedCount}
-              bg="bg-amber-500/10"
+              bg="bg-warning/10"
             />
           )}
           {unansweredCount > 0 && (
-            <SummaryRow 
-              icon={<AlertCircle className="w-4 h-4 text-red-400" />}
+            <SummaryRow
+              icon={<AlertCircle className="w-4 h-4 text-destructive" />}
               label="Not answered"
               value={unansweredCount}
-              bg="bg-red-500/10"
+              bg="bg-destructive/10"
             />
           )}
         </div>
 
         {/* Unanswered Warning */}
         {unansweredCount > 0 && (
-          <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-700/30 flex gap-3 mb-4">
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-200/80 leading-relaxed">
-              You have <span className="text-amber-400 font-bold">{unansweredCount}</span> unanswered question(s). 
+          <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 flex gap-3 mb-4">
+            <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+            <div className="text-xs text-warning/80 leading-relaxed">
+              You have <span className="text-warning font-bold">{unansweredCount}</span> unanswered question(s).
               Unanswered questions will be marked as skipped.
             </div>
           </div>
@@ -78,14 +78,14 @@ export function SubmitConfirmModal({ isOpen, onClose, onConfirm, isSubmitting }:
             variant="outline"
             disabled={isSubmitting}
             onClick={onClose}
-            className="flex-1 border-white/10 text-white/70 hover:bg-white/5"
+            className="flex-1 border-border text-muted-foreground hover:bg-muted/50"
           >
             Continue Quiz
           </Button>
           <Button
             disabled={isSubmitting}
             onClick={onConfirm}
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+            className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
           >
             {isSubmitting ? (
               <>

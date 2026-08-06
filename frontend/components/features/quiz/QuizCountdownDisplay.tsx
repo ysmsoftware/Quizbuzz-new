@@ -31,18 +31,18 @@ export function QuizCountdownDisplay({ timeRemaining }: QuizCountdownDisplayProp
     const seconds = timeRemaining % 60;
     const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-    let color = 'text-white';
+    let color = 'text-foreground';
     let flash = false;
 
     if (timeRemaining <= 0) {
-      color = 'text-red-600';
+      color = 'text-destructive';
     } else if (timeRemaining < 60) {
-      color = 'text-red-400';
+      color = 'text-destructive';
       flash = true;
     } else if (timeRemaining <= 300) {
-      color = 'text-red-400';
+      color = 'text-destructive';
     } else if (timeRemaining <= 600) {
-      color = 'text-amber-400';
+      color = 'text-warning';
     }
 
     return { display: formatted, colorClass: color, isFlash: flash };
@@ -66,7 +66,7 @@ export function QuizCountdownDisplay({ timeRemaining }: QuizCountdownDisplayProp
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[8px] text-green-400 font-medium uppercase tracking-tighter"
+              className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[8px] text-success font-medium uppercase tracking-tighter"
             >
               <Clock className="w-2 h-2" />
               synced

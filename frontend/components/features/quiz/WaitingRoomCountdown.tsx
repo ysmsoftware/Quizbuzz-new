@@ -73,7 +73,7 @@ export function WaitingRoomCountdown({
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.3 }}
-            className="min-w-20 px-4 py-3 rounded-lg bg-surface border border-border flex items-center justify-center"
+            className="min-w-20 px-4 py-3 rounded-lg bg-card border border-border flex items-center justify-center"
           >
             <span className="text-4xl md:text-5xl font-mono font-bold text-foreground">
               {String(unit.value).padStart(2, '0')}

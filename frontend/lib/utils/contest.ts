@@ -10,6 +10,58 @@ export {
  * Transforms a ServerContest from the backend API into the local Contest shape
  * to ensure that all UI views continue to function without massive refactoring.
  */
+/**
+ * Fields the backend's UpdateContestSchema actually accepts.
+ *
+ * The client-side `Contest` type is a superset of the real model — several fields
+ * (totalMarks, passingMarks, negativeMarking, tabSwitchLimit, allowBackNavigation,
+ * category, difficulty, topic, fee, shortDescription…) are synthesised below from
+ * constants or derived values and have no column on Contest. Sending them to
+ * PATCH /contests/:id now fails validation, because the schema is `.strict()` and
+ * rejects unknown keys rather than silently discarding them.
+ */
+const PERSISTABLE_CONTEST_FIELDS = new Set([
+  'title',
+  'description',
+  'details',
+  'bannerImage',
+  'topics',
+  'rules',
+  'paymentEnabled',
+  'paymentConfig',
+  'duration',
+  'durationMinutes',
+  'cutoffScore',
+  'maxParticipants',
+  'registrationDeadline',
+  'startTime',
+  'shuffleQuestions',
+  'shuffleOptions',
+  'proctoringEnabled',
+  'showResultsAfter',
+  'prizes',
+]);
+
+/**
+ * Split an edit payload into what the API can store and what it cannot, so callers can
+ * persist the former and tell the user the truth about the latter — rather than either
+ * 400-ing the whole request or silently dropping fields and reporting success.
+ */
+export function splitPersistableContestFields(
+  updates: Record<string, unknown>,
+): { persisted: Record<string, unknown>; dropped: string[] } {
+  const persisted: Record<string, unknown> = {};
+  const dropped: string[] = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined) continue;
+    if (PERSISTABLE_CONTEST_FIELDS.has(key)) persisted[key] = value;
+    else dropped.push(key);
+  }
+
+  return { persisted, dropped };
+}
+
 export function adaptServerContest(server: ServerContest): Contest {
   const _count = (server as any)._count || {};
   
@@ -77,7 +129,10 @@ export function adaptServerContest(server: ServerContest): Contest {
     shuffleQuestions: server.shuffleQuestions,
     shuffleOptions: server.shuffleOptions,
     allowBackNavigation: true,
-    proctoringEnabled: false,
+    // Was hardcoded `false`, which silently contradicted the server — Contest.proctoringEnabled
+    // is a real column (defaults true). Admin screens reading this were shown the wrong
+    // proctoring state for every contest.
+    proctoringEnabled: server.proctoringEnabled ?? true,
     fullscreenRequired: false,
     webcamRequired: false,
     tabSwitchLimit: 3,

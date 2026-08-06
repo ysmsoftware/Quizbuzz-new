@@ -3,7 +3,7 @@ import { crmApi } from '@/lib/api/crm.api';
 import { getContest, listParticipants } from '@/lib/api/contests.api';
 
 class MessageService {
-  async getTemplates(orgId: string): Promise<MessageTemplate[]> {
+  async getTemplates(): Promise<MessageTemplate[]> {
     try {
       const res = await crmApi.getMessageTemplates();
       if (res.success && Array.isArray(res.data)) {
@@ -17,7 +17,7 @@ class MessageService {
   }
 
   async getTemplateById(id: string): Promise<MessageTemplate | null> {
-    const templates = await this.getTemplates('all');
+    const templates = await this.getTemplates();
     return templates.find(t => t.id === id) || null;
   }
 

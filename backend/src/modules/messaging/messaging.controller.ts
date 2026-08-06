@@ -164,8 +164,8 @@ export class MessagingController {
                     orgId: user.organizationId,
                     name: "Workshop / Contest Reminder",
                     channel: "both",
-                    body: "Dear {{name}}, this is a reminder for your registered program: {{eventName}}\nDate: {{date}}\nTime: {{time}}\nVenue/Link: {{link}}\nKindly be available 10 minutes before the scheduled time.",
-                    variables: ["name", "eventName", "date", "time", "link"],
+                    body: "Dear {{name}}, this is a reminder for your registered program: {{eventName}}\nDate: {{date}}\nTime: {{time}}\nJoin Code: {{joinCode}}\nJoin Link: {{link}}\nKindly be available 10 minutes before the scheduled time.",
+                    variables: ["name", "eventName", "date", "time", "joinCode", "link"],
                     isSystem: true,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()

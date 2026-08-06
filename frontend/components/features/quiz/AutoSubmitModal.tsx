@@ -37,8 +37,8 @@ export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmit
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent 
-        className="max-w-md p-0 overflow-hidden border-none bg-slate-900 shadow-2xl"
+      <DialogContent
+        className="max-w-md p-0 overflow-hidden border-none bg-card shadow-2xl"
       >
         <div className="p-8 flex flex-col items-center text-center">
           <AnimatePresence mode="wait">
@@ -50,32 +50,32 @@ export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmit
                 transition={{ type: 'spring', damping: 12 }}
                 className="flex flex-col items-center"
               >
-                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
-                  <Clock className="w-8 h-8 text-red-500" />
+                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-6">
+                  <Clock className="w-8 h-8 text-destructive" />
                 </div>
-                
-                <h2 className="text-2xl font-bold text-white mb-2">⏰ Time is Up!</h2>
-                <p className="text-white/60 mb-8 max-w-xs">
+
+                <h2 className="text-2xl font-bold text-foreground mb-2">⏰ Time is Up!</h2>
+                <p className="text-muted-foreground mb-8 max-w-xs">
                   Your answers are being submitted automatically.
                 </p>
 
                 <div className="relative mb-8">
-                  <span className="text-7xl font-bold text-red-500 font-mono">
+                  <span className="text-7xl font-bold text-destructive font-mono">
                     {countdown}
                   </span>
                 </div>
 
                 {/* Depleting Progress Bar */}
-                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-4">
+                <div className="w-full h-2 bg-border/40 rounded-full overflow-hidden mb-4">
                   <motion.div
                     initial={{ width: '100%' }}
                     animate={{ width: `${(countdown / 10) * 100}%` }}
                     transition={{ duration: 1, ease: 'linear' }}
-                    className="h-full bg-red-500"
+                    className="h-full bg-destructive"
                   />
                 </div>
-                
-                <p className="text-xs text-white/30 italic">
+
+                <p className="text-xs text-muted-foreground/70 italic">
                   All your saved answers will be submitted.
                 </p>
               </motion.div>
@@ -86,9 +86,9 @@ export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmit
                 animate={{ opacity: 1 }}
                 className="py-10 flex flex-col items-center"
               >
-                <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-                <h2 className="text-xl font-bold text-white mb-1">Submitting your answers...</h2>
-                <p className="text-sm text-white/50">Saving results to server</p>
+                <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+                <h2 className="text-xl font-bold text-foreground mb-1">Submitting your answers...</h2>
+                <p className="text-sm text-muted-foreground">Saving results to server</p>
               </motion.div>
             )}
           </AnimatePresence>

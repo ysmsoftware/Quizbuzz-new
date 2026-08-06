@@ -6,10 +6,9 @@ import {
     ListContestsQuerySchema,
     RegisterParticipantSchema,
     RegisterStatusSchema,
-    AssignQuestionsSchema,
-    ReorderQuestionsSchema,
-    GenerateCertificatesSchema,
     CancelContestSchema,
+    RescheduleContestSchema,
+    ForceEndContestSchema,
 } from "./contest.validator";
 import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
 import { storageService } from "../../services/storage.service";
@@ -130,6 +129,68 @@ export class ContestController {
             );
 
             res.json({ success: true, message: "Contest published", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // ─── Lifecycle operations ─────────────────────────────────────────────────
+
+    rescheduleContest = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const data = RescheduleContestSchema.parse(req.body);
+
+            const contest = await this.contestService.rescheduleContest(
+                req.params.contestId as string,
+                user.organizationId,
+                data,
+            );
+
+            res.status(200).json({ success: true, message: "Contest rescheduled", data: contest, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    cancelContest = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const data = CancelContestSchema.parse(req.body);
+
+            const result = await this.contestService.cancelContest(
+                req.params.contestId as string,
+                user.organizationId,
+                data,
+            );
+
+            res.status(200).json({ success: true, message: "Contest cancelled", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    forceEndContest = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const data = ForceEndContestSchema.parse(req.body ?? {});
+
+            const result = await this.contestService.forceEndContest(
+                req.params.contestId as string,
+                user.organizationId,
+                data,
+            );
+
+            res.status(200).json({ success: true, message: "Contest ended", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }
@@ -293,7 +354,7 @@ export class ContestController {
         try {
             const contestId = req.params.contestId as string;
             const organizationId = req.user?.organizationId ?? "";
-            
+
             const page = parseInt(req.query.page as string) || 1;
             const limit = parseInt(req.query.limit as string) || 50;
 
@@ -317,7 +378,7 @@ export class ContestController {
             if (!user) {
                 throw new UnauthorizedError("User not authorized.");
             }
-            
+
             const page = parseInt(req.query.page as string) || 1;
             const limit = parseInt(req.query.limit as string) || 50;
 

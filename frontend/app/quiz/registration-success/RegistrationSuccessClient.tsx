@@ -65,10 +65,10 @@ export default function RegistrationSuccessClient() {
                 </Button>
                 <Button
                   className="flex-1 h-12 rounded-xl gap-2"
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push('/')}
                 >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Go to Dashboard
+                  <Home className="h-4 w-4" />
+                  Explore Contests
                 </Button>
               </div>
 

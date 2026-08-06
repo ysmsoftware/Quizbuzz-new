@@ -29,6 +29,10 @@ const formatToLocalDatetime = (dateStr: string | Date | null) => {
 export function KeyDatesCard({ contest, phase, className, onSave }: KeyDatesCardProps) {
     const isCancelled = phase === 'CANCELLED';
     const isEndedOrLive = phase === 'LIVE' || phase === 'ENDED' || phase === 'RESULTS_PUBLISHED' || phase === 'REGISTRATION_CLOSED';
+    // Timing is inline-editable on DRAFT only — see isTimingLocked on the overview
+    // page. Post-publish changes must go through Reschedule so the whole schedule is
+    // applied atomically and registrants are notified; the server rejects them here.
+    const timingEditable = phase === 'DRAFT';
 
     const dates = [
         {
@@ -47,7 +51,7 @@ export function KeyDatesCard({ contest, phase, className, onSave }: KeyDatesCard
             label: 'Registration Ends',
             date: new Date(contest.registrationDeadline),
             status: phase === 'REGISTRATION_CLOSED' || phase === 'LIVE' || phase === 'ENDED' ? 'completed' : phase === 'PUBLISHED' ? 'active' : 'pending',
-            isEditable: !isCancelled && !isEndedOrLive,
+            isEditable: timingEditable,
             fieldValue: formatToLocalDatetime(contest.registrationDeadline),
             onSave: async (val: string) => {
                 if (!val) return;
@@ -59,7 +63,7 @@ export function KeyDatesCard({ contest, phase, className, onSave }: KeyDatesCard
             label: 'Contest Starts',
             date: new Date(contest.startTime),
             status: phase === 'LIVE' || phase === 'ENDED' ? 'completed' : phase === 'REGISTRATION_CLOSED' ? 'active' : 'pending',
-            isEditable: !isCancelled && !isEndedOrLive,
+            isEditable: timingEditable,
             fieldValue: formatToLocalDatetime(contest.startTime),
             onSave: async (val: string) => {
                 if (!val) return;
@@ -71,7 +75,7 @@ export function KeyDatesCard({ contest, phase, className, onSave }: KeyDatesCard
             label: 'Contest Ends',
             date: new Date(new Date(contest.startTime).getTime() + contest.durationMinutes * 60000),
             status: phase === 'ENDED' ? 'completed' : phase === 'LIVE' ? 'active' : 'pending',
-            isEditable: !isCancelled && !isEndedOrLive,
+            isEditable: timingEditable,
             fieldValue: formatToLocalDatetime(new Date(new Date(contest.startTime).getTime() + contest.durationMinutes * 60000)),
             onSave: async (val: string) => {
                 if (!val) return;

@@ -988,7 +988,7 @@ function QuizStatusBadge({ status, progress, total }: { status: string; progress
         },
         CHECKED_IN: {
             label: 'Checked In',
-            className: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shadow-sm shadow-indigo-500/5'
+            className: 'bg-primary/10 text-primary border border-primary/20 shadow-sm shadow-primary/5'
         },
         IN_WAITING: {
             label: 'In Waiting Room',

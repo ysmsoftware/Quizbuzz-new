@@ -37,6 +37,11 @@ export function useWaitingRoomSocket(
   const [status, setStatus] = useState<WaitingStatus>('connecting');
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [broadcastMessage, setBroadcastMessage] = useState<BroadcastMessage | null>(null);
+  // Set only when an admin reschedules while this participant is already waiting.
+  // The page's countdown prefers this over the startTime it fetched on mount.
+  const [contestStartTime, setContestStartTime] = useState<Date | null>(null);
+  const [serverTime, setServerTime] = useState<string | null>(null);
+  const [cancellation, setCancellation] = useState<{ reason: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -103,6 +108,37 @@ export function useWaitingRoomSocket(
       setBroadcastMessage(msg);
     });
 
+    // ── Schedule moved while we're sitting here ───────────────────────────────
+    // Without this the countdown keeps running to the startTime fetched on mount,
+    // hits zero, polls for a LIVE status that never comes, and strands the
+    // participant on 00:00:00 with no explanation.
+    socket.on(
+      'quiz:v1:rescheduled',
+      (data: { startTime: string; endTime: string; reason?: string; serverTime?: string }) => {
+        const next = new Date(data.startTime);
+        if (Number.isNaN(next.getTime())) return;
+
+        setContestStartTime(next);
+        if (data.serverTime) setServerTime(data.serverTime);
+
+        const when = next.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        setBroadcastMessage({
+          type: 'warning',
+          text: data.reason
+            ? `Contest rescheduled to ${when} — ${data.reason}`
+            : `Contest rescheduled to ${when}`,
+        });
+      },
+    );
+
+    socket.on('quiz:v1:cancelled', (data: { reason: string }) => {
+      setCancellation({ reason: data.reason });
+      setBroadcastMessage({
+        type: 'urgent',
+        text: `This contest has been cancelled — ${data.reason}`,
+      });
+    });
+
     socket.on('connect', () => {
       setStatus('connected');
       if (participantId) {
@@ -150,7 +186,12 @@ export function useWaitingRoomSocket(
     broadcastMessage,
     clearBroadcast,
     showStartingOverlay: status === 'starting',
-    contestStartTime: null as Date | null, // startTime comes from the contest HTTP payload
+    /** Revised start time pushed by an admin reschedule; null until that happens. */
+    contestStartTime,
+    /** Server clock from the reschedule event, so the page can re-anchor its offset. */
+    rescheduledServerTime: serverTime,
+    /** Set when the contest is cancelled out from under the waiting participant. */
+    cancellation,
     socket: socketRef.current,
   };
 }

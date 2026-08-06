@@ -1,59 +1,17 @@
-import React from 'react';
-import { Clock, Send, Construction } from 'lucide-react';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+/**
+ * REMOVED — scheduled messaging is not implemented.
+ *
+ * This component rendered a "Send Now / Schedule" choice where the Schedule half was
+ * permanently disabled behind a "coming soon" tooltip. Presenting a two-option control
+ * with only one working option is misleading, and it had no remaining call sites.
+ *
+ * Messages are sent immediately; there is no send-time choice to make. If scheduling
+ * is built later, reintroduce this alongside a real scheduled-send backend path
+ * (a delayed messageQueue job keyed by contest, mirroring the reminder jobs in
+ * QuizSchedulerService) rather than restoring the disabled-button UI.
+ *
+ * Intentionally left as an empty module so any stale import fails loudly at build
+ * time instead of silently rendering dead UI.
+ */
 
-interface ScheduleToggleProps {
-  isScheduled: boolean;
-  onToggle: (scheduled: boolean) => void;
-  scheduledTime: string;
-  onTimeChange: (time: string) => void;
-}
-
-export function ScheduleToggle({
-  isScheduled,
-  onToggle,
-  scheduledTime,
-  onTimeChange,
-}: ScheduleToggleProps) {
-  return (
-    <div className="space-y-3">
-      <Label className="text-sm font-medium">Send Option</Label>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant={!isScheduled ? 'default' : 'outline'}
-          onClick={() => onToggle(false)}
-          className="gap-2"
-        >
-          <Send className="h-4 w-4" />
-          Send Now
-        </Button>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* Wrapping in a span so the tooltip fires even when button is disabled */}
-              <span className="w-full">
-                <Button
-                  variant="outline"
-                  disabled
-                  className="gap-2 w-full opacity-50 cursor-not-allowed"
-                >
-                  <Clock className="h-4 w-4" />
-                  Schedule
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="flex items-center gap-1.5">
-              <Construction className="h-3.5 w-3.5" />
-              <span>Scheduled messaging coming soon</span>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    </div>
-  );
-}
+export {};

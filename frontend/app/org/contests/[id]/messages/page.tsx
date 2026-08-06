@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Send, AlertCircle, RefreshCcw, CheckCircle2, XCircle, Clock, MessageSquare, ChevronLeft, ChevronRight, ConstructionIcon } from 'lucide-react';
+import { Loader2, Send, AlertCircle, RefreshCcw, CheckCircle2, XCircle, Clock, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { MessageTemplate } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,7 @@ export default function MessagesPage() {
   const [sentPage, setSentPage] = useState(1);
 
   // Hooks
-  const { templates, loading: templatesLoading } = useMessageTemplates('org-1');
+  const { templates, loading: templatesLoading } = useMessageTemplates();
   const { filter: recipientFilter, setFilter: setRecipientFilter, count: recipientCount, loading: recipientFilterLoading } =
     useRecipientFilter(contestId);
   const { sendNow, loading: sendingLoading, error: sendingError } = useMessageSending();
@@ -211,17 +211,6 @@ export default function MessagesPage() {
                         recipientCounts={recipientCounts}
                         loading={recipientLoading}
                       />
-                    </CardContent>
-                  </Card>
-
-                  {/* Scheduling — coming soon notice */}
-                  <Card className="border-dashed border-amber-200 bg-amber-50/40">
-                    <CardContent className="pt-4 pb-3 flex items-start gap-2.5">
-                      <ConstructionIcon className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                      <p className="text-xs text-amber-700 leading-relaxed">
-                        <span className="font-semibold">Scheduled messaging is coming soon.</span>{' '}
-                        Currently, messages are sent immediately upon confirmation.
-                      </p>
                     </CardContent>
                   </Card>
 

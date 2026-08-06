@@ -20,20 +20,15 @@ export function QuizRightPanel({ onSubmitClick }: QuizRightPanelProps) {
 
   return (
     <aside
-      className="hidden sm:flex flex-col h-full w-[35%] min-w-[280px] max-w-[380px] border-l overflow-hidden"
-      style={{
-        background: 'rgba(15,32,64,0.6)',
-        backdropFilter: 'blur(4px)',
-        borderColor: 'rgba(255,255,255,0.08)',
-      }}
+      className="hidden sm:flex flex-col h-full w-[35%] min-w-[280px] max-w-[380px] border-l overflow-hidden bg-card/60 backdrop-blur-sm border-border"
     >
       <div className="flex flex-col flex-1 p-5 overflow-hidden">
         {/* Section Header */}
         <header className="mb-4">
-          <h3 className="text-white/50 text-[10px] uppercase tracking-wider font-semibold mb-1">
+          <h3 className="text-muted-foreground text-[10px] uppercase tracking-wider font-semibold mb-1">
             Questions
           </h3>
-          <div className="h-px w-full bg-white/10" />
+          <div className="h-px w-full bg-border" />
         </header>
 
         {/* Stats */}
@@ -47,24 +42,24 @@ export function QuizRightPanel({ onSubmitClick }: QuizRightPanelProps) {
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-white/10 mt-4" />
+        <div className="h-px w-full bg-border mt-4" />
 
         {/* Submit Button */}
         <div className="mt-4">
           <Button
             onClick={onSubmitClick}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl py-6 font-semibold shadow-lg shadow-orange-500/20"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl py-6 font-semibold shadow-lg shadow-primary/20"
           >
             Submit All Answers
           </Button>
-          
+
           <div className="mt-2 text-center">
             {unansweredCount > 0 ? (
-              <p className="text-xs text-amber-400">
+              <p className="text-xs text-warning">
                 {unansweredCount} question{unansweredCount !== 1 ? 's' : ''} unanswered
               </p>
             ) : (
-              <p className="text-xs text-green-400">
+              <p className="text-xs text-success">
                 All answered — ready to submit!
               </p>
             )}

@@ -382,12 +382,17 @@ export default function QuizPlayPage() {
     const hasAnswer = answers[currentIndex] !== undefined;
     const progressPct = Math.round((currentIndex / questions.length) * 100);
 
+    // Root box: `fixed inset-0` pins the quiz shell to the viewport on every screen
+    // size. Do NOT add `relative` alongside it — Tailwind emits `position:relative`
+    // after `position:fixed`, so it silently wins, `inset-0` stops constraining the
+    // box, the container collapses to content height, `flex-1` has no height left to
+    // distribute, and the footer floats mid-screen with dead space beneath it on tall
+    // displays. `fixed` already creates the containing block the absolute children need.
     return (
-        <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#020617] text-slate-100 relative">
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
             {/* Ambient background glows */}
-            <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
-            <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-violet-600/10 blur-[150px] pointer-events-none" />
-            <div className="absolute top-[40%] left-[30%] w-[40%] h-[40%] rounded-full bg-fuchsia-500/5 blur-[120px] pointer-events-none" />
+            <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-primary/10 blur-[150px] pointer-events-none" />
+            <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[150px] pointer-events-none" />
 
             {/* Digital HUD Grid overlay */}
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none opacity-60" />
@@ -413,17 +418,17 @@ export default function QuizPlayPage() {
             <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
-            <header className="flex-none h-16 flex items-center justify-between px-6 md:px-8 border-b border-slate-900/60 bg-slate-950/40 backdrop-blur-xl z-40">
+            <header className="flex-none h-16 flex items-center justify-between px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
                 {/* Contest title */}
                 <div className="min-w-0 flex-1 mr-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-                        <Shield className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+                        <Shield className="w-4 h-4 text-primary-foreground" />
                     </div>
                     <div>
-                        <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-black leading-none mb-1">
+                        <p className="text-[10px] text-primary uppercase tracking-widest font-black leading-none mb-1">
                             Secure Portal
                         </p>
-                        <p className="text-sm text-slate-200 font-bold truncate max-w-[150px] sm:max-w-xs leading-none">
+                        <p className="text-sm text-foreground font-bold truncate max-w-[150px] sm:max-w-xs leading-none">
                             {contest?.title || "Quiz"}
                         </p>
                     </div>
@@ -433,19 +438,19 @@ export default function QuizPlayPage() {
                 <div className={cn(
                     "flex items-center gap-2 px-3 py-1.5 sm:px-4 rounded-xl border font-mono tabular-nums transition-all duration-300 flex-none shadow-sm",
                     timeRemaining < 300
-                        ? "bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
-                        : "bg-indigo-500/5 border-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.05)]",
+                        ? "bg-destructive/10 border-destructive/30 text-destructive"
+                        : "bg-primary/5 border-primary/20 text-primary",
                 )}>
                     <div className={cn(
                         "w-1.5 h-1.5 rounded-full shrink-0",
-                        timeRemaining < 300 ? "bg-rose-500 animate-pulse" : "bg-indigo-400"
+                        timeRemaining < 300 ? "bg-destructive animate-pulse" : "bg-primary"
                     )} />
                     <span className="text-sm sm:text-base font-black tracking-tight">{formatTime(timeRemaining)}</span>
                 </div>
 
                 {/* Submit */}
                 <Button
-                    className="ml-3 rounded-xl font-bold px-4 h-9 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white border border-indigo-400/20 shadow-lg shadow-indigo-500/20 flex-none text-xs sm:text-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-indigo-500/30"
+                    className="ml-3 rounded-xl font-bold px-4 h-9 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary/20 shadow-lg shadow-primary/20 flex-none text-xs sm:text-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-primary/30"
                     onClick={() => setShowSubmitModal(true)}
                 >
                     <Send className="h-3.5 w-3.5 mr-1.5" />
@@ -456,13 +461,13 @@ export default function QuizPlayPage() {
             {/* ── Progress bar + question counter ─────────────────────────────── */}
             <div className="flex-none px-6 md:px-8 pt-4 pb-2 bg-transparent z-10">
                 <div className="max-w-2xl mx-auto">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mb-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground font-extrabold uppercase tracking-widest mb-1.5">
                         <span>Question {currentIndex + 1} of {questions.length}</span>
-                        <span className="text-indigo-400">{progressPct}% completed</span>
+                        <span className="text-primary">{progressPct}% completed</span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-slate-950/80 border border-slate-900 overflow-hidden p-[1px] shadow-inner">
+                    <div className="h-2 w-full rounded-full bg-muted/80 border border-border overflow-hidden p-[1px] shadow-inner">
                         <motion.div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                            className="h-full rounded-full bg-primary"
                             initial={false}
                             animate={{ width: `${progressPct}%` }}
                             transition={{ duration: 0.35, ease: "easeOut" }}
@@ -479,7 +484,7 @@ export default function QuizPlayPage() {
                             
                             {/* Widescreen Proctoring Camera Feed — only shown when proctoring is enabled */}
                             {proctoringEnabled && (
-                                <div className="lg:fixed lg:top-24 lg:right-8 lg:w-56 lg:h-36 lg:z-30 w-full relative aspect-[21/9] sm:aspect-[24/9] lg:aspect-video rounded-2xl overflow-hidden bg-slate-950/60 border border-slate-800 shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-indigo-500/40 shrink-0">
+                                <div className="lg:fixed lg:top-24 lg:right-8 lg:w-56 lg:h-36 lg:z-30 w-full relative aspect-[21/9] sm:aspect-[24/9] lg:aspect-video rounded-2xl overflow-hidden bg-muted/60 border border-border shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-primary/40 shrink-0">
                                     <video
                                         ref={videoRef}
                                         autoPlay playsInline muted
@@ -488,33 +493,33 @@ export default function QuizPlayPage() {
 
                                     {/* Pulsing Scanline overlay using Framer Motion */}
                                     <motion.div
-                                        className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-rose-500/80 to-transparent shadow-[0_0_8px_rgba(244,63,94,0.8)] pointer-events-none"
+                                        className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
                                         animate={{ top: ["0%", "100%", "0%"] }}
                                         transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
                                     />
 
                                     {/* HUD corner markings */}
-                                    <div className="absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-indigo-500/10 rounded-lg flex items-center justify-center">
+                                    <div className="absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg flex items-center justify-center">
                                         {/* Corner highlights */}
-                                        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-indigo-400/40" />
-                                        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-indigo-400/40" />
-                                        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-indigo-400/40" />
-                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-indigo-400/40" />
+                                        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
+                                        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
+                                        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
+                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
                                     </div>
 
                                     {/* Top overlays */}
-                                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-white/90">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping absolute" />
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
                                         <span>REC</span>
                                     </div>
 
-                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/70 border border-white/5 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-indigo-400">
+                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
                                         <span>SECURE LINK</span>
                                     </div>
 
                                     {/* Ambient HUD decorative text */}
-                                    <div className="absolute bottom-2 left-2 text-[8px] font-mono text-white/40 tracking-wider">
+                                    <div className="absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
                                         CAM_01 // ACTIVE_FEED
                                     </div>
                                 </div>
@@ -530,8 +535,8 @@ export default function QuizPlayPage() {
                                     transition={{ duration: 0.22, ease: "easeOut" }}
                                     className="flex flex-col gap-6"
                                 >
-                                    <div className="backdrop-blur-xl bg-slate-900/30 border border-slate-800/80 rounded-3xl p-5 md:p-6 shadow-[0_0_50px_-15px_rgba(99,102,241,0.08)] relative overflow-hidden">
-                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-indigo-500/30 via-violet-500/20 to-transparent" />
+                                    <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-5 md:p-6 relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
                                         <QuestionCard
                                             question={currentQuestion}
                                             questionNumber={currentIndex + 1}
@@ -557,12 +562,12 @@ export default function QuizPlayPage() {
                     </main>
 
                     {/* ── Bottom navigation bar stuck at screen bottom ───────────────── */}
-                    <footer className="flex-none border-t border-slate-900/60 bg-slate-950/50 backdrop-blur-xl py-4 px-6 md:px-8 z-40">
+                    <footer className="flex-none border-t border-border/60 bg-card/50 backdrop-blur-xl py-4 px-6 md:px-8 z-40">
                         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
                             {isLastQuestion ? (
                                 <Button
                                     size="lg"
-                                    className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:brightness-110 text-white font-bold gap-2 border-0 shadow-lg shadow-indigo-500/20 text-base cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+                                    className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 border-0 shadow-lg shadow-primary/20 text-base cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
                                     onClick={() => setShowSubmitModal(true)}
                                 >
                                     <Send className="h-4 w-4" />
@@ -573,10 +578,10 @@ export default function QuizPlayPage() {
                                     <Button
                                         size="lg"
                                         variant="ghost"
-                                        className="rounded-2xl h-12 px-6 text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 gap-2 border border-slate-800 hover:border-slate-700 text-sm font-semibold transition-all duration-200 cursor-pointer"
+                                        className="rounded-2xl h-12 px-6 text-muted-foreground hover:text-foreground hover:bg-muted/40 gap-2 border border-border hover:border-border/60 text-sm font-semibold transition-all duration-200 cursor-pointer"
                                         onClick={handleSkip}
                                     >
-                                        <SkipForward className="h-4 w-4 text-slate-400" />
+                                        <SkipForward className="h-4 w-4 text-muted-foreground" />
                                         <span>Skip</span>
                                     </Button>
 
@@ -585,8 +590,8 @@ export default function QuizPlayPage() {
                                         className={cn(
                                             "flex-1 sm:flex-initial rounded-2xl h-12 px-10 font-bold gap-2 border transition-all text-base cursor-pointer",
                                             hasAnswer
-                                                ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:brightness-110 text-white shadow-lg shadow-indigo-500/25 border-0 hover:-translate-y-0.5"
-                                                : "bg-slate-900/60 hover:bg-slate-900/90 text-slate-400 border-slate-800 hover:text-slate-300",
+                                                ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 border-0 hover:-translate-y-0.5"
+                                                : "bg-muted/60 hover:bg-muted/90 text-muted-foreground border-border hover:text-foreground",
                                         )}
                                         onClick={handleNext}
                                     >

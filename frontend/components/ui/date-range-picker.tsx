@@ -82,12 +82,12 @@ export function DateRangePicker({
             className={cn(
               "flex items-center justify-between px-3 h-9 bg-background border rounded-lg text-xs font-semibold text-left select-none transition-all duration-200 outline-none w-full md:w-[260px]",
               open
-                ? "border-indigo-600 ring-2 ring-indigo-500/10 shadow-sm"
+                ? "border-primary ring-2 ring-primary/10 shadow-sm"
                 : "border-border hover:border-muted-foreground/30 shadow-xs"
             )}
           >
             <span className="flex items-center gap-2 truncate">
-              <CalendarIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
               <span className="truncate">{displayValue}</span>
             </span>
             <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform duration-200", open && "rotate-180")} />
@@ -117,10 +117,10 @@ export function DateRangePicker({
                 day: cn(
                   "h-9 w-9 p-0 font-normal transition-all rounded-full hover:bg-muted"
                 ),
-                day_range_start: "bg-indigo-600 text-white rounded-l-md font-bold hover:bg-indigo-600 hover:text-white",
-                day_range_end: "bg-indigo-600 text-white rounded-r-md font-bold hover:bg-indigo-600 hover:text-white",
-                day_range_middle: "bg-indigo-50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-100 rounded-none font-medium hover:bg-indigo-100/50",
-                day_selected: "bg-indigo-600 text-white font-bold hover:bg-indigo-700",
+                day_range_start: "bg-primary text-primary-foreground rounded-l-md font-bold hover:bg-primary hover:text-primary-foreground",
+                day_range_end: "bg-primary text-primary-foreground rounded-r-md font-bold hover:bg-primary hover:text-primary-foreground",
+                day_range_middle: "bg-primary/10 text-foreground rounded-none font-medium hover:bg-primary/20",
+                day_selected: "bg-primary text-primary-foreground font-bold hover:bg-primary/90",
                 day_today: "bg-accent text-accent-foreground font-bold",
                 day_outside: "text-muted-foreground/30 opacity-50",
                 day_disabled: "text-muted-foreground/30 opacity-50",

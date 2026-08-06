@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useParticipants } from '@/lib/hooks/useParticipantCertificate';
 import { useCertificateTemplates } from '@/lib/hooks/useCertificateTemplates';
+import { useContest } from '@/lib/hooks/useContest';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,8 @@ export default function CertificatesManagementPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
 
   const { data: templates = [] } = useCertificateTemplates();
+
+  const { contest } = useContest(contestId);
 
   // Custom hook for participant & certificate queries/mutations
   const {
@@ -408,7 +411,7 @@ export default function CertificatesManagementPage() {
                                   <DropdownMenuContent align="end" className="w-48 rounded-xl border-border bg-popover text-popover-foreground">
                                     {record.certificate?.fileUrl && (
                                       <DropdownMenuItem 
-                                        onClick={() => record.certificate?.id && window.open(`/quiz/${contestId}/certificate/${record.certificate.id}`)}
+                                        onClick={() => record.participant?.id && window.open(`/quiz/${contest?.slug || contestId}/certificate/${record.participant.id}`)}
                                         className="cursor-pointer gap-2"
                                       >
                                         <ExternalLink className="h-4 w-4" /> View Public Page

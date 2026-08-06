@@ -39,7 +39,7 @@ export default function Error({
                         <RotateCcw className="h-4 w-4 mr-2" />
                         Try Again
                     </Button>
-                    <Link href="/dashboard" className="w-full sm:w-auto">
+                    <Link href="/" className="w-full sm:w-auto">
                         <Button variant="outline" size="lg" className="w-full">
                             <Home className="h-4 w-4 mr-2" />
                             Go Home

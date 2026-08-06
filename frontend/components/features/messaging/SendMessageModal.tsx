@@ -65,7 +65,7 @@ export function SendMessageModal({
   const { sendNow, sendDirect, loading: sendingLoading, error: sendingError } = useMessageSending();
 
   // Hook for templates loading
-  const { templates, loading: templatesLoading } = useMessageTemplates('org-1');
+  const { templates, loading: templatesLoading } = useMessageTemplates();
 
   // Query client for cache invalidation
   const queryClient = useQueryClient();

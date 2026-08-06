@@ -3,6 +3,8 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { archiveContest } from '@/lib/api/contests.api';
 import {
     Users,
     CheckCircle2,
@@ -14,7 +16,8 @@ import {
     BarChart3,
     MonitorPlay,
     AlertTriangle,
-    Award
+    Award,
+    MessageSquare
 } from 'lucide-react';
 import {
     Breadcrumb,
@@ -90,7 +93,8 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
             },
             { id: 'proctoring', label: 'Proctoring Alerts', icon: ShieldCheck, show: ['LIVE', 'EVALUATION', 'RESULTS_OUT', 'COMPLETED'].includes(status), isFlagged: liveFlaggedCount > 0, count: liveFlaggedCount || undefined },
             { id: 'submissions', label: 'Submissions', icon: FileText, show: ['EVALUATION', 'RESULTS_OUT', 'COMPLETED'].includes(status) },
-            { id: 'results', label: 'Results', icon: CheckCircle2, show: ['ENDED', 'RESULTS_OUT', 'COMPLETED'].includes(status) },
+            { id: 'results', label: 'Results', icon: CheckCircle2, show: ['EVALUATION', 'RESULTS_OUT', 'COMPLETED'].includes(status) },
+            { id: 'messages', label: 'Messages', icon: MessageSquare, show: status !== 'DRAFT' && status !== 'CANCELLED' },
             { id: 'analytics', label: 'Analytics', icon: BarChart3, show: status !== 'DRAFT' && status !== 'CANCELLED' },
             { id: 'certificates', label: 'Certificates', icon: Award, show: ['RESULTS_OUT', 'COMPLETED'].includes(status) },
         ];
@@ -183,11 +187,22 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                         refetch();
                     }}
                     isDeclaringResults={declareResultsMutation.isPending}
-                    onCancel={async (reason) => {
-                        await updateContestMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
+                    // ContestActionBar performs the cancel itself via POST /:id/cancel;
+                    // this is just the post-cancel refresh hook. The previous
+                    // `{ status: 'CANCELLED' }` PATCH never worked (both fields were
+                    // silently stripped) and is now rejected outright.
+                    onCancel={() => {
                         refetch();
                     }}
-                    onArchive={() => console.log('Archived')}
+                    onArchive={async () => {
+                        try {
+                            await archiveContest(contestId);
+                            toast.success('Contest archived');
+                            router.push('/org/contests/archived');
+                        } catch (err: any) {
+                            toast.error(err?.message || 'Failed to archive contest');
+                        }
+                    }}
                     onDelete={async () => {
                         await deleteContestMutation.mutateAsync();
                         router.push('/org/contests');

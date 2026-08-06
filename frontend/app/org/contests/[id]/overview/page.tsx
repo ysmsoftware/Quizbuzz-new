@@ -45,6 +45,7 @@ import { format } from 'date-fns';
 import { fmtDateTime } from '@/lib/formatDate';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
 import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
+import { useCancelContest } from '@/lib/hooks/useContestLifecycle';
 import { deriveContestPhase } from '@/lib/utils/contest';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,7 @@ export default function ContestOverviewPage() {
         refetch
     } = useContestDetail(id);
     const updateMutation = useUpdateContest(id);
+    const cancelMutation = useCancelContest(id);
 
     const [descExpanded, setDescExpanded] = useState(false);
     const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -182,7 +184,10 @@ export default function ContestOverviewPage() {
     const isLivePlus = phase === 'LIVE' || phase === 'ENDED';
     const isPublished = phase === 'PUBLISHED' || phase === 'REGISTRATION_CLOSED';
     const isRegistrationClosed = phase === 'REGISTRATION_CLOSED';
-    const isTimingLocked = isLivePlus || isRegistrationClosed;
+    // Timing is inline-editable on DRAFT only. Once published, the server rejects
+    // timing fields on PATCH — they must go through the Reschedule action so the
+    // whole schedule is applied atomically and registrants are notified.
+    const isTimingLocked = !isDraft;
 
     const formatToLocalDatetime = (dateStr: string) => {
         if (!dateStr) return '';
@@ -315,14 +320,11 @@ export default function ContestOverviewPage() {
 
                     {/* BASIC INFORMATION */}
                     <section className="space-y-4">
+                        {/* "Edit with Wizard" removed — it only emitted a toast and opened
+                            nothing. Every field in this section is already inline-editable
+                            on a DRAFT, so the wizard had no behaviour to restore. */}
                         <div className="flex items-center justify-between">
                             <h2 className="text-xl font-bold tracking-tight">Basic Information</h2>
-                            {isDraft && (
-                                <Button variant="outline" size="sm" onClick={() => toast.info("Opening Wizard...")}>
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    Edit with Wizard
-                                </Button>
-                            )}
                         </div>
 
                         <Card className="border-border/50 overflow-hidden">
@@ -372,13 +374,11 @@ export default function ContestOverviewPage() {
                                             className="[&_span]:text-2xl [&_span]:font-bold [&_span]:font-plus-jakarta"
                                         />
 
-                                        <EditableField
-                                            label="Short Description"
-                                            value={contest.shortDescription || ''}
-                                            onSave={(v) => handleSave('shortDescription', v)}
-                                            disabled={isCancelled}
-                                            autoSave={isDraft}
-                                        />
+                                        {/* "Short Description" removed — Contest has no such
+                                            column. adaptServerContest derives it as
+                                            description.slice(0, 120), so edits could never
+                                            persist; the PATCH now 400s outright. "Full
+                                            Description" below is the real storable field. */}
                                     </div>
                                 </div>
 
@@ -478,7 +478,7 @@ export default function ContestOverviewPage() {
                                     displayValue={contest.startTime ? fmtDateTime(new Date(contest.startTime)) : ''}
                                     onSave={(v) => handleSave('startTime', new Date(v).toISOString())}
                                     disabled={isTimingLocked || isCancelled}
-                                    lockReason={isLivePlus ? "Cannot change start time after contest begins" : isRegistrationClosed ? "Cannot change timing once registration is closed" : ""}
+                                    lockReason={isLivePlus ? "Cannot change timing once the contest has started" : "Use the Reschedule action so registrants are notified"}
                                     autoSave={isDraft}
                                 />
                                 <EditableField
@@ -730,10 +730,17 @@ export default function ContestOverviewPage() {
                                 toast.error(err?.message || "Failed to delete contest");
                             }
                         }}
+                        // DangerZoneCard is its own cancel entry point (separate from
+                        // ContestActionBar, which is rendered by the parent layout shell),
+                        // so it performs the real cancel here. Uses POST /:id/cancel — the
+                        // old `{ status: 'CANCELLED' }` PATCH silently did nothing, and is
+                        // now rejected outright since status/cancelReason are not
+                        // updatable fields on that endpoint.
                         onCancel={async (reason) => {
                             try {
-                                await updateMutation.mutateAsync({ status: 'CANCELLED', cancelReason: reason });
-                                toast.success("Contest cancelled and participants notified");
+                                await cancelMutation.mutateAsync({ reason });
+                                toast.success("Contest cancelled — registered participants have been notified");
+                                await refetch();
                             } catch (err: any) {
                                 toast.error(err?.message || "Failed to cancel contest");
                             }

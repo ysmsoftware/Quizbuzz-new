@@ -12,8 +12,17 @@
  */
 
 import logger from "../../config/logger";
-import { quizTimerQueue, type QuizTimerJobPayload } from "../../queues";
+import { quizTimerQueue, messageQueue, type QuizTimerJobPayload } from "../../queues";
 import { config } from "../../config";
+import { MessageTemplate } from "../../types/message-template.enum";
+
+// Pre-start reminder offsets (ms before startTime), keyed by the job-id suffix used
+// to schedule/cancel them. Adding a reminder means adding one entry here — nothing
+// else in the codebase needs to know about it.
+const REMINDER_OFFSETS: ReadonlyArray<{ id: string; msBefore: number }> = [
+    { id: "24h", msBefore: 24 * 60 * 60 * 1000 },
+    { id: "1h", msBefore: 60 * 60 * 1000 },
+];
 
 // Time warning intervals from env (seconds before endTime)
 const TIME_WARNINGS = [
@@ -92,6 +101,75 @@ export class QuizSchedulerService {
     }
 
     /**
+     * (Re)schedule the pre-start reminder notifications for a contest.
+     *
+     * Cancels any existing reminders first so this is safe to call on publish and on
+     * every reschedule — the same reason scheduleJob evicts before adding. Reminders
+     * whose send time has already passed are skipped rather than fired immediately.
+     */
+    async scheduleReminders(
+        contestId: string,
+        organizationId: string,
+        startTime: Date,
+    ): Promise<void> {
+        await this.cancelReminders(contestId);
+
+        const now = Date.now();
+        const startMs = startTime.getTime();
+
+        for (const { id, msBefore } of REMINDER_OFFSETS) {
+            const delay = startMs - msBefore - now;
+            if (delay <= 0) continue;
+
+            await messageQueue.add(
+                "bulk-notify",
+                { contestId, organizationId, template: MessageTemplate.WORKSHOP_REMINDER_MESSAGE },
+                { delay, jobId: this.reminderJobId(contestId, id) },
+            );
+            logger.info(`[quiz-scheduler] Scheduled ${id} reminder for contest ${contestId}`);
+        }
+    }
+
+    /**
+     * Queue the post-contest absentee sweep.
+     *
+     * Delayed so submission workers have time to flush and persist before anyone is
+     * judged absent. Shared by both termination paths — the scheduled AUTO_SUBMIT job
+     * and an admin force-end — so the grace period can never differ between them.
+     */
+    async scheduleMarkAbsent(contestId: string, organizationId: string): Promise<void> {
+        await quizTimerQueue.add(
+            "mark-absent",
+            { contestId, organizationId, type: "MARK_ABSENT" },
+            {
+                jobId: `MARK_ABSENT-${contestId}`,
+                delay: config.quiz.markAbsentDelay * 1000,
+            },
+        );
+        logger.info(
+            `[quiz-scheduler] MARK_ABSENT for contest ${contestId} queued in ${config.quiz.markAbsentDelay}s`,
+        );
+    }
+
+    /** Remove all pending pre-start reminders for a contest. */
+    async cancelReminders(contestId: string): Promise<void> {
+        for (const { id } of REMINDER_OFFSETS) {
+            const jobId = this.reminderJobId(contestId, id);
+            try {
+                const job = await messageQueue.getJob(jobId);
+                if (job) await job.remove();
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error(`[quiz-scheduler] Failed to remove reminder ${jobId}: ${msg}`);
+            }
+        }
+    }
+
+    private reminderJobId(contestId: string, offsetId: string): string {
+        return `reminder-${offsetId}-${contestId}`;
+    }
+
+    /**
      * Schedule identity audit snapshots for a specific participant.
      * Called when a participant enters the quiz phase.
      *
@@ -145,18 +223,38 @@ export class QuizSchedulerService {
             ...TIME_WARNINGS.map((s) => `warning-${contestId}-${s}`),
         ];
 
+        const failed: string[] = [];
+
         for (const jobId of jobIds) {
             try {
                 const job = await quizTimerQueue.getJob(jobId);
                 if (job) {
                     await job.remove();
                 }
-            } catch {
-                // Job may already have been processed — ignore
+            } catch (err) {
+                // A removal failure is NOT harmless: scheduleJob re-adds with the same
+                // jobId, and BullMQ silently ignores add() when that id still exists —
+                // so the surviving job keeps its ORIGINAL delay and the contest fires on
+                // the old schedule. Surface it instead of swallowing it. The timer worker
+                // additionally re-validates each job against the contest's current
+                // startTime/endTime, so this is logged rather than thrown.
+                failed.push(jobId);
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error(
+                    `[quiz-scheduler] FAILED to remove job ${jobId} for contest ${contestId}: ${msg}. ` +
+                    `A stale job may remain queued on the old schedule.`,
+                );
             }
         }
 
-        logger.info(`[quiz-scheduler] Cancelled all jobs for contest ${contestId}`);
+        if (failed.length > 0) {
+            logger.warn(
+                `[quiz-scheduler] Cancelled jobs for contest ${contestId} with ${failed.length} ` +
+                `failure(s): ${failed.join(", ")}`,
+            );
+        } else {
+            logger.info(`[quiz-scheduler] Cancelled all jobs for contest ${contestId}`);
+        }
     }
 
     // ─── Private ──────────────────────────────────────────────────────────────
@@ -166,6 +264,25 @@ export class QuizSchedulerService {
         jobId: string,
         delay: number,
     ): Promise<void> {
+        // BullMQ treats jobId as an idempotency key: add() is a silent no-op when a
+        // job with the same id already exists. On a reschedule that means the NEW
+        // delay is discarded and the OLD one survives — the exact failure mode behind
+        // "I moved the start time but the contest still began at the old time".
+        // Explicitly evict any leftover before adding so the new delay always wins.
+        try {
+            const existing = await quizTimerQueue.getJob(jobId);
+            if (existing) {
+                await existing.remove();
+                logger.info(`[quiz-scheduler] Evicted pre-existing job ${jobId} before rescheduling`);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error(
+                `[quiz-scheduler] Could not evict existing job ${jobId}: ${msg}. ` +
+                `The new delay may not apply — the timer worker's staleness check is the backstop.`,
+            );
+        }
+
         await quizTimerQueue.add("quiz-timer", payload, {
             jobId,
             delay,

@@ -55,7 +55,56 @@ export const CreateContestSchema = CreateContestBase.refine(
 
 // UPDATE CONTEST
 
-export const UpdateContestSchema = CreateContestBase.partial();
+/**
+ * `.strict()` is load-bearing, not decoration.
+ *
+ * Zod objects strip unknown keys by default, which turned two separate client/server
+ * field-name mismatches into silent no-ops that reported HTTP 200 and toasted success:
+ *   1. the inline "Contest Ends" editor posts `durationMinutes` → dropped, so
+ *      duration/endTime never changed and AUTO_SUBMIT stayed on the old schedule;
+ *   2. the cancel modal posts `status` + `cancelReason` → both dropped, so contests
+ *      were never actually cancelled.
+ * Rejecting unknown keys makes that whole class of bug a loud 400 instead.
+ *
+ * `durationMinutes` is accepted as an explicit alias (the admin UI's own field name)
+ * and normalised onto `duration` so there is one canonical field downstream.
+ */
+export const UpdateContestSchema = CreateContestBase.partial()
+    .extend({
+        durationMinutes: z.number().int().min(10).max(480).optional(),
+    })
+    .strict()
+    .transform(({ durationMinutes, ...rest }) => {
+        const normalised = { ...rest } as Omit<typeof rest, never> & { duration?: number };
+        if (normalised.duration === undefined && durationMinutes !== undefined) {
+            normalised.duration = durationMinutes;
+        }
+        return normalised;
+    });
+
+/** Timing fields. Once a contest is published these may only change via reschedule. */
+export const TIMING_FIELDS = ["startTime", "registrationDeadline", "duration", "durationMinutes"] as const;
+
+// RESCHEDULE CONTEST
+
+/**
+ * A reschedule is one atomic intent, unlike PATCH which sends a single field per
+ * request and re-runs the whole cancel/reschedule cycle each time. `endTime` is always
+ * derived from startTime + duration and is never accepted from the client.
+ */
+export const RescheduleContestSchema = z.object({
+    startTime: z.coerce.date(),
+    registrationDeadline: z.coerce.date().optional(),
+    duration: z.number().int().min(10).max(480).optional(),
+    reason: z.string().max(500).optional(),
+    notifyParticipants: z.boolean().default(true),
+}).strict();
+
+// FORCE-END CONTEST
+
+export const ForceEndContestSchema = z.object({
+    reason: z.string().max(500).optional(),
+}).strict();
 // REGISTER FOR CONTEST
 
 export const RegisterParticipantSchema = z.object({
@@ -130,8 +179,10 @@ export const DisqualifyParticipantSchema = z.object({
 });
 
 export const CancelContestSchema = z.object({
-    reason: z.string().max(500).optional(),
-});
+    /** Shown verbatim to participants in the cancellation notice. */
+    reason: z.string().min(5).max(500),
+    notifyParticipants: z.boolean().default(true),
+}).strict();
 
 export const SendContestMessageSchema = z.object({
     contestId: z.string().min(1),
@@ -149,3 +200,5 @@ export type ReorderQuestionsInput = z.infer<typeof ReorderQuestionsSchema>;
 export type GenerateCertificatesInput = z.infer<typeof GenerateCertificatesSchema>;
 export type DisqualifyParticipantInput = z.infer<typeof DisqualifyParticipantSchema>;
 export type CancelContestInput = z.infer<typeof CancelContestSchema>;
+export type RescheduleContestInput = z.infer<typeof RescheduleContestSchema>;
+export type ForceEndContestInput = z.infer<typeof ForceEndContestSchema>;

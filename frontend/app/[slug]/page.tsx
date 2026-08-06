@@ -657,14 +657,9 @@ export default function PublicRegistrationPage() {
                                         <p className="text-3xl font-mono font-bold tracking-widest text-primary">{registrationRef}</p>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <Button variant="outline" className="h-12 rounded-xl" onClick={() => router.push('/')}>
+                                        <Button className="h-12 rounded-xl col-span-2" onClick={() => router.push('/')}>
                                             Go to Home
                                         </Button>
-                                        <Button className="h-12 rounded-xl" onClick={() => router.push('/dashboard')}>
-                                            Go to Dashboard
-                                        </Button>
-                                    </div>
                                 </div>
                             </Card>
                         </motion.div>

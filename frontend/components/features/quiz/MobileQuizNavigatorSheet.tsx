@@ -36,17 +36,17 @@ export function MobileQuizNavigatorSheet({ onSubmitClick }: MobileQuizNavigatorS
         onClick={() => setOpen(true)}
         className="
           sm:hidden fixed bottom-20 right-4 z-30
-          w-14 h-14 rounded-full bg-orange-500 shadow-lg shadow-orange-500/25
+          w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25
           flex items-center justify-center
           active:scale-95 transition-transform
         "
         aria-label="Open question navigator"
       >
-        <LayoutGrid className="w-5 h-5 text-white" />
+        <LayoutGrid className="w-5 h-5 text-primary-foreground" />
 
         {/* Unanswered badge */}
         {unanswered > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
             {unanswered > 99 ? '99+' : unanswered}
           </span>
         )}
@@ -75,21 +75,21 @@ export function MobileQuizNavigatorSheet({ onSubmitClick }: MobileQuizNavigatorS
               dragConstraints={{ top: 0 }}
               dragElastic={0.1}
               onDragEnd={handleDragEnd}
-              className="sm:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl overflow-hidden"
-              style={{ height: '60vh', background: '#1E293B' }}
+              className="sm:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl overflow-hidden bg-card"
+              style={{ height: '60vh' }}
             >
               {/* Drag Handle */}
               <div className="flex justify-center pt-3 pb-2">
-                <div className="w-10 h-1 rounded-full bg-white/20" />
+                <div className="w-10 h-1 rounded-full bg-border" />
               </div>
 
               {/* Header */}
               <div className="flex items-center justify-between px-4 pb-3">
-                <h3 className="text-sm font-semibold text-white">Question Navigator</h3>
+                <h3 className="text-sm font-semibold text-foreground">Question Navigator</h3>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="text-white/40 hover:text-white p-1"
+                  className="text-muted-foreground hover:text-foreground p-1"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -101,7 +101,7 @@ export function MobileQuizNavigatorSheet({ onSubmitClick }: MobileQuizNavigatorS
               </div>
 
               {/* Divider */}
-              <div className="h-px bg-white/10 mx-4" />
+              <div className="h-px bg-border mx-4" />
 
               {/* Navigator Grid — 6 cols on mobile */}
               <div className="px-4 pt-3 flex-1 overflow-y-auto" style={{ maxHeight: 'calc(60vh - 200px)' }}>
@@ -112,7 +112,7 @@ export function MobileQuizNavigatorSheet({ onSubmitClick }: MobileQuizNavigatorS
               </div>
 
               {/* Divider */}
-              <div className="h-px bg-white/10 mx-4 mt-3" />
+              <div className="h-px bg-border mx-4 mt-3" />
 
               {/* Submit Button */}
               <div className="p-4">
@@ -121,16 +121,16 @@ export function MobileQuizNavigatorSheet({ onSubmitClick }: MobileQuizNavigatorS
                     setOpen(false);
                     onSubmitClick();
                   }}
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl py-3 font-semibold"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl py-3 font-semibold"
                 >
                   Submit All Answers
                 </Button>
                 {unanswered > 0 ? (
-                  <p className="text-xs text-amber-400 text-center mt-1.5">
+                  <p className="text-xs text-warning text-center mt-1.5">
                     {unanswered} question{unanswered !== 1 ? 's' : ''} unanswered
                   </p>
                 ) : (
-                  <p className="text-xs text-green-400 text-center mt-1.5">
+                  <p className="text-xs text-success text-center mt-1.5">
                     All answered — ready to submit!
                   </p>
                 )}

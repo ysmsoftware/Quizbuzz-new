@@ -29,8 +29,8 @@ export function FlagButton({ questionIndex, emitFlag }: FlagButtonProps) {
         flex items-center gap-1.5 text-sm p-2 rounded-lg
         transition-all duration-150
         ${isFlagged
-          ? 'text-amber-400 bg-amber-500/10'
-          : 'text-white/40 hover:text-amber-400 hover:bg-white/5'
+          ? 'text-warning bg-warning/10'
+          : 'text-muted-foreground hover:text-warning hover:bg-muted/50'
         }
       `}
       title={isFlagged ? 'Remove flag' : 'Flag for review'}

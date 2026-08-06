@@ -198,6 +198,13 @@ const envSchema = z.object({
     QUIZ_TIME_WARNING_1: z.coerce.number(),
     QUIZ_TIME_WARNING_2: z.coerce.number(),
     QUIZ_TIME_WARNING_3: z.coerce.number(),
+    // How early (seconds) a lifecycle timer job may fire relative to the contest's
+    // CURRENT startTime/endTime before it is treated as stale and re-scheduled.
+    // Absorbs BullMQ delay jitter + minor clock skew between app instances.
+    QUIZ_TIMER_DRIFT_TOLERANCE: z.coerce.number().default(5),
+    // Grace period (seconds) after a contest ends before participants who never
+    // joined are marked ABSENT — lets submission workers flush and persist first.
+    QUIZ_MARK_ABSENT_DELAY: z.coerce.number().default(600),
     MAX_SLUG_RETRIES: z.coerce.number().default(5),
     JOIN_CODE_LENGTH: z.coerce.number().default(6),
     BULK_IMPORT_LIMIT: z.coerce.number().default(500),
@@ -448,6 +455,8 @@ export const config = {
         timeWarning3: env.QUIZ_TIME_WARNING_3,
         sessionTTL: env.QUIZ_SESSION_TTL,
         heartbeatTTL: env.HEARTBEAT_TTL,
+        timerDriftTolerance: env.QUIZ_TIMER_DRIFT_TOLERANCE,
+        markAbsentDelay: env.QUIZ_MARK_ABSENT_DELAY,
     },
 
     // Convenience alias — quiz module uses config.ws / config.app.frontendUrl

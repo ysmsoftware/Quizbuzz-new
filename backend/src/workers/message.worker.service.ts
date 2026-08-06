@@ -81,8 +81,19 @@ export class MessageWorkerService {
      * Fan-out handler for bulk notifications (reminders, results published, etc.)
      * Fetches all participants for a contest and creates individual send-message jobs.
      */
-    async processBulkNotify(data: { contestId: string; organizationId: string; template: string; contestSlug?: string }) {
-        const { contestId, organizationId, template } = data;
+    async processBulkNotify(data: {
+        contestId: string;
+        organizationId: string;
+        template: string;
+        contestSlug?: string;
+        /**
+         * Template-specific values merged into every recipient's params, for templates
+         * that need context beyond the contest itself (e.g. a cancellation reason).
+         * Per-recipient fields below always win so they can't be clobbered.
+         */
+        extraParams?: Record<string, string>;
+    }) {
+        const { contestId, organizationId, template, extraParams } = data;
 
         logger.info(`[message-worker] Starting bulk-notify: template=${template} contest=${contestId}`);
 
@@ -98,7 +109,20 @@ export class MessageWorkerService {
         }
 
         const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || config.app.frontendUrl || 'https://quizbuzz.in';
-        const isResultsTemplate = template === 'RESULTS_PUBLISHED';
+
+        // Each notification template needs a different destination:
+        //  - RESULTS_PUBLISHED         → public leaderboard/results page
+        //  - WORKSHOP_REMINDER_MESSAGE → the participant's actual quiz JOIN flow
+        //    (this used to reuse the generic contest info link below, which sent
+        //    people to a details page instead of letting them join — fixed here
+        //    to match the link REGISTRATION_SUCCESSFUL already uses)
+        //  - everything else (reschedule/cancel notices, etc.) → generic contest info page
+        const link =
+            template === 'RESULTS_PUBLISHED'
+                ? `${appUrl}/quiz/${contest.slug}/results`
+                : template === 'WORKSHOP_REMINDER_MESSAGE'
+                    ? `${appUrl}/quiz/${contest.slug}/join`
+                    : `${appUrl}/contests/${contest.slug}`;
 
         // Fetch all registered participants with their contact info
         const participants = await prisma.participant.findMany({
@@ -122,6 +146,7 @@ export class MessageWorkerService {
                     template,
                     recipient: p.contact.email,
                     params: {
+                        ...extraParams,
                         name: p.contact.firstName,
                         eventName: contest.title,
                         date: contest.startTime
@@ -130,10 +155,7 @@ export class MessageWorkerService {
                         time: contest.startTime
                             ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short', timeZone: 'Asia/Kolkata' })
                             : 'TBD',
-                        // Results: link to public leaderboard. Reminder/confirmation: link to contest page.
-                        link: isResultsTemplate
-                            ? `${appUrl}/quiz/${contest.slug}/results`
-                            : `${appUrl}/contests/${contest.slug}`,
+                        link,
                         joinCode: contest.joinCode ?? 'To be revealed on contest day',
                     },
                 });

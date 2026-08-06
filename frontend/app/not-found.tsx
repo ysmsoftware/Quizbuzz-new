@@ -19,10 +19,10 @@ export default function NotFound() {
           The page you're looking for doesn't exist or has been moved.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-          <Link href="/dashboard">
+          <Link href="/">
             <Button size="lg" className="w-full sm:w-auto">
               <Home className="h-4 w-4 mr-2" />
-              Go to Dashboard
+              Go to Home
             </Button>
           </Link>
           <Button

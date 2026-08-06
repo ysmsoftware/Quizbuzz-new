@@ -305,7 +305,14 @@ export class QuizService {
             contest.shuffleOptions,
         );
 
-        const totalTimeMs = (contest.duration ?? 60) * 60 * 1000;
+        // Time budget = the participant's full duration, but never beyond the
+        // contest's hard endTime. Without the clamp a participant who starts even
+        // slightly early/late gets a full `duration` window measured from their own
+        // start, which can run past endTime — the AUTO_SUBMIT job then cuts them off
+        // mid-quiz while their on-screen timer still shows time left.
+        const fullDurationMs = (contest.duration ?? 60) * 60 * 1000;
+        const msUntilContestEnd = contest.endTime.getTime() - Date.now();
+        const totalTimeMs = Math.max(0, Math.min(fullDurationMs, msUntilContestEnd));
 
         // Write full session state to Redis
         await this.session.createSession({

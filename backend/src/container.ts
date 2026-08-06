@@ -126,6 +126,15 @@ injectTimerWorkerDeps({
     prismaClient: prisma,
 });
 
+// ContestService is constructed before the gateway (the gateway depends on
+// QuizService), so its socket + quiz-runtime collaborators are bound after the fact
+// through narrow ports — same late-binding approach as injectTimerWorkerDeps above.
+contestService.setBroadcaster(quizGateway);
+contestService.setQuizTerminator({
+    handleTimeExpiry: (cid) => quizService.handleTimeExpiry(cid),
+    emitAutoSubmit: (pid, cid, reason) => quizGateway.emitAutoSubmit(pid, cid, reason),
+});
+
 // ─── Controllers ──────────────────────────────────────────────────────────────
 export const organizationController = new OrganizationController(organizationService, adminAuthRepository);
 export const adminAuthController = new AdminAuthController(adminAuthService);

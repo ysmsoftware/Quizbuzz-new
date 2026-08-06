@@ -88,36 +88,24 @@ export function QuestionNavigator({ onNavigate, columns }: QuestionNavigatorProp
           const label = i + 1;
           const isLargeNumber = label >= 10;
 
-          // Base styles by status
-          let bg: string;
-          let border: string;
-          let textColor: string;
+          // Base styles by status — semantic theme tokens, not hardcoded hex/rgba
+          let stateClass: string;
 
           if (isConfirming) {
-            bg = 'rgba(34,197,94,0.6)';
-            border = 'none';
-            textColor = 'text-white';
+            stateClass = 'bg-success/60 border border-transparent text-success-foreground';
           } else {
             switch (status) {
               case 'answered':
-                bg = '#1E3A5F';
-                border = 'none';
-                textColor = 'text-white font-medium';
+                stateClass = 'bg-primary/30 border border-transparent text-foreground font-medium';
                 break;
               case 'flagged':
-                bg = 'rgba(245,158,11,0.25)';
-                border = '1.5px solid #F59E0B';
-                textColor = 'text-amber-300';
+                stateClass = 'bg-warning/25 border-[1.5px] border-warning text-warning';
                 break;
               case 'visited':
-                bg = 'rgba(255,255,255,0.05)';
-                border = '1.5px solid rgba(255,255,255,0.40)';
-                textColor = 'text-white/60';
+                stateClass = 'bg-muted/40 border-[1.5px] border-border text-muted-foreground';
                 break;
               default: // unanswered
-                bg = 'rgba(255,255,255,0.08)';
-                border = '1px solid rgba(255,255,255,0.15)';
-                textColor = 'text-white/40';
+                stateClass = 'bg-muted/20 border border-border/60 text-muted-foreground/70';
                 break;
             }
           }
@@ -131,12 +119,10 @@ export function QuestionNavigator({ onNavigate, columns }: QuestionNavigatorProp
                 w-7 h-7 rounded-full flex items-center justify-center
                 cursor-pointer transition-all duration-150
                 hover:brightness-[1.3]
-                ${textColor}
-                ${isCurrent ? 'ring-2 ring-orange-500 scale-[1.15]' : ''}
+                ${stateClass}
+                ${isCurrent ? 'ring-2 ring-primary scale-[1.15]' : ''}
               `}
               style={{
-                background: bg,
-                border: border,
                 fontSize: isLargeNumber ? '7px' : '8px',
               }}
               aria-label={`Question ${label}${status !== 'unanswered' ? ` (${status})` : ''}`}
