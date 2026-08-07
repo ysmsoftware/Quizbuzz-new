@@ -11,9 +11,7 @@ import {
   Crown,
   Timer,
   Zap,
-  Star,
-  Download,
-  Share2
+  Star
 } from 'lucide-react';
 import { resultsApi, LeaderboardEntry } from '@/lib/api/results-certs.api';
 import { contestService } from '@/lib/services/contest-service';
@@ -107,16 +105,6 @@ export default function PublicLeaderboardPage() {
             <p className="text-muted-foreground text-lg font-medium max-w-xl">
               Celebrating the brilliance and hard work of our top performers. Congratulations to everyone!
             </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="rounded-2xl h-14 px-8 border-border/50 bg-background/50 backdrop-blur-xl">
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            <Button className="rounded-2xl h-14 px-8 bg-primary shadow-xl shadow-primary/20">
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
           </div>
         </div>
       </div>

@@ -101,7 +101,7 @@ export default function QuestionSelector({ contestId, onBack }: { contestId: str
       localStorage.setItem('questionConfigs', JSON.stringify([...existing, questionConfig]));
 
       alert(`Successfully selected ${selectedQuestions} questions from database!`);
-      router.push(`/admin/contests/${contestId}`);
+      router.push(`/org/contests/${contestId}`);
     } finally {
       setLoading(false);
     }

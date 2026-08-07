@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { PublicContestDetail } from '@/lib/types/public-contest';
 import { contestService } from '@/lib/services/contest-service';
 import {
@@ -30,6 +32,66 @@ import {
 interface ContestDetailsProps {
   contest: PublicContestDetail;
 }
+
+// The contest-create form labels this field "Rich Text Details / Markdown"
+// and its placeholder is literal markdown (## headings, etc.), so it has to
+// actually be rendered as markdown here — not dumped into a <p> as raw text.
+// Styled to match the surrounding card typography rather than pulling in the
+// Tailwind Typography plugin for one field.
+const markdownComponents = {
+  h1: ({ children }: { children?: ReactNode }) => (
+    <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }: { children?: ReactNode }) => (
+    <h2 className="text-xl font-bold text-foreground mt-5 mb-2.5 first:mt-0">{children}</h2>
+  ),
+  h3: ({ children }: { children?: ReactNode }) => (
+    <h3 className="text-lg font-semibold text-foreground mt-4 mb-2 first:mt-0">{children}</h3>
+  ),
+  p: ({ children }: { children?: ReactNode }) => (
+    <p className="leading-relaxed mb-3 last:mb-0">{children}</p>
+  ),
+  ul: ({ children }: { children?: ReactNode }) => (
+    <ul className="list-disc pl-5 space-y-1 mb-3 last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }: { children?: ReactNode }) => (
+    <ol className="list-decimal pl-5 space-y-1 mb-3 last:mb-0">{children}</ol>
+  ),
+  li: ({ children }: { children?: ReactNode }) => <li className="leading-relaxed">{children}</li>,
+  a: ({ children, href }: { children?: ReactNode; href?: string }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline underline-offset-2 hover:no-underline"
+    >
+      {children}
+    </a>
+  ),
+  strong: ({ children }: { children?: ReactNode }) => (
+    <strong className="font-semibold text-foreground">{children}</strong>
+  ),
+  code: ({ children }: { children?: ReactNode }) => (
+    <code className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[0.85em] font-mono">{children}</code>
+  ),
+  blockquote: ({ children }: { children?: ReactNode }) => (
+    <blockquote className="border-l-2 border-primary/30 pl-4 italic text-muted-foreground/90 my-3">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="my-4 border-border/50" />,
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="overflow-x-auto my-3">
+      <table className="w-full text-sm border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }: { children?: ReactNode }) => (
+    <th className="border border-border/50 px-2 py-1 text-left font-semibold bg-muted/50">{children}</th>
+  ),
+  td: ({ children }: { children?: ReactNode }) => (
+    <td className="border border-border/50 px-2 py-1">{children}</td>
+  ),
+};
 
 const statusLabels: Record<string, string> = {
   PUBLISHED: 'Open for Registration',
@@ -199,9 +261,17 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                   <CardTitle>About This Contest</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground whitespace-pre-line">
-                    {contest.details || contest.description || 'No details provided.'}
-                  </p>
+                  {contest.details ? (
+                    <div className="text-muted-foreground text-sm">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {contest.details}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground whitespace-pre-line">
+                      {contest.description || 'No details provided.'}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 

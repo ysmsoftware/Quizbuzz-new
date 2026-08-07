@@ -21,9 +21,32 @@ export class ProctoringService {
 
     async getParticipantEvents(contestId: string, participantId: string) {
         const events = await this.proctoringRepo.findEvents(contestId, participantId);
+        return this.attachSnapshotUrls(events, 3600 * 24); // 24h — single participant, admin actively reviewing
+    }
+
+    /**
+     * All events for the contest, across every participant — backs the
+     * "Full Event Log" page. Same snapshot-presigning as the per-participant
+     * view, just over a paginated, contest-wide result set.
+     */
+    async getContestEvents(contestId: string, options: ProctoringPaginationOptions) {
+        const { events, total } = await this.proctoringRepo.findContestEvents(contestId, options);
+        const withSnapshots = await this.attachSnapshotUrls(events, 3600); // 1h — a paginated list, not a long review session
+        return { events: withSnapshots, total, page: options.page, limit: options.limit };
+    }
+
+    /**
+     * Resolves each event's stored S3 key (if any) into a time-limited
+     * presigned GET url. Shared by both the single-participant timeline and
+     * the contest-wide event log so they stay in sync.
+     */
+    private async attachSnapshotUrls<T extends { metadata: any }>(
+        events: T[],
+        expiresInSeconds: number
+    ): Promise<(T & { snapshotUrl: string | null })[]> {
         const provider = getStorageProvider();
 
-        const processedEvents = await Promise.all(
+        return Promise.all(
             events.map(async (event) => {
                 const s3Key = (event.metadata as any)?.s3Key as string | undefined;
                 let snapshotUrl: string | null = null;
@@ -32,7 +55,7 @@ export class ProctoringService {
                     try {
                         const { url } = await provider.getPresignedGetUrl({
                             storageKey: s3Key,
-                            expiresInSeconds: 3600 * 24, // 24 hours
+                            expiresInSeconds,
                         });
                         snapshotUrl = url;
                     } catch (err) {
@@ -46,8 +69,6 @@ export class ProctoringService {
                 };
             })
         );
-
-        return processedEvents;
     }
 
     /**

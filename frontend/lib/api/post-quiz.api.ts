@@ -107,6 +107,9 @@ export const proctoringApi = {
   getParticipantEvents: (contestId: string, participantId: string, params?: { page?: number; limit?: number }) =>
     get<any>(`/proctoring/contests/${contestId}/participants/${participantId}/events`, { params }),
 
+  getContestEvents: (contestId: string, params?: { page?: number; limit?: number; type?: string }) =>
+    get<any>(`/proctoring/contests/${contestId}/events`, { params }),
+
   dismissViolation: (scoreId: string) =>
     patch<any>(`/proctoring/scores/${scoreId}/status`, { isDismissed: true }),
 };

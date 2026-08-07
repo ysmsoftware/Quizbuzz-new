@@ -370,7 +370,7 @@ export function ContestActionBar({
       </AlertDialog>
 
       <Button size="sm" className="bg-primary shadow-lg shadow-primary/20" asChild>
-        <Link href={`/admin/contests/${contest.id}/live`}>
+        <Link href={`/org/contests/${contest.id}/live`}>
           <Radio className="mr-2 h-4 w-4 animate-pulse" />
           Broadcast Message
         </Link>
@@ -444,7 +444,7 @@ export function ContestActionBar({
 
         {!onDeclareResults && (
           <Button size="sm" className="bg-green-600 hover:bg-green-700" asChild>
-            <Link href={`/admin/contests/${contest.id}/results`}>
+            <Link href={`/org/contests/${contest.id}/results`}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Publish Results
             </Link>
@@ -461,7 +461,7 @@ export function ContestActionBar({
         Archive
       </Button>
       <Button variant="outline" size="sm" asChild>
-        <Link href={`/admin/contests/${contest.id}/certificates`}>
+        <Link href={`/org/contests/${contest.id}/certificates`}>
           <ShieldAlert className="mr-2 h-4 w-4" />
           Issue Certificates
         </Link>

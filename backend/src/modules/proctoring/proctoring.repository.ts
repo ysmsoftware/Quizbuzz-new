@@ -8,6 +8,10 @@ import {
 
 export interface IProctoringRepository {
     findEvents(contestId: string, participantId: string): Promise<ProctoringEventRecord[]>;
+    findContestEvents(
+        contestId: string,
+        options: ProctoringPaginationOptions
+    ): Promise<{ events: (ProctoringEventRecord & { participant: { id: string; contact: { firstName: string; lastName: string | null; email: string } } })[], total: number }>;
     findScores(contestId: string, options: ProctoringPaginationOptions): Promise<{ scores: ProctoringScoreRecord[], total: number }>;
     updateScoreStatus(scoreId: string, organizationId: string, isDismissed: boolean): Promise<ProctoringScore>;
     getContestStats(contestId: string): Promise<{
@@ -29,6 +33,44 @@ export class ProctoringRepository implements IProctoringRepository {
             where: { contestId, participantId },
             orderBy: { occurredAt: "desc" },
         }) as Promise<ProctoringEventRecord[]>;
+    }
+
+    /**
+     * All proctoring events across an entire contest (every participant),
+     * newest first — backs the "Full Event Log" view. Uses the
+     * [contestId, occurredAt] index on ProctoringEvent, same as the
+     * per-participant lookup uses [participantId].
+     */
+    async findContestEvents(
+        contestId: string,
+        { page, limit, type }: ProctoringPaginationOptions
+    ) {
+        const where = {
+            contestId,
+            ...(type ? { type } : {}),
+        };
+
+        const [events, total] = await prisma.$transaction([
+            prisma.proctoringEvent.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: { occurredAt: "desc" },
+                include: {
+                    participant: {
+                        select: {
+                            id: true,
+                            contact: {
+                                select: { firstName: true, lastName: true, email: true },
+                            },
+                        },
+                    },
+                },
+            }),
+            prisma.proctoringEvent.count({ where }),
+        ]);
+
+        return { events: events as any, total };
     }
 
     async findScores(

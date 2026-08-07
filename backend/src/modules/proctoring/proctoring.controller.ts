@@ -39,6 +39,22 @@ export class ProctoringController {
         }
     };
 
+    /**
+     * GET /proctoring/contests/:contestId/events
+     * Paginated event log across every participant in the contest — backs
+     * the proctoring page's "Full Event Log" button.
+     */
+    getContestEvents = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { contestId } = req.params;
+            const query = ProctoringPaginationSchema.parse(req.query);
+            const result = await this.proctoringService.getContestEvents(contestId as string, query);
+            res.json({ success: true, data: result });
+        } catch (error) {
+            next(error);
+        }
+    };
+
     updateViolationStatus = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { scoreId } = req.params;
