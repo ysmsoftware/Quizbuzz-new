@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { contestService } from '@/lib/services';
 import { ContestCard } from '@/components/contests/contest-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Trophy, ArrowRight } from 'lucide-react';
 
 export function FeaturedContests() {
   const { data, isLoading, error } = useQuery({
@@ -27,8 +30,34 @@ export function FeaturedContests() {
 
   if (error || !data?.success) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        Failed to load featured contests. Please try again later.
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border py-16 text-center">
+        <Trophy className="h-10 w-10 text-muted-foreground" />
+        <div>
+          <p className="font-medium">Could not load featured contests</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The contest list is temporarily unavailable. Try again shortly.
+          </p>
+        </div>
+        <Link href="/contests">
+          <Button variant="outline" size="sm" className="gap-1">
+            Browse All Contests
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (data.data?.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border py-16 text-center">
+        <Trophy className="h-10 w-10 text-muted-foreground" />
+        <div>
+          <p className="font-medium">No contests are open right now</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            New contests are published regularly — check back soon.
+          </p>
+        </div>
       </div>
     );
   }

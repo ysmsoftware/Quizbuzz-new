@@ -364,11 +364,15 @@ export default function ContestAnalyticsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 rounded-2xl bg-secondary/30 text-center">
                       <p className="text-xs text-muted-foreground mb-1">Fastest</p>
-                      <p className="text-sm font-bold">{Math.floor((snapshot?.fastestTimeSecs ?? 0) / 60)}m</p>
+                      <p className="text-sm font-bold">
+                        {snapshot?.fastestTimeSecs != null ? `${Math.floor(snapshot.fastestTimeSecs / 60)}m` : '—'}
+                      </p>
                     </div>
                     <div className="p-3 rounded-2xl bg-secondary/30 text-center">
                       <p className="text-xs text-muted-foreground mb-1">Slowest</p>
-                      <p className="text-sm font-bold">{Math.floor((snapshot?.slowestTimeSecs ?? 0) / 60)}m</p>
+                      <p className="text-sm font-bold">
+                        {snapshot?.slowestTimeSecs != null ? `${Math.floor(snapshot.slowestTimeSecs / 60)}m` : '—'}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/10 text-center">
@@ -398,7 +402,7 @@ export default function ContestAnalyticsPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span>Passed</span>
-                    <span>{snapshot?.passingCount ?? 0}</span>
+                    <span>{snapshot?.passingCount ?? '—'}</span>
                   </div>
                     <Progress 
                       value={snapshot?.totalSubmitted && snapshot?.totalRegistrations

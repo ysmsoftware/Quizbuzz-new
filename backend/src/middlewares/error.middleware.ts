@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as Sentry from "@sentry/node";
 import { AppError } from "../error/app-error";
+import { PlanLimitExceededError } from "../error/http-errors";
 import logger from "../config/logger";
 import { TokenExpiredError, JsonWebTokenError } from "jsonwebtoken";
 import { ZodError } from "zod";
@@ -69,7 +70,23 @@ export const globalErrorHandler = (
         });
     }
 
-    // ── 3. AppError ──────────────────────────────────────────────────────────
+    // ── 3. Plan/subscription limit errors ──────────────────────────────────────
+    // Surfaced with a distinct machine-readable code + structured limit info so the
+    // frontend can render an "Upgrade your plan" prompt instead of a generic error.
+    if (err instanceof PlanLimitExceededError) {
+        logger.warn(`${err.message} - [${method} ${originalUrl}] (ReqID: ${requestId})`);
+        return res.status(err.statusCode).json({
+            success: false,
+            code: "PLAN_LIMIT_EXCEEDED",
+            message: err.message,
+            limitType: err.limitType,
+            limit: err.limit,
+            current: err.current,
+            requestId,
+        });
+    }
+
+    // ── 4. AppError ──────────────────────────────────────────────────────────
     if (err instanceof AppError) {
         logger.warn(`${err.message} - [${method} ${originalUrl}] (ReqID: ${requestId})`);
         return res.status(err.statusCode).json({
@@ -80,7 +97,7 @@ export const globalErrorHandler = (
         });
     }
 
-    // ── 4. Fallback handler ──────────────────────────────────────────────────
+    // ── 5. Fallback handler ──────────────────────────────────────────────────
     // Handle non-Error thrown objects (e.g. Razorpay SDK rejects with plain objects)
     const message = err?.message ?? (typeof err === "object" ? JSON.stringify(err) : String(err))
     logger.error(`${message} - [${method} ${originalUrl}] (ReqID: ${requestId})`, { stack: err?.stack, raw: err });

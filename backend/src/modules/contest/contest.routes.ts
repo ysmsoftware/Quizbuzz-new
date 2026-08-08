@@ -1,16 +1,21 @@
 import { Router } from "express";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
 import { idempotency } from "../../middlewares/idempotency.middleware";
+import {
+    enforceContestCreateLimits,
+    enforceContestUpdateParticipantCap,
+    enforceParticipantRegistrationLimit,
+} from "../../middlewares/plan-limit.middleware";
 
 function ctrl() { return require("../../container").contestController; }
 function pctrl() { return require("../../container").participantController; }
 
 export const contestRouter = Router();
 
-contestRouter.post("/", authenticatedOrgMiddleware, (req, res, next) => ctrl().createContest(req, res, next));
+contestRouter.post("/", authenticatedOrgMiddleware, enforceContestCreateLimits, (req, res, next) => ctrl().createContest(req, res, next));
 contestRouter.get("/", authenticatedOrgMiddleware, (req, res, next) => ctrl().listContests(req, res, next));
 contestRouter.post("/upload-banner", authenticatedOrgMiddleware, (req, res, next) => ctrl().uploadBanner(req, res, next));
-contestRouter.post("/register/:contestSlug", (req, res, next) => ctrl().registerParticipant(req, res, next));
+contestRouter.post("/register/:contestSlug", enforceParticipantRegistrationLimit, (req, res, next) => ctrl().registerParticipant(req, res, next));
 contestRouter.post("/register-status/:contestSlug", (req, res, next) => ctrl().getRegisterStatus(req, res, next));
 
 // Public Routes (no auth)
@@ -20,7 +25,7 @@ contestRouter.get("/public/:slug", (req, res, next) => ctrl().getPublicContestBy
 // CRUD
 contestRouter.get("/archived", authenticatedOrgMiddleware, (req, res, next) => ctrl().listArchivedContests(req, res, next));
 contestRouter.get("/:contestId", authenticatedOrgMiddleware, (req, res, next) => ctrl().getContest(req, res, next));
-contestRouter.patch("/:contestId", authenticatedOrgMiddleware, (req, res, next) => ctrl().updateContest(req, res, next));
+contestRouter.patch("/:contestId", authenticatedOrgMiddleware, enforceContestUpdateParticipantCap, (req, res, next) => ctrl().updateContest(req, res, next));
 contestRouter.delete("/:contestId", authenticatedOrgMiddleware, (req, res, next) => ctrl().deleteContest(req, res, next));
 contestRouter.patch("/:contestId/archive", authenticatedOrgMiddleware, (req, res, next) => ctrl().archiveContest(req, res, next));
 

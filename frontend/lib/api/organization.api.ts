@@ -16,6 +16,31 @@ export async function getOrg(orgId: string): Promise<ApiResponse<any>> {
   return get(`/org/${orgId}`);
 }
 
+export interface OrgPlanLimits {
+  maxContestsPerCycle: number | null;
+  maxParticipantsPerContest: number | null;
+  maxQuestionsPerContest: number | null;
+  maxOrgMembers: number | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+}
+
+export interface OrgPlanUsage {
+  contestsUsedThisCycle: number;
+  /** Per-contest ceiling, not an org-wide total — the org's single fullest contest is what matters. */
+  maxParticipantsInAContest: number;
+  maxQuestionsInAContest: number;
+  memberCountUsed: number;
+  limits: OrgPlanLimits;
+}
+
+/**
+ * GET /org/:orgId/usage — powers the Settings → Plan & Billing usage bars.
+ */
+export async function getOrgUsage(orgId: string): Promise<ApiResponse<OrgPlanUsage>> {
+  return get(`/org/${orgId}/usage`);
+}
+
 /**
  * PATCH /org/:orgId
  */

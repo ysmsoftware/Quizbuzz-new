@@ -3,7 +3,11 @@
  * Following Rule 17: Standard Error Reference & Frontend HTTP Client.
  */
 
+import { notifyPlanLimitExceeded } from '../notifications/planLimitToast';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
+
+const PLAN_LIMIT_EXCEEDED_CODE = 'PLAN_LIMIT_EXCEEDED';
 
 export interface ApiResponse<T = unknown> {
   success: true;
@@ -18,6 +22,11 @@ export interface ApiError {
   message: string;
   details?: Record<string, string[]>;
   requestId?: string;
+  // Only present when code === "PLAN_LIMIT_EXCEEDED" — see backend's
+  // PlanLimitExceededError / error.middleware.ts.
+  limitType?: string;
+  limit?: number;
+  current?: number;
 }
 
 export class ApiRequestError extends Error {
@@ -26,7 +35,10 @@ export class ApiRequestError extends Error {
     message: string,
     public readonly details?: Record<string, string[]>,
     public readonly requestId?: string,
-    public readonly status?: number
+    public readonly status?: number,
+    public readonly limitType?: string,
+    public readonly limit?: number,
+    public readonly current?: number,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -134,12 +146,23 @@ export async function apiClient<T = unknown>(
 
   if (!data.success) {
     const errData = data as ApiError;
+
+    // Fires for every caller automatically — no per-call-site handling
+    // needed to turn a blocked request into a visible "upgrade your plan"
+    // toast instead of a silent failure or a raw error in the console.
+    if (errData.code === PLAN_LIMIT_EXCEEDED_CODE) {
+      notifyPlanLimitExceeded(errData);
+    }
+
     throw new ApiRequestError(
       errData.code ?? "UNKNOWN_ERROR",
       errData.message ?? res.statusText,
       errData.details,
       errData.requestId,
-      res.status
+      res.status,
+      errData.limitType,
+      errData.limit,
+      errData.current,
     );
   }
 

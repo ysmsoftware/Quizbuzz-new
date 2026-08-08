@@ -19,6 +19,9 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from ".
 import { createSlug } from "../../utils/slug";
 import { generateRegistrationRef } from "../../utils/ref";
 import { config } from "../../config";
+// Plan-limit enforcement (contests/cycle, participants/contest) now runs as
+// middleware ahead of these routes — see src/middlewares/plan-limit.middleware.ts.
+// This service no longer calls src/common/plan-entitlements.ts directly.
 import { verifyContactToken } from "../../utils/tokens";
 import { ContactService } from "../contact/contact.service";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
@@ -94,6 +97,8 @@ export class ContestService {
             throw new ForbiddenError("Organization is not active, and cannot create contests");
         }
 
+        // Plan enforcement (contests-per-cycle, participant cap) already ran
+        // in enforceContestCreateLimits middleware before this handler.
 
         if (registrationDeadline >= startTime) {
             throw new BadRequestError("Registration deadline must be before the start time")
@@ -254,6 +259,8 @@ export class ContestService {
                     `Max participants cannot be set below the current registered count (${currentParticipantCount})`
                 );
             }
+            // Plan enforcement (participants/contest cap) already ran in
+            // enforceContestUpdateParticipantCap middleware before this handler.
         }
 
         // Recompute endTime if startTime or duration changes
@@ -693,6 +700,10 @@ export class ContestService {
         if (contest.maxParticipants !== null && (contest as any)._count?.participants >= contest.maxParticipants) {
             throw new BadRequestError("Contest has reached its maximum participant limit");
         }
+
+        // Plan enforcement backstop (participants/contest, for contests with no
+        // self-imposed maxParticipants) already ran in enforceParticipantRegistrationLimit
+        // middleware before this handler.
 
         // 3. Resolve contactId — service orchestrates, repos do the queries
         const existingContact = await this.contactService.findByEmailOrPhone(

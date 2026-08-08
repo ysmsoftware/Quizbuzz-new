@@ -1,15 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Menu, X, ChevronDown, Trophy, Users, HelpCircle, Download } from 'lucide-react';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { Menu, X, Trophy, Users, HelpCircle, Download } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 
 const navigation = [
@@ -42,11 +38,15 @@ export function Header() {
         <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Logo */}
-                <Link href="/" className="flex items-center gap-2">
-                    <img src="/qbfavicon.png" alt="QuizBuzz" className="h-9 w-9 rounded-lg" width={36} height={36} />
-                    <span className="text-xl font-bold tracking-tight">
-                        Quiz<span className="text-primary">Buzz</span>
-                    </span>
+                <Link href="/" className="flex items-center">
+                    <Image
+                        src="/quizBuzz-logo.png"
+                        alt="QuizBuzz"
+                        width={140}
+                        height={40}
+                        priority
+                        className="h-8 w-auto sm:h-9"
+                    />
                 </Link>
 
                 {/* Desktop Navigation */}
@@ -65,17 +65,6 @@ export function Header() {
 
                 {/* Desktop CTA */}
                 <div className="hidden md:flex md:items-center md:gap-3">
-                    {showInstallBtn && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowInstallPrompt(true)}
-                            className="text-primary font-medium hover:text-primary hover:bg-secondary flex items-center gap-1.5 mr-1"
-                        >
-                            <Download className="h-4 w-4" />
-                            Install App
-                        </Button>
-                    )}
                     <Link href="/login">
                         <Button variant="outline" size="sm">
                             Sign In
@@ -86,21 +75,25 @@ export function Header() {
                             Create Account
                         </Button>
                     </Link>
+                    <ThemeToggle />
                 </div>
 
-                {/* Mobile menu button */}
-                <button
-                    type="button"
-                    className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                >
-                    <span className="sr-only">Open main menu</span>
-                    {mobileMenuOpen ? (
-                        <X className="h-6 w-6" aria-hidden="true" />
-                    ) : (
-                        <Menu className="h-6 w-6" aria-hidden="true" />
-                    )}
-                </button>
+                {/* Mobile controls */}
+                <div className="flex items-center gap-1 md:hidden">
+                    <ThemeToggle />
+                    <button
+                        type="button"
+                        className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    >
+                        <span className="sr-only">Open main menu</span>
+                        {mobileMenuOpen ? (
+                            <X className="h-6 w-6" aria-hidden="true" />
+                        ) : (
+                            <Menu className="h-6 w-6" aria-hidden="true" />
+                        )}
+                    </button>
+                </div>
             </nav>
 
             {/* Mobile menu */}

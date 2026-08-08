@@ -3,55 +3,52 @@ import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { HeroInstallButton, BottomInstallButton, FloatingInstallButton } from '@/components/pwa/LandingInstallButtons';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { FeaturedContests } from '@/components/home/featured-contests';
 import { WebApplicationJsonLd } from '@/lib/seo/json-ld';
 import {
     Trophy,
-    Users,
-    Shield,
+    ShieldCheck,
     BarChart3,
-    Clock,
     CheckCircle2,
     ArrowRight,
-    Zap,
+    ArrowDown,
     Globe,
-    Lock,
-    Star,
+    UserPlus,
+    Zap,
+    Award,
 } from 'lucide-react';
 
-const features = [
-    {
-        icon: Trophy,
-        title: 'Competitive Contests',
-        description: 'Participate in challenging quizzes across multiple categories with prizes and recognition.',
-    },
-    {
-        icon: Shield,
-        title: 'Secure Proctoring',
-        description: 'AI-powered proctoring ensures fair play with fullscreen mode and webcam monitoring.',
-    },
-    {
-        icon: BarChart3,
-        title: 'Real-time Leaderboards',
-        description: 'Track your performance live and see where you stand against other participants.',
-    },
-    {
-        icon: Clock,
-        title: 'Auto-Save Progress',
-        description: 'Never lose your answers with automatic saving and session recovery.',
-    },
-];
-
+// Satisfaction rate and support hours are still placeholder figures — replace with real data before launch.
 const stats = [
-    { value: '50K+', label: 'Active Participants' },
-    { value: '500+', label: 'Contests Hosted' },
+    { value: '3,000+', label: 'Concurrent Users per Contest Room' },
     { value: '98%', label: 'Satisfaction Rate' },
     { value: '24/7', label: 'Support Available' },
 ];
 
-const howItWorks = [
+const lifecycle = [
+    {
+        icon: UserPlus,
+        title: 'Register',
+        description: 'Participants sign up for a contest, with optional paid entry, in a few clicks.',
+    },
+    {
+        icon: ShieldCheck,
+        title: 'Proctor',
+        description: 'Fullscreen enforcement and webcam-based checks keep every session fair.',
+    },
+    {
+        icon: Zap,
+        title: 'Compete',
+        description: 'Timed quizzes with auto-save, session recovery, and a live leaderboard.',
+    },
+    {
+        icon: Award,
+        title: 'Certify',
+        description: 'Rankings and a downloadable certificate the moment the contest ends.',
+    },
+];
+
+const participantJourney = [
     {
         step: 1,
         title: 'Browse & Register',
@@ -83,42 +80,36 @@ export default function HomePage() {
             <main className="flex-1">
                 {/* Hero Section */}
                 <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background">
-                    <div className="absolute inset-0 bg-grid-pattern opacity-5" />
                     <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 sm:py-32 lg:px-8">
                         <div className="mx-auto max-w-3xl text-center">
-                            <Badge variant="outline" className="mb-6 border-primary/30 bg-primary/5 text-primary">
-                                <Zap className="mr-1 h-3 w-3" />
-                                New: AI-Powered Proctoring Now Available
-                            </Badge>
                             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-balance">
-                                Elevate Your
-                                <span className="text-primary"> Learning</span> Through
-                                <span className="text-primary"> Competition</span>
+                                Every Step of the Contest,
+                                <span className="text-primary"> One Platform</span>
                             </h1>
                             <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto text-pretty">
-                                Join thousands of participants in skill-testing quizzes and contests.
-                                From academic olympiads to coding challenges, prove your expertise and win exciting prizes.
+                                QuizBuzz takes a contest from registration to certificate: AI-assisted proctoring,
+                                real-time leaderboards, and instant results. Organizations run fair competitions —
+                                participants compete knowing the result is real.
                             </p>
-                            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
-                                <Link href="/login">
+                            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center sm:flex-wrap">
+                                <Link href="/contests">
                                     <Button size="lg" className="w-full sm:w-auto gap-2">
                                         <Trophy className="h-5 w-5" />
-                                        Sign In
+                                        Browse Contests
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 </Link>
-                                <HeroInstallButton />
                                 <Link href="/register">
                                     <Button size="lg" variant="outline" className="w-full sm:w-auto gap-2">
-                                        <Lock className="h-5 w-5" />
-                                        Create Account
+                                        <Globe className="h-5 w-5" />
+                                        Start Organizing
                                     </Button>
                                 </Link>
                             </div>
                         </div>
 
                         {/* Stats */}
-                        <div className="mt-20 grid grid-cols-2 gap-6 sm:grid-cols-4">
+                        <div className="mt-20 grid grid-cols-1 gap-6 sm:grid-cols-3">
                             {stats.map((stat) => (
                                 <div key={stat.label} className="text-center">
                                     <p className="text-3xl font-bold text-primary sm:text-4xl">{stat.value}</p>
@@ -158,46 +149,56 @@ export default function HomePage() {
                     </div>
                 </section>
 
-                {/* Features */}
+                {/* Lifecycle */}
                 <section className="py-20">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                         <div className="mx-auto max-w-2xl text-center mb-16">
-                            <h2 className="text-3xl font-bold tracking-tight">Why Choose QuizBuzz?</h2>
+                            <h2 className="text-3xl font-bold tracking-tight">One Lifecycle, Start to Finish</h2>
                             <p className="mt-4 text-muted-foreground">
-                                A complete platform designed for fair, engaging, and rewarding quiz experiences
+                                The same four steps run every contest on QuizBuzz — the same ones a
+                                competitor covering only a piece of this can&apos;t offer end to end.
                             </p>
                         </div>
-                        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                            {features.map((feature) => (
-                                <Card key={feature.title} className="border-border/50 bg-card/50">
-                                    <CardContent className="pt-6">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                                            <feature.icon className="h-6 w-6 text-primary" />
+                        <div className="rounded-2xl border border-border/50 bg-card/50 p-8 sm:p-10">
+                            <div className="flex flex-col divide-y divide-border/50 lg:flex-row lg:divide-y-0 lg:divide-x">
+                                {lifecycle.map((item, index) => (
+                                    <div key={item.title} className="flex-1 lg:px-6 first:pl-0 first:lg:pl-0 last:pr-0">
+                                        <div className="flex items-center gap-4 py-6 lg:flex-col lg:items-start lg:gap-0 lg:py-0">
+                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                                <item.icon className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <div className="lg:mt-4">
+                                                <h3 className="text-lg font-semibold">{item.title}</h3>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {item.description}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <h3 className="mt-4 text-lg font-semibold">{feature.title}</h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">
-                                            {feature.description}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                                        {index < lifecycle.length - 1 && (
+                                            <div className="flex justify-center py-1 lg:hidden">
+                                                <ArrowDown className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </section>
 
-                {/* How It Works */}
+                {/* Participant Journey */}
                 <section id="how-it-works" className="py-20 bg-secondary/20">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                         <div className="mx-auto max-w-2xl text-center mb-16">
-                            <h2 className="text-3xl font-bold tracking-tight">How It Works</h2>
+                            <h2 className="text-3xl font-bold tracking-tight">Your Participant Journey</h2>
                             <p className="mt-4 text-muted-foreground">
-                                Getting started is easy. Follow these simple steps to begin your journey.
+                                Getting started is easy. Here&apos;s what happens after you find a contest.
                             </p>
                         </div>
                         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                            {howItWorks.map((item, index) => (
+                            {participantJourney.map((item, index) => (
                                 <div key={item.step} className="relative">
-                                    {index < howItWorks.length - 1 && (
+                                    {index < participantJourney.length - 1 && (
                                         <div className="absolute top-8 left-10 hidden h-0.5 w-full bg-border lg:block" />
                                     )}
                                     <div className="relative flex flex-col items-center text-center lg:items-start lg:text-left">
@@ -218,52 +219,37 @@ export default function HomePage() {
                 {/* For Organizers */}
                 <section id="organizers" className="py-20">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
-                            <div>
-                                <Badge variant="outline" className="mb-4">For Organizers</Badge>
-                                <h2 className="text-3xl font-bold tracking-tight">
-                                    Create and Manage Contests with Ease
-                                </h2>
-                                <p className="mt-4 text-muted-foreground">
-                                    QuizBuzz provides powerful tools for organizations to create,
-                                    manage, and analyze quizzes and contests at scale.
-                                </p>
-                                <ul className="mt-8 space-y-4">
-                                    {[
-                                        'Drag-and-drop question builder with multiple question types',
-                                        'Automated participant management and communication',
-                                        'Real-time monitoring and proctoring dashboard',
-                                        'Comprehensive analytics and exportable reports',
-                                        'White-label options for your brand',
-                                    ].map((item) => (
-                                        <li key={item} className="flex items-start gap-3">
-                                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                                            <span className="text-sm">{item}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <div className="mt-8">
-                                    <Link href="/login">
-                                        <Button size="lg" className="gap-2">
-                                            <Globe className="h-5 w-5" />
-                                            Start Organizing
-                                            <ArrowRight className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </div>
-                            <div className="relative">
-                                <div className="aspect-video rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/20 p-1">
-                                    <div className="h-full w-full rounded-xl bg-card border border-border/50 flex items-center justify-center">
-                                        <div className="text-center p-8">
-                                            <BarChart3 className="h-16 w-16 text-primary mx-auto mb-4" />
-                                            <p className="text-lg font-semibold">Admin Dashboard Preview</p>
-                                            <p className="text-sm text-muted-foreground mt-2">
-                                                Powerful analytics at your fingertips
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                        <div className="mx-auto max-w-3xl">
+                            <h2 className="text-3xl font-bold tracking-tight">
+                                Create and Manage Contests with Ease
+                            </h2>
+                            <p className="mt-4 text-muted-foreground max-w-2xl">
+                                QuizBuzz provides powerful tools for organizations to run the full
+                                contest lifecycle — question bank to certificate — at scale.
+                            </p>
+                            <ul className="mt-8 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                                {[
+                                    'Drag-and-drop question builder with multiple question types',
+                                    'Automated participant management and communication',
+                                    'Live monitoring and proctoring dashboard',
+                                    'Exportable analytics and results reporting',
+                                    'Automated certificate generation',
+                                    'White-label options for your brand',
+                                ].map((item) => (
+                                    <li key={item} className="flex items-start gap-3">
+                                        <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                                        <span className="text-sm">{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="mt-8">
+                                <Link href="/register">
+                                    <Button size="lg" className="gap-2">
+                                        <BarChart3 className="h-5 w-5" />
+                                        Start Organizing
+                                        <ArrowRight className="h-4 w-4" />
+                                    </Button>
+                                </Link>
                             </div>
                         </div>
                     </div>
@@ -279,23 +265,24 @@ export default function HomePage() {
                             <p className="mt-4 text-primary-foreground/80">
                                 Join thousands of participants and prove your expertise in exciting contests.
                             </p>
-                            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-center">
-                                <Link href="/login">
+                            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-center sm:flex-wrap">
+                                <Link href="/contests">
                                     <Button size="lg" variant="secondary" className="w-full sm:w-auto gap-2">
                                         <Trophy className="h-5 w-5" />
-                                        Sign In Now
+                                        Browse Contests
                                     </Button>
                                 </Link>
-                                <BottomInstallButton />
                                 <Link href="/register">
                                     <Button
                                         size="lg"
                                         variant="outline"
                                         className="w-full sm:w-auto gap-2 bg-transparent border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
                                     >
-                                        Create Account
+                                        <Globe className="h-5 w-5" />
+                                        Start Organizing
                                     </Button>
                                 </Link>
+                                <BottomInstallButton />
                             </div>
                         </div>
                     </div>

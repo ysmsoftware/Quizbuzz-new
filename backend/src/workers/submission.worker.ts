@@ -94,6 +94,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
         source:         payload.source,
         totalQuestions: payload.totalQuestions,
         attempted:      payload.attempted,
+        joinedAt:       payload.joinedAt ? new Date(payload.joinedAt) : null,
         answers:        payload.answers,
     });
 

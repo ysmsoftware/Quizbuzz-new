@@ -18,6 +18,13 @@ export interface CreateSubmissionInput {
     source: SubmissionSource;
     totalQuestions: number;
     attempted: number;
+    /**
+     * When the participant actually entered the quiz room (Redis session's
+     * `startedAt`, captured in quiz.service#startQuiz). Optional — absent for
+     * fallback/expired-session submissions where no live session ever existed.
+     * Written to Participant.joinedAt inside createWithAnswers().
+     */
+    joinedAt?: Date | null;
     answers: Array<{
         questionId: string;
         selectedOptionId: string | null; // null = skipped
@@ -127,6 +134,8 @@ export interface SubmissionJobPayload {
     source: SubmissionSource;
     totalQuestions: number;
     attempted: number;
+    /** ISO string — Redis session's startedAt, passed through to Participant.joinedAt at persistence. */
+    joinedAt?: string | null;
     answers: Array<{
         questionId: string;
         selectedOptionId: string | null;

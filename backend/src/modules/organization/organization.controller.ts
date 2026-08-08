@@ -115,6 +115,25 @@ export class OrganizationController {
         }
     };
 
+    // GET /organizations/:orgId/usage
+    getUsage = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const organizationId = req.params.orgId;
+            if (!organizationId) {
+                res.status(400).json({
+                    success: false,
+                    error: { code: "VALIDATION_ERROR", message: "Organization ID is required" },
+                });
+                return;
+            }
+
+            const usage = await this.orgService.getUsage(organizationId as string);
+            res.json({ success: true, data: usage });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     // GET /organizations/:orgId/members
     listMembers = async (req: Request, res: Response, next: NextFunction) => {
         try {

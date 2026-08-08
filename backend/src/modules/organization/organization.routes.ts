@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
+import { enforceOrgMemberInviteLimit } from "../../middlewares/plan-limit.middleware";
 
 export const organizationRouter = Router();
 
@@ -18,12 +19,13 @@ function ctrl() {
 
 // Org profile
 organizationRouter.get("/:orgId",                          authenticatedOrgMiddleware, (req, res, next) => ctrl().getOrganization(req, res, next));
+organizationRouter.get("/:orgId/usage",                    authenticatedOrgMiddleware, (req, res, next) => ctrl().getUsage(req, res, next));
 organizationRouter.patch("/:orgId",                        authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganization(req, res, next));
 organizationRouter.patch("/:orgId/profile",                authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganizationProfile(req, res, next));
 
 // Members
 organizationRouter.get("/:orgId/members",                  authenticatedOrgMiddleware, (req, res, next) => ctrl().listMembers(req, res, next));
-organizationRouter.post("/:orgId/members/invite",          authenticatedOrgMiddleware, (req, res, next) => ctrl().inviteMember(req, res, next));
+organizationRouter.post("/:orgId/members/invite",          authenticatedOrgMiddleware, enforceOrgMemberInviteLimit, (req, res, next) => ctrl().inviteMember(req, res, next));
 organizationRouter.patch("/:orgId/members/:memberId/role", authenticatedOrgMiddleware, (req, res, next) => ctrl().updateMemberRole(req, res, next));
 organizationRouter.delete("/:orgId/members/:memberId",     authenticatedOrgMiddleware, (req, res, next) => ctrl().removeMember(req, res, next));
 

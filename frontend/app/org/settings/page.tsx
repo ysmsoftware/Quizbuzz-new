@@ -27,6 +27,9 @@ export default function SettingsPage() {
 
     const [isSaving, setIsSaving] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
+    // ?tab=billing is already read below (see the effect reading
+    // window.location.search) — that's what the plan-limit toast's "Upgrade
+    // Plan" action (lib/notifications/planLimitToast.ts) links to.
     const [activeTab, setActiveTab] = useState('general');
     const [formData, setFormData] = useState({
         orgName: '',

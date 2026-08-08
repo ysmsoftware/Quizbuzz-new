@@ -246,11 +246,38 @@ model Organization {
   scheduledJobs        ScheduledJob[]
   analyticsSnapshots   ContestAnalyticsSnapshot[]
   exportLogs           ExportLog[]
+  planUsageCheckLogs   PlanUsageCheckLog[]
 
   @@index([slug])
   @@index([isActive, isDeleted])
   @@index([onboardingCompleted])   // ops-dashboard funnel queries
   @@map("organizations")
+}
+
+/**
+ * Audit trail of every subscription-plan-limit check performed by
+ * src/middlewares/plan-limit.middleware.ts, both allowed and blocked.
+ * Feeds the ops-next "recent limit hits" panel and lets us answer
+ * "how close is this org to its ceiling" without recomputing it from
+ * scratch on every dashboard load. `ALLOWED` rows are pruned after ~90
+ * days by a scheduled job; `BLOCKED` rows are kept indefinitely since
+ * those are what the ops team actually needs history on.
+ */
+model PlanUsageCheckLog {
+  id             String   @id @default(ulid())
+  organizationId String
+  limitType      String   // "contestsPerCycle" | "participantsPerContest" | "questionsPerContest" | "orgMembers"
+  outcome        String   // "ALLOWED" | "BLOCKED"
+  limitValue     Int?     // null = unlimited at the moment of this check
+  currentValue   Int
+  requestId      String?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, limitType, createdAt])
+  @@index([outcome, createdAt])
+  @@map("plan_usage_check_logs")
 }
 
 model OrgMember {
@@ -936,6 +963,10 @@ model ContestAnalyticsSnapshot {
   lowestScore           Decimal?  @db.Decimal(5, 2)
   medianScore           Decimal?  @db.Decimal(5, 2)
   avgTimeTakenSecs      Int?
+  fastestTimeSecs       Int?      // MIN(timeTakenSecs) across EVALUATED submissions
+  slowestTimeSecs       Int?      // MAX(timeTakenSecs) across EVALUATED submissions
+  passingCount          Int?      // EVALUATED submissions with percentage >= Contest.cutoffScore
+  failingCount          Int?      // EVALUATED submissions with percentage < Contest.cutoffScore
   activeNow             Int       @default(0)    // updated from Redis heartbeat
   snapshotAt            DateTime  @default(now())
   updatedAt             DateTime  @updatedAt

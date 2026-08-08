@@ -410,6 +410,8 @@ export class QuizService {
                     source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                     totalQuestions: 0,
                     attempted: 0,
+                    // No Redis session existed (expired/never started) — joinedAt stays unset.
+                    joinedAt: null,
                     answers: [],
                 },
                 { jobId: fallbackJobId }
@@ -458,6 +460,9 @@ export class QuizService {
                 source: reason === "MANUAL" ? "MANUAL" : "AUTO",
                 totalQuestions: orderedQuestionIds.length,
                 attempted: attemptedCount,
+                // Same moment already used above for timeTakenMs — passed through so
+                // the submission worker can persist Participant.joinedAt.
+                joinedAt: state.startedAt,
                 answers: answersArray,
             },
             { jobId }

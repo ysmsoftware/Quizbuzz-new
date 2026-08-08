@@ -5,13 +5,16 @@ import { format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useOnboardingPlans } from '@/lib/hooks/useOnboarding';
+import { useOrgUsage } from '@/lib/hooks/useOrganization';
 import { startingPrice, startingPriceIsMonthly } from '@/lib/utils/plan-pricing';
 import { UpgradePromptModal } from './UpgradePromptModal';
+import { PlanUsageBars } from './PlanUsageBars';
 import { CreditCard, Calendar, ArrowUpCircle, Loader2 } from 'lucide-react';
 
 interface PlanBillingTabContentProps {
   /** The `org` object returned by useOrganization — includes planSlug/planStatus/planLimitsCache. */
   org: {
+    id: string;
     planSlug?: string | null;
     planStatus?: string | null;
     planLimitsCache?: Record<string, any> | null;
@@ -28,6 +31,7 @@ interface PlanBillingTabContentProps {
 export function PlanBillingTabContent({ org }: PlanBillingTabContentProps) {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const plansQuery = useOnboardingPlans(true);
+  const usageQuery = useOrgUsage(org.id);
   const plans = plansQuery.data?.data ?? [];
 
   const planSlug = org.planSlug || 'free';
@@ -129,6 +133,19 @@ export function PlanBillingTabContent({ org }: PlanBillingTabContentProps) {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardContent className="pt-6">
+          {usageQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading usage…
+            </div>
+          ) : usageQuery.data?.data ? (
+            <PlanUsageBars usage={usageQuery.data.data} />
+          ) : null}
         </CardContent>
       </Card>
 

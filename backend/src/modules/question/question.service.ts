@@ -17,6 +17,8 @@ import { BadRequestError, NotFoundError, UnprocessableEntityError } from "../../
 import { config } from "../../config";
 import { ContestService } from "../contest/contest.service";
 import { prisma } from "../../config/db";
+// Plan-limit enforcement (questions/contest) now runs as middleware ahead of
+// these routes — see src/middlewares/plan-limit.middleware.ts.
 
 // ─── Contest context the service needs but doesn't own ───────────────────────
 
@@ -167,6 +169,9 @@ export class QuestionService {
                 `The following question IDs do not belong to your organisation: ${foreignIds.join(", ")}`
             );
         }
+
+        // Plan enforcement (questions/contest) already ran in
+        // enforceQuestionAssignLimit middleware before this handler.
 
         const result = await this.questionRepo.assignToContest(organizationId, contestId, dto.questions);
 
@@ -365,6 +370,9 @@ export class QuestionService {
         if (selectedQuestionIds.size === 0) {
             throw new BadRequestError("No questions matching your criteria were found in the question bank.");
         }
+
+        // Plan enforcement (questions/contest) already ran in
+        // enforceQuestionAutoGenerateLimit middleware before this handler.
 
         const currentMaxPosition = await this.questionRepo.countContestQuestions(contestId, organizationId);
         let nextPosition = currentMaxPosition + 1;

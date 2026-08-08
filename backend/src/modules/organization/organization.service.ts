@@ -9,6 +9,9 @@ import { OrgMemberRole, OrganizationProfile } from "@prisma/client";
 import { redis } from "../../config/redis";
 import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
+// Plan-limit enforcement (org members) now runs as middleware ahead of this
+// route — see src/middlewares/plan-limit.middleware.ts::enforceOrgMemberInviteLimit.
+import { getPlanUsageSummary, PlanUsageSummary } from "../../common/plan-usage-summary";
 
 
 
@@ -32,6 +35,12 @@ export class OrganizationService {
         const org = await this.organizationRepo.findBySlug(slug);
         if (!org) throw new NotFoundError("Organization not found");
         return org;
+    }
+
+    /** Current usage vs. plan limits — powers the Settings → Plan & Billing usage bars. */
+    async getUsage(orgId: string): Promise<PlanUsageSummary> {
+        await this.getById(orgId);
+        return getPlanUsageSummary(orgId);
     }
 
 
@@ -130,8 +139,12 @@ export class OrganizationService {
             if (existing.isActive) {
                 throw new ConflictError("This admin is already an active member of the organization");
             }
-            // Pending invite exists — just reissue the token (idempotent)
+            // Pending invite exists — just reissue the token (idempotent, no new member)
         } else {
+            // Plan enforcement (org members) already ran in enforceOrgMemberInviteLimit
+            // middleware before this handler (it replicates this same reissue-vs-new
+            // distinction so the check only fires for genuinely new memberships).
+
             await this.organizationRepo.createMembership({
                 adminId: targetAdmin.id,
                 organizationId: orgId,

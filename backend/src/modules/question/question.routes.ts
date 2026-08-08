@@ -1,5 +1,9 @@
 import { Router } from "express";
 import { authenticatedOrgMiddleware } from "../../middlewares/authenticated-org.middleware";
+import {
+    enforceQuestionAssignLimit,
+    enforceQuestionAutoGenerateLimit,
+} from "../../middlewares/plan-limit.middleware";
 
 function ctrl() { return require("../../container").questionController; }
 
@@ -15,7 +19,7 @@ questionRouter.delete("/:questionId", authenticatedOrgMiddleware, (req, res, nex
 
 // Contest–Question Assignment
 questionRouter.get("/contests/:contestId/questions",                   authenticatedOrgMiddleware, (req, res, next) => ctrl().getContestQuestions(req, res, next));
-questionRouter.post("/contests/:contestId/assign-questions",           authenticatedOrgMiddleware, (req, res, next) => ctrl().assignQuestionsToContest(req, res, next));
-questionRouter.post("/contests/:contestId/auto-generate",             authenticatedOrgMiddleware, (req, res, next) => ctrl().autoGenerateQuestions(req, res, next));
+questionRouter.post("/contests/:contestId/assign-questions",           authenticatedOrgMiddleware, enforceQuestionAssignLimit, (req, res, next) => ctrl().assignQuestionsToContest(req, res, next));
+questionRouter.post("/contests/:contestId/auto-generate",             authenticatedOrgMiddleware, enforceQuestionAutoGenerateLimit, (req, res, next) => ctrl().autoGenerateQuestions(req, res, next));
 questionRouter.delete("/contests/:contestId/questions/:questionId",    authenticatedOrgMiddleware, (req, res, next) => ctrl().removeQuestionFromContest(req, res, next));
 questionRouter.patch("/contests/:contestId/questions/:questionId",     authenticatedOrgMiddleware, (req, res, next) => ctrl().updateContestQuestion(req, res, next));

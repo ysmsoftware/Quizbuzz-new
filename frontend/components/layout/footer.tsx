@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Mail } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/icons/whatsapp-icon';
 import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_URL } from '@/lib/seo/config';
@@ -7,7 +8,6 @@ const footerLinks = {
     product: [
         { name: 'Browse Contests', href: '/contests' },
         { name: 'How It Works', href: '/#how-it-works' },
-        { name: 'Pricing', href: '/pricing' },
         { name: 'For Organizers', href: '/#organizers' },
     ],
     support: [
@@ -38,11 +38,14 @@ export function Footer() {
                 <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
                     {/* Brand */}
                     <div className="col-span-2 lg:col-span-2">
-                        <Link href="/" className="flex items-center gap-2">
-                            <img src="/qbfavicon.png" alt="QuizBuzz" className="h-9 w-9 rounded-lg" width={36} height={36} />
-                            <span className="text-xl font-bold tracking-tight">
-                                Quiz<span className="text-primary">Buzz</span>
-                            </span>
+                        <Link href="/" className="flex items-center">
+                            <Image
+                                src="/quizBuzz-logo.png"
+                                alt="QuizBuzz"
+                                width={140}
+                                height={40}
+                                className="h-8 w-auto"
+                            />
                         </Link>
                         <p className="mt-4 max-w-xs text-sm text-muted-foreground">
                             The modern platform for creating, managing, and participating in online quizzes and contests.

@@ -18,11 +18,12 @@ export class AnalyticsService {
     async generateSnapshot(contestId: string, organizationId: string) {
         logger.info(`[analytics-service] Generating snapshot for contest ${contestId}`);
 
-        const [baseMetrics, scoreMetrics, activeNow] = await Promise.all([
+        const [baseMetrics, cutoffScore, activeNow] = await Promise.all([
             this.repository.getSnapshotBaseMetrics(contestId, organizationId),
-            this.repository.getAggregatedScores(contestId, organizationId),
+            this.repository.getContestCutoffScore(contestId),
             this.quizSessionRepo.getActiveCount(contestId)
         ]);
+        const scoreMetrics = await this.repository.getAggregatedScores(contestId, organizationId, cutoffScore);
 
         const snapshotData = {
             contestId,

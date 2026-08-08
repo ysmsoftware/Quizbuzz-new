@@ -62,7 +62,12 @@ export class AnalyticsRepository {
         };
     }
 
-    async getAggregatedScores(contestId: string, organizationId: string) {
+    /**
+     * @param cutoffScore Contest.cutoffScore (percentage pass mark). When null/undefined
+     *   the contest has no configured pass mark, so passingCount/failingCount are
+     *   returned as null rather than asserting a split that was never defined.
+     */
+    async getAggregatedScores(contestId: string, organizationId: string, cutoffScore?: number | null) {
         const stats = await this.prisma.submission.aggregate({
             where: {
                 contestId,
@@ -75,9 +80,11 @@ export class AnalyticsRepository {
             },
             _max: {
                 score: true,
+                timeTakenSecs: true,
             },
             _min: {
                 score: true,
+                timeTakenSecs: true,
             },
         });
 
@@ -90,13 +97,43 @@ export class AnalyticsRepository {
               AND status = 'EVALUATED'
         `;
 
+        let passingCount: number | null = null;
+        let failingCount: number | null = null;
+        if (cutoffScore !== null && cutoffScore !== undefined) {
+            [passingCount, failingCount] = await Promise.all([
+                this.prisma.submission.count({
+                    where: { contestId, organizationId, status: "EVALUATED", percentage: { gte: cutoffScore } },
+                }),
+                this.prisma.submission.count({
+                    where: { contestId, organizationId, status: "EVALUATED", percentage: { lt: cutoffScore } },
+                }),
+            ]);
+        }
+
         return {
             avgScore: stats._avg.score ? Number(stats._avg.score) : null,
             highestScore: stats._max.score ? Number(stats._max.score) : null,
             lowestScore: stats._min.score ? Number(stats._min.score) : null,
             medianScore: medianResult[0]?.median ? Number(medianResult[0].median) : null,
             avgTimeTakenSecs: stats._avg.timeTakenSecs ? Math.round(Number(stats._avg.timeTakenSecs)) : null,
+            fastestTimeSecs: stats._min.timeTakenSecs ?? null,
+            slowestTimeSecs: stats._max.timeTakenSecs ?? null,
+            passingCount,
+            failingCount,
         };
+    }
+
+    /**
+     * Contest's configured pass mark (percentage), used to compute
+     * passingCount/failingCount in getAggregatedScores. Null = contest has
+     * no pass mark configured.
+     */
+    async getContestCutoffScore(contestId: string): Promise<number | null> {
+        const contest = await this.prisma.contest.findUnique({
+            where: { id: contestId },
+            select: { cutoffScore: true },
+        });
+        return contest?.cutoffScore ?? null;
     }
 
     async upsertSnapshot(data: Partial<ContestAnalyticsSnapshot> & { contestId: string, organizationId: string }) {

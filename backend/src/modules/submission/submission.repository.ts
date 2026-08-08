@@ -94,10 +94,17 @@ export class SubmissionRepository {
                 });
             }
 
-            // Eagerly update participant status to SUBMITTED in the DB
+            // Eagerly update participant status to SUBMITTED in the DB.
+            // joinedAt is only set when the worker supplied one (i.e. the
+            // participant actually reached a live Redis session) — omitted
+            // entirely (not overwritten with null) otherwise, and left alone
+            // on retries since Participant.joinedAt is only ever set once.
             await tx.participant.update({
                 where: { id: input.participantId },
-                data: { status: "SUBMITTED" },
+                data: {
+                    status: "SUBMITTED",
+                    ...(input.joinedAt ? { joinedAt: input.joinedAt } : {}),
+                },
             });
 
             return submission;

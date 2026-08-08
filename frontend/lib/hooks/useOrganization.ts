@@ -113,3 +113,16 @@ export function useOrganization(orgId: string) {
     error,
   };
 }
+
+/**
+ * Standalone, read-only — for components (like PlanUsageBars) that only need
+ * usage numbers and shouldn't have to pull in useOrganization's full set of
+ * mutations just to render a progress bar.
+ */
+export function useOrgUsage(orgId: string) {
+  return useQuery({
+    queryKey: queryKeys.org.usage(orgId),
+    queryFn: () => orgApi.getOrgUsage(orgId),
+    enabled: !!orgId,
+  });
+}
