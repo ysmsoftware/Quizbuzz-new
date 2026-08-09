@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
+import { CONTEST_START_TIME_SLOT_MINUTES } from '@/lib/constants/contest-scheduling';
+import { toLocalInputValue } from '@/lib/utils/datetime';
 import {
   Tooltip,
   TooltipContent,
@@ -25,6 +28,9 @@ interface EditableFieldProps {
   autoSave?: boolean;
   className?: string;
   multiline?: boolean;
+  /** Grid step (minutes) for the datetime-local picker's time column — defaults to the
+   * contest start-time grid (15). Only relevant when type="datetime-local". */
+  stepMinutes?: number;
 }
 
 export function EditableField({
@@ -38,6 +44,7 @@ export function EditableField({
   autoSave = false,
   className,
   multiline = false,
+  stepMinutes = CONTEST_START_TIME_SLOT_MINUTES,
 }: EditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
@@ -59,15 +66,19 @@ export function EditableField({
     }
   }, [isEditing, type]);
 
-  const handleSave = useCallback(async () => {
-    if (currentValue === value) {
+  // Takes the value to save explicitly rather than always reading `currentValue` from
+  // closure — the DateTimePicker branch below calls this right after setCurrentValue(),
+  // and React state updates aren't synchronous, so reading currentValue there would
+  // save the previous value, not the one just picked.
+  const commit = useCallback(async (nextValue: string) => {
+    if (nextValue === value) {
       setIsEditing(false);
       return;
     }
 
     setStatus('saving');
     try {
-      await onSave(currentValue);
+      await onSave(nextValue);
       setStatus('success');
       setTimeout(() => setStatus('idle'), 2000);
       setIsEditing(false);
@@ -75,7 +86,9 @@ export function EditableField({
       setStatus('error');
       setErrorMessage(error.message || 'Failed to save');
     }
-  }, [currentValue, value, onSave]);
+  }, [value, onSave]);
+
+  const handleSave = useCallback(() => commit(currentValue), [commit, currentValue]);
 
   const handleCancel = useCallback(() => {
     setCurrentValue(value);
@@ -143,7 +156,31 @@ export function EditableField({
             exit={{ opacity: 0, y: 5 }}
             className="relative"
           >
-            {multiline ? (
+            {type === 'datetime-local' ? (
+              // DateTimePicker has its own Apply/Cancel inside the popover — Apply IS
+              // the save action here (see commit() below), not a separate confirm step
+              // on top of it. No native browser picker anywhere — see
+              // docs/contest-start-reliability-spec.md §6.4.
+              <div className="flex items-center gap-1.5">
+                <DateTimePicker
+                  value={currentValue ? new Date(currentValue) : undefined}
+                  onChange={(date) => {
+                    const iso = date ? toLocalInputValue(date) : '';
+                    setCurrentValue(iso);
+                    commit(iso);
+                  }}
+                  stepMinutes={stepMinutes}
+                  autoOpen
+                  disabled={status === 'saving'}
+                  className="h-9"
+                />
+                {!autoSave && (
+                  <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={handleCancel}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ) : multiline ? (
               <Textarea
                 ref={inputRef as any}
                 value={currentValue}
@@ -163,7 +200,7 @@ export function EditableField({
                 className="h-9"
               />
             )}
-            {!autoSave && (
+            {!autoSave && type !== 'datetime-local' && (
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancel}>
                   <X className="h-3 w-3" />

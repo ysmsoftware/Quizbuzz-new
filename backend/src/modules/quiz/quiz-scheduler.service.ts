@@ -151,6 +151,34 @@ export class QuizSchedulerService {
         );
     }
 
+    /**
+     * (Re)install just the CONTEST_START job for a contest — used by the reconciliation
+     * sweep when it finds a contest whose job should exist but doesn't. Evicts any
+     * existing job of the same id first (scheduleJob's usual guarantee), so this is
+     * always safe to call even if the job turns out not to actually be missing.
+     */
+    async ensureStartJob(contestId: string, organizationId: string, startTime: Date): Promise<void> {
+        const delay = Math.max(0, startTime.getTime() - Date.now());
+        await this.scheduleJob({ contestId, organizationId, type: "CONTEST_START" }, `start-${contestId}`, delay);
+    }
+
+    /**
+     * Remove only the pending CONTEST_START job — used by the manual "Start Now"
+     * override so the scheduled job cannot also fire and double-run the start
+     * sequence. Deliberately narrower than cancelContestJobs, which also tears down
+     * AUTO_SUBMIT/warnings/auto-declare that still need to fire at the contest's endTime.
+     */
+    async cancelStartJob(contestId: string): Promise<void> {
+        const jobId = `start-${contestId}`;
+        try {
+            const job = await quizTimerQueue.getJob(jobId);
+            if (job) await job.remove();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error(`[quiz-scheduler] Failed to remove start job ${jobId}: ${msg}`);
+        }
+    }
+
     /** Remove all pending pre-start reminders for a contest. */
     async cancelReminders(contestId: string): Promise<void> {
         for (const { id } of REMINDER_OFFSETS) {

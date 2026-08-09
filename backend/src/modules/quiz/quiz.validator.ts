@@ -76,6 +76,13 @@ export const AdminSubscribeSchema = z.object({
     contestId: z.string().min(1),
 });
 
+export const AdminBroadcastSchema = z.object({
+    contestId: z.string().min(1),
+    message: z.string().min(1).max(1000),
+    type: z.enum(["INFO", "WARNING", "URGENT"]).default("INFO"),
+    target: z.enum(["ALL"]).default("ALL"),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 
 export type AuthenticateInput = z.infer<typeof AuthenticateSchema>;
@@ -86,3 +93,4 @@ export type AnswerInput = z.infer<typeof AnswerSchema>;
 export type ViolationInput = z.infer<typeof ViolationSchema>;
 export type SnapshotInput = z.infer<typeof SnapshotSchema>;
 export type AdminSubscribeInput = z.infer<typeof AdminSubscribeSchema>;
+export type AdminBroadcastInput = z.infer<typeof AdminBroadcastSchema>;

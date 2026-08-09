@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { RescheduleContestModal } from './RescheduleContestModal';
-import { useCancelContest, useForceEndContest } from '@/lib/hooks/useContestLifecycle';
+import { StartNowCountdown } from './StartNowCountdown';
+import { useCancelContest, useForceEndContest, useStartContestNow } from '@/lib/hooks/useContestLifecycle';
 import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
 import { splitPersistableContestFields } from '@/lib/utils/contest';
 import { 
@@ -99,10 +100,37 @@ export function ContestActionBar({
   const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [confirmText, setConfirmText] = useState('');
+  const [isStartNowModalOpen, setIsStartNowModalOpen] = useState(false);
+  const [startNowConfirmText, setStartNowConfirmText] = useState('');
 
   const cancelMutation = useCancelContest(contest.id);
   const forceEndMutation = useForceEndContest(contest.id);
+  const startNowMutation = useStartContestNow(contest.id);
   const updateMutation = useUpdateContest(contest.id);
+
+  // Ticks once a second only while the manual-start window is relevant — avoids a
+  // pointless per-second re-render on every other contest phase.
+  const canManuallyStart = (contestPhase === 'PUBLISHED' || contestPhase === 'REGISTRATION_CLOSED') && !!contest.manualStartVisibleFrom;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!canManuallyStart) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [canManuallyStart]);
+
+  const showStartNow = canManuallyStart && now >= new Date(contest.manualStartVisibleFrom!).getTime();
+  const isPastStartTime = canManuallyStart && now >= new Date(contest.startTime).getTime();
+
+  const handleStartNow = async () => {
+    try {
+      await startNowMutation.mutateAsync({});
+      toast.success('Contest started — participants have been moved into the quiz');
+      setIsStartNowModalOpen(false);
+      setStartNowConfirmText('');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start contest');
+    }
+  };
 
   const handleCancelContest = async () => {
     try {
@@ -206,6 +234,75 @@ export function ContestActionBar({
     }
   };
 
+  // Fallback for when the automated CONTEST_START job never fires — see
+  // docs/contest-start-reliability-spec.md. Visible inside the manual-start window;
+  // disabled until startTime itself so this stays a recovery action, not an
+  // early-start convenience (per the spec's recommended default).
+  const renderStartNowAction = () => {
+    if (!showStartNow) return null;
+    return (
+      <div className="flex items-center gap-2">
+        {!isPastStartTime && <StartNowCountdown startTime={contest.startTime} />}
+        <AlertDialog open={isStartNowModalOpen} onOpenChange={setIsStartNowModalOpen}>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!isPastStartTime}
+                      className="text-green-700 border-green-200 hover:bg-green-50 disabled:opacity-50"
+                    >
+                      <Zap className="mr-2 h-4 w-4" />
+                      Start Now
+                    </Button>
+                  </AlertDialogTrigger>
+                </span>
+              </TooltipTrigger>
+              {!isPastStartTime && (
+                <TooltipContent>
+                  Available once the scheduled start time passes, as a recovery action if the automated start doesn't fire.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-green-700">Manually start this contest?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p>
+                  This immediately moves every waiting participant into the quiz and removes the
+                  automated start job, so it cannot also fire and start the contest a second time.
+                </p>
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200 text-xs text-green-800">
+                  Type <strong>START NOW</strong> below to confirm.
+                </div>
+                <Input
+                  placeholder="START NOW"
+                  value={startNowConfirmText}
+                  onChange={(e) => setStartNowConfirmText(e.target.value)}
+                  className="mt-2"
+                />
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setStartNowConfirmText('')}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={startNowConfirmText !== 'START NOW' || startNowMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+                onClick={handleStartNow}
+              >
+                {startNowMutation.isPending ? 'Starting...' : 'Start Contest Now'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  };
+
   const renderDraftActions = () => (
     <div className="flex items-center gap-3">
       <AlertDialog>
@@ -282,6 +379,7 @@ export function ContestActionBar({
 
   const renderPublishedActions = () => (
     <div className="flex items-center gap-3">
+      {renderStartNowAction()}
       <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
         Cancel Contest
       </Button>
@@ -306,6 +404,7 @@ export function ContestActionBar({
 
   const renderRegistrationClosedActions = () => (
     <div className="flex items-center gap-3">
+      {renderStartNowAction()}
       <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
         Cancel Contest
       </Button>

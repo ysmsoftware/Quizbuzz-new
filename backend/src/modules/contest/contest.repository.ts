@@ -22,6 +22,10 @@ export interface IContestRepository {
     archive(contestId: string, organizationId: string): Promise<void>;
     countQuestions(contestId: string): Promise<number>;
     countParticipants(contestId: string): Promise<number>;
+    findStartReconciliationCandidates(
+        windowStart: Date,
+        windowEnd: Date,
+    ): Promise<Array<{ id: string; organizationId: string; startTime: Date }>>;
 }
 
 export class ContestRepository implements IContestRepository {
@@ -277,6 +281,27 @@ export class ContestRepository implements IContestRepository {
         };
         const total = await prisma.contest.count({ where });
         return { total };
+    }
+
+    /**
+     * Candidates for the CONTEST_START reconciliation sweep (§6.3 of the reliability
+     * spec — query Contest directly rather than a separate schedule table, since
+     * `@@index([startTime, status])` already makes this an index range scan and a
+     * second persisted copy of "when does this start" is exactly the kind of
+     * two-sources-of-truth drift the sweep exists to protect against).
+     */
+    async findStartReconciliationCandidates(
+        windowStart: Date,
+        windowEnd: Date,
+    ): Promise<Array<{ id: string; organizationId: string; startTime: Date }>> {
+        return prisma.contest.findMany({
+            where: {
+                status: { in: [ContestStatus.PUBLISHED, ContestStatus.REGISTRATION_CLOSED] },
+                startTime: { gt: windowStart, lte: windowEnd },
+                isDeleted: false,
+            },
+            select: { id: true, organizationId: true, startTime: true },
+        });
     }
 
     async countQuestions(contestId: string): Promise<number> {

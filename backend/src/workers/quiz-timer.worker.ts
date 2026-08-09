@@ -47,6 +47,7 @@ let quizService: {
 let contestService: {
     triggerEvaluation: (cid: string, oid: string) => Promise<any>;
     declareResults: (cid: string, oid: string) => Promise<any>;
+    runContestStartSequence: (cid: string, oid: string) => Promise<{ transitioned: string[]; blocked: string[] }>;
 } | null = null;
 
 let prisma: PrismaClient | null = null;
@@ -158,7 +159,7 @@ async function isDueOrReschedule(
 }
 
 async function handleContestStart(contestId: string, organizationId: string): Promise<void> {
-    if (!quizService || !quizGateway || !prisma) {
+    if (!contestService || !prisma) {
         logger.error(
             "[quiz-timer] CONTEST_START aborted — dependencies not injected. " +
             "Ensure worker.ts imports ./container before startWorkers().",
@@ -179,7 +180,10 @@ async function handleContestStart(contestId: string, organizationId: string): Pr
         return;
     }
 
-    if (scheduled.status === "CANCELLED" || scheduled.status === "COMPLETED") {
+    // LIVE is included alongside the terminal statuses: an admin's manual "Start Now"
+    // may have already run this contest's start sequence (and evicted this job), but a
+    // race where this job still fires afterwards must no-op rather than re-run it.
+    if (scheduled.status === "CANCELLED" || scheduled.status === "COMPLETED" || scheduled.status === "LIVE") {
         logger.warn(
             `[quiz-timer] CONTEST_START aborted — contest ${contestId} is ${scheduled.status}`,
         );
@@ -193,69 +197,14 @@ async function handleContestStart(contestId: string, organizationId: string): Pr
     });
     if (!due) return;
 
-    // 1. Update contest status to LIVE
-    await prisma.contest.update({
-        where: { id: contestId },
-        data: { status: "LIVE" },
-    });
-
-    // 2. Transition waiting-room participants (Redis set) to quiz
-    const { transitioned, blocked } = await quizService.transitionToQuiz(contestId);
+    // Steps 1–5 (status flip, transitionToQuiz, per-participant start, DB-fallback,
+    // admin broadcast) live on ContestService — shared with the manual "Start Now"
+    // override so the two triggers can never diverge. See contest.service.ts.
+    const { transitioned, blocked } = await contestService.runContestStartSequence(contestId, organizationId);
 
     logger.info(
         `[quiz-timer] Contest ${contestId} started: ${transitioned.length} transitioned, ${blocked.length} blocked`,
     );
-
-    // 3. Start quiz for each participant who was in the Redis waiting set
-    const startedPids = new Set<string>();
-    for (const pid of transitioned) {
-        try {
-            const session = await quizService.handleRejoin(contestId, pid);
-            const contactId = session?.contactId ?? "";
-            await quizGateway.startQuizForParticipant(pid, contestId, organizationId, contactId);
-            startedPids.add(pid);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.error(`[quiz-timer] Failed to start quiz for ${pid}: ${msg}`);
-        }
-    }
-
-    // 4. DB-level fallback: also start quiz for any REGISTERED/CHECKED_IN participants
-    //    who were on the waiting page but whose socket never emitted quiz:v1:join
-    //    (network blip, page refresh, slow connection, etc.)
-    try {
-        const dbParticipants = await prisma.participant.findMany({
-            where: {
-                contestId,
-                organizationId,
-                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"] },
-            },
-            select: { id: true, contactId: true },
-        });
-
-        for (const p of dbParticipants) {
-            if (startedPids.has(p.id)) continue; // already handled above
-            try {
-                await quizGateway.startQuizForParticipant(p.id, contestId, organizationId, p.contactId);
-                logger.info(`[quiz-timer] DB-fallback: started quiz for ${p.id}`);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                logger.error(`[quiz-timer] DB-fallback failed for ${p.id}: ${msg}`);
-            }
-        }
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`[quiz-timer] DB-fallback query failed: ${msg}`);
-    }
-
-    // 5. Broadcast admin stats
-    quizGateway.broadcastAdminEvent(contestId, "admin:v1:live-stats", {
-        contestId,
-        active: transitioned.length,
-        submitted: 0,
-        waiting: blocked.length,
-        totalViolations: 0,
-    });
 }
 
 async function handleTimeWarning(contestId: string, secondsRemaining: number): Promise<void> {

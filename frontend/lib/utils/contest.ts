@@ -111,6 +111,7 @@ export function adaptServerContest(server: ServerContest): Contest {
 
     // Timing
     startTime: server.startTime,
+    manualStartVisibleFrom: server.manualStartVisibleFrom,
     registrationDeadline: server.registrationDeadline,
     registrationStartDate: server.createdAt,
     registrationEndDate: server.registrationDeadline,

@@ -208,3 +208,22 @@ export const paymentCleanupQueue = new Queue("payment-cleanup-queue", {
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+// ─── Contest Start Reconciliation ─────────────────────────────────────────────
+
+/**
+ * Contest reconciliation queue.
+ * Producers : ContestService.ensureContestStartReconciliationJob (repeatable, no per-contest payload)
+ * Consumers : contest-reconciliation.worker.ts
+ *
+ * Periodic sweep that catches a CONTEST_START job that went missing entirely — e.g.
+ * the "Two-Redis Trap" incident (job stranded in idle-mode Redis after a go-live
+ * switch) — which quiz-timer.worker.ts's own staleness self-heal cannot catch, because
+ * that only re-schedules a job that fires at the WRONG time, not one that never fires
+ * at all. See docs/contest-start-reliability-spec.md.
+ */
+export const contestReconciliationQueue = new Queue("contest-reconciliation-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

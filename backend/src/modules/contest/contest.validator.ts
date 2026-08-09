@@ -1,5 +1,23 @@
 import { z } from "zod";
 import { ContestStatus } from "@prisma/client";
+import { config } from "../../config";
+
+/**
+ * Enforcement layer for the 15-minute start-time grid (contest-start-reliability
+ * spec §6.4) — reduces user mis-entry of odd start times. The frontend picker is a UX
+ * nicety on top of this, not the source of truth; config.contest.startTimeSlotMinutes
+ * stays the single place this threshold is defined.
+ */
+function isOnStartTimeGrid(date: Date): boolean {
+    return date.getMinutes() % config.contest.startTimeSlotMinutes === 0 && date.getSeconds() === 0;
+}
+
+const START_TIME_GRID_MESSAGE = () => {
+    const step = config.contest.startTimeSlotMinutes;
+    const marks: string[] = [];
+    for (let m = 0; m < 60; m += step) marks.push(`:${String(m).padStart(2, "0")}`);
+    return `Start time must land on a ${step}-minute mark (${marks.join(", ")})`;
+};
 
 // PRIZE
 
@@ -50,6 +68,9 @@ export const CreateContestSchema = CreateContestBase.refine(
 ).refine(
     (d) => d.startTime > new Date(),
     { message: "startTime must be in the future", path: ["startTime"] }
+).refine(
+    (d) => isOnStartTimeGrid(d.startTime),
+    { message: START_TIME_GRID_MESSAGE(), path: ["startTime"] }
 );
 
 
@@ -98,13 +119,23 @@ export const RescheduleContestSchema = z.object({
     duration: z.number().int().min(10).max(480).optional(),
     reason: z.string().max(500).optional(),
     notifyParticipants: z.boolean().default(true),
-}).strict();
+}).strict().refine(
+    (d) => isOnStartTimeGrid(d.startTime),
+    { message: START_TIME_GRID_MESSAGE(), path: ["startTime"] }
+);
 
 // FORCE-END CONTEST
 
 export const ForceEndContestSchema = z.object({
     reason: z.string().max(500).optional(),
 }).strict();
+
+// START CONTEST NOW
+
+export const StartContestNowSchema = z.object({
+    reason: z.string().max(500).optional(),
+}).strict();
+
 // REGISTER FOR CONTEST
 
 export const RegisterParticipantSchema = z.object({
@@ -202,3 +233,4 @@ export type DisqualifyParticipantInput = z.infer<typeof DisqualifyParticipantSch
 export type CancelContestInput = z.infer<typeof CancelContestSchema>;
 export type RescheduleContestInput = z.infer<typeof RescheduleContestSchema>;
 export type ForceEndContestInput = z.infer<typeof ForceEndContestSchema>;
+export type StartContestNowInput = z.infer<typeof StartContestNowSchema>;

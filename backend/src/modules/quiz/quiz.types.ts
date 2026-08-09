@@ -221,6 +221,13 @@ export interface AdminSubscribePayload {
     contestId: string;
 }
 
+export interface AdminBroadcastPayload {
+    contestId: string;
+    message: string;
+    type: "INFO" | "WARNING" | "URGENT";
+    target: "ALL";
+}
+
 export interface AdminWaitingRoomUpdate {
     contestId: string;
     count: number;

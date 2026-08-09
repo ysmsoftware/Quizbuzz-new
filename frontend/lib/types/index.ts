@@ -34,6 +34,8 @@ export interface Contest {
 
     // Timing
     startTime: string;
+    /** When the admin "Start Now" override becomes visible — server-computed. */
+    manualStartVisibleFrom?: string;
     registrationDeadline: string;
     registrationStartDate: string;
     registrationEndDate: string;
@@ -449,6 +451,8 @@ export interface ServerContest {
     registrationDeadline: string;
     startTime: string;
     endTime: string;
+    /** Derived server-side: startTime - config.quiz.manualStartVisibilityWindow. */
+    manualStartVisibleFrom: string;
     joinCode: string | null;
     shuffleQuestions: boolean;
     shuffleOptions: boolean;

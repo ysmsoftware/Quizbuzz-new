@@ -118,6 +118,11 @@ export const adminGateway = new AdminGateway(
     proctoringService
 );
 
+// Lets AdminGateway relay admin:v1:broadcast to participants without a hard
+// constructor dependency on QuizGateway — same late-binding pattern as
+// contestService.setBroadcaster(quizGateway) below.
+adminGateway.setParticipantBroadcaster(quizGateway);
+
 // Inject dependencies into the timer worker (avoids circular imports)
 injectTimerWorkerDeps({
     gateway: quizGateway,
@@ -133,6 +138,12 @@ contestService.setBroadcaster(quizGateway);
 contestService.setQuizTerminator({
     handleTimeExpiry: (cid) => quizService.handleTimeExpiry(cid),
     emitAutoSubmit: (pid, cid, reason) => quizGateway.emitAutoSubmit(pid, cid, reason),
+});
+contestService.setQuizStarter({
+    transitionToQuiz: (cid) => quizService.transitionToQuiz(cid),
+    handleRejoin: (cid, pid) => quizService.handleRejoin(cid, pid),
+    startQuizForParticipant: (pid, cid, oid, contactId) => quizGateway.startQuizForParticipant(pid, cid, oid, contactId),
+    broadcastAdminEvent: (cid, event, data) => quizGateway.broadcastAdminEvent(cid, event, data),
 });
 
 // ─── Controllers ──────────────────────────────────────────────────────────────

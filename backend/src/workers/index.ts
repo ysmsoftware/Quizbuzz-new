@@ -12,6 +12,7 @@ import "./leaderboard.worker";
 import "./capture-metadata.worker";
 import "./export.worker";
 import "./payment-cleanup.worker";
+import "./contest-reconciliation.worker";
 
 export function startWorkers() {
     logger.info("Starting background workers...");

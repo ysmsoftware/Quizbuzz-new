@@ -55,3 +55,12 @@ export function useForceEndContest(contestId: string) {
     onSuccess: invalidate,
   });
 }
+
+export function useStartContestNow(contestId: string) {
+  const invalidate = useLifecycleInvalidation(contestId);
+
+  return useMutation({
+    mutationFn: (body?: { reason?: string }) => contestsApi.startContestNow(contestId, body),
+    onSuccess: invalidate,
+  });
+}

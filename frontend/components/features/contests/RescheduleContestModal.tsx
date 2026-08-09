@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
+import { isOnStartTimeGrid } from '@/lib/constants/contest-scheduling';
 import { useRescheduleContest } from '@/lib/hooks/useContestLifecycle';
 
 interface RescheduleContestModalProps {
@@ -28,14 +30,6 @@ interface RescheduleContestModalProps {
   registrationDeadline: string | Date;
   durationMinutes: number;
   registeredCount?: number;
-}
-
-/** `<input type="datetime-local">` needs a local-time string, not an ISO/UTC one. */
-function toLocalInputValue(value: string | Date): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatRelative(ms: number): string {
@@ -62,8 +56,17 @@ export function RescheduleContestModal({
   durationMinutes,
   registeredCount = 0,
 }: RescheduleContestModalProps) {
-  const [start, setStart] = useState(() => toLocalInputValue(startTime));
-  const [deadline, setDeadline] = useState(() => toLocalInputValue(registrationDeadline));
+  // Combined date+time pickers now — see docs/contest-start-reliability-spec.md §6.4
+  // and components/ui/datetime-picker.tsx. Registration deadline isn't grid-restricted
+  // server-side, but gets the same picker for a consistent, no-native-widget UI.
+  const [startValue, setStartValue] = useState<Date | undefined>(() => {
+    const d = new Date(startTime);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  });
+  const [deadlineValue, setDeadlineValue] = useState<Date | undefined>(() => {
+    const d = new Date(registrationDeadline);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  });
   const [duration, setDuration] = useState(String(durationMinutes));
   const [reason, setReason] = useState('');
   const [notify, setNotify] = useState(true);
@@ -74,44 +77,47 @@ export function RescheduleContestModal({
   // to catch the "set it an hour off and only notice from the participant side"
   // mistake before it is submitted, not merely to look informative.
   const preview = useMemo(() => {
-    const startDate = new Date(start);
-    const deadlineDate = new Date(deadline);
     const mins = parseInt(duration, 10);
 
-    if (Number.isNaN(startDate.getTime())) {
+    if (!startValue) {
       return { error: 'Enter a valid start date and time.' as string | null, lines: [] as string[] };
+    }
+    const startTimeStr = `${String(startValue.getHours()).padStart(2, '0')}:${String(startValue.getMinutes()).padStart(2, '0')}`;
+    if (!isOnStartTimeGrid(startTimeStr)) {
+      // Belt and suspenders — the picker itself should make this unreachable.
+      return { error: 'Start time must land on a 15-minute mark.', lines: [] };
     }
     if (!mins || mins < 10 || mins > 480) {
       return { error: 'Duration must be between 10 and 480 minutes.', lines: [] };
     }
-    if (startDate.getTime() <= Date.now()) {
+    if (startValue.getTime() <= Date.now()) {
       return { error: 'Start time must be in the future.', lines: [] };
     }
-    if (!Number.isNaN(deadlineDate.getTime()) && deadlineDate.getTime() >= startDate.getTime()) {
+    if (deadlineValue && deadlineValue.getTime() >= startValue.getTime()) {
       return { error: 'Registration must close before the contest starts.', lines: [] };
     }
 
-    const endDate = new Date(startDate.getTime() + mins * 60000);
+    const endDate = new Date(startValue.getTime() + mins * 60000);
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const fmt = (d: Date) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
     return {
       error: null,
       lines: [
-        `Starts ${fmt(startDate)} — ${formatRelative(startDate.getTime() - Date.now())}`,
+        `Starts ${fmt(startValue)} — ${formatRelative(startValue.getTime() - Date.now())}`,
         `Ends ${fmt(endDate)} (${mins} min)`,
-        !Number.isNaN(deadlineDate.getTime()) ? `Registration closes ${fmt(deadlineDate)}` : '',
+        deadlineValue ? `Registration closes ${fmt(deadlineValue)}` : '',
         `Times shown in ${tz}`,
       ].filter(Boolean),
     };
-  }, [start, deadline, duration]);
+  }, [startValue, deadlineValue, duration]);
 
   const handleSubmit = async () => {
-    if (preview.error) return;
+    if (preview.error || !startValue) return;
     try {
       await mutation.mutateAsync({
-        startTime: new Date(start).toISOString(),
-        registrationDeadline: deadline ? new Date(deadline).toISOString() : undefined,
+        startTime: startValue.toISOString(),
+        registrationDeadline: deadlineValue ? deadlineValue.toISOString() : undefined,
         duration: parseInt(duration, 10),
         reason: reason.trim() || undefined,
         notifyParticipants: notify,
@@ -144,13 +150,8 @@ export function RescheduleContestModal({
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="reschedule-start">Start date &amp; time</Label>
-              <Input
-                id="reschedule-start"
-                type="datetime-local"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
+              <Label>Start date &amp; time</Label>
+              <DateTimePicker value={startValue} onChange={setStartValue} placeholder="Pick date & time" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="reschedule-duration">Duration (minutes)</Label>
@@ -166,13 +167,8 @@ export function RescheduleContestModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="reschedule-deadline">Registration closes</Label>
-            <Input
-              id="reschedule-deadline"
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
+            <Label>Registration closes</Label>
+            <DateTimePicker value={deadlineValue} onChange={setDeadlineValue} placeholder="Pick date & time" />
           </div>
 
           {/* Derived schedule preview */}

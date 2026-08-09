@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { PostHogProvider } from '@/components/providers/posthog-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { MaintenanceBanner } from '@/components/layout/MaintenanceBanner'
 import { Suspense } from 'react'
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, SITE_KEYWORDS, SOCIAL_IMAGE, TWITTER_HANDLE } from '@/lib/seo/config'
 import { OrganizationJsonLd } from '@/lib/seo/json-ld'
@@ -111,6 +112,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <body className="font-sans antialiased bg-background text-foreground">
                 <MotionConfig reducedMotion="user">
                     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+                        <MaintenanceBanner />
                         <QueryProvider>
                             <Suspense>
                                 <PostHogProvider>

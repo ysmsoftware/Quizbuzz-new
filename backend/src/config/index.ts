@@ -205,6 +205,16 @@ const envSchema = z.object({
     // Grace period (seconds) after a contest ends before participants who never
     // joined are marked ABSENT — lets submission workers flush and persist first.
     QUIZ_MARK_ABSENT_DELAY: z.coerce.number().default(600),
+    // How far before startTime the admin "Start Now" override becomes visible.
+    QUIZ_MANUAL_START_VISIBILITY_WINDOW: z.coerce.number().default(600), // 10 min
+    // Reconciliation sweep (contest-start-reliability spec, Phase 2): how often the
+    // recurring job scans for contests whose CONTEST_START job should exist but
+    // doesn't, and how far ahead it looks when deciding what counts as a candidate.
+    QUIZ_RECONCILIATION_INTERVAL_MS: z.coerce.number().default(15 * 60 * 1000), // 15 min
+    QUIZ_RECONCILIATION_LOOKAHEAD_MS: z.coerce.number().default(30 * 60 * 1000), // 2x interval
+    QUIZ_RECONCILIATION_GRACE_MS: z.coerce.number().default(5 * 60 * 1000), // catch recently-due misses too
+    // 15-minute start-time grid (contest-start-reliability spec §6.4).
+    CONTEST_START_TIME_SLOT_MINUTES: z.coerce.number().default(15),
     MAX_SLUG_RETRIES: z.coerce.number().default(5),
     JOIN_CODE_LENGTH: z.coerce.number().default(6),
     BULK_IMPORT_LIMIT: z.coerce.number().default(500),
@@ -457,6 +467,15 @@ export const config = {
         heartbeatTTL: env.HEARTBEAT_TTL,
         timerDriftTolerance: env.QUIZ_TIMER_DRIFT_TOLERANCE,
         markAbsentDelay: env.QUIZ_MARK_ABSENT_DELAY,
+        manualStartVisibilityWindow: env.QUIZ_MANUAL_START_VISIBILITY_WINDOW, // seconds
+        reconciliationIntervalMs: env.QUIZ_RECONCILIATION_INTERVAL_MS,
+        reconciliationLookaheadMs: env.QUIZ_RECONCILIATION_LOOKAHEAD_MS,
+        reconciliationGraceMs: env.QUIZ_RECONCILIATION_GRACE_MS,
+    },
+
+    contest: {
+        // Start times must land on this grid (minutes) — see contest.validator.ts.
+        startTimeSlotMinutes: env.CONTEST_START_TIME_SLOT_MINUTES,
     },
 
     // Convenience alias — quiz module uses config.ws / config.app.frontendUrl

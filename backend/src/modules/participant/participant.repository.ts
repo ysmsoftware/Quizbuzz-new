@@ -51,6 +51,13 @@ export interface IParticipantRepository {
     getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>>;
 
     updateStatuses(participantIds: string[], status: ParticipantStatus, organizationId: string): Promise<number>;
+
+    /**
+     * Participants still pre-quiz (never got a socket-driven quiz:v1:join) at the
+     * moment a contest starts — the DB-level fallback for CONTEST_START, used by both
+     * the scheduled job and the manual "Start Now" override.
+     */
+    findAwaitingStart(contestId: string, organizationId: string): Promise<Array<{ id: string; contactId: string }>>;
 }
 
 
@@ -211,6 +218,17 @@ export class ParticipantRepository implements IParticipantRepository {
             select: { organizationId: true },
         });
         return participant?.organizationId ?? null;
+    }
+
+    async findAwaitingStart(contestId: string, organizationId: string): Promise<Array<{ id: string; contactId: string }>> {
+        return prisma.participant.findMany({
+            where: {
+                contestId,
+                organizationId,
+                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"] },
+            },
+            select: { id: true, contactId: true },
+        });
     }
 
     async getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>> {

@@ -9,6 +9,7 @@ import {
     CancelContestSchema,
     RescheduleContestSchema,
     ForceEndContestSchema,
+    StartContestNowSchema,
 } from "./contest.validator";
 import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
 import { storageService } from "../../services/storage.service";
@@ -191,6 +192,25 @@ export class ContestController {
             );
 
             res.status(200).json({ success: true, message: "Contest ended", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    startContestNow = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            StartContestNowSchema.parse(req.body ?? {});
+
+            const result = await this.contestService.startContestNow(
+                req.params.contestId as string,
+                user.organizationId,
+            );
+
+            res.status(200).json({ success: true, message: "Contest started", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

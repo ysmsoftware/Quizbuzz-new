@@ -355,6 +355,19 @@ export class QuizGateway {
         this.emitSocket("participant", `contest:${cid}`, "quiz:v1:cancelled", payload);
     }
 
+    /**
+     * Relay an admin's broadcast message to every participant socket in the
+     * contest room (waiting room + in-quiz play page both listen for this).
+     * Payload shape/casing must match `BroadcastMessage` in
+     * useWaitingRoomSocket.ts: lowercase `type`, key named `text`.
+     */
+    emitBroadcastMessage(cid: string, payload: { type: string; text: string }) {
+        this.emitSocket("participant", `contest:${cid}`, "quiz:v1:broadcast", {
+            type: payload.type.toLowerCase(),
+            text: payload.text,
+        });
+    }
+
     async emitAutoSubmit(pid: string, cid: string, reason: string) {
         try {
             const result = await this.quizService.submitQuiz(cid, pid, "AUTO");

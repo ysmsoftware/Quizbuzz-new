@@ -27,7 +27,7 @@ import { verifyContactToken } from "../../utils/tokens";
 import { ContactService } from "../contact/contact.service";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
-import { messageQueue } from "../../queues";
+import { messageQueue, quizTimerQueue, contestReconciliationQueue } from "../../queues";
 import { rankRows } from "../../workers/leaderboard.worker";
 import logger from "../../config/logger";
 
@@ -59,6 +59,18 @@ export interface IContestQuizTerminator {
     emitAutoSubmit(participantId: string, contestId: string, reason: string): Promise<void>;
 }
 
+/**
+ * The slice of quiz runtime + gateway behaviour CONTEST_START needs. Same reasoning
+ * as IContestQuizTerminator — shared by the scheduled quiz-timer job and the manual
+ * "Start Now" override so the two start sequences can never diverge.
+ */
+export interface IContestQuizStarter {
+    transitionToQuiz(contestId: string): Promise<{ transitioned: string[]; blocked: string[] }>;
+    handleRejoin(contestId: string, participantId: string): Promise<{ contactId?: string } | null>;
+    startQuizForParticipant(participantId: string, contestId: string, organizationId: string, contactId: string): Promise<void>;
+    broadcastAdminEvent(contestId: string, event: string, data: unknown): void;
+}
+
 export class ContestService {
     constructor(
         private readonly orgRepo: OrganizationRepository,
@@ -76,6 +88,7 @@ export class ContestService {
     // ─── Late-bound collaborators (see IContestBroadcaster) ───────────────────
     private broadcaster?: IContestBroadcaster;
     private quizTerminator?: IContestQuizTerminator;
+    private quizStarter?: IContestQuizStarter;
 
     setBroadcaster(broadcaster: IContestBroadcaster): void {
         this.broadcaster = broadcaster;
@@ -83,6 +96,10 @@ export class ContestService {
 
     setQuizTerminator(terminator: IContestQuizTerminator): void {
         this.quizTerminator = terminator;
+    }
+
+    setQuizStarter(starter: IContestQuizStarter): void {
+        this.quizStarter = starter;
     }
 
     // ─── Contest CRUD ─────────────────────────────────────────────────────────
@@ -123,7 +140,14 @@ export class ContestService {
     async getContest(contestId: string, organizationId: string) {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");
-        return contest;
+        return {
+            ...contest,
+            // Derived, not stored — keeps config.quiz.manualStartVisibilityWindow the
+            // single source of truth instead of duplicating the threshold in the client.
+            manualStartVisibleFrom: new Date(
+                contest.startTime.getTime() - config.quiz.manualStartVisibilityWindow * 1000,
+            ).toISOString(),
+        };
     }
 
     async getContestContext(contestId: string, organizationId: string) {
@@ -550,6 +574,174 @@ export class ContestService {
         );
 
         return { status: ContestStatus.EVALUATION, submitted: submitted.length, errors: errors.length };
+    }
+
+    /** Statuses from which a contest may still be manually started. */
+    private static readonly MANUALLY_STARTABLE: ReadonlyArray<ContestStatus> = [
+        ContestStatus.PUBLISHED,
+        ContestStatus.REGISTRATION_CLOSED,
+    ];
+
+    /**
+     * Run the CONTEST_START sequence: flip status to LIVE, move waiting-room
+     * participants into the quiz, DB-fallback for anyone the socket path missed, and
+     * broadcast admin stats.
+     *
+     * Shared by quiz-timer.worker.ts's scheduled handler and startContestNow below so
+     * the two triggers can never produce different outcomes — see
+     * docs/contest-start-reliability-spec.md §5.2.
+     */
+    async runContestStartSequence(
+        contestId: string,
+        organizationId: string,
+    ): Promise<{ transitioned: string[]; blocked: string[] }> {
+        if (!this.quizStarter) {
+            throw new BadRequestError("Quiz runtime is unavailable — cannot start the contest");
+        }
+
+        await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.LIVE);
+
+        const { transitioned, blocked } = await this.quizStarter.transitionToQuiz(contestId);
+
+        const startedPids = new Set<string>();
+        for (const pid of transitioned) {
+            try {
+                const session = await this.quizStarter.handleRejoin(contestId, pid);
+                const contactId = session?.contactId ?? "";
+                await this.quizStarter.startQuizForParticipant(pid, contestId, organizationId, contactId);
+                startedPids.add(pid);
+            } catch (err) {
+                logger.error(`[contest] Failed to start quiz for ${pid}: ${(err as Error).message}`);
+            }
+        }
+
+        // DB-level fallback: participants still REGISTERED/CHECKED_IN/IN_WAITING whose
+        // socket never emitted quiz:v1:join (network blip, page refresh, slow connection).
+        if (this.participantRepo) {
+            try {
+                const dbParticipants = await this.participantRepo.findAwaitingStart(contestId, organizationId);
+                for (const p of dbParticipants) {
+                    if (startedPids.has(p.id)) continue;
+                    try {
+                        await this.quizStarter.startQuizForParticipant(p.id, contestId, organizationId, p.contactId);
+                        logger.info(`[contest] DB-fallback: started quiz for ${p.id}`);
+                    } catch (err) {
+                        logger.error(`[contest] DB-fallback failed for ${p.id}: ${(err as Error).message}`);
+                    }
+                }
+            } catch (err) {
+                logger.error(`[contest] DB-fallback query failed: ${(err as Error).message}`);
+            }
+        }
+
+        this.quizStarter.broadcastAdminEvent(contestId, "admin:v1:live-stats", {
+            contestId,
+            active: transitioned.length,
+            submitted: 0,
+            waiting: blocked.length,
+            totalViolations: 0,
+        });
+
+        return { transitioned, blocked };
+    }
+
+    /**
+     * Admin-triggered fallback for when the scheduled CONTEST_START job never fires
+     * (the "Two-Redis Trap" incident this spec exists to close). Idempotent against a
+     * still-pending scheduled job: that job is evicted here so it cannot also fire and
+     * double-run the start sequence, and a race where it fires anyway is a no-op —
+     * quiz-timer.worker.ts's handleContestStart treats LIVE the same as CANCELLED/COMPLETED.
+     */
+    async startContestNow(contestId: string, organizationId: string) {
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        if (!ContestService.MANUALLY_STARTABLE.includes(contest.status)) {
+            throw new ConflictError(
+                contest.status === ContestStatus.LIVE
+                    ? "Contest is already LIVE"
+                    : `Cannot manually start a ${contest.status} contest`,
+            );
+        }
+
+        await this.schedulerService.cancelStartJob(contestId);
+
+        const { transitioned, blocked } = await this.runContestStartSequence(contestId, organizationId);
+
+        logger.info(
+            `[contest] Manually started ${contestId}: ${transitioned.length} transitioned, ${blocked.length} blocked`,
+        );
+
+        return { status: ContestStatus.LIVE, transitioned: transitioned.length, blocked: blocked.length };
+    }
+
+    /**
+     * Periodic safety net (Phase 2 of docs/contest-start-reliability-spec.md): catches
+     * a CONTEST_START job that is simply gone — Redis mode-switch data loss, a failed
+     * re-schedule, an operator error — which the worker's own staleness self-heal
+     * cannot catch, since that only corrects a job firing at the wrong time, not one
+     * that never fires at all. Manual "Start Now" is the human-triggered fallback for
+     * the same gap; this is the automatic one.
+     *
+     * Queries Contest directly (already indexed on [startTime, status]) rather than a
+     * separate schedule table — see the spec §6.3 for why a second persisted copy of
+     * "when does this start" was rejected as its own source of drift risk.
+     */
+    async reconcileMissingStartJobs(): Promise<{ checked: number; fixed: number }> {
+        const now = Date.now();
+        const windowStart = new Date(now - config.quiz.reconciliationGraceMs);
+        const windowEnd = new Date(now + config.quiz.reconciliationLookaheadMs);
+
+        const candidates = await this.contestRepo.findStartReconciliationCandidates(windowStart, windowEnd);
+
+        let fixed = 0;
+        for (const contest of candidates) {
+            try {
+                const existing = await quizTimerQueue.getJob(`start-${contest.id}`);
+                if (existing) continue; // healthy — no action, no log noise
+
+                await this.schedulerService.ensureStartJob(contest.id, contest.organizationId, contest.startTime);
+                fixed++;
+                logger.warn(
+                    `[contest-reconciliation] Re-enqueued missing CONTEST_START job for contest ${contest.id} ` +
+                    `(scheduled for ${contest.startTime.toISOString()})`,
+                );
+            } catch (err) {
+                logger.error(
+                    `[contest-reconciliation] Failed to check/fix contest ${contest.id}: ${(err as Error).message}`,
+                );
+            }
+        }
+
+        logger.info(`[contest-reconciliation] Sweep complete — checked=${candidates.length}, fixed=${fixed}`);
+
+        return { checked: candidates.length, fixed };
+    }
+
+    /** Registers the recurring BullMQ job that drives reconcileMissingStartJobs on a schedule. */
+    async ensureContestStartReconciliationJob(): Promise<void> {
+        const jobId = "periodic-contest-start-reconciliation";
+
+        const repeatables = await contestReconciliationQueue.getRepeatableJobs();
+        const existing = repeatables.find((repeatable) => repeatable.id === jobId);
+        if (existing) {
+            await contestReconciliationQueue.removeRepeatableByKey(existing.key);
+        }
+
+        await contestReconciliationQueue.add(
+            "reconcile-contest-starts",
+            {},
+            {
+                jobId,
+                repeat: { every: config.quiz.reconciliationIntervalMs },
+                removeOnComplete: true,
+                removeOnFail: true,
+            },
+        );
+
+        logger.info(
+            `[contest-service] Recurring contest-start reconciliation scheduled every ${config.quiz.reconciliationIntervalMs / 60000} minutes`,
+        );
     }
 
     /**

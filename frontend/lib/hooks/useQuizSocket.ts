@@ -19,6 +19,7 @@ interface UseQuizSocketProps {
     onDisqualified?: (data: any) => void;
     onError?: (data: any) => void;
     onCaptureRequest?: (data: any) => void;
+    onBroadcast?: (data: { type: 'info' | 'warning' | 'urgent'; text: string }) => void;
 }
 
 const mapViolationType = (type: string): string => {
@@ -61,6 +62,7 @@ export function useQuizSocket({
     onDisqualified,
     onError,
     onCaptureRequest,
+    onBroadcast,
 }: UseQuizSocketProps) {
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
@@ -72,13 +74,13 @@ export function useQuizSocket({
     const cbRef = useRef({
         onJoinAck, onQuizStarted, onAnswerAck, onSubmitAck,
         onAutoSubmit, onTimeWarning, onReadyAck, onProctoringAlert,
-        onDisqualified, onError, onCaptureRequest,
+        onDisqualified, onError, onCaptureRequest, onBroadcast,
     });
     useEffect(() => {
         cbRef.current = {
             onJoinAck, onQuizStarted, onAnswerAck, onSubmitAck,
             onAutoSubmit, onTimeWarning, onReadyAck, onProctoringAlert,
-            onDisqualified, onError, onCaptureRequest,
+            onDisqualified, onError, onCaptureRequest, onBroadcast,
         };
     });
 
@@ -149,6 +151,7 @@ export function useQuizSocket({
         socket.on('quiz:v1:time_warning', (d) => cbRef.current.onTimeWarning?.(d));
         socket.on('quiz:v1:violation_update', (d) => cbRef.current.onProctoringAlert?.(d));
         socket.on('quiz:v1:capture_request', (d) => cbRef.current.onCaptureRequest?.(d));
+        socket.on('quiz:v1:broadcast', (d) => cbRef.current.onBroadcast?.(d));
         // Backward-compat aliases
         socket.on('quiz:v1:join_ack', (d) => cbRef.current.onJoinAck?.(d));
         socket.on('quiz:v1:quiz_started', (d) => cbRef.current.onQuizStarted?.(d));

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +21,7 @@ import {
 import {
     AlertCircle,
     ArrowLeft,
-    Calendar,
     CheckCircle2,
-    Clock,
     Plus,
     Trash2,
     X,
@@ -35,7 +32,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { useContests } from '@/lib/hooks/useContests';
 import { Stepper } from '@/components/shared/Stepper';
 import { Loader2 } from 'lucide-react';
-import { DatePicker } from '@/components/ui/date-picker';
+import { DateTimePicker } from '@/components/ui/datetime-picker';
+import { isOnStartTimeGrid } from '@/lib/constants/contest-scheduling';
+import { toLocalInputValue } from '@/lib/utils/datetime';
 import { FileUpload } from '@/components/features/shared/FileUpload';
 import { uploadBanner } from '@/lib/api/contests.api';
 
@@ -115,69 +114,21 @@ export default function CreateContestPage() {
         bannerImage: undefined,
     });
 
-    // Helpers for registrationDeadline
-    const deadlineDate = form.registrationDeadline ? new Date(form.registrationDeadline.split('T')[0] + 'T00:00:00') : undefined;
-    const deadlineTime = form.registrationDeadline ? form.registrationDeadline.split('T')[1] || '12:00' : '12:00';
+    // registrationDeadline / startTime are combined date+time picks now — see
+    // components/ui/datetime-picker.tsx. `form.*` stays the same "YYYY-MM-DDTHH:mm"
+    // string shape the rest of this form (and the API payload below) already expects.
+    const deadlineValue = form.registrationDeadline ? new Date(form.registrationDeadline) : undefined;
+    const startValue = form.startTime ? new Date(form.startTime) : undefined;
 
-    const handleDeadlineDateChange = (date?: Date) => {
-        if (date) {
-            const dateStr = format(date, 'yyyy-MM-dd');
-            setForm(prev => ({
-                ...prev,
-                registrationDeadline: `${dateStr}T${deadlineTime}`
-            }));
-        } else {
-            setForm(prev => ({
-                ...prev,
-                registrationDeadline: ''
-            }));
-        }
+    const handleDeadlineChange = (date?: Date) => {
+        setForm(prev => ({ ...prev, registrationDeadline: date ? toLocalInputValue(date) : '' }));
         if (errors.registrationDeadline) {
             setErrors(prev => ({ ...prev, registrationDeadline: '' }));
         }
     };
 
-    const handleDeadlineTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const timeStr = e.target.value;
-        const datePart = form.registrationDeadline ? form.registrationDeadline.split('T')[0] : format(new Date(), 'yyyy-MM-dd');
-        setForm(prev => ({
-            ...prev,
-            registrationDeadline: `${datePart}T${timeStr}`
-        }));
-        if (errors.registrationDeadline) {
-            setErrors(prev => ({ ...prev, registrationDeadline: '' }));
-        }
-    };
-
-    // Helpers for startTime
-    const startDate = form.startTime ? new Date(form.startTime.split('T')[0] + 'T00:00:00') : undefined;
-    const startTimeVal = form.startTime ? form.startTime.split('T')[1] || '12:00' : '12:00';
-
-    const handleStartDateChange = (date?: Date) => {
-        if (date) {
-            const dateStr = format(date, 'yyyy-MM-dd');
-            setForm(prev => ({
-                ...prev,
-                startTime: `${dateStr}T${startTimeVal}`
-            }));
-        } else {
-            setForm(prev => ({
-                ...prev,
-                startTime: ''
-            }));
-        }
-        if (errors.startTime) {
-            setErrors(prev => ({ ...prev, startTime: '' }));
-        }
-    };
-
-    const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const timeStr = e.target.value;
-        const datePart = form.startTime ? form.startTime.split('T')[0] : format(new Date(), 'yyyy-MM-dd');
-        setForm(prev => ({
-            ...prev,
-            startTime: `${datePart}T${timeStr}`
-        }));
+    const handleStartChange = (date?: Date) => {
+        setForm(prev => ({ ...prev, startTime: date ? toLocalInputValue(date) : '' }));
         if (errors.startTime) {
             setErrors(prev => ({ ...prev, startTime: '' }));
         }
@@ -372,6 +323,11 @@ export default function CreateContestPage() {
                     newErrors.startTime = 'Invalid date';
                 } else if (d <= now) {
                     newErrors.startTime = 'Start time must be in the future';
+                } else if (!isOnStartTimeGrid(form.startTime.split('T')[1] || '')) {
+                    // Defense in depth alongside the picker itself, which should make this
+                    // unreachable — mirrors the backend's isOnStartTimeGrid refine so a
+                    // rejection never has to make a round trip to be caught.
+                    newErrors.startTime = 'Start time must land on a 15-minute mark (e.g. 2:00, 2:15, 2:30, 2:45)';
                 }
             }
 
@@ -660,23 +616,12 @@ export default function CreateContestPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-sm font-semibold mb-1 block">Registration Deadline *</label>
-                                        <div className="flex gap-2 w-full">
-                                            <div className="flex-1">
-                                                <DatePicker
-                                                    value={deadlineDate}
-                                                    onChange={handleDeadlineDateChange}
-                                                    className={cn('w-full', errors.registrationDeadline ? 'border-destructive' : '')}
-                                                />
-                                            </div>
-                                            <div className="w-[110px] shrink-0">
-                                                <Input
-                                                    type="time"
-                                                    value={deadlineTime}
-                                                    onChange={handleDeadlineTimeChange}
-                                                    className={cn('w-full h-9 text-xs', errors.registrationDeadline ? 'border-destructive' : '')}
-                                                />
-                                            </div>
-                                        </div>
+                                        <DateTimePicker
+                                            value={deadlineValue}
+                                            onChange={handleDeadlineChange}
+                                            placeholder="Pick date & time"
+                                            className={cn(errors.registrationDeadline ? 'border-destructive' : '')}
+                                        />
                                         {errors.registrationDeadline && (
                                             <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.registrationDeadline}</p>
                                         )}
@@ -684,23 +629,12 @@ export default function CreateContestPage() {
 
                                     <div>
                                         <label className="text-sm font-semibold mb-1 block">Contest Start Time *</label>
-                                        <div className="flex gap-2 w-full">
-                                            <div className="flex-1">
-                                                <DatePicker
-                                                    value={startDate}
-                                                    onChange={handleStartDateChange}
-                                                    className={cn('w-full', errors.startTime ? 'border-destructive' : '')}
-                                                />
-                                            </div>
-                                            <div className="w-[110px] shrink-0">
-                                                <Input
-                                                    type="time"
-                                                    value={startTimeVal}
-                                                    onChange={handleStartTimeChange}
-                                                    className={cn('w-full h-9 text-xs', errors.startTime ? 'border-destructive' : '')}
-                                                />
-                                            </div>
-                                        </div>
+                                        <DateTimePicker
+                                            value={startValue}
+                                            onChange={handleStartChange}
+                                            placeholder="Pick date & time"
+                                            className={cn(errors.startTime ? 'border-destructive' : '')}
+                                        />
                                         {errors.startTime && (
                                             <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.startTime}</p>
                                         )}

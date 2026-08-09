@@ -118,6 +118,22 @@ export async function forceEndContest(
 }
 
 /**
+ * POST /contests/:contestId/start-now
+ * Manual fallback when the automated start job doesn't fire. Visible only inside
+ * config.quiz.manualStartVisibilityWindow before startTime (see contest.manualStartVisibleFrom).
+ * Idempotent — 409s if the contest is already LIVE.
+ */
+export async function startContestNow(
+  contestId: string,
+  body?: { reason?: string },
+): Promise<ApiResponse<{ status: string; transitioned: number; blocked: number }>> {
+  return post<{ status: string; transitioned: number; blocked: number }>(
+    `/contests/${contestId}/start-now`,
+    body ?? {},
+  );
+}
+
+/**
  * PATCH /contests/:contestId/archive
  */
 export async function archiveContest(contestId: string): Promise<ApiResponse> {

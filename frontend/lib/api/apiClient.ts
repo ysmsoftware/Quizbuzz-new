@@ -6,6 +6,7 @@
 import { notifyPlanLimitExceeded } from '../notifications/planLimitToast';
 import { notifyFeatureUnavailable } from '../notifications/featureUnavailableToast';
 import { notifyMaintenanceMode } from '../notifications/maintenanceModeToast';
+import { useMaintenanceStore } from '../stores/maintenance-store';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
@@ -171,8 +172,18 @@ export async function apiClient<T = unknown>(
     // maintenance.middleware.ts gates every /api/v1 request, including plain
     // GET page loads that don't have their own onError toast — without this,
     // those requests would fail with no visible message to the end user.
+    // Also drives the persistent top-of-screen banner (MaintenanceBanner.tsx),
+    // not just the one-off toast, since maintenance can outlast any single
+    // request's toast duration.
     if (errData.code === MAINTENANCE_MODE_CODE) {
       notifyMaintenanceMode(errData);
+      useMaintenanceStore.getState().setMaintenanceActive(true, errData.message);
+    } else {
+      // Any other response — success or a different error — means this
+      // request got past maintenanceGate, so maintenance mode is not (or no
+      // longer) active. Clears a stale banner left over from an earlier
+      // outage without needing a separate poll.
+      useMaintenanceStore.getState().setMaintenanceActive(false);
     }
 
     throw new ApiRequestError(
@@ -187,6 +198,10 @@ export async function apiClient<T = unknown>(
       errData.featureKey,
     );
   }
+
+  // A successful response also means maintenanceGate let this request
+  // through — clear the banner if it was showing.
+  useMaintenanceStore.getState().setMaintenanceActive(false);
 
   return data as ApiResponse<T>;
 }

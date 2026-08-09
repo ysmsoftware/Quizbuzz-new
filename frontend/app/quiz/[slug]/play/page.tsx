@@ -222,6 +222,14 @@ export default function QuizPlayPage() {
             useQuizStore.getState().resetQuiz();
             router.push(`/quiz/${slug}/disqualified`);
         },
+        onBroadcast: (data) => {
+            const toastFn = data.type === "urgent" ? toast.error : data.type === "warning" ? toast.warning : toast.info;
+            toastFn(data.text, {
+                position: "top-right",
+                duration: 8000,
+                id: `broadcast-${Date.now()}`,
+            });
+        },
     });
 
     // ─── Proctoring warnings → toast (side position) ─────────────────────────

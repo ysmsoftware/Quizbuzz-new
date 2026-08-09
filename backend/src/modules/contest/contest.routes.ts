@@ -38,6 +38,7 @@ contestRouter.post("/:contestId/close-registration", authenticatedOrgMiddleware,
 contestRouter.post("/:contestId/reschedule", authenticatedOrgMiddleware, idempotency, (req, res, next) => ctrl().rescheduleContest(req, res, next));
 contestRouter.post("/:contestId/cancel", authenticatedOrgMiddleware, idempotency, (req, res, next) => ctrl().cancelContest(req, res, next));
 contestRouter.post("/:contestId/force-end", authenticatedOrgMiddleware, idempotency, (req, res, next) => ctrl().forceEndContest(req, res, next));
+contestRouter.post("/:contestId/start-now", authenticatedOrgMiddleware, idempotency, (req, res, next) => ctrl().startContestNow(req, res, next));
 
 // Participants (Admin)
 contestRouter.get("/:contestId/participants", authenticatedOrgMiddleware, (req, res, next) => pctrl().listParticipants(req, res, next));
