@@ -2,6 +2,7 @@ import { Router } from "express";
 
 // Domain routers
 import { organizationRouter } from "./modules/organization/organization.routes"
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { adminAuthRouter } from "./modules/admin/auth/admin-auth.routes";
 import { contactRouter } from "./modules/contact/contact.routes";
 import { contestRouter } from "./modules/contest/contest.routes";
@@ -26,6 +27,7 @@ import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
 const apiRouter = Router();
 
 apiRouter.use("/org", organizationRouter);
+apiRouter.use("/org", dashboardRouter);
 apiRouter.use("/auth/admin", adminAuthRouter);
 apiRouter.use("/auth/quiz", quizRegistrationRouter);
 apiRouter.use("/quiz-proctoring", quizProctoringRouter);

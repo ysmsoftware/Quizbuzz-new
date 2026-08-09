@@ -43,6 +43,14 @@ export const queryKeys = {
     usage: (orgId: string) => ['org', orgId, 'usage'],
   },
 
+  dashboard: {
+    overview: (orgId: string, params?: any) => ['dashboard', orgId, 'overview', params],
+    upcomingContests: (orgId: string, params?: any) => ['dashboard', orgId, 'upcoming-contests', params],
+    recentRegistrations: (orgId: string, params?: any) => ['dashboard', orgId, 'recent-registrations', params],
+    registrationTrend: (orgId: string, params?: any) => ['dashboard', orgId, 'registration-trend', params],
+    contestsByStatus: (orgId: string, params?: any) => ['dashboard', orgId, 'contests-by-status', params],
+  },
+
   contests: {
     list: (filters?: any) => ['contests', 'list', filters],
     detail: (id: string) => ['contests', id],

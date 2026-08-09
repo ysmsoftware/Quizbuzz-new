@@ -46,6 +46,9 @@ import { OnboardingController } from './modules/onboarding/onboarding.controller
 import { PayoutRepository } from './modules/payout/payout.repository.js';
 import { PayoutService } from './modules/payout/payout.service.js';
 import { PayoutController } from './modules/payout/payout.controller.js';
+import { DashboardRepository } from './modules/dashboard/dashboard.repository.js';
+import { DashboardService } from './modules/dashboard/dashboard.service.js';
+import { DashboardController } from './modules/dashboard/dashboard.controller.js';
 
 // Quiz Module
 import { QuizSession } from './modules/quiz/quiz.session.js';
@@ -82,6 +85,7 @@ export const proctoringRepository = new ProctoringRepository();
 export const analyticsRepository = new AnalyticsRepository(prisma);
 export const onboardingRepository = new OnboardingRepository();
 export const payoutRepository = new PayoutRepository();
+export const dashboardRepository = new DashboardRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -101,6 +105,7 @@ export const adminProctoringService = new AdminProctoringService(proctoringRepos
 export const quizSession = new QuizSession();
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);
+export const dashboardService = new DashboardService(dashboardRepository);
 export const proctoringService = new ProctoringService(prisma, quizSession);
 export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
@@ -163,3 +168,4 @@ export const analyticsController = new AnalyticsController(analyticsService);
 export const onboardingController = new OnboardingController(onboardingService);
 export const quizRegistrationController = new QuizRegistrationController(quizRegistrationService, quizAuthService);
 export const payoutController = new PayoutController(payoutService);
+export const dashboardController = new DashboardController(dashboardService);

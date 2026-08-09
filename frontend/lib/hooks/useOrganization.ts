@@ -119,10 +119,11 @@ export function useOrganization(orgId: string) {
  * usage numbers and shouldn't have to pull in useOrganization's full set of
  * mutations just to render a progress bar.
  */
-export function useOrgUsage(orgId: string) {
+export function useOrgUsage(orgId: string, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: queryKeys.org.usage(orgId),
     queryFn: () => orgApi.getOrgUsage(orgId),
     enabled: !!orgId,
+    ...(options?.refetchInterval ? { refetchInterval: options.refetchInterval } : {}),
   });
 }

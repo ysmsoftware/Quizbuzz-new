@@ -147,6 +147,22 @@ const envSchema = z.object({
     ANALYTICS_SNAPSHOT_INTERVAL: z.coerce.number(),
     ANALYTICS_RETENTION_DAYS: z.coerce.number(),
 
+    // ORG DASHBOARD
+    // All limits below are ceilings + defaults for the /org/:orgId/dashboard/* endpoints.
+    // Callers can request anything from 1 up to the *_MAX value via query params —
+    // nothing here is a hardcoded response size, it's just the config-driven bound.
+    DASHBOARD_UPCOMING_CONTESTS_LIMIT_DEFAULT: z.coerce.number().int().min(1).default(5),
+    DASHBOARD_UPCOMING_CONTESTS_LIMIT_MAX: z.coerce.number().int().min(1).default(50),
+    DASHBOARD_RECENT_REGISTRATIONS_LIMIT_DEFAULT: z.coerce.number().int().min(1).default(10),
+    DASHBOARD_RECENT_REGISTRATIONS_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+    DASHBOARD_TREND_DAYS_DEFAULT: z.coerce.number().int().min(1).default(7),
+    DASHBOARD_TREND_DAYS_MAX: z.coerce.number().int().min(1).default(90),
+    DASHBOARD_DEFAULT_PERIOD: z.enum(["week", "month"]).default("month"),
+    // Overview aggregates across every contest in the org, so it's cached briefly in
+    // Redis rather than recomputed on every poll (Redis rule 5.1 — allowed as "live
+    // analytics", not persisted/critical data).
+    DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(10),
+
     // PUB/SUB
     REDIS_PUBSUB_ENABLED: z.coerce.boolean(),
     REDIS_PUBSUB_PREFIX: z.string(),
@@ -410,6 +426,23 @@ export const config = {
     analytics: {
         snapshotInterval: env.ANALYTICS_SNAPSHOT_INTERVAL,
         retentionDays: env.ANALYTICS_RETENTION_DAYS,
+    },
+
+    dashboard: {
+        upcomingContests: {
+            defaultLimit: env.DASHBOARD_UPCOMING_CONTESTS_LIMIT_DEFAULT,
+            maxLimit: env.DASHBOARD_UPCOMING_CONTESTS_LIMIT_MAX,
+        },
+        recentRegistrations: {
+            defaultLimit: env.DASHBOARD_RECENT_REGISTRATIONS_LIMIT_DEFAULT,
+            maxLimit: env.DASHBOARD_RECENT_REGISTRATIONS_LIMIT_MAX,
+        },
+        trend: {
+            defaultDays: env.DASHBOARD_TREND_DAYS_DEFAULT,
+            maxDays: env.DASHBOARD_TREND_DAYS_MAX,
+        },
+        defaultPeriod: env.DASHBOARD_DEFAULT_PERIOD,
+        overviewCacheTtlSeconds: env.DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS,
     },
 
     pubsub: {
