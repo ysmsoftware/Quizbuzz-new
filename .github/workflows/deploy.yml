@@ -21,6 +21,24 @@ jobs:
   test:
     name: Lint & Test
     runs-on: ubuntu-latest
+    # backend/src/config/redis.ts opens a real ioredis connection at import time
+    # (submissionQueue, evaluationQueue, etc. in backend/src/queues/index.ts are
+    # constructed eagerly, not lazily), and backend/.env.test — loaded whenever
+    # NODE_ENV=test — points REDIS_HOST/REDIS_PORT at localhost:6379. Any Jest
+    # suite that transitively imports one of those modules (e.g. payment-registration.test.ts
+    # importing PaymentService) needs a real Redis reachable at that address, even
+    # though its own assertions never touch Redis directly. Matches local dev,
+    # where docker-compose already provides Redis on 6379.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
