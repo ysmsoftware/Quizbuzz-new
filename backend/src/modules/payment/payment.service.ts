@@ -4,7 +4,8 @@ import { RazorpayProvider } from '../../providers/razorpay.provider';
 import { ContestService } from "../contest/contest.service";
 import { ParticipantService } from "../participant/participant.service";
 import { MessagingService } from "../messaging/messaging.service";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../../error/http-errors";
+import { BadRequestError, ForbiddenError, NotFoundError, FeatureUnavailableError } from "../../error/http-errors";
+import { isFeatureEnabled } from "../../common/feature-flags";
 import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
 
@@ -42,6 +43,14 @@ export class PaymentService {
         const contest = await this.contestService.getContest(participant.contestId, participant.organizationId);
         if (!contest) {
             throw new NotFoundError("No contest found");
+        }
+
+        // Razorpay kill switch / per-org gate (razorpay_gateway_active flag).
+        if (!(await isFeatureEnabled("razorpay_gateway_active", { organizationId: participant.organizationId }))) {
+            throw new FeatureUnavailableError(
+                "razorpay_gateway_active",
+                "Payments are temporarily unavailable for this organization. Please try again shortly."
+            );
         }
 
         if (!contest.paymentEnabled) {

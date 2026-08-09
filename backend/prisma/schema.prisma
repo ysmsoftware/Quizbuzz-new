@@ -1048,3 +1048,34 @@ model OrganizationProfile {
   @@index([heardAboutSource])
   @@map("organization_profiles")
 }
+
+// FEATURE FLAGS
+// Global default + per-organization override, mirroring quizbuzz-ops-next's
+// own FeatureFlag / FeatureFlagOrgOverride models 1:1. Deliberately minimal
+// here — no label/description/severity/reason/createdByName/soft-delete
+// bookkeeping. That history of record (who toggled what, when, why) lives in
+// ops's own tables and PlatformAuditLog. This side only ever needs to answer
+// "is `key` currently on for this org (or globally)" — see
+// src/common/feature-flags.ts's isFeatureEnabled(). Written to by ops via
+// queryMainDb (same connection/pattern entitlements.repository.ts already
+// uses), read by this app's own Prisma client on its own connection.
+
+model PlatformFeatureFlag {
+  key       String   @id
+  isEnabled Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_feature_flags")
+}
+
+model OrganizationFeatureFlagOverride {
+  key            String
+  organizationId String
+  isEnabled      Boolean
+  expiresAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@id([key, organizationId])
+  @@index([key, organizationId])
+  @@map("organization_feature_flag_overrides")
+}

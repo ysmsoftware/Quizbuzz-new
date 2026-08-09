@@ -7,6 +7,7 @@
  */
 
 import { config } from "../../config";
+import { isProctoringEnabled } from "../../common/feature-flags";
 import logger from "../../config/logger";
 import { QuizSession } from "./quiz.session";
 import type { PrismaClient } from "@prisma/client";
@@ -108,7 +109,7 @@ export class ProctoringService {
         organizationId: string,
         violation: ViolationEvent,
     ): Promise<void> {
-        if (!config.features.proctoring) return;
+        if (!(await isProctoringEnabled(organizationId))) return;
 
         await this.prisma.proctoringEvent.create({
             data: {

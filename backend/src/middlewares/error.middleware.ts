@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as Sentry from "@sentry/node";
 import { AppError } from "../error/app-error";
-import { PlanLimitExceededError } from "../error/http-errors";
+import { PlanLimitExceededError, FeatureUnavailableError } from "../error/http-errors";
 import logger from "../config/logger";
 import { TokenExpiredError, JsonWebTokenError } from "jsonwebtoken";
 import { ZodError } from "zod";
@@ -82,6 +82,21 @@ export const globalErrorHandler = (
             limitType: err.limitType,
             limit: err.limit,
             current: err.current,
+            requestId,
+        });
+    }
+
+    // ── 3b. Feature flag disabled ──────────────────────────────────────────────
+    // Distinct machine-readable code so the frontend recognizes "this feature is
+    // off" and renders a consistent notice instead of a generic error — never a
+    // silent no-op (product requirement, see docs/feature-flags-audit-and-implementation-plan.md §5.1a).
+    if (err instanceof FeatureUnavailableError) {
+        logger.warn(`${err.message} - [${method} ${originalUrl}] (ReqID: ${requestId})`);
+        return res.status(err.statusCode).json({
+            success: false,
+            code: "FEATURE_DISABLED",
+            message: err.message,
+            featureKey: err.featureKey,
             requestId,
         });
     }

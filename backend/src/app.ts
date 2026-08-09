@@ -12,6 +12,7 @@ import path from "path";
 
 import { redis } from './config/redis';
 import { globalErrorHandler } from "./middlewares/error.middleware";
+import { maintenanceGate } from "./middlewares/maintenance.middleware";
 import { metricsRegistry, collectQueueMetrics } from './config/metrics';
 
 import { config } from './config/index';
@@ -77,7 +78,7 @@ app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
 
 
 // routes
-app.use('/api/v1', apiRouter);
+app.use('/api/v1', maintenanceGate, apiRouter);
 
 
 app.get('/metrics', async (req, res) => {

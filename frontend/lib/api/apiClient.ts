@@ -4,10 +4,14 @@
  */
 
 import { notifyPlanLimitExceeded } from '../notifications/planLimitToast';
+import { notifyFeatureUnavailable } from '../notifications/featureUnavailableToast';
+import { notifyMaintenanceMode } from '../notifications/maintenanceModeToast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
 const PLAN_LIMIT_EXCEEDED_CODE = 'PLAN_LIMIT_EXCEEDED';
+const FEATURE_DISABLED_CODE = 'FEATURE_DISABLED';
+const MAINTENANCE_MODE_CODE = 'MAINTENANCE_MODE';
 
 export interface ApiResponse<T = unknown> {
   success: true;
@@ -27,6 +31,9 @@ export interface ApiError {
   limitType?: string;
   limit?: number;
   current?: number;
+  // Only present when code === "FEATURE_DISABLED" — see backend's
+  // FeatureUnavailableError / error.middleware.ts.
+  featureKey?: string;
 }
 
 export class ApiRequestError extends Error {
@@ -39,6 +46,7 @@ export class ApiRequestError extends Error {
     public readonly limitType?: string,
     public readonly limit?: number,
     public readonly current?: number,
+    public readonly featureKey?: string,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -154,6 +162,19 @@ export async function apiClient<T = unknown>(
       notifyPlanLimitExceeded(errData);
     }
 
+    // Same automatic, no-per-call-site-effort treatment as PLAN_LIMIT_EXCEEDED
+    // above — a feature turning off must never be a silent no-op.
+    if (errData.code === FEATURE_DISABLED_CODE) {
+      notifyFeatureUnavailable(errData);
+    }
+
+    // maintenance.middleware.ts gates every /api/v1 request, including plain
+    // GET page loads that don't have their own onError toast — without this,
+    // those requests would fail with no visible message to the end user.
+    if (errData.code === MAINTENANCE_MODE_CODE) {
+      notifyMaintenanceMode(errData);
+    }
+
     throw new ApiRequestError(
       errData.code ?? "UNKNOWN_ERROR",
       errData.message ?? res.statusText,
@@ -163,6 +184,7 @@ export async function apiClient<T = unknown>(
       errData.limitType,
       errData.limit,
       errData.current,
+      errData.featureKey,
     );
   }
 

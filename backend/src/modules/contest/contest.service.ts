@@ -15,7 +15,8 @@ import {
     ForceEndContestInput,
     TIMING_FIELDS,
 } from "./contest.validator";
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../../error/http-errors";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, FeatureUnavailableError } from "../../error/http-errors";
+import { isFeatureEnabled } from "../../common/feature-flags";
 import { createSlug } from "../../utils/slug";
 import { generateRegistrationRef } from "../../utils/ref";
 import { config } from "../../config";
@@ -680,6 +681,16 @@ export class ContestService {
     }
 
     async registerParticipant(contestSlug: string, dto: RegisterParticipantInput) {
+        // 0. Platform-wide registration pause (new_registrations_paused flag,
+        // org-unaware — supportsOrgOverride: false). Checked before the OTP
+        // token verification so a paused registration fails fast.
+        if (await isFeatureEnabled("new_registrations_paused")) {
+            throw new FeatureUnavailableError(
+                "new_registrations_paused",
+                "New registrations are temporarily paused. Please try again shortly."
+            );
+        }
+
         // 1. Verify the OTP contact token so we know the phone/email is real
         const tokenPayload = await verifyContactToken(dto.contactToken);
         if (tokenPayload.email !== dto.email) {

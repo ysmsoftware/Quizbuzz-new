@@ -1,6 +1,7 @@
 import { Worker as BullWorker, Job } from "bullmq";
 import { redis } from "../config/redis";
 import { config } from "../config";
+import { isProctoringEnabled } from "../common/feature-flags";
 import { Worker } from "./worker.interface";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
@@ -64,7 +65,7 @@ export class CaptureMetadataWorker implements Worker {
                 });
 
                 // 3. Upsert aggregated ProctoringScore if features are enabled
-                if (config.features.proctoring && !isSnapshot) {
+                if ((await isProctoringEnabled(organizationId)) && !isSnapshot) {
                     const activeViolationsCount = await prisma.proctoringEvent.count({
                         where: {
                             participantId,

@@ -11,7 +11,7 @@ import {
 } from "./quiz.types.js";
 import { prisma } from "../../config/db.js";
 import { getStorageProvider } from "../../providers/storage.provider.js";
-import { config } from "../../config";
+import { isProctoringEnabled } from "../../common/feature-flags";
 
 // Violation types that require a live camera/mic feed to detect. When a
 // contest has no camera module (per-contest proctoringEnabled = false),
@@ -135,10 +135,14 @@ export class QuizGateway {
 
         // Cache per-contest proctoring flag on the socket so handleViolation
         // doesn't hit the DB on every proctoring event.
-        socket.data.proctoringEnabled = await this.isProctoringEnabled(contestId);
+        socket.data.proctoringEnabled = await this.isContestProctoringEnabled(contestId);
     }
 
-    private async isProctoringEnabled(contestId: string): Promise<boolean> {
+    // Per-contest "does this contest have a camera module" setting — distinct
+    // from the imported isProctoringEnabled() org-aware feature-flag SDK
+    // function (feature-flags.ts) used at the platform/org kill-switch check
+    // below. Renamed to avoid two same-named-but-unrelated checks in one file.
+    private async isContestProctoringEnabled(contestId: string): Promise<boolean> {
         const contest = await prisma.contest.findUnique({
             where: { id: contestId },
             select: { proctoringEnabled: true },
@@ -262,9 +266,10 @@ export class QuizGateway {
     async handleViolation(socket: Socket, payload: ViolationPayload) {
         const { participantId, contestId, organizationId, proctoringEnabled } = socket.data;
 
-        // Global kill switch — disables proctoring platform-wide regardless
-        // of any per-contest setting.
-        if (!config.features.proctoring) {
+        // Global kill switch — disables proctoring platform-wide (env ceiling)
+        // or per-organization (DB flag/override), regardless of any
+        // per-contest setting.
+        if (!(await isProctoringEnabled(organizationId))) {
             return;
         }
 

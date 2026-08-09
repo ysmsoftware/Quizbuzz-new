@@ -72,3 +72,21 @@ export class PlanLimitExceededError extends AppError {
         }
     }
 }
+
+/**
+ * Thrown by any call site gated on isFeatureEnabled() (src/common/feature-flags.ts)
+ * when a flag resolves to false — global kill-switch or a per-org override turning
+ * a feature off. Kept distinct from ForbiddenError, same reasoning as
+ * PlanLimitExceededError above: the product owner was explicit that turning a
+ * feature off must never be a silent no-op, so the frontend needs a single
+ * recognizable FEATURE_DISABLED code to render one consistent "unavailable"
+ * state instead of every call site inventing its own copy.
+ */
+export class FeatureUnavailableError extends AppError {
+    constructor(
+        public readonly featureKey: string,
+        message = "This feature is currently unavailable.",
+    ) {
+        super(message, 403);
+    }
+}
