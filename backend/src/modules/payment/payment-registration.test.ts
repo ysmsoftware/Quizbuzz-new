@@ -3,6 +3,20 @@ import { PaymentService } from "./payment.service";
 import { ContestStatus, ParticipantStatus, PaymentStatus } from "@prisma/client";
 import { createContactToken } from "../../utils/tokens";
 
+// contest.service.ts / payment.service.ts both call the real isFeatureEnabled()
+// (backend/src/common/feature-flags.ts), which reads platformFeatureFlag straight
+// from Prisma — a genuine DB dependency this suite otherwise has no reason to need,
+// since every repository is already mocked above. Without this mock, these tests
+// only "pass" by accident: isFeatureEnabled fails closed (DB unreachable in CI) to
+// false for every key, which happens to be the desired value for
+// new_registrations_paused (not paused) but the wrong one for razorpay_gateway_active
+// (gateway inactive) — silently breaking PaymentService.createOrder. Mocking it here
+// makes the suite self-contained and its behavior independent of whatever Postgres
+// happens to be reachable at test time.
+jest.mock("../../common/feature-flags", () => ({
+  isFeatureEnabled: jest.fn((key: string) => Promise.resolve(key === "razorpay_gateway_active")),
+}));
+
 const sampleToken = createContactToken({
   email: "test@example.com",
   phone: "9876543210",
@@ -212,6 +226,9 @@ describe("Payment Registration Flow — Resume or Fresh", () => {
         paymentEnabled: true,
         paymentConfig: { amount: 100, currency: "INR" },
         title: "Test Contest",
+        // getContest() derives manualStartVisibleFrom from startTime.getTime() —
+        // required on every mock contest returned from findById, not optional.
+        startTime: new Date(Date.now() + 3600_000),
       });
       mockPaymentRepo.findByParticipantId.mockResolvedValue({
         id: "pay_1",
@@ -244,6 +261,7 @@ describe("Payment Registration Flow — Resume or Fresh", () => {
         paymentEnabled: true,
         paymentConfig: { amount: 100, currency: "INR" },
         title: "Test Contest",
+        startTime: new Date(Date.now() + 3600_000),
       });
       // 15 minutes old (> 10m window)
       mockPaymentRepo.findByParticipantId.mockResolvedValue({
