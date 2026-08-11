@@ -86,6 +86,7 @@ export interface InviteMemberResult {
     email: string;
     role: OrgMemberRole;
     inviteToken: string;
+    inviteLink: string;
 }
 
 // ─── Internal typed joins ─────────────────────────────────────────────────────

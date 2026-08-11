@@ -69,6 +69,8 @@ export type TemplateParamsMap = {
         name: string,
         orgName: string,
         inviteLink: string,
+        inviterName?: string,
+        role?: string,
     },
     [MessageTemplate.ADMIN_EMAIL_OTP]: {
         name: string,

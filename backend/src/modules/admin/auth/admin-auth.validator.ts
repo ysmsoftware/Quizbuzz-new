@@ -4,14 +4,19 @@ import { z } from 'zod';
 
 // shared
 
-const emailField = z.string().email("Invalid email address").toLowerCase().trim();
+const emailField = z.string()
+    .email("Invalid email address")
+    .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, "Email contains invalid characters or format")
+    .toLowerCase()
+    .trim();
 
 const passwordField = z.string()
-    .min(8,"Password must be at least 8 characters")
+    .min(6, "Password must be at least 6 characters")
     .max(72, "Password too long")
     .regex(/[A-Z]/, "Must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Must contain at least one lowercase letter")
     .regex(/[0-9]/, "Must contain at least one number")
+    .regex(/^[a-zA-Z0-9@#$%^&*!_\-+?]+$/, "Password contains invalid characters. Disallowed: commas, dots, brackets, slashes");
 
 
 const ulidField = z.ulid("Invalid ID format");

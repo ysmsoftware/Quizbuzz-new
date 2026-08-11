@@ -32,9 +32,15 @@ export default function RegisterPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, type, checked, value } = e.currentTarget;
+    let sanitizedValue = value;
+    if (name === 'email') {
+      sanitizedValue = value.replace(/[^a-zA-Z0-9@._\-+]/g, '');
+    } else if (name === 'password' || name === 'confirmPassword') {
+      sanitizedValue = value.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+    }
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === 'checkbox' ? checked : sanitizedValue,
     }));
   };
 
@@ -47,13 +53,34 @@ export default function RegisterPage() {
       return;
     }
 
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address (e.g. name@example.com)');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!/[A-Z]/.test(formData.password)) {
+      setError('Password must contain at least one uppercase letter');
+      return;
+    }
+
+    if (!/[a-z]/.test(formData.password)) {
+      setError('Password must contain at least one lowercase letter');
+      return;
+    }
+
+    if (!/[0-9]/.test(formData.password)) {
+      setError('Password must contain at least one number');
       return;
     }
 
@@ -152,7 +179,7 @@ export default function RegisterPage() {
                   className="border-border/50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters with uppercase, lowercase, and numbers
+                  Must be at least 6 characters with uppercase, lowercase, and numbers. Special characters allowed: @, #, $, %, ^, &, *, !, _, -, ?. No commas, dots, brackets, or slashes.
                 </p>
               </div>
 

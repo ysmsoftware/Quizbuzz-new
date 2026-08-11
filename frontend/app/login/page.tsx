@@ -23,6 +23,18 @@ export default function LoginPage() {
         }
     }, [isLoggedIn, router]);
 
+    const handleEmailChange = (val: string) => {
+        // Only accept characters valid in email (alphanumeric, @, ., -, _, +)
+        const sanitized = val.replace(/[^a-zA-Z0-9@._\-+]/g, '');
+        setEmail(sanitized);
+    };
+
+    const handlePasswordChange = (val: string) => {
+        // Strip disallowed special characters (comma, dot, brackets, slashes, quotes, colons)
+        const sanitized = val.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+        setPassword(sanitized);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -32,8 +44,9 @@ export default function LoginPage() {
             return;
         }
 
-        if (!email.includes('@')) {
-            setError('Please enter a valid email');
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(email)) {
+            setError('Please enter a valid email address (e.g. name@example.com)');
             return;
         }
 
@@ -92,7 +105,7 @@ export default function LoginPage() {
                                     type="email"
                                     placeholder="your@email.com"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => handleEmailChange(e.target.value)}
                                     disabled={loginMutation.isPending}
                                     className="border-border/50"
                                 />
@@ -104,7 +117,7 @@ export default function LoginPage() {
                                     type="password"
                                     placeholder="••••••••"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => handlePasswordChange(e.target.value)}
                                     disabled={loginMutation.isPending}
                                     className="border-border/50"
                                 />

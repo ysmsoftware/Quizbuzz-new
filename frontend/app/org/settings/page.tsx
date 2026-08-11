@@ -3,34 +3,29 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useOrganization } from '@/lib/hooks/useOrganization';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Globe, Palette, Loader2, Save, ExternalLink, ShieldCheck, Building2, Heart, CreditCard, CheckCircle2, AlertTriangle, Clock, Ban, Mail, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { ChipSelect } from '@/components/shared/ChipSelect';
-import { USE_CASES, ORG_SIZES, CONTEST_VOLUMES, PARTICIPANT_VOLUMES, HEARD_SOURCES } from '@/lib/constants/org-profile-options';
+import { ArrowLeft, Globe, Palette, Loader2, Building2, CreditCard, Users } from 'lucide-react';
 import { PlanBillingTabContent } from '@/components/features/organization/PlanBillingTabContent';
+import { MembersTabContent } from '@/components/features/organization/MembersTabContent';
+import { GeneralSettingsTabContent } from '@/components/features/organization/GeneralSettingsTabContent';
+import { ProfileDetailsTabContent } from '@/components/features/organization/ProfileDetailsTabContent';
+import { AppearanceSettingsTabContent } from '@/components/features/organization/AppearanceSettingsTabContent';
 
 export default function SettingsPage() {
     const router = useRouter();
     const { activeOrg, admin, meQuery } = useAuth();
     const orgId = activeOrg?.id || '';
     const { org, loading: orgLoading, error: orgError, updateOrgMutation, updateOrgProfileMutation } = useOrganization(orgId);
-    const { theme, setTheme } = useTheme();
 
     const [isSaving, setIsSaving] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
-    // ?tab=billing is already read below (see the effect reading
-    // window.location.search) — that's what the plan-limit toast's "Upgrade
-    // Plan" action (lib/notifications/planLimitToast.ts) links to.
     const [activeTab, setActiveTab] = useState('general');
+
     const [formData, setFormData] = useState({
         orgName: '',
         website: '',
@@ -120,7 +115,6 @@ export default function SettingsPage() {
 
         setIsSaving(true);
         try {
-            // Validate Inputs
             if (!formData.orgName.trim() || formData.orgName.trim().length < 2) {
                 toast.error('Organization Name must be at least 2 characters');
                 setIsSaving(false);
@@ -227,7 +221,7 @@ export default function SettingsPage() {
         <div className="min-h-screen bg-background">
             <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-                    <Link href="/org" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                    <Link href="/org" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
                         <ArrowLeft className="h-5 w-5" />
                         <span>Back</span>
                     </Link>
@@ -236,495 +230,82 @@ export default function SettingsPage() {
                 </div>
             </header>
 
-            <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-4 max-w-3xl mx-auto">
-                        <TabsTrigger value="general" className="gap-2">
-                            <Globe className="h-4 w-4" />
+            <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:flex-row gap-8 items-start">
+                    <TabsList className="flex flex-col w-full md:w-64 h-auto p-2 bg-card/60 rounded-xl border border-border/50 gap-1 shrink-0 sticky top-20">
+                        <TabsTrigger
+                            value="general"
+                            className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                        >
+                            <Globe className="h-4 w-4 shrink-0" />
                             <span>General</span>
                         </TabsTrigger>
-                        <TabsTrigger value="profile" className="gap-2">
-                            <Building2 className="h-4 w-4" />
+                        <TabsTrigger
+                            value="members"
+                            className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                        >
+                            <Users className="h-4 w-4 shrink-0" />
+                            <span>Members</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="profile"
+                            className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                        >
+                            <Building2 className="h-4 w-4 shrink-0" />
                             <span>Profile Details</span>
                         </TabsTrigger>
-                        <TabsTrigger value="billing" className="gap-2">
-                            <CreditCard className="h-4 w-4" />
+                        <TabsTrigger
+                            value="billing"
+                            className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                        >
+                            <CreditCard className="h-4 w-4 shrink-0" />
                             <span>Plan & Billing</span>
                         </TabsTrigger>
-                        <TabsTrigger value="appearance" className="gap-2">
-                            <Palette className="h-4 w-4" />
+                        <TabsTrigger
+                            value="appearance"
+                            className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                        >
+                            <Palette className="h-4 w-4 shrink-0" />
                             <span>Appearance</span>
                         </TabsTrigger>
                     </TabsList>
 
-                    {/* General Settings Tab */}
-                    <TabsContent value="general" className="space-y-6">
-                        <form onSubmit={handleSaveGeneral} className="space-y-6">
-                            <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle>Organization Settings</CardTitle>
-                                    <CardDescription>Manage your workspace details and branding metadata</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="grid gap-4">
-                                        <div>
-                                            <label className="text-sm font-medium text-foreground">Organization Name</label>
-                                            <Input
-                                                name="orgName"
-                                                value={formData.orgName}
-                                                onChange={handleInputChange}
-                                                placeholder="Your organization name"
-                                                className="mt-2"
-                                                required
-                                            />
-                                        </div>
+                    <div className="flex-1 w-full min-w-0">
+                        <TabsContent value="general" className="mt-0 space-y-6 focus-visible:outline-none">
+                            <GeneralSettingsTabContent
+                                formData={formData}
+                                org={org}
+                                admin={admin}
+                                isSaving={isSaving}
+                                handleInputChange={handleInputChange}
+                                handleSaveGeneral={handleSaveGeneral}
+                            />
+                        </TabsContent>
 
-                                        <div>
-                                            <label className="text-sm font-medium text-foreground flex justify-between">
-                                                <span>Workspace URL Slug</span>
-                                                <span className="text-xs text-muted-foreground font-normal">Read-only</span>
-                                            </label>
-                                            <div className="mt-2 flex items-center rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                                                <span className="select-none text-muted-foreground/60 pr-1">ysmquizbuzz.com/org/</span>
-                                                <span className="font-semibold text-foreground">{org.slug}</span>
-                                            </div>
-                                            <p className="mt-1.5 text-xs text-muted-foreground">
-                                                The workspace slug is established during registration and cannot be modified.
-                                            </p>
-                                        </div>
+                        <TabsContent value="members" className="mt-0 space-y-6 focus-visible:outline-none">
+                            <MembersTabContent orgId={orgId} />
+                        </TabsContent>
 
-                                        <div>
-                                            <label className="text-sm font-medium text-foreground">Website</label>
-                                            <Input
-                                                name="website"
-                                                type="url"
-                                                value={formData.website}
-                                                onChange={handleInputChange}
-                                                placeholder="https://example.com"
-                                                className="mt-2"
-                                            />
-                                        </div>
+                        <TabsContent value="profile" className="mt-0 space-y-6 focus-visible:outline-none">
+                            <ProfileDetailsTabContent
+                                profileData={profileData}
+                                isSavingProfile={isSavingProfile}
+                                handleProfileInputChange={handleProfileInputChange}
+                                handleProfileSelectChange={handleProfileSelectChange}
+                                handleSaveProfile={handleSaveProfile}
+                            />
+                        </TabsContent>
 
-                                        <div>
-                                            <label className="text-sm font-medium text-foreground">Logo URL</label>
-                                            <Input
-                                                name="logoUrl"
-                                                type="url"
-                                                value={formData.logoUrl}
-                                                onChange={handleInputChange}
-                                                placeholder="https://example.com/logo.png"
-                                                className="mt-2"
-                                            />
-                                            {formData.logoUrl && (
-                                                <div className="mt-4 flex items-center gap-4 p-3 rounded-lg border border-border/50 bg-secondary/20">
-                                                    <img
-                                                        src={formData.logoUrl}
-                                                        alt="Logo preview"
-                                                        className="h-12 w-12 rounded object-contain border bg-white"
-                                                        onError={(e) => {
-                                                            (e.target as HTMLElement).style.display = 'none';
-                                                        }}
-                                                    />
-                                                    <div>
-                                                        <span className="text-xs font-semibold text-foreground block">Logo Preview</span>
-                                                        <span className="text-xs text-muted-foreground block truncate max-w-xs">{formData.logoUrl}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                        <TabsContent value="billing" className="mt-0 space-y-6 focus-visible:outline-none">
+                            <PlanBillingTabContent org={org} />
+                        </TabsContent>
 
-                                    <div className="flex justify-end pt-2">
-                                        <Button type="submit" disabled={isSaving} className="gap-2">
-                                            {isSaving ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Save className="h-4 w-4" />
-                                            )}
-                                            {isSaving ? 'Saving...' : 'Save Changes'}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </form>
-
-                        {/* Admin Profile Details Card */}
-                        {admin && (
-                            <Card className="border-border/50 bg-secondary/10">
-                                <CardHeader>
-                                    <div className="flex items-center gap-2 text-primary">
-                                        <ShieldCheck className="h-5 w-5" />
-                                        <CardTitle className="text-lg font-bold">Admin Profile Account</CardTitle>
-                                    </div>
-                                    <CardDescription>Details of the authenticated user currently managing this workspace</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="p-3 rounded-lg border bg-background/50">
-                                            <span className="text-xs font-medium text-muted-foreground block">Admin User</span>
-                                            <span className="text-sm font-semibold text-foreground block mt-1">
-                                                {admin.firstName} {admin.lastName}
-                                            </span>
-                                        </div>
-                                        <div className="p-3 rounded-lg border bg-background/50">
-                                            <span className="text-xs font-medium text-muted-foreground block">Email Address</span>
-                                            <span className="text-sm font-semibold text-foreground block mt-1">
-                                                {admin.email}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </TabsContent>
-
-                    {/* Organization Profile Details Tab */}
-                    <TabsContent value="profile" className="space-y-6">
-                        <form onSubmit={handleSaveProfile} className="space-y-6">
-                            {/* Card 1: About your organization */}
-                            <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle>About Your Organization</CardTitle>
-                                    <CardDescription>Configure primary use cases and size attributes</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label>What best describes your organization?</Label>
-                                            <ChipSelect
-                                                options={USE_CASES as any}
-                                                value={profileData.primaryUseCase}
-                                                onChange={(v) => handleProfileSelectChange('primaryUseCase', v)}
-                                            />
-                                            {profileData.primaryUseCase === 'OTHER' && (
-                                                <Input
-                                                    name="useCaseOther"
-                                                    placeholder="Describe your use case..."
-                                                    value={profileData.useCaseOther}
-                                                    onChange={handleProfileInputChange}
-                                                    className="mt-2"
-                                                />
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>Organization size</Label>
-                                            <ChipSelect
-                                                options={ORG_SIZES as any}
-                                                value={profileData.sizeBucket}
-                                                onChange={(v) => handleProfileSelectChange('sizeBucket', v)}
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>Expected contests per month</Label>
-                                                <ChipSelect
-                                                    options={CONTEST_VOLUMES as any}
-                                                    value={profileData.expectedContestsPerMonth}
-                                                    onChange={(v) => handleProfileSelectChange('expectedContestsPerMonth', v)}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Expected participants per contest</Label>
-                                                <ChipSelect
-                                                    options={PARTICIPANT_VOLUMES as any}
-                                                    value={profileData.expectedParticipants}
-                                                    onChange={(v) => handleProfileSelectChange('expectedParticipants', v)}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Card 2: Contact & locale details */}
-                            <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle>Contact & Locale Details</CardTitle>
-                                    <CardDescription>Primary administrative contact info and geographic localization settings</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-primary-name">Contact Name</Label>
-                                            <Input
-                                                id="set-primary-name"
-                                                name="primaryContactName"
-                                                placeholder="Jane Smith"
-                                                value={profileData.primaryContactName}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-primary-email">Contact Email</Label>
-                                            <Input
-                                                id="set-primary-email"
-                                                name="primaryContactEmail"
-                                                type="email"
-                                                placeholder="jane@yourorg.com"
-                                                value={profileData.primaryContactEmail}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-primary-phone">Contact Phone</Label>
-                                            <Input
-                                                id="set-primary-phone"
-                                                name="primaryContactPhone"
-                                                placeholder="+91 98765 43210"
-                                                value={profileData.primaryContactPhone}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-country">Country</Label>
-                                            <Input
-                                                id="set-country"
-                                                name="country"
-                                                placeholder="India"
-                                                value={profileData.country}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-state">State</Label>
-                                            <Input
-                                                id="set-state"
-                                                name="state"
-                                                placeholder="Maharashtra"
-                                                value={profileData.state}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-city">City</Label>
-                                            <Input
-                                                id="set-city"
-                                                name="city"
-                                                placeholder="Mumbai"
-                                                value={profileData.city}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-timezone">Timezone</Label>
-                                            <Input
-                                                id="set-timezone"
-                                                name="timezone"
-                                                placeholder="Asia/Kolkata"
-                                                value={profileData.timezone}
-                                                onChange={handleProfileInputChange}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="set-currency">Preferred Currency</Label>
-                                            <Input
-                                                id="set-currency"
-                                                name="preferredCurrency"
-                                                placeholder="INR"
-                                                maxLength={3}
-                                                value={profileData.preferredCurrency}
-                                                onChange={(e) => handleProfileSelectChange('preferredCurrency', e.target.value.toUpperCase())}
-                                            />
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Card 3: Billing details */}
-                            <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle>Billing Details</CardTitle>
-                                    <CardDescription>Tax registration numbers and billing address metadata</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="set-gst">GST Number (Optional)</Label>
-                                        <Input
-                                            id="set-gst"
-                                            name="gstNumber"
-                                            placeholder="22AAAAA0000A1Z5"
-                                            value={profileData.gstNumber}
-                                            onChange={handleProfileInputChange}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="set-billing">Billing Address (Optional)</Label>
-                                        <Input
-                                            id="set-billing"
-                                            name="billingAddress"
-                                            placeholder="123 Main St, Mumbai, MH 400001"
-                                            value={profileData.billingAddress}
-                                            onChange={handleProfileInputChange}
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Card 4: Preferences */}
-                            <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle>Preferences</CardTitle>
-                                    <CardDescription>Configure notifications and updates options</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-secondary/40">
-                                        <Heart className="h-5 w-5 text-primary shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium">Stay in the loop</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Receive product updates, tips, and feature announcements
-                                            </p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleProfileSelectChange('marketingOptIn', !profileData.marketingOptIn)}
-                                            aria-label="Toggle marketing emails"
-                                            className={cn(
-                                                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                                profileData.marketingOptIn ? 'bg-primary' : 'bg-muted'
-                                            )}
-                                        >
-                                            <span
-                                                className={cn(
-                                                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                                                    profileData.marketingOptIn ? 'translate-x-5' : 'translate-x-0'
-                                                )}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex justify-end pt-2">
-                                        <Button type="submit" disabled={isSavingProfile} className="gap-2">
-                                            {isSavingProfile ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Save className="h-4 w-4" />
-                                            )}
-                                            {isSavingProfile ? 'Saving...' : 'Save Profile Changes'}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </form>
-                    </TabsContent>
-
-                    {/* Plan & Billing Settings Tab */}
-                    <TabsContent value="billing">
-                        <PlanBillingTabContent org={org} />
-                    </TabsContent>
-
-                    {/* Appearance Settings Tab */}
-                    <TabsContent value="appearance">
-                        <Card className="border-border/50">
-                            <CardHeader className="pb-4">
-                                <CardTitle className="text-2xl font-bold tracking-tight">Appearance</CardTitle>
-                                <CardDescription className="text-muted-foreground text-sm">
-                                    Customize your theme for a tailored experience
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-2">
-                                    <h3 className="text-sm font-semibold text-foreground">Theme</h3>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                                        {/* Light Mode Option */}
-                                        <div className="flex flex-col">
-                                            <button
-                                                type="button"
-                                                onClick={() => setTheme('light')}
-                                                className={`group relative w-full h-28 rounded-xl border-2 overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex flex-col justify-between p-3.5 ${theme === 'light'
-                                                        ? 'border-sky-500 ring-2 ring-sky-500/20 bg-white'
-                                                        : 'border-border/70 bg-white hover:border-border'
-                                                    }`}
-                                            >
-                                                {/* Mini Mock Card */}
-                                                <div className="w-full flex flex-col justify-between h-full">
-                                                    <div className="space-y-2">
-                                                        <div className="h-1.5 w-16 bg-slate-100 rounded-full" />
-                                                        <div className="h-1.5 w-24 bg-slate-100 rounded-full" />
-                                                    </div>
-                                                    <div className="h-2.5 w-8 bg-sky-500 rounded-full" />
-                                                </div>
-                                            </button>
-                                            <span className="text-xs font-semibold text-foreground mt-2.5 pl-1">Light mode</span>
-                                        </div>
-
-                                        {/* Dark Mode Option */}
-                                        <div className="flex flex-col">
-                                            <button
-                                                type="button"
-                                                onClick={() => setTheme('dark')}
-                                                className={`group relative w-full h-28 rounded-xl border-2 overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex flex-col justify-between p-3.5 ${theme === 'dark'
-                                                        ? 'border-sky-500 ring-2 ring-sky-500/20 bg-[#121212]'
-                                                        : 'border-border/70 bg-[#121212] hover:border-neutral-700'
-                                                    }`}
-                                            >
-                                                {/* Mini Mock Card */}
-                                                <div className="w-full flex flex-col justify-between h-full">
-                                                    <div className="space-y-2">
-                                                        <div className="h-1.5 w-16 bg-neutral-800 rounded-full" />
-                                                        <div className="h-1.5 w-24 bg-neutral-800 rounded-full" />
-                                                    </div>
-                                                    <div className="h-2.5 w-8 bg-sky-500 rounded-full" />
-                                                </div>
-                                            </button>
-                                            <span className="text-xs font-semibold text-foreground mt-2.5 pl-1">Dark mode</span>
-                                        </div>
-
-                                        {/* Auto Option */}
-                                        <div className="flex flex-col">
-                                            <button
-                                                type="button"
-                                                onClick={() => setTheme('system')}
-                                                className={`group relative w-full h-28 rounded-xl border-2 overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex ${theme === 'system'
-                                                        ? 'border-sky-500 ring-2 ring-sky-500/20'
-                                                        : 'border-border/70 hover:border-border'
-                                                    }`}
-                                            >
-                                                {/* Mini Mock Card Split */}
-                                                <div className="w-1/2 bg-white h-full flex flex-col justify-between p-3.5 border-r border-slate-100">
-                                                    <div className="space-y-2">
-                                                        <div className="h-1.5 w-10 bg-slate-100 rounded-full" />
-                                                        <div className="h-1.5 w-14 bg-slate-100 rounded-full" />
-                                                    </div>
-                                                    <div className="h-2.5 w-6 bg-sky-500 rounded-full" />
-                                                </div>
-                                                <div className="w-1/2 bg-[#121212] h-full flex flex-col justify-between p-3.5">
-                                                    <div className="space-y-2">
-                                                        <div className="h-1.5 w-10 bg-neutral-800 rounded-full" />
-                                                        <div className="h-1.5 w-14 bg-neutral-800 rounded-full" />
-                                                    </div>
-                                                    <div className="h-2.5 w-6 bg-sky-500 rounded-full" />
-                                                </div>
-                                            </button>
-                                            <span className="text-xs font-semibold text-foreground mt-2.5 pl-1">Auto</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-lg border border-border/50 bg-secondary/10 p-4 flex items-start gap-3 mt-6">
-                                    <div className="h-2 w-2 rounded-full bg-primary mt-2 animate-pulse" />
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Active theme changes are applied instantly across the entire application interface, cookies, and local browser persistence contexts.
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                        <TabsContent value="appearance" className="mt-0 space-y-6 focus-visible:outline-none">
+                            <AppearanceSettingsTabContent />
+                        </TabsContent>
+                    </div>
                 </Tabs>
             </main>
         </div>
     );
 }
-

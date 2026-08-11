@@ -190,10 +190,31 @@ export class OrganizationController {
                     memberId: result.memberId,
                     email: result.email,
                     role: result.role,
+                    inviteToken: result.inviteToken,
+                    inviteLink: result.inviteLink,
                     message:
                         "Invite sent. The admin will receive an email with a link to join.",
                 },
             });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // GET /organizations/invite/details?token=... (public)
+    getInviteDetails = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const token = req.query.token as string;
+            if (!token) {
+                res.status(400).json({
+                    success: false,
+                    error: { code: "VALIDATION_ERROR", message: "Invite token parameter is required" },
+                });
+                return;
+            }
+
+            const details = await this.orgService.getInviteDetails(token, this.adminRepo);
+            res.json({ success: true, data: details });
         } catch (err) {
             next(err);
         }
@@ -214,9 +235,14 @@ export class OrganizationController {
                 return;
             }
 
-            await this.orgService.acceptInvite(parsed.data.token);
+            const acceptData = Object.fromEntries(
+                Object.entries(parsed.data).filter(([_, v]) => v !== undefined)
+            ) as any;
+
+            const result = await this.orgService.acceptInvite(acceptData, this.adminRepo);
             res.json({
                 success: true,
+                data: result,
                 message:
                     "You have successfully joined the organization. Please log in to continue.",
             });

@@ -12,7 +12,10 @@ export const updateOrganizationSchema = z.object({
 });
 
 export const inviteMemberSchema = z.object({
-    email: z.string().email("Must be a valid email address"),
+    email: z.preprocess(
+        (val) => (Array.isArray(val) ? val[0] : val),
+        z.string().email("Must be a valid email address")
+    ),
     role: z.nativeEnum(OrgMemberRole, {
         message: "Role must be OWNER, ADMIN, or VIEWER",
     }),
@@ -26,6 +29,9 @@ export const updateMemberRoleSchema = z.object({
 
 export const acceptInviteSchema = z.object({
     token: z.string().min(1, "Invite token is required"),
+    firstName: z.string().min(1, "First name is required").optional(),
+    lastName: z.string().min(1, "Last name is required").optional(),
+    password: z.string().min(6, "Password must be at least 6 characters").optional(),
 });
 
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

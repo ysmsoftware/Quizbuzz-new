@@ -328,7 +328,7 @@ export interface SentMessage {
 // Organization & Team
 // ============================================
 
-export type TeamRole = 'admin' | 'editor' | 'viewer';
+export type TeamRole = 'OWNER' | 'ADMIN' | 'VIEWER' | 'owner' | 'admin' | 'editor' | 'viewer';
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
 
 export interface Organization {
@@ -360,12 +360,23 @@ export interface Organization {
 
 export interface TeamMember {
     id: string;
-    orgId: string;
+    adminId?: string;
+    orgId?: string;
     email: string;
     name: string;
     role: TeamRole;
-    status: 'active' | 'inactive';
+    status: 'active' | 'inactive' | 'pending';
+    isActive?: boolean;
     joinedAt: string;
+    invitedAt?: string;
+    acceptedAt?: string | null;
+    admin?: {
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        avatarUrl?: string | null;
+    };
 }
 
 export interface TeamInvitation {

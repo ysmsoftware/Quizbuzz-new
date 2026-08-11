@@ -209,7 +209,7 @@ export const EmailTemplates: {
                 heading: "Organization invitation",
                 bodyHtml: `
                     <p style="${P}">Hi ${params.name},</p>
-                    <p style="${P}">You've been invited to join <strong>${params.orgName}</strong> on QuizBuzz.</p>
+                    <p style="${P}">${params.inviterName ? `<strong>${params.inviterName}</strong> has invited you` : `You've been invited`} to join <strong>${params.orgName}</strong> on QuizBuzz${params.role ? ` as a <strong>${params.role}</strong>` : ""}.</p>
                     ${emailButton("Accept Invitation", params.inviteLink)}
                     <p style="${SMALL}">This invitation expires in 3 days. If you weren't expecting this, you can ignore this email.</p>
                 `,

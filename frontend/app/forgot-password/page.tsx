@@ -19,6 +19,11 @@ export default function ForgotPasswordPage() {
   const auth = useAuth();
   const loading = auth.forgotPasswordMutation.isPending;
 
+  const handleEmailChange = (val: string) => {
+    const sanitized = val.replace(/[^a-zA-Z0-9@._\-+]/g, '');
+    setEmail(sanitized);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -28,8 +33,9 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    if (!email.includes('@')) {
-      setError('Please enter a valid email');
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address (e.g. name@example.com)');
       return;
     }
 
@@ -115,7 +121,7 @@ export default function ForgotPasswordPage() {
                   type="email"
                   placeholder="your@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => handleEmailChange(e.target.value)}
                   disabled={loading}
                   className="border-border/50"
                 />

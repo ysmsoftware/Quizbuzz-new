@@ -6,9 +6,22 @@ import { CreateAdminInput, CreateRefreshTokenInput } from "./admin-auth.types";
 export class AdminAuthRepository {
  
     // admin 
-    async findByEmail(email: string): Promise<Admin | null> {
+    async findByEmail(email: string | string[]): Promise<Admin | null> {
+        if (Array.isArray(email)) {
+            if (email.length === 0) return null;
+            const target = email[0];
+            if (!target) return null;
+            if (email.length === 1) {
+                return prisma.admin.findUnique({
+                    where: { email: target },
+                });
+            }
+            return prisma.admin.findFirst({
+                where: { email: { in: email } },
+            });
+        }
         return prisma.admin.findUnique({
-            where: { email }
+            where: { email },
         });
     };
 

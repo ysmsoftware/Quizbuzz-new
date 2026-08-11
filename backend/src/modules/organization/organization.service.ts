@@ -7,6 +7,8 @@ import { config } from "../../config";
 import { InviteMemberDTO, InviteMemberResult, OrgMemberResult, OrgMemberWithOrg, OrgWithMembersResult, OrganizationResult, UpdateOrganizationDTO, UpdateOrganizationProfileDTO, } from "./organization.types";
 import { OrgMemberRole, OrganizationProfile } from "@prisma/client";
 import { redis } from "../../config/redis";
+import { prisma } from "../../config/db";
+import { hashPassword } from "../../utils/password";
 import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
 // Plan-limit enforcement (org members) now runs as middleware ahead of this
@@ -115,86 +117,170 @@ export class OrganizationService {
     }
 
     // invite
+    // invite
     async inviteMember(
         orgId: string,
         requestingAdminId: string,
         dto: InviteMemberDTO,
-        adminRepo: { findByEmail: (email: string) => Promise<{ id: string; firstName: string } | null> },
+        adminRepo: {
+            findByEmail: (email: string | string[]) => Promise<{ id: string; firstName: string; email: string } | null>;
+            findById?: (id: string) => Promise<{ id: string; firstName: string; lastName: string } | null>;
+        },
     ): Promise<InviteMemberResult> {
         await this._assertRole(requestingAdminId, orgId, [OrgMemberRole.OWNER]);
 
         const targetAdmin = await adminRepo.findByEmail(dto.email);
-        if (!targetAdmin) {
-            throw new NotFoundError(
-                "No admin account found with that email. The user must register first.",
-            );
-        }
 
-        if (targetAdmin.id === requestingAdminId) {
-            throw new BadRequestError("You cannot invite yourself.");
-        }
-
-        const existing = await this.organizationRepo.findPendingMembership(targetAdmin.id, orgId);
-        if (existing) {
-            if (existing.isActive) {
-                throw new ConflictError("This admin is already an active member of the organization");
+        if (targetAdmin) {
+            if (targetAdmin.id === requestingAdminId) {
+                throw new BadRequestError("You cannot invite yourself.");
             }
-            // Pending invite exists — just reissue the token (idempotent, no new member)
-        } else {
-            // Plan enforcement (org members) already ran in enforceOrgMemberInviteLimit
-            // middleware before this handler (it replicates this same reissue-vs-new
-            // distinction so the check only fires for genuinely new memberships).
 
-            await this.organizationRepo.createMembership({
-                adminId: targetAdmin.id,
-                organizationId: orgId,
-                role: dto.role,
-            });
+            const existing = await this.organizationRepo.findPendingMembership(targetAdmin.id, orgId);
+            if (existing) {
+                if (existing.isActive) {
+                    throw new ConflictError("This user is already an active member of the organization");
+                }
+                // Pending invite exists — just reissue the token
+            } else {
+                await this.organizationRepo.createMembership({
+                    adminId: targetAdmin.id,
+                    organizationId: orgId,
+                    role: dto.role,
+                });
+            }
         }
 
         const rawToken = crypto.randomBytes(32).toString("hex");
-        const payload = JSON.stringify({ adminId: targetAdmin.id, orgId, role: dto.role });
+        const payload = JSON.stringify({
+            email: dto.email,
+            adminId: targetAdmin?.id ?? null,
+            orgId,
+            role: dto.role,
+        });
         await redis.setex(INVITE_KEY(rawToken), INVITE_TTL_SECONDS, payload);
 
         // Enqueue invite email
         const org = await this.getById(orgId);
         const inviteLink = `${config.app.frontendUrl}/accept-invite?token=${rawToken}`;
+        const requestingAdmin = adminRepo.findById ? await adminRepo.findById(requestingAdminId) : null;
+        const inviterName = requestingAdmin ? `${requestingAdmin.firstName} ${requestingAdmin.lastName}`.trim() : undefined;
+        const recipientName = targetAdmin ? targetAdmin.firstName : dto.email.split("@")[0];
 
         await this.messagingService.enqueueMessage(orgId, {
             channel: "EMAIL",
             template: MessageTemplate.ORG_INVITE,
             recipient: dto.email,
             params: {
-                name: targetAdmin.firstName,
+                name: recipientName,
                 orgName: org.name,
                 inviteLink,
+                inviterName,
+                role: dto.role,
             },
         }).catch((err) => {
             logger.error(`[organization] Failed to enqueue invite email: ${(err as Error).message}`);
         });
 
         return {
-            memberId: targetAdmin.id,
+            memberId: targetAdmin?.id ?? "",
             email: dto.email,
             role: dto.role,
             inviteToken: rawToken,
+            inviteLink,
         };
     }
 
-    async acceptInvite(rawToken: string): Promise<void> {
+    async getInviteDetails(
+        rawToken: string,
+        adminRepo: { findByEmail: (email: string) => Promise<{ id: string; email: string } | null> }
+    ) {
         const stored = await redis.get(INVITE_KEY(rawToken));
         if (!stored) {
             throw new BadRequestError("Invite link is invalid or has expired");
         }
 
-        const { adminId, orgId } = JSON.parse(stored) as {
-            adminId: string;
+        const { email, orgId, role } = JSON.parse(stored) as {
+            email: string;
+            adminId?: string | null;
             orgId: string;
             role: OrgMemberRole;
         };
 
-        await this.organizationRepo.acceptMembership(adminId, orgId);
-        await redis.del(INVITE_KEY(rawToken));
+        const org = await this.getById(orgId);
+        const targetAdmin = await adminRepo.findByEmail(email);
+
+        return {
+            valid: true,
+            email,
+            orgId,
+            orgName: org.name,
+            role,
+            hasAccount: !!targetAdmin,
+        };
+    }
+
+    async acceptInvite(
+        dto: {
+            token: string;
+            firstName?: string;
+            lastName?: string;
+            password?: string;
+        },
+        adminRepo: { findByEmail: (email: string) => Promise<{ id: string; email: string } | null> }
+    ): Promise<{ admin: { id: string; email: string; firstName: string; lastName: string }; orgId: string }> {
+        const stored = await redis.get(INVITE_KEY(dto.token));
+        if (!stored) {
+            throw new BadRequestError("Invite link is invalid or has expired");
+        }
+
+        const { email, orgId, role } = JSON.parse(stored) as {
+            email: string;
+            adminId?: string | null;
+            orgId: string;
+            role: OrgMemberRole;
+        };
+
+        let targetAdmin = await adminRepo.findByEmail(email);
+
+        if (!targetAdmin) {
+            if (!dto.firstName?.trim() || !dto.lastName?.trim() || !dto.password || dto.password.length < 6) {
+                throw new BadRequestError(
+                    "First name, last name, and a password (min 6 characters) are required to create your account."
+                );
+            }
+
+            const passwordHash = await hashPassword(dto.password);
+            targetAdmin = await prisma.admin.create({
+                data: {
+                    email,
+                    passwordHash,
+                    firstName: dto.firstName.trim(),
+                    lastName: dto.lastName.trim(),
+                    emailVerified: true,
+                    emailVerifiedAt: new Date(),
+                },
+            });
+        }
+
+        const existing = await this.organizationRepo.findPendingMembership(targetAdmin.id, orgId);
+        if (existing) {
+            await this.organizationRepo.acceptMembership(targetAdmin.id, orgId);
+        } else {
+            await this.organizationRepo.createMembership({
+                adminId: targetAdmin.id,
+                organizationId: orgId,
+                role: role,
+            });
+            await this.organizationRepo.acceptMembership(targetAdmin.id, orgId);
+        }
+
+        await redis.del(INVITE_KEY(dto.token));
+
+        return {
+            admin: targetAdmin as any,
+            orgId,
+        };
     }
 
     async updateMemberRole(

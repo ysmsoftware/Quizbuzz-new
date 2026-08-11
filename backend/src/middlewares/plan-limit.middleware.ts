@@ -165,7 +165,8 @@ export function enforceQuestionAutoGenerateLimit(req: Request, res: Response, ne
 export function enforceOrgMemberInviteLimit(req: Request, res: Response, next: NextFunction): void {
     void (async () => {
         const organizationId = req.params.orgId as string;
-        const email = req.body?.email as string | undefined;
+        const rawEmail = req.body?.email;
+        const email = Array.isArray(rawEmail) ? rawEmail[0] : (typeof rawEmail === "string" ? rawEmail : undefined);
 
         if (!organizationId || !email) {
             next();
@@ -174,18 +175,14 @@ export function enforceOrgMemberInviteLimit(req: Request, res: Response, next: N
 
         const { adminAuthRepository, organizationRepository } = require("../container");
         const targetAdmin = await adminAuthRepository.findByEmail(email);
-        if (!targetAdmin) {
-            // No account with that email — the service will 404 this itself.
-            next();
-            return;
-        }
-
-        const existingMembership = await organizationRepository.findPendingMembership(targetAdmin.id, organizationId);
-        if (existingMembership) {
-            // Reissuing a token for an existing (pending or active) membership
-            // adds no new member — nothing to check against maxOrgMembers.
-            next();
-            return;
+        if (targetAdmin) {
+            const existingMembership = await organizationRepository.findPendingMembership(targetAdmin.id, organizationId);
+            if (existingMembership) {
+                // Reissuing a token for an existing (pending or active) membership
+                // adds no new member — nothing to check against maxOrgMembers.
+                next();
+                return;
+            }
         }
 
         await runCheck(req, res, next, organizationId, () => assertCanInviteMember(organizationId));

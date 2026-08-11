@@ -30,4 +30,5 @@ organizationRouter.patch("/:orgId/members/:memberId/role", authenticatedOrgMiddl
 organizationRouter.delete("/:orgId/members/:memberId",     authenticatedOrgMiddleware, (req, res, next) => ctrl().removeMember(req, res, next));
 
 // Public
+organizationRouter.get("/invite/details", (req, res, next) => ctrl().getInviteDetails(req, res, next));
 organizationRouter.post("/invite/accept", (req, res, next) => ctrl().acceptInvite(req, res, next));

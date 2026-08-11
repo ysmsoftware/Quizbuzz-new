@@ -207,7 +207,7 @@ export class MessagingService {
             template: string;
             recipient: string;
             subject?: string;
-            params?: Record<string, string>;
+            params?: Record<string, any>;
         }
     ): Promise<void> {
         await this.sendMessage({

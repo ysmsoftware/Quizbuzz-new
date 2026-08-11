@@ -103,10 +103,32 @@ export async function removeMember(orgId: string, memberId: string): Promise<Api
   return del(`/org/${orgId}/members/${memberId}`);
 }
 
+export interface InviteDetails {
+  valid: boolean;
+  email: string;
+  orgId: string;
+  orgName: string;
+  role: string;
+  hasAccount: boolean;
+}
+
+/**
+ * GET /org/invite/details?token=...
+ * Public endpoint — fetches invite details
+ */
+export async function getInviteDetails(token: string): Promise<ApiResponse<InviteDetails>> {
+  return get<InviteDetails>(`/org/invite/details?token=${encodeURIComponent(token)}`);
+}
+
 /**
  * POST /org/invite/accept
  * Public endpoint — accepts org invite token from email
  */
-export async function acceptInvite(token: string): Promise<ApiResponse> {
-  return post('/org/invite/accept', { token });
+export async function acceptInvite(body: {
+  token: string;
+  firstName?: string;
+  lastName?: string;
+  password?: string;
+}): Promise<ApiResponse<any>> {
+  return post('/org/invite/accept', body);
 }
