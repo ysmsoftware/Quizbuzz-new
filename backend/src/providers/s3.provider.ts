@@ -6,8 +6,9 @@ import { config } from "../config";
 
 function validateFolder(folder: string) {
     const parts = folder.split("/");
-    if (parts.length !== 3 || parts[0] !== "proctoring" || !parts[1] || !parts[2]) {
-        throw new Error("Access Denied: Invalid folder structure. Expected 'proctoring/{contestSlug}/{participantSlug}'");
+    const validPrefixes = ["proctoring", "ambassador-proof"];
+    if (parts.length !== 3 || !validPrefixes.includes(parts[0] as string) || !parts[1] || !parts[2]) {
+        throw new Error("Access Denied: Invalid folder structure.");
     }
 }
 

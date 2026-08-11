@@ -144,6 +144,7 @@ export class ParticipantRepository implements IParticipantRepository {
                 contestId: input.contestId,
                 registrationRef: input.registrationRef,
                 status: input.status ?? ParticipantStatus.REGISTERED,
+                referredByEnrollmentId: input.referredByEnrollmentId ?? null,
             },
         });
     }

@@ -17,9 +17,11 @@ import {
     ChevronLeft,
     User,
     Award,
+    Megaphone,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useOnboardingStatus } from '@/lib/hooks/useOnboarding';
+import { useAmbassadorProgramEnabled } from '@/lib/hooks/useAmbassadorProgramEnabled';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -33,7 +35,7 @@ import { cn } from '@/lib/utils';
 import { OnboardingModal } from '@/components/features/organization/OnboardingModal';
 import { UpgradePromptModal } from '@/components/features/organization/UpgradePromptModal';
 
-const navItems = [
+const baseNavItems = [
     { label: 'Dashboard', href: '/org', icon: LayoutDashboard },
     { label: 'Contests', href: '/org/contests', icon: Trophy },
     { label: 'Questions', href: '/org/questions', icon: HelpCircle },
@@ -49,6 +51,13 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     const { isLoggedIn, isEmailVerified, admin, activeOrg, logoutMutation, meQuery } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [upgradePromptOpen, setUpgradePromptOpen] = useState(false);
+
+    // Nav item simply doesn't render when the flag is off — same "no signal" posture as the backend's 404.
+    // Direct URL navigation into /org/ambassadors is separately blocked by that section's own layout.tsx.
+    const { enabled: ambassadorProgramEnabled } = useAmbassadorProgramEnabled(activeOrg?.id ?? '');
+    const navItems = ambassadorProgramEnabled
+        ? [...baseNavItems.slice(0, 4), { label: 'Ambassadors', href: '/org/ambassadors', icon: Megaphone }, ...baseNavItems.slice(4)]
+        : baseNavItems;
 
     // Only query onboarding status once the user is fully logged-in + verified
     const readyForOnboarding = !meQuery.isLoading && isLoggedIn && isEmailVerified;

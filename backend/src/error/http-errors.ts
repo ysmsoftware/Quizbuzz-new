@@ -90,3 +90,15 @@ export class FeatureUnavailableError extends AppError {
         super(message, 403);
     }
 }
+
+export class AmbassadorApplicationExistsError extends ConflictError {
+    constructor(public readonly email: string) {
+        super(`An ambassador application for "${email}" already exists for this organization.`);
+    }
+}
+
+export class InvalidApplicationDataError extends BadRequestError {
+    constructor(public readonly violations: { field: string; issue: string }[]) {
+        super("One or more required fields are missing or invalid.");
+    }
+}

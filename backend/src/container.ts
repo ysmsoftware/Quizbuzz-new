@@ -49,6 +49,13 @@ import { PayoutController } from './modules/payout/payout.controller.js';
 import { DashboardRepository } from './modules/dashboard/dashboard.repository.js';
 import { DashboardService } from './modules/dashboard/dashboard.service.js';
 import { DashboardController } from './modules/dashboard/dashboard.controller.js';
+import { AmbassadorRepository } from './modules/ambassador/ambassador.repository.js';
+import { AmbassadorService } from './modules/ambassador/ambassador.service.js';
+import { AmbassadorController } from './modules/ambassador/ambassador.controller.js';
+import { AmbassadorCampaignRepository } from './modules/ambassador-campaign/ambassador-campaign.repository.js';
+import { AmbassadorCampaignService } from './modules/ambassador-campaign/ambassador-campaign.service.js';
+import { AmbassadorCampaignController } from './modules/ambassador-campaign/ambassador-campaign.controller.js';
+import { getStorageProvider } from './providers/storage.provider.js';
 
 // Quiz Module
 import { QuizSession } from './modules/quiz/quiz.session.js';
@@ -67,6 +74,7 @@ import { prisma } from './config/db.js';
 
 export const razorpay = new RazorpayProvider();
 export const emailProvider = new EmailProvider();
+export const storageProvider = getStorageProvider();
 
 // ─── Repositories ─────────────────────────────────────────────────────────────
 export const organizationRepository = new OrganizationRepository()
@@ -86,6 +94,8 @@ export const analyticsRepository = new AnalyticsRepository(prisma);
 export const onboardingRepository = new OnboardingRepository();
 export const payoutRepository = new PayoutRepository();
 export const dashboardRepository = new DashboardRepository();
+export const ambassadorRepository = new AmbassadorRepository();
+export const ambassadorCampaignRepository = new AmbassadorCampaignRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -98,7 +108,7 @@ export const submissionService = new SubmissionService(submissionRepository, par
 export const participantService = new ParticipantService(participantRepository, contestRepository);
 export const quizSchedulerService = new QuizSchedulerService();
 export const payoutService = new PayoutService(payoutRepository, razorpay, messagingService);
-export const contestService = new ContestService(organizationRepository, contestRepository, participantService, leaderboardRepository, contactService, messagingService, submissionService, quizSchedulerService, participantRepository, paymentRepository);
+export const contestService = new ContestService(organizationRepository, contestRepository, participantService, leaderboardRepository, contactService, messagingService, submissionService, quizSchedulerService, participantRepository, paymentRepository, ambassadorCampaignRepository);
 export const questionService = new QuestionService(questionRepository, contestService);
 export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService, payoutService);
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
@@ -106,6 +116,8 @@ export const quizSession = new QuizSession();
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);
 export const dashboardService = new DashboardService(dashboardRepository);
+export const ambassadorService = new AmbassadorService(ambassadorRepository, ambassadorCampaignRepository, organizationRepository, emailProvider, storageProvider);
+export const ambassadorCampaignService = new AmbassadorCampaignService(ambassadorCampaignRepository, ambassadorRepository, organizationRepository, emailProvider, storageProvider);
 export const proctoringService = new ProctoringService(prisma, quizSession);
 export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
@@ -169,3 +181,5 @@ export const onboardingController = new OnboardingController(onboardingService);
 export const quizRegistrationController = new QuizRegistrationController(quizRegistrationService, quizAuthService);
 export const payoutController = new PayoutController(payoutService);
 export const dashboardController = new DashboardController(dashboardService);
+export const ambassadorController = new AmbassadorController(ambassadorService);
+export const ambassadorCampaignController = new AmbassadorCampaignController(ambassadorCampaignService);

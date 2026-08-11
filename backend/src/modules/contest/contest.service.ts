@@ -34,6 +34,7 @@ import logger from "../../config/logger";
 
 import { IParticipantRepository } from "../participant/participant.repository";
 import { IPaymentRepository } from "../payment/payment.repository";
+import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
 
 /**
  * The slice of the socket gateway this service depends on — announcing lifecycle
@@ -83,6 +84,7 @@ export class ContestService {
         private readonly schedulerService: QuizSchedulerService,
         private readonly participantRepo?: IParticipantRepository,
         private readonly paymentRepo?: IPaymentRepository,
+        private readonly ambassadorCampaignRepo?: AmbassadorCampaignRepository,
     ) { }
 
     // ─── Late-bound collaborators (see IContestBroadcaster) ───────────────────
@@ -960,6 +962,20 @@ export class ContestService {
 
         if (!participant) {
             const registrationRef = generateRegistrationRef();
+
+            // Ambassador referral capture (additive, §6.5) — only runs when a
+            // ref code was actually submitted, so the common no-referral path
+            // never pays for an extra query. Missing/unrecognized code →
+            // proceed exactly as before, silently unattributed.
+            let referredByEnrollmentId: string | undefined;
+            if (dto.referralCode && this.ambassadorCampaignRepo) {
+                const enrollment = await this.ambassadorCampaignRepo.findEnrollmentByReferralCodeForContest(
+                    dto.referralCode,
+                    contest.id,
+                );
+                if (enrollment) referredByEnrollmentId = enrollment.id;
+            }
+
             try {
                 participant = await this.participantService.registerParticipant({
                     organizationId: contest.organizationId,
@@ -971,6 +987,7 @@ export class ContestService {
                     status: contest.paymentEnabled
                         ? ParticipantStatus.PENDING_PAYMENT
                         : ParticipantStatus.REGISTERED,
+                    ...(referredByEnrollmentId ? { referredByEnrollmentId } : {}),
                 });
             } catch (err: any) {
                 if (err?.code === "P2002") {

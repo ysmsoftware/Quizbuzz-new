@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,8 +59,18 @@ const STEP_LABELS: Record<Step, string> = {
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background" />}>
+      <RegisterPageInner />
+    </Suspense>
+  );
+}
+
+function RegisterPageInner() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const referralCode = searchParams.get("ref") || undefined;
 
   // State
   const [contest, setContest] = useState<PublicContestDetail | null>(null);
@@ -223,6 +233,7 @@ export default function RegisterPage() {
         department: formData.department || undefined,
         city: formData.city || undefined,
         state: formData.state || undefined,
+        referralCode,
       });
 
       setRegistrationRef(result.data.registrationRef);

@@ -105,6 +105,21 @@ export type TemplateParamsMap = {
         time: string,
         reason: string,
     },
+    [MessageTemplate.AMBASSADOR_APPLICATION_RECEIVED]: {
+        name: string,
+        orgName: string,
+    },
+    [MessageTemplate.AMBASSADOR_APPLICATION_APPROVED]: {
+        name: string,
+        orgName: string,
+        link: string,
+    },
+    [MessageTemplate.AMBASSADOR_APPLICATION_REJECTED]: {
+        name: string,
+        orgName: string,
+        reason: string,
+    },
+
     [MessageTemplate.CUSTOM]: {
         name: string,
         [key: string]: string,

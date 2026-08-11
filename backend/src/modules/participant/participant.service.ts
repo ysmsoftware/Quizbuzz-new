@@ -73,6 +73,7 @@ export class ParticipantService {
         contactId: string;
         registrationRef: string;
         status?: ParticipantStatus;
+        referredByEnrollmentId?: string;
     }) {
         const contest = await this.contestRepo.findById(input.contestId, input.organizationId);
         if (!contest) {
