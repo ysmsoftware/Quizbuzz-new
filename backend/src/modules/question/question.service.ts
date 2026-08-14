@@ -17,6 +17,7 @@ import { BadRequestError, NotFoundError, UnprocessableEntityError } from "../../
 import { config } from "../../config";
 import { ContestService } from "../contest/contest.service";
 import { prisma } from "../../config/db";
+import { logAudit } from "../../common/audit-log";
 // Plan-limit enforcement (questions/contest) now runs as middleware ahead of
 // these routes — see src/middlewares/plan-limit.middleware.ts.
 
@@ -79,6 +80,15 @@ export class QuestionService {
                 failed++;
                 errors.push({ index, reason: result.error ?? "Unknown error" });
             }
+        });
+
+        logAudit({
+            action: "question.bulk_imported",
+            targetType: "QUESTION",
+            targetId: organizationId,
+            targetLabel: "Question bank bulk import",
+            organizationId,
+            metadata: { created, failed },
         });
 
         return { created, failed, errors, ids };

@@ -22,11 +22,13 @@ import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import puppeteer, { Browser } from "puppeteer";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { certificateService, certificateTemplateService } from "../container";
+import { certificateService, certificateTemplateService, organizationRepository } from "../container";
 import { storageService } from "../services/storage.service";
 import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 import { CertificateQueueJobData } from "../queues";
 import { renderCertificateHtml, renderCustomTemplateHtml } from "../modules/certificate/certificate.template";
+import { auditContextStorage } from "../common/audit-context";
+import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -133,8 +135,11 @@ async function processTestCertificate(
 
     logger.info(`[certificate-worker] Test job ${job.id} started — template: ${templateId}`);
 
-    const template = await certificateTemplateService.getTemplate(templateId, organizationId);
-    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`);
+    const [template, timezone] = await Promise.all([
+        certificateTemplateService.getTemplate(templateId, organizationId),
+        organizationRepository.findTimezone(organizationId),
+    ]);
+    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`, timezone);
 
     let pdfBuffer: Buffer;
     try {
@@ -153,6 +158,10 @@ async function processTestCertificate(
 }
 
 async function processRealCertificate(job: Job<CertificateJobPayload>): Promise<void> {
+    return auditContextStorage.run({ requestId: job.data.requestId }, () => processRealCertificateInner(job));
+}
+
+async function processRealCertificateInner(job: Job<CertificateJobPayload>): Promise<void> {
     const { certificateId, organizationId, contestId, participantId, metadata } = job.data;
 
     logger.info(
@@ -178,15 +187,20 @@ async function processRealCertificate(job: Job<CertificateJobPayload>): Promise<
     await certificateService.markGenerating(certificateId, organizationId);
 
     // ── Step 3: Render HTML ───────────────────────────────────────────────────
+    // Dates on the certificate (contest date, issued date) are formatted in the
+    // organization's own configured timezone — see utils/timezone.ts — rather than
+    // implicitly using this worker process's local time.
+    const timezone = await organizationRepository.findTimezone(organizationId);
+
     let html: string;
     let usesCustomTemplate = false;
 
     if (metadata.templateId) {
         const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
-        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId);
+        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId, timezone);
         usesCustomTemplate = true;
     } else {
-        html = renderCertificateHtml(metadata, certificateId);
+        html = renderCertificateHtml(metadata, certificateId, timezone);
     }
 
     // ── Step 4: Generate PDF via Puppeteer ────────────────────────────────────
@@ -286,6 +300,17 @@ export class CertificateWorker implements Worker {
                     );
                 }
             }
+
+            const certificateId = job?.data && "certificateId" in job.data ? job.data.certificateId : undefined;
+            auditIfRetriesExhausted({
+                queueName: "certificate-queue",
+                job,
+                err,
+                targetType: "CERTIFICATE",
+                targetId: certificateId ?? job?.id ?? "unknown",
+                targetLabel: certificateId ?? job?.id ?? "unknown",
+                organizationId: job?.data?.organizationId,
+            });
         });
 
         this.worker.on("error", (err) => {

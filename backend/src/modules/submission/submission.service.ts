@@ -15,6 +15,8 @@ import {
 } from "./submission.types";
 import { SubmitSubmissionInput } from "./submission.validator";
 import { evaluationQueue } from "../../queues";
+import { getAuditContext } from "../../common/audit-context";
+import { logAudit } from "../../common/audit-log";
 import logger from "../../config/logger";
 
 export class SubmissionService {
@@ -70,6 +72,16 @@ export class SubmissionService {
             `[SubmissionService.persistSubmission] Persisted ${submission.id} for participant ${resolvedInput.participantId}`
         );
 
+        logAudit({
+            action: "submission.submitted",
+            targetType: "SUBMISSION",
+            targetId: submission.id,
+            targetLabel: submission.id,
+            organizationId,
+            actorId: resolvedInput.participantId,
+            actorType: "PARTICIPANT",
+        });
+
         return { submissionId: submission.id, organizationId };
     }
 
@@ -99,6 +111,15 @@ export class SubmissionService {
         logger.info(
             `[SubmissionService.applyEvaluationResult] ${submissionId} evaluated — score: ${input.score}`
         );
+
+        logAudit({
+            action: "submission.evaluated",
+            targetType: "SUBMISSION",
+            targetId: submissionId,
+            targetLabel: submissionId,
+            organizationId,
+            metadata: { score: input.score.toString(), percentage: input.percentage.toString(), isPassed: input.isPassed },
+        });
     }
 
     /**
@@ -106,9 +127,11 @@ export class SubmissionService {
      * jobId = submissionId guarantees BullMQ deduplication across retries.
      */
     async enqueueEvaluation(payload: EvaluationJobPayload): Promise<void> {
-        await evaluationQueue.add("evaluate-submission", payload, {
-            jobId: payload.submissionId,
-        });
+        await evaluationQueue.add(
+            "evaluate-submission",
+            { ...payload, requestId: payload.requestId ?? getAuditContext().requestId },
+            { jobId: payload.submissionId }
+        );
 
         logger.info(
             `[SubmissionService.enqueueEvaluation] Queued evaluation job for submission ${payload.submissionId}`
@@ -212,6 +235,15 @@ export class SubmissionService {
         logger.info(
             `[SubmissionService.invalidateSubmission] ${submissionId} invalidated. Reason: ${reason}`
         );
+
+        logAudit({
+            action: "submission.invalidated",
+            targetType: "SUBMISSION",
+            targetId: submissionId,
+            targetLabel: submissionId,
+            organizationId,
+            metadata: { reason },
+        });
     }
 
     /**
@@ -346,6 +378,13 @@ export class SubmissionService {
             );
             return { queued: 0 };
         }
+
+        // Clear any stale job under each submission's ID first — BullMQ's jobId-based
+        // add() silently no-ops when a job with that ID already exists in ANY state
+        // (including a long-finished failed one), so re-triggering evaluation for a
+        // submission whose FIRST evaluation attempt failed would otherwise never
+        // actually reach the worker. Same class of bug as certificate retries.
+        await Promise.all(pending.map((s) => evaluationQueue.remove(s.id)));
 
         await evaluationQueue.addBulk(
             pending.map((s) => ({

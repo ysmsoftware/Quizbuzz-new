@@ -30,6 +30,19 @@ export class OrganizationRepository {
         });
     }
 
+    /** Lightweight lookup — used wherever a date needs to be formatted in the org's
+     *  configured timezone (emails, certificates, exports) without pulling the whole
+     *  profile row. Returns null if the org hasn't set one yet (nothing captured at
+     *  onboarding, or the profile row doesn't exist) — callers fall back to the
+     *  platform default via resolveTimezone() in utils/timezone.ts. */
+    async findTimezone(organizationId: string): Promise<string | null> {
+        const profile = await prisma.organizationProfile.findUnique({
+            where: { organizationId },
+            select: { timezone: true },
+        });
+        return profile?.timezone ?? null;
+    }
+
     async upsertProfile(orgId: string, data: any): Promise<OrganizationProfile> {
         return prisma.organizationProfile.upsert({
             where: { organizationId: orgId },

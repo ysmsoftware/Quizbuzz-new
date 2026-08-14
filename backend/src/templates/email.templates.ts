@@ -303,6 +303,51 @@ export const EmailTemplates: {
             }),
         }),
     },
+    [MessageTemplate.AMBASSADOR_APPLICATION_RECEIVED]: {
+        build: (params) => ({
+            subject: `We've received your ambassador application — ${params.orgName}`,
+            html: renderEmailLayout({
+                preheader: `Your application to become an ambassador for ${params.orgName} is under review`,
+                heading: "Application received",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">Thanks for applying to be an ambassador for <strong>${params.orgName}</strong>. Our team is reviewing your application and will notify you by email once a decision is made.</p>
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
+    [MessageTemplate.AMBASSADOR_APPLICATION_APPROVED]: {
+        build: (params) => ({
+            subject: `You're approved as an ambassador — ${params.orgName}`,
+            html: renderEmailLayout({
+                preheader: `Your ambassador application for ${params.orgName} has been approved`,
+                heading: "Application approved",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">Great news — your ambassador application for <strong>${params.orgName}</strong> has been approved!</p>
+                    ${emailButton("Go to your dashboard", params.link)}
+                    ${linkFallback(params.link)}
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
+    [MessageTemplate.AMBASSADOR_APPLICATION_REJECTED]: {
+        build: (params) => ({
+            subject: `Update on your ambassador application — ${params.orgName}`,
+            html: renderEmailLayout({
+                preheader: `Your ambassador application for ${params.orgName} was not approved`,
+                heading: "Application not approved",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}">Thanks for your interest in becoming an ambassador for <strong>${params.orgName}</strong>. After review, we're not able to approve your application at this time.</p>
+                    ${calloutBox(`<strong>Reason:</strong> ${params.reason}`, "info")}
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
     [MessageTemplate.CUSTOM]: {
         build: (params) => ({
             subject: params.subject || `Notification from YSM Info Solution`,

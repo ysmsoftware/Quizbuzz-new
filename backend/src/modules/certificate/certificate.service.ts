@@ -2,6 +2,8 @@ import { CertificateRepository } from "./certificate.repository";
 import { ParticipantRepository } from "../participant/participant.repository";
 import { CertificateTemplateRepository } from "../certificate-template/certificate-template.repository";
 import { certificateQueue } from "../../queues";
+import { getAuditContext } from "../../common/audit-context";
+import { logAudit } from "../../common/audit-log";
 import { NotFoundError, BadRequestError, ConflictError } from "../../error/http-errors";
 import {
     CertificateJobPayload,
@@ -219,6 +221,14 @@ export class CertificateService {
             `[CertificateService.issueCertificate] Certificate ${cert.id} queued for participant ${participantId}`
         );
 
+        logAudit({
+            action: "certificate.issue_triggered",
+            targetType: "CERTIFICATE",
+            targetId: cert.id,
+            targetLabel: metadata.participantName,
+            organizationId,
+        });
+
         return cert;
     }
 
@@ -292,6 +302,7 @@ export class CertificateService {
 
         // 5. Bulk-enqueue — single Redis pipeline
         if (queuedCerts.length > 0) {
+            const requestId = getAuditContext().requestId;
             await certificateQueue.addBulk(
                 queuedCerts.map((cert) => ({
                     name: "generate-certificate",
@@ -302,6 +313,7 @@ export class CertificateService {
                         participantId: cert.participantId,
                         metadata: (cert.metadata as CertificateMetadata) ??
                             createInputs.find(i => i.participantId === cert.participantId)!.metadata,
+                        requestId,
                     } satisfies CertificateJobPayload,
                     opts: { jobId: cert.id },
                 }))
@@ -311,6 +323,15 @@ export class CertificateService {
         logger.info(
             `[CertificateService.bulkIssueCertificates] Contest ${contestId}: ${count} rows created, ${queuedCerts.length} jobs enqueued`
         );
+
+        logAudit({
+            action: "certificate.issue_triggered",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contestTitle,
+            organizationId,
+            metadata: { queued: queuedCerts.length, skipped: eligible.length - count },
+        });
 
         return { queued: queuedCerts.length, skipped: eligible.length - count };
     }
@@ -349,7 +370,14 @@ export class CertificateService {
         // Batch-reset to QUEUED
         const count = await this.certificateRepo.resetFailedToQueued(organizationId, contestId);
 
+        // Clear each cert's old (failed) job first — see _enqueueGeneration for why:
+        // BullMQ's jobId-based add() silently no-ops if a job with that ID already
+        // exists in any state, so without this the bulk retry would reset every
+        // row to QUEUED without a single job actually reaching the worker.
+        await Promise.all(failed.map((cert) => certificateQueue.remove(cert.id)));
+
         // Bulk-enqueue
+        const requestId = getAuditContext().requestId;
         await certificateQueue.addBulk(
             failed.map((cert) => ({
                 name: "generate-certificate",
@@ -359,6 +387,7 @@ export class CertificateService {
                     contestId: cert.contestId,
                     participantId: cert.participantId,
                     metadata: cert.metadata as CertificateMetadata,
+                    requestId,
                 } satisfies CertificateJobPayload,
                 opts: { jobId: cert.id },
             }))
@@ -393,6 +422,14 @@ export class CertificateService {
         logger.info(
             `[CertificateService.markGenerated] Certificate ${certificateId} generated → ${fileUrl}`
         );
+
+        logAudit({
+            action: "certificate.generated",
+            targetType: "CERTIFICATE",
+            targetId: certificateId,
+            targetLabel: fileUrl,
+            organizationId,
+        });
     }
 
     /**
@@ -412,6 +449,16 @@ export class CertificateService {
         logger.warn(
             `[CertificateService.markFailed] Certificate ${certificateId} failed: ${reason}`
         );
+
+        logAudit({
+            action: "certificate.failed",
+            targetType: "CERTIFICATE",
+            targetId: certificateId,
+            targetLabel: certificateId,
+            organizationId,
+            actorType: "SYSTEM",
+            metadata: { reason },
+        });
     }
 
     /**
@@ -478,6 +525,14 @@ export class CertificateService {
         organizationId: string,
         metadata: CertificateMetadata
     ): Promise<void> {
+        // A stale job can already exist under this ID from a prior completed/failed
+        // run — jobId is reused as the dedup key below. BullMQ's add() silently
+        // no-ops when a job with that ID already exists in ANY state (including
+        // long-finished ones still retained by removeOnFail's count-based
+        // retention), so without clearing it first, a retry never actually
+        // reaches the worker: the DB flips to QUEUED but no job is ever queued.
+        await certificateQueue.remove(cert.id);
+
         await certificateQueue.add(
             "generate-certificate",
             {
@@ -486,6 +541,7 @@ export class CertificateService {
                 contestId: cert.contestId,
                 participantId: cert.participantId,
                 metadata,
+                requestId: getAuditContext().requestId,
             } satisfies CertificateJobPayload,
             { jobId: cert.id }   // deduplication key
         );

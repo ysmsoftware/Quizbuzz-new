@@ -5,6 +5,8 @@ import { MessageProvider } from "../providers/message.provider";
 import { TemplateParamsMap } from "../types/message-template";
 import { prisma } from "../config/db";
 import { config } from "../config";
+import { formatDateHuman, formatTimeHuman } from "../utils/timezone";
+import { logAudit } from "../common/audit-log";
 
 
 export class MessageWorkerService {
@@ -56,6 +58,15 @@ export class MessageWorkerService {
                 metadata: response ?? null,
             });
 
+            logAudit({
+                action: "message.sent",
+                targetType: "MESSAGE",
+                targetId: log.id,
+                targetLabel: destination,
+                organizationId: log.organizationId,
+                actorType: "SYSTEM",
+                metadata: { channel: log.channel, template: log.template },
+            });
 
         } catch (error) {
             const errMessage = (error as Error).message;
@@ -68,6 +79,16 @@ export class MessageWorkerService {
             if (Number(log.attemptCount) + 1 >= 3) {
                 await this.messageService.updateMessageStatus(log.id, "FAILED", {
                     failureReason: errMessage,
+                });
+
+                logAudit({
+                    action: "message.failed",
+                    targetType: "MESSAGE",
+                    targetId: log.id,
+                    targetLabel: destination,
+                    organizationId: log.organizationId,
+                    actorType: "SYSTEM",
+                    metadata: { channel: log.channel, template: log.template, reason: errMessage },
                 });
             }
 
@@ -107,6 +128,16 @@ export class MessageWorkerService {
             logger.error(`[message-worker] Contest ${contestId} not found for bulk-notify`);
             return;
         }
+
+        // Format the contest's date/time in the organization's own configured timezone
+        // (OrganizationProfile.timezone, captured from the browser at onboarding) rather
+        // than a hardcoded zone — falls back to the platform default (see utils/timezone.ts)
+        // for orgs that haven't set one.
+        const orgProfile = await prisma.organizationProfile.findUnique({
+            where: { organizationId },
+            select: { timezone: true },
+        });
+        const timezone = orgProfile?.timezone ?? null;
 
         const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || config.app.frontendUrl || 'https://quizbuzz.in';
 
@@ -149,12 +180,8 @@ export class MessageWorkerService {
                         ...extraParams,
                         name: p.contact.firstName,
                         eventName: contest.title,
-                        date: contest.startTime
-                            ? new Date(contest.startTime).toLocaleDateString('en-IN', { dateStyle: 'long', timeZone: 'Asia/Kolkata' })
-                            : 'TBD',
-                        time: contest.startTime
-                            ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short', timeZone: 'Asia/Kolkata' })
-                            : 'TBD',
+                        date: contest.startTime ? formatDateHuman(contest.startTime, timezone) : 'TBD',
+                        time: contest.startTime ? formatTimeHuman(contest.startTime, timezone) : 'TBD',
                         link,
                         joinCode: contest.joinCode ?? 'To be revealed on contest day',
                     },

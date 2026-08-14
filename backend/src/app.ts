@@ -13,6 +13,7 @@ import path from "path";
 import { redis } from './config/redis';
 import { globalErrorHandler } from "./middlewares/error.middleware";
 import { maintenanceGate } from "./middlewares/maintenance.middleware";
+import { auditContextMiddleware } from "./middlewares/audit-context.middleware";
 import { metricsRegistry, collectQueueMetrics } from './config/metrics';
 
 import { config } from './config/index';
@@ -37,6 +38,7 @@ app.use(helmet({
 }));
 
 app.use(addRequestId());
+app.use(auditContextMiddleware);
 
 // payment webhook
 // Lazy handler: paymentController is read at request time, not at module load.

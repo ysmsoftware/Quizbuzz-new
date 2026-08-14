@@ -7,6 +7,7 @@ import { PayoutAccountStatus, PayoutOnboardingMode, RouteTransferStatus, Prisma 
 import { SetupPayoutAccountInput, PayoutTransferItem, PayoutTransferSummary } from "./payout.types";
 import { MessagingService } from "../messaging/messaging.service";
 import { MessageTemplate } from "../../types/message-template.enum";
+import { logAudit } from "../../common/audit-log";
 
 /**
  * Fee breakdown for a single Route transfer.
@@ -441,6 +442,16 @@ export class PayoutService {
         gatewayFeeAmount,
         gstAmount,
         transferAmount,
+      });
+
+      logAudit({
+        action: "payout.route_transfer_processed",
+        targetType: "PAYMENT",
+        targetId: payment.id,
+        targetLabel: razorpayTransferId ?? updated.id,
+        organizationId: payment.organizationId,
+        actorType: "SYSTEM",
+        metadata: { razorpayTransferId, transferAmount },
       });
 
       this.sendTransferBreakdownEmail(payoutAccount, fees, razorpayTransferId).catch((err) => {

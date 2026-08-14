@@ -38,4 +38,6 @@ export interface CreateParticipantInput {
     registrationRef: string;
     /** Initial status. Defaults to REGISTERED if omitted. Pass PENDING_PAYMENT for paid contests. */
     status?: ParticipantStatus;
+    /** Set when registration came in through an ambassador referral link (§6.5). */
+    referredByEnrollmentId?: string;
 }

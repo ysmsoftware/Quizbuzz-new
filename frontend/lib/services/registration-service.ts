@@ -99,6 +99,8 @@ class RegistrationService {
       department?: string;
       city?: string;
       state?: string;
+      /** Ambassador Program referral code, from the `?ref=` query param on the register link. */
+      referralCode?: string;
     }
   ): Promise<{ success: boolean; data: RegistrationResult }> {
     return publicPost<{ success: boolean; data: RegistrationResult }>(

@@ -8,6 +8,8 @@ import { storageService } from "../services/storage.service";
 import * as Sentry from "@sentry/node";
 import { workerRegistry } from "./worker.registry";
 import puppeteer from "puppeteer";
+import { organizationRepository } from "../container";
+import { formatDateTimeHuman } from "../utils/timezone";
 
 export class ExportWorker {
     public readonly name = "ExportWorker";
@@ -89,7 +91,8 @@ export class ExportWorker {
                 contentType = "text/csv";
                 fileExt = "csv";
             } else if (exportLog.format === "pdf") {
-                buffer = await this.generatePDF(participants, exportLog.contest.title);
+                const timezone = await organizationRepository.findTimezone(exportLog.organizationId);
+                buffer = await this.generatePDF(participants, exportLog.contest.title, timezone);
                 contentType = "application/pdf";
                 fileExt = "pdf";
             } else {
@@ -157,7 +160,7 @@ export class ExportWorker {
         return Buffer.from(csvContent, 'utf-8');
     }
 
-    private async generatePDF(participants: any[], contestTitle: string): Promise<Buffer> {
+    private async generatePDF(participants: any[], contestTitle: string, timezone: string | null): Promise<Buffer> {
         let html = `
         <html>
         <head>
@@ -193,7 +196,7 @@ export class ExportWorker {
                     <td>${name}</td>
                     <td>${p.contact.email}</td>
                     <td>${p.status}</td>
-                    <td>${p.joinedAt ? new Date(p.joinedAt).toLocaleString() : '-'}</td>
+                    <td>${p.joinedAt ? formatDateTimeHuman(p.joinedAt, timezone) : '-'}</td>
                 </tr>
             `;
         }

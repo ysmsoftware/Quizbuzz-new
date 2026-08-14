@@ -11,6 +11,7 @@ import crypto from 'crypto'
 import { config } from "../../../config";
 import { redis } from "../../../config/redis";
 import logger from "../../../config/logger";
+import { logAudit } from "../../../common/audit-log";
 
 export class AdminAuthService {
 
@@ -48,6 +49,17 @@ export class AdminAuthService {
                 name: orgName,
                 slug: orgSlug,
             },
+        });
+
+        logAudit({
+            action: "organization.created",
+            targetType: "ORGANIZATION",
+            targetId: organization.id,
+            targetLabel: organization.name,
+            organizationId: organization.id,
+            actorId: admin.id,
+            actorType: "ADMIN",
+            actorLabel: `${admin.firstName} ${admin.lastName ?? ""}`.trim() || admin.email,
         });
 
         // Enqueue email verification job
@@ -106,6 +118,17 @@ export class AdminAuthService {
         const tokens = await this._issueTokenPairAndStore(admin.id, defaultOrg.organizationId, device);
         await this.repo.updateById(admin.id, { lastLoginAt: new Date() });
 
+        logAudit({
+            action: "auth.admin_login",
+            targetType: "AUTH",
+            targetId: admin.id,
+            targetLabel: admin.email,
+            organizationId: defaultOrg.organizationId,
+            actorId: admin.id,
+            actorType: "ADMIN",
+            actorLabel: `${admin.firstName} ${admin.lastName ?? ""}`.trim() || admin.email,
+        });
+
         return {
             admin: {
                 id: admin.id,
@@ -162,6 +185,15 @@ export class AdminAuthService {
 
         if (record && !record.revokedAt) {
             await this.repo.revokeRefreshToken(hash);
+
+            logAudit({
+                action: "auth.admin_logout",
+                targetType: "AUTH",
+                targetId: record.adminId,
+                targetLabel: record.adminId,
+                actorId: record.adminId,
+                actorType: "ADMIN",
+            });
         }
     }
 
@@ -233,6 +265,16 @@ export class AdminAuthService {
         await this.repo.updateById(admin.id, {
             emailVerified: true,
             emailVerifiedAt: new Date(),
+        });
+
+        logAudit({
+            action: "auth.admin_email_verified",
+            targetType: "AUTH",
+            targetId: admin.id,
+            targetLabel: admin.email,
+            actorId: admin.id,
+            actorType: "ADMIN",
+            actorLabel: `${admin.firstName} ${admin.lastName ?? ""}`.trim() || admin.email,
         });
 
         await redis.del(key);

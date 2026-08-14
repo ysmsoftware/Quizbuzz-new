@@ -227,3 +227,20 @@ export const contestReconciliationQueue = new Queue("contest-reconciliation-queu
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+// ─── Audit Log Retention ───────────────────────────────────────────────────────
+
+/**
+ * Audit retention queue.
+ * Producers : ensureAuditRetentionSweepJob (repeatable, no payload) — see common/audit-retention.ts
+ * Consumers : audit-retention-sweep.worker.ts
+ *
+ * Daily sweep that hard-deletes audit_logs rows older than
+ * auditLogConfig.retention.maxAgeDays, in small batches so it never holds a
+ * long lock on a table the app writes to constantly.
+ */
+export const auditRetentionQueue = new Queue("audit-retention-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

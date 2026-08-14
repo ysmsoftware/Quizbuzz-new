@@ -24,16 +24,19 @@ import { config } from "../../config";
 // middleware ahead of these routes — see src/middlewares/plan-limit.middleware.ts.
 // This service no longer calls src/common/plan-entitlements.ts directly.
 import { verifyContactToken } from "../../utils/tokens";
+import { formatDateHuman, formatDateTimeHuman, formatTimeHuman } from "../../utils/timezone";
 import { ContactService } from "../contact/contact.service";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { messageQueue, quizTimerQueue, contestReconciliationQueue } from "../../queues";
 import { rankRows } from "../../workers/leaderboard.worker";
+import { logAudit } from "../../common/audit-log";
 import logger from "../../config/logger";
 
 
 import { IParticipantRepository } from "../participant/participant.repository";
 import { IPaymentRepository } from "../payment/payment.repository";
+import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
 
 /**
  * The slice of the socket gateway this service depends on — announcing lifecycle
@@ -83,6 +86,7 @@ export class ContestService {
         private readonly schedulerService: QuizSchedulerService,
         private readonly participantRepo?: IParticipantRepository,
         private readonly paymentRepo?: IPaymentRepository,
+        private readonly ambassadorCampaignRepo?: AmbassadorCampaignRepository,
     ) { }
 
     // ─── Late-bound collaborators (see IContestBroadcaster) ───────────────────
@@ -134,7 +138,17 @@ export class ContestService {
             startTime,
         };
 
-        return this.contestRepo.create(organizationId, createdById, data);
+        const contest = await this.contestRepo.create(organizationId, createdById, data);
+
+        logAudit({
+            action: "contest.created",
+            targetType: "CONTEST",
+            targetId: contest.id,
+            targetLabel: contest.title,
+            organizationId,
+        });
+
+        return contest;
     }
 
     async getContest(contestId: string, organizationId: string) {
@@ -337,6 +351,15 @@ export class ContestService {
             contest.showResultsAfter ?? 24,
         );
 
+        logAudit({
+            action: "contest.published",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+            metadata: { joinCode },
+        });
+
         return { status: updated.status, joinCode };
     }
 
@@ -476,8 +499,9 @@ export class ContestService {
         });
 
         if (input.notifyParticipants && contest.status !== ContestStatus.DRAFT) {
+            const timezone = await this.orgRepo.findTimezone(organizationId);
             await this.notifyParticipants(contestId, organizationId, MessageTemplate.CONTEST_RESCHEDULED, {
-                previousDate: this.formatForParticipant(previousStartTime),
+                previousDate: this.formatForParticipant(previousStartTime, timezone),
                 reason: input.reason ?? "",
             });
         }
@@ -528,6 +552,15 @@ export class ContestService {
         }
 
         logger.info(`[contest] Cancelled ${contestId} (was ${contest.status}): ${input.reason}`);
+
+        logAudit({
+            action: "contest.cancelled",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+            metadata: { reason: input.reason },
+        });
 
         return { status: updated.status };
     }
@@ -715,6 +748,17 @@ export class ContestService {
 
         logger.info(`[contest-reconciliation] Sweep complete — checked=${candidates.length}, fixed=${fixed}`);
 
+        if (fixed > 0) {
+            logAudit({
+                action: "system.contest_reconciliation_fired",
+                targetType: "SYSTEM",
+                targetId: "contest-reconciliation",
+                targetLabel: "Contest start reconciliation sweep",
+                actorType: "SYSTEM",
+                metadata: { checked: candidates.length, fixed },
+            });
+        }
+
         return { checked: candidates.length, fixed };
     }
 
@@ -758,12 +802,8 @@ export class ContestService {
         logger.info(`[contest] Queued ${template} notification for contest ${contestId}`);
     }
 
-    private formatForParticipant(date: Date): string {
-        return new Date(date).toLocaleString("en-IN", {
-            dateStyle: "long",
-            timeStyle: "short",
-            timeZone: "Asia/Kolkata",
-        });
+    private formatForParticipant(date: Date, timezone: string | null): string {
+        return formatDateTimeHuman(date, timezone);
     }
 
     async deleteContest(contestId: string, organizationId: string) {
@@ -960,6 +1000,20 @@ export class ContestService {
 
         if (!participant) {
             const registrationRef = generateRegistrationRef();
+
+            // Ambassador referral capture (additive, §6.5) — only runs when a
+            // ref code was actually submitted, so the common no-referral path
+            // never pays for an extra query. Missing/unrecognized code →
+            // proceed exactly as before, silently unattributed.
+            let referredByEnrollmentId: string | undefined;
+            if (dto.referralCode && this.ambassadorCampaignRepo) {
+                const enrollment = await this.ambassadorCampaignRepo.findEnrollmentByReferralCodeForContest(
+                    dto.referralCode,
+                    contest.id,
+                );
+                if (enrollment) referredByEnrollmentId = enrollment.id;
+            }
+
             try {
                 participant = await this.participantService.registerParticipant({
                     organizationId: contest.organizationId,
@@ -971,6 +1025,7 @@ export class ContestService {
                     status: contest.paymentEnabled
                         ? ParticipantStatus.PENDING_PAYMENT
                         : ParticipantStatus.REGISTERED,
+                    ...(referredByEnrollmentId ? { referredByEnrollmentId } : {}),
                 });
             } catch (err: any) {
                 if (err?.code === "P2002") {
@@ -983,6 +1038,7 @@ export class ContestService {
         // 5. Free contest — done
         if (!contest.paymentEnabled) {
             // Enqueue confirmation message
+            const timezone = await this.orgRepo.findTimezone(contest.organizationId);
             this.messagingService.enqueueMessage(contest.organizationId, {
                 participantId: participant.id,
                 contestId: contest.id,
@@ -992,12 +1048,8 @@ export class ContestService {
                 params: {
                     name: dto.firstName,
                     eventName: contest.title,
-                    date: contest.startTime
-                        ? new Date(contest.startTime).toLocaleDateString('en-IN', { dateStyle: 'long' })
-                        : 'TBD',
-                    time: contest.startTime
-                        ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short' })
-                        : 'TBD',
+                    date: contest.startTime ? formatDateHuman(contest.startTime, timezone) : 'TBD',
+                    time: contest.startTime ? formatTimeHuman(contest.startTime, timezone) : 'TBD',
                     link: `${config.app.frontendUrl}/quiz/${contest.slug}/join`,
                     joinCode: contest.joinCode || 'N/A',
                 },
@@ -1131,6 +1183,14 @@ export class ContestService {
         // Publish all entries and update contest status
         await this.leaderboardRepo.publishAll(contestId, organizationId);
         await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.RESULTS_OUT);
+
+        logAudit({
+            action: "contest.results_declared",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+        });
 
         // Notify all participants that results are out (fan-out via worker)
         // Pass contest slug so the worker can build the leaderboard URL

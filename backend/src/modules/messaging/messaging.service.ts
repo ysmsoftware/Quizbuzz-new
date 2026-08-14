@@ -6,6 +6,7 @@ import { MessageChannel, MessageStatus } from "@prisma/client";
 import { NotFoundError } from "../../error/http-errors";
 import { messageQueue } from "../../queues";
 import logger from "../../config/logger";
+import { logAudit } from "../../common/audit-log";
 
 export class MessagingService {
     constructor(
@@ -167,6 +168,14 @@ export class MessagingService {
 
         logger.info(`[messaging] Enqueued retry job for messageLog ${messageId}`);
 
+        logAudit({
+            action: "message.retried",
+            targetType: "MESSAGE",
+            targetId: messageId,
+            targetLabel: message.recipient,
+            organizationId,
+        });
+
         return updated as any;
     }
 
@@ -185,6 +194,17 @@ export class MessagingService {
         }
 
         logger.info(`[messaging] Enqueued ${failedMessages.length} retry jobs for org ${organizationId}`);
+
+        if (failedMessages.length > 0) {
+            logAudit({
+                action: "message.retried",
+                targetType: "ORGANIZATION",
+                targetId: organizationId,
+                targetLabel: `Bulk retry — ${failedMessages.length} messages`,
+                organizationId,
+                metadata: { count: failedMessages.length },
+            });
+        }
 
         return { count: failedMessages.length };
     }

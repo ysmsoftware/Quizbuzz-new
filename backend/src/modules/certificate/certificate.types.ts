@@ -176,6 +176,8 @@ export interface CertificateJobPayload {
     contestId:      string;
     participantId:  string;
     metadata:       CertificateMetadata;
+    /** Carries the originating request's id across the queue boundary — see common/audit-context.ts */
+    requestId?:     string | undefined;
 }
 
 /**

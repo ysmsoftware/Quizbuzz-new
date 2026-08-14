@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as Sentry from "@sentry/node";
 import { AppError } from "../error/app-error";
-import { PlanLimitExceededError, FeatureUnavailableError } from "../error/http-errors";
+import { PlanLimitExceededError, FeatureUnavailableError, AmbassadorApplicationExistsError, InvalidApplicationDataError } from "../error/http-errors";
 import logger from "../config/logger";
 import { TokenExpiredError, JsonWebTokenError } from "jsonwebtoken";
 import { ZodError } from "zod";
@@ -97,6 +97,27 @@ export const globalErrorHandler = (
             code: "FEATURE_DISABLED",
             message: err.message,
             featureKey: err.featureKey,
+            requestId,
+        });
+    }
+
+    // ── 3c. Ambassador application errors — carry structured data the apply form uses ──
+    if (err instanceof InvalidApplicationDataError) {
+        return res.status(err.statusCode).json({
+            success: false,
+            code: "INVALID_APPLICATION_DATA",
+            message: err.message,
+            violations: err.violations,
+            requestId,
+        });
+    }
+
+    if (err instanceof AmbassadorApplicationExistsError) {
+        return res.status(err.statusCode).json({
+            success: false,
+            code: "AMBASSADOR_APPLICATION_EXISTS",
+            message: err.message,
+            email: err.email,
             requestId,
         });
     }

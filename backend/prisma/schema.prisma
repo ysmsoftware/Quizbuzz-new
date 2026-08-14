@@ -192,6 +192,21 @@ enum ExpectedParticipantVolume {
   UNSURE
 }
 
+enum AmbassadorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AmbassadorCampaignStatus {
+  DRAFT
+  PUBLISHED
+  LIVE
+  ENDED
+  ARCHIVED
+}
+
 enum HeardAboutSource {
   GOOGLE_SEARCH
   SOCIAL_MEDIA
@@ -247,6 +262,10 @@ model Organization {
   analyticsSnapshots   ContestAnalyticsSnapshot[]
   exportLogs           ExportLog[]
   planUsageCheckLogs   PlanUsageCheckLog[]
+  ambassadors          Ambassador[]
+  ambassadorCampaigns  AmbassadorCampaign[]
+  ambassadorCampaignTemplates AmbassadorCampaignTemplate[]
+  ambassadorTypeAccess OrganizationAmbassadorTypeAccess[]
 
   @@index([slug])
   @@index([isActive, isDeleted])
@@ -395,6 +414,7 @@ model Contest {
   payments              Payment[]
   proctoringScores      ProctoringScore[]
   exportLogs            ExportLog[]
+  ambassadorCampaign    AmbassadorCampaign?
 
   @@unique([organizationId, slug])        // slug is unique within an org, not globally
   @@index([organizationId, status])
@@ -563,11 +583,15 @@ model Participant {
   messages        MessageLog[]
   proctoringScores ProctoringScore[]
 
+  referredByEnrollmentId String?
+  referredByEnrollment   AmbassadorCampaignEnrollment? @relation("ReferredBy", fields: [referredByEnrollmentId], references: [id])
+
   @@unique([contactId, contestId])        // one registration per contact per contest
   @@index([organizationId])
   @@index([contestId, status])
   @@index([contactId])
   @@index([registrationRef])
+  @@index([referredByEnrollmentId])
   @@map("participants")
 }
 
@@ -1078,4 +1102,213 @@ model OrganizationFeatureFlagOverride {
   @@id([key, organizationId])
   @@index([key, organizationId])
   @@map("organization_feature_flag_overrides")
+}
+
+// AUDIT LOG
+// Global audit trail for this app's own actions (auth, payments, contest
+// lifecycle, certificates, etc). Written only by this app — see
+// src/lib/audit/log-audit.ts. Never read by this app; ops reads it cross-DB
+// via queryMainDb (same read-only pattern it already uses for organizations/
+// entitlements), exposed there as a second Audit Ledger tab. No FKs on
+// purpose — actorId can point at either Admin or Contact and the row must
+// survive the referenced actor being deleted later.
+
+enum AuditActorType {
+  ADMIN
+  PARTICIPANT
+  SYSTEM
+  WEBHOOK
+}
+
+enum AuditTargetType {
+  ORGANIZATION
+  ADMIN
+  CONTEST
+  PARTICIPANT
+  PAYMENT
+  SUBMISSION
+  CERTIFICATE
+  QUESTION
+  MESSAGE
+  AUTH
+  SYSTEM
+}
+
+model AuditLog {
+  id             String          @id @default(ulid())
+  requestId      String?
+  organizationId String?
+  actorId        String?
+  actorType      AuditActorType
+  actorLabel     String
+  action         String
+  targetType     AuditTargetType
+  targetId       String
+  targetLabel    String
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime        @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// AMBASSADOR PROGRAM
+
+model Ambassador {
+  id                String            @id @default(ulid())
+  organizationId    String
+  email             String
+  phone             String?
+  firstName         String
+  lastName          String?
+  ambassadorType    String            // PlatformAmbassadorType.key — validated at application time, not a DB FK
+  applicationData   Json              @default("{}")   // type-specific answers, keyed by that type's applicationFields[].key
+  status            AmbassadorStatus  @default(PENDING)
+  proofStorageKey   String
+  proofUrl          String
+  appliedAt         DateTime          @default(now())
+  reviewedAt        DateTime?
+  reviewedById      String?
+  rejectionReason   String?
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organization      Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  enrollments       AmbassadorCampaignEnrollment[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+  @@map("ambassadors")
+}
+
+model AmbassadorCampaign {
+  id                      String                    @id @default(ulid())
+  organizationId          String
+  contestId               String?                    // optional while DRAFT — required by PublishCampaignSchema at publish time
+  name                    String
+  ambassadorTypesAllowed  String[]                   @default([])
+  rewardConfig            Json      @default("{}")   // see ambassador-campaign.types.ts RewardConfig — incomplete while DRAFT
+  shareTemplates          Json      @default("{}")   // { whatsappText, instagramText, posterImageUrl }
+  sourceCampaignId        String?
+  sourceTemplateId        String?                    // set when instantiated from an AmbassadorCampaignTemplate — not a FK, same lineage-only treatment as sourceCampaignId
+  status                  AmbassadorCampaignStatus  @default(DRAFT)
+  wizardStep              Int                       @default(1)  // last completed creation-wizard step, for resume
+  startDate               DateTime?                  // Timeline step — required by PublishCampaignSchema at publish time
+  endDate                 DateTime?
+  phases                  Json?     @default("[]")   // generated CampaignPhase[] snapshot — see campaign-timeline.ts
+  phaseTemplate           Json?                       // CampaignPhaseTemplateEntry[] override; null = use the built-in default
+  publishedAt             DateTime?
+  createdById             String
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest                 Contest?                  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  enrollments             AmbassadorCampaignEnrollment[]
+  groups                  AmbassadorGroup[]
+
+  @@unique([contestId])
+  @@index([organizationId, status])
+  @@map("ambassador_campaigns")
+}
+
+/**
+ * Ambassador Structure (wizard step 3, docs/ambassador-campaign-wizard-plan.md §3.3) — an
+ * org-admin's planning breakdown of a campaign, e.g. "50 departments, 1 ambassador each,
+ * target 100 registrations per ambassador". Replaces having to eyeball capacity: totals are
+ * computed from these rows (see campaign-capacity.ts). Deliberately NOT linked to individual
+ * Ambassador rows yet — `college`/`department` on Ambassador.applicationData stay free text
+ * (a real applicant-to-group link needs an apply-time field, which is a separate module's
+ * concern) — so this is a target-setting table, not yet a denominator for per-group
+ * leaderboard rates. See the note in campaign-stats.ts for that upgrade path.
+ */
+model AmbassadorGroup {
+  id                 String   @id @default(ulid())
+  campaignId         String
+  groupType          String   // "DEPARTMENT" | "COLLEGE" | "CUSTOM" — validated at the API boundary, not a DB enum (config-driven, matches how PlatformAmbassadorType.key works)
+  name               String
+  ambassadorTarget   Int?     // e.g. 1 ambassador for this group
+  registrationTarget Int?     // e.g. 100 registrations per ambassador in this group
+  createdAt          DateTime @default(now())
+
+  campaign           AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("ambassador_groups")
+}
+
+/**
+ * Reusable snapshot of a campaign's config (§3.4, Phase 5) — org-admins save a campaign (at
+ * any status) as a template, then instantiate new DRAFT campaigns from it instead of
+ * starting from a blank wizard every time. Kept as its own table rather than an `isTemplate`
+ * flag on AmbassadorCampaign: a template has no contestId (campaigns require one, unique
+ * 1:1) and shouldn't carry any campaign-only fields (status, enrollments, publishedAt).
+ * `groups` is a plain JSON snapshot of AmbassadorGroupInput[] rather than its own relational
+ * table — templates aren't queried/joined the way live campaign groups are, so there's
+ * nothing a real FK-backed table would buy here.
+ */
+model AmbassadorCampaignTemplate {
+  id                     String   @id @default(ulid())
+  organizationId         String
+  name                   String
+  ambassadorTypesAllowed String[] @default([])
+  rewardConfig           Json     @default("{}")
+  shareTemplates         Json     @default("{}")
+  groups                 Json     @default("[]")
+  sourceCampaignId       String?  // the campaign this was saved from, if any — lineage only, not a FK (that campaign may later be archived/deleted without invalidating the template)
+  createdById            String
+  createdAt              DateTime @default(now())
+
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("ambassador_campaign_templates")
+}
+
+model AmbassadorCampaignEnrollment {
+  id              String     @id @default(ulid())
+  campaignId      String
+  ambassadorId    String
+  referralCode    String     @unique
+  createdAt       DateTime   @default(now())
+
+  campaign        AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ambassador      Ambassador         @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  referrals       Participant[]      @relation("ReferredBy")
+
+  @@unique([campaignId, ambassadorId])
+  @@index([referralCode])
+  @@map("ambassador_campaign_enrollments")
+}
+
+// Read-only mirror of quizbuzz-ops-next's AmbassadorType catalog — quizbuzz-ops-next writes these two
+// tables via a fire-and-forget raw-SQL write-through on every type create/edit/toggle (same mechanism as
+// platform_feature_flags above — see src/common/feature-flags.ts). This app only ever reads these tables.
+model PlatformAmbassadorType {
+  key               String   @id
+  label             String
+  proofFieldLabel   String
+  applicationFields Json     // array of { key, label, type, required, options? }
+  isActive          Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+  @@map("platform_ambassador_types")
+}
+
+model OrganizationAmbassadorTypeAccess {
+  organizationId String
+  typeKey        String
+  isEnabled      Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, typeKey])
+  @@map("organization_ambassador_type_access")
 }

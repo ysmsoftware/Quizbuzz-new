@@ -1,3 +1,9 @@
+// Pin every instance's baseline timezone to UTC, before anything else runs — see the
+// matching comment in server.ts. Workers are exactly the process this matters most
+// for: they're what actually formats dates into emails/certificates/exports, and are
+// the ones auto-scaling spins up/down across potentially different AWS AZs.
+process.env.TZ = "UTC";
+
 import "./instrument"; // ← first
 import * as Sentry from "@sentry/node";
 import dotenv from "dotenv";

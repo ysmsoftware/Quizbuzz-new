@@ -160,6 +160,7 @@ export const RegisterParticipantSchema = z.object({
     department: z.string().max(200).optional(),
     city: z.string().max(100).optional(),
     state: z.string().max(100).optional(),
+    referralCode: z.string().trim().min(1).optional(),
 });
 
 export const RegisterStatusSchema = z.object({

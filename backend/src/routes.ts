@@ -23,6 +23,8 @@ import paymentRouter from "./modules/payment/payment.routes.js";
 import payoutRouter from "./modules/payout/payout.routes.js";
 import { quizRegistrationRouter } from "./modules/quiz/quiz-registration.routes.js";
 import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
+import { ambassadorPublicRouter, ambassadorRouter } from "./modules/ambassador/ambassador.routes";
+import { ambassadorCampaignRouter } from "./modules/ambassador-campaign/ambassador-campaign.routes";
 
 const apiRouter = Router();
 
@@ -43,6 +45,9 @@ apiRouter.use("/certificate-templates", certificateTemplateRouter);
 apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
 apiRouter.use("/onboarding", onboardingRouter);
+apiRouter.use("/public/ambassador", ambassadorPublicRouter);
+apiRouter.use("/ambassador", ambassadorRouter);
+apiRouter.use("/org/ambassadors", ambassadorCampaignRouter);
 apiRouter.use("/queues", authenticatedOrgMiddleware, bullBoardRouter);
 apiRouter.use("/", submissionRouter); // submission routes carry their own full prefixes
 

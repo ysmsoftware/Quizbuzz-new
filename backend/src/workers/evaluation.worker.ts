@@ -26,6 +26,8 @@ import { leaderboardRepository } from "../container";
 import { contestRepository } from "../container";
 import { EvaluationJobPayload } from "../modules/submission/submission.types";
 import { ApplyEvaluationInput } from "../modules/submission/submission.types";
+import { auditContextStorage } from "../common/audit-context";
+import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -167,6 +169,10 @@ async function incrementEvalCounter(
 // ─── Worker processor ─────────────────────────────────────────────────────────
 
 async function processEvaluation(job: Job<EvaluationJobPayload>): Promise<void> {
+    return auditContextStorage.run({ requestId: job.data.requestId }, () => processEvaluationInner(job));
+}
+
+async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<void> {
     const { organizationId, submissionId, participantId, contestId } = job.data;
 
     logger.info(
@@ -327,6 +333,10 @@ async function processEvaluation(job: Job<EvaluationJobPayload>): Promise<void> 
     // The last job to finish fires the leaderboard build.
     // Using Redis INCR guarantees exactly one worker sees the final evaluated count.
     if (evaluated >= totalSubmitted) {
+        // removeOnComplete clears the jobId on success, but removeOnFail retains it —
+        // if a prior leaderboard build for this contest failed, add() would silently
+        // no-op on this trigger instead of re-running it. Evict any stale job first.
+        await leaderboardQueue.remove(`leaderboard-${contestId}`);
         await leaderboardQueue.add(
             "build-leaderboard",
             { contestId, organizationId },
@@ -372,6 +382,16 @@ export class EvaluationWorker implements Worker {
             logger.error(
                 `[evaluation-worker] Job ${job?.id} failed (${permanent ? "permanent" : `attempt ${job?.attemptsMade}`}): ${err.message}`
             );
+
+            auditIfRetriesExhausted({
+                queueName: "evaluation-queue",
+                job,
+                err,
+                targetType: "SUBMISSION",
+                targetId: job?.data.submissionId ?? "unknown",
+                targetLabel: job?.data.submissionId ?? "unknown",
+                organizationId: job?.data.organizationId,
+            });
         });
 
         this.worker.on("error", (err) => {

@@ -1,6 +1,14 @@
 import { prisma } from "../config/db";
 import { config } from "../config";
-import { computeEffectiveFlagState } from "./effective-flag-state";
+import { computeEffectiveFlagState, computeOptInFlagState } from "./effective-flag-state";
+
+// Flags where the global toggle is a pure availability gate / kill switch,
+// not a default. Every other flag here is the opposite: global=true means
+// on for everyone, and an org override exists only to turn ONE org off.
+// These are the reverse — global=true just makes the feature grantable;
+// an org still needs its own active override to actually have it, and
+// global=false always wins over any override. See computeOptInFlagState.
+const OPT_IN_ONLY_FLAGS = new Set(["ambassador_program_enabled"]);
 
 /**
  * Org-aware feature-flag SDK, backed by quizbuzz-ops-next's write-through
@@ -48,7 +56,9 @@ export async function isFeatureEnabled(
         // Fail-closed on "flag not found": an unrecognized key is treated as
         // off, never as "assume the old/default behavior".
         const globalValue = globalRow?.isEnabled ?? false;
-        const { value } = computeEffectiveFlagState(globalValue, overrideRow);
+        const { value } = OPT_IN_ONLY_FLAGS.has(key)
+            ? computeOptInFlagState(globalValue, overrideRow)
+            : computeEffectiveFlagState(globalValue, overrideRow);
 
         flagCache.set(cacheKey, { value, expires: Date.now() + (TTL_MS[key] ?? DEFAULT_TTL_MS) });
         return value;

@@ -10,6 +10,10 @@ declare global {
                 contestId: string;
                 organizationId: string;
             };
+            ambassador?: {
+                id: string;
+                organizationId: string;
+            };
             id: string;
         }
     }

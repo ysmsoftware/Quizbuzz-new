@@ -6,6 +6,7 @@ import { redis } from "../../config/redis";
 import { ParticipantStatus } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { exportQueue } from "../../queues";
+import { logAudit } from "../../common/audit-log";
 
 export class ParticipantService {
     constructor(
@@ -59,6 +60,16 @@ export class ParticipantService {
         // Additional business logic for disqualification could go here
 
         const result = await this.participantRepo.disqualify(participantId, organizationId);
+
+        logAudit({
+            action: "participant.disqualified",
+            targetType: "PARTICIPANT",
+            targetId: participantId,
+            targetLabel: participantId,
+            organizationId,
+            metadata: reason ? { reason } : undefined,
+        });
+
         try {
             await redis.del(`contest:status-summary:${contestId}`);
         } catch (e) {
@@ -73,6 +84,7 @@ export class ParticipantService {
         contactId: string;
         registrationRef: string;
         status?: ParticipantStatus;
+        referredByEnrollmentId?: string;
     }) {
         const contest = await this.contestRepo.findById(input.contestId, input.organizationId);
         if (!contest) {

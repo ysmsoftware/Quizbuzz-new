@@ -18,6 +18,7 @@ import { config } from "../config";
 import { submissionService } from "../container";
 import { SubmissionJobPayload } from "../modules/submission/submission.types";
 import { messageQueue } from "../queues";
+import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -166,6 +167,16 @@ export class SubmissionWorker implements Worker {
             logger.error(
                 `[submission-worker] Job ${job?.id} failed (${isUnrecoverable ? "permanent" : `attempt ${job?.attemptsMade}`}): ${err.message}`
             );
+
+            auditIfRetriesExhausted({
+                queueName: "submission-queue",
+                job,
+                err,
+                targetType: "PARTICIPANT",
+                targetId: job?.data.participantId ?? "unknown",
+                targetLabel: job?.data.participantId ?? "unknown",
+                organizationId: job?.data.organizationId,
+            });
         });
 
         this.worker.on("error", (err) => {

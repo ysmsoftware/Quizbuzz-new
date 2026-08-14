@@ -72,8 +72,7 @@ This is how `quizbuzz-ops-next` actually implements flags today, confirmed by re
    and `organization_feature_flag_overrides`. Deliberately minimal on that side — just `key`/`isEnabled`
    and `key+organizationId`/`isEnabled`/`expiresAt` — no label/description/severity/audit fields, those
    stay ops-only.
-6. **Main app reads its own local copy** — `common/feature-flags.ts`'s `isFeatureEnabled(key, {
-   organizationId })`, backed by an in-memory TTL cache (5s for `maintenance_mode`/
+6. **Main app reads its own local copy** — `common/feature-flags.ts`'s `isFeatureEnabled(key, { organizationId })`, backed by an in-memory TTL cache (5s for `maintenance_mode`/
    `new_registrations_paused`, 60s default) and **fails closed** (unknown key or DB error → `false`,
    falling back to a stale cache entry if one exists). Effective-state resolution
    (`common/effective-flag-state.ts`'s `computeEffectiveFlagState`) is simple: an active, non-expired org
@@ -343,8 +342,7 @@ same `Participant` row that flow already manages correctly. Full step-by-step in
 ### 0.6 Module layout
 
 Two new backend modules, following the exact convention every existing module already uses
-(`contact/`, `participant/`, `payment/`: `.routes.ts .controller.ts .service.ts .repository.ts .types.ts
-.validator.ts`):
+(`contact/`, `participant/`, `payment/`: `.routes.ts .controller.ts .service.ts .repository.ts .types.ts .validator.ts`):
 
 - `backend/src/modules/ambassador/` — identity, auth, application, the ambassador's own dashboard data
   (referral stats, leaderboard position, reward status).
@@ -416,8 +414,7 @@ fire-and-forget mirror into the main app's `platform_ambassador_types` /
 
 ## 2. Part 2 — Ambassador Management in the Main App (org-admin side)
 
-Everything in this part only renders/works once `await isFeatureEnabled("ambassador_program_enabled", {
-organizationId })` resolves `true` (§0.2) — the org-admin dashboard gets a new "Ambassadors" nav item
+Everything in this part only renders/works once `await isFeatureEnabled("ambassador_program_enabled", { organizationId })` resolves `true` (§0.2) — the org-admin dashboard gets a new "Ambassadors" nav item
 that's simply absent otherwise.
 
 ### 2.1 Applications queue
@@ -542,8 +539,7 @@ prize/certificate config already lives; it's a different axis from everything am
 
 ### 2.4 Reporting
 
-Per-campaign view: every enrolled ambassador, their live registration count (`COUNT(Participant WHERE
-referredByEnrollmentId = enrollment.id)`), current milestone tier reached, computed accrued reward, and
+Per-campaign view: every enrolled ambassador, their live registration count (`COUNT(Participant WHERE referredByEnrollmentId = enrollment.id)`), current milestone tier reached, computed accrued reward, and
 department/college rollups — the four leaderboard cuts in §2.3 are the same underlying aggregate grouped
 differently, not four separate systems. An "amount owed" export per ambassador, feeding the same
 manual-disbursement process the payout rollback work already established — no automated payout wiring
@@ -625,8 +621,7 @@ Concrete walkthrough of the same lifecycle §3.1–3.3 describe structurally, as
    route that never existed, per §0.2). If `true`, it calls a public
    `GET /api/v1/public/ambassador-types?organizationId=...` which reads `common/ambassador-types.ts`
    (§0.3) and returns the *full* definition of each type the org currently has enabled, not just names —
-   `[{ key: "student", label: "Student Ambassador", proofFieldLabel: "College ID Card", applicationFields:
-   [...] }, { key: "general", ... }]`. The type dropdown is built from the `label`s; nothing about which
+   `[{ key: "student", label: "Student Ambassador", proofFieldLabel: "College ID Card", applicationFields: [...] }, { key: "general", ... }]`. The type dropdown is built from the `label`s; nothing about which
    types exist or what they ask for is hardcoded in the frontend.
 2. **Applicant picks a type, the form grows to match, then uploads proof.** Name, email, phone are always
    present. Choosing a type from the dropdown built in step 1 renders that type's `applicationFields`
@@ -634,9 +629,7 @@ Concrete walkthrough of the same lifecycle §3.1–3.3 describe structurally, as
    The proof file itself goes through `FileStorageProvider.upload` into
    `ambassador-proof/{organizationSlug}/{tempId}/...` first, returning a `proofStorageKey` + `proofUrl`,
    the same two-step upload-then-submit pattern already used for proctoring evidence.
-3. **Submit.** `POST /api/v1/public/ambassador/apply` with `{organizationId, firstName, lastName, email,
-   phone, ambassadorType, applicationData: {...the type-specific answers, keyed by field.key...},
-   proofStorageKey, proofUrl}`. Server re-validates `ambassadorType` against the same org-scoped
+3. **Submit.** `POST /api/v1/public/ambassador/apply` with `{organizationId, firstName, lastName, email, phone, ambassadorType, applicationData: {...the type-specific answers, keyed by field.key...}, proofStorageKey, proofUrl}`. Server re-validates `ambassadorType` against the same org-scoped
    enabled-types list from step 1 (never trusts the client value blindly), re-validates `applicationData`
    against that type's `applicationFields` schema (every `required` field present, `SELECT` values within
    `options`), and checks `@@unique([organizationId, email])` — a second application from the same email
@@ -646,8 +639,7 @@ Concrete walkthrough of the same lifecycle §3.1–3.3 describe structurally, as
 4. **Applicant gets a confirmation email**, sent directly via `EmailProvider` (§0.6) — "Your application
    to become a [Student] Ambassador for [Org Name] has been received and is under review." No dashboard
    access yet; `status: PENDING` blocks login past the waiting page (§3.2).
-5. **Org admin sees it immediately.** The Applications queue (§2.1) is a live `GET
-   /api/v1/org/ambassadors?status=PENDING` list — no polling delay beyond normal page load, this isn't
+5. **Org admin sees it immediately.** The Applications queue (§2.1) is a live `GET /api/v1/org/ambassadors?status=PENDING` list — no polling delay beyond normal page load, this isn't
    queued or batched. Each row shows the applicant's details plus a presigned view link to their proof
    document (`FileStorageProvider.getPresignedGetUrl`, generated on-demand per row, short-lived).
 6. **Org admin approves or denies.** `POST /api/v1/org/ambassadors/{id}/approve` or `/reject` (with a
@@ -686,8 +678,7 @@ their dashboard get there.
 3. **A prospective participant clicks the link.** They land on the normal contest registration page —
    nothing about the registration UI itself changes. The `ref` query param is read client-side once on
    page load and carried through the existing flow: stored alongside the in-progress registration form
-   state, survives the OTP-verification step, and gets sent as part of the final `POST
-   .../register` payload the existing flow already makes.
+   state, survives the OTP-verification step, and gets sent as part of the final `POST .../register` payload the existing flow already makes.
 4. **Attribution happens inside the existing registration call, not a separate step.**
    `ContestService.registerParticipant` (`contest.service.ts:446`, §0.5) — after its existing logic
    resolves the participant, it additionally looks up `ref` against
