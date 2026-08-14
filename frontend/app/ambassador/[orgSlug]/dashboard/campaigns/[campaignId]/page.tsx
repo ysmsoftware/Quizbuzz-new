@@ -12,14 +12,7 @@ import { useAmbassadorMe } from '@/lib/hooks/useAmbassadorMe';
 import { CampaignStatsPanel } from '@/components/features/ambassador/CampaignStatsPanel';
 import { LeaderboardTable } from '@/components/features/ambassador/LeaderboardTable';
 import { ShareCampaignCard } from '@/components/features/ambassador/ShareCampaignCard';
-import type { LeaderboardScope } from '@/lib/types/ambassador';
-
-const SCOPE_LABEL: Record<LeaderboardScope, string> = {
-  INDIVIDUAL_AMBASSADOR: 'Ambassadors',
-  DEPARTMENT: 'Department',
-  INTER_COLLEGE_DEPARTMENT: 'Inter-college',
-  COLLEGE: 'College',
-};
+import { leaderboardScopeKey } from '@/lib/types/ambassador';
 
 export default function AmbassadorCampaignDetailPage() {
   const params = useParams();
@@ -38,13 +31,14 @@ export default function AmbassadorCampaignDetailPage() {
 
   // Derived straight from stats.leaderboardRanks (each entry already carries its scope +
   // label) — no need to fetch the campaign's rewardConfig just to know which tabs to show.
-  const scopes = useMemo(() => stats?.leaderboardRanks.map((r) => r.scope) ?? [], [stats]);
-  const [activeScope, setActiveScope] = useState<LeaderboardScope | null>(null);
-  const currentScope = activeScope ?? scopes[0] ?? null;
+  const ranks = useMemo(() => stats?.leaderboardRanks ?? [], [stats]);
+  const [activeScopeKey, setActiveScopeKey] = useState<string | null>(null);
+  const currentRank = ranks.find((r) => leaderboardScopeKey(r.scope) === activeScopeKey) ?? ranks[0] ?? null;
+  const currentScope = currentRank?.scope ?? null;
 
   const { rows, isLoading: leaderboardLoading } = useAmbassadorCampaignLeaderboard(
     campaignId,
-    currentScope ?? 'INDIVIDUAL_AMBASSADOR',
+    currentScope ?? { kind: 'INDIVIDUAL_AMBASSADOR' },
     { limit: 10 }
   );
 
@@ -89,20 +83,21 @@ export default function AmbassadorCampaignDetailPage() {
           posterImageUrl={campaign.shareTemplates.posterImageUrl}
         />
 
-        {scopes.length > 0 && currentScope && (
+        {ranks.length > 0 && currentRank && currentScope && (
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Leaderboard</h2>
-            <Tabs value={currentScope} onValueChange={(v) => setActiveScope(v as LeaderboardScope)}>
+            <Tabs value={leaderboardScopeKey(currentRank.scope)} onValueChange={setActiveScopeKey}>
               <TabsList className="w-full flex-wrap h-auto">
-                {scopes.map((scope) => (
-                  <TabsTrigger key={scope} value={scope} className="flex-1">
-                    {SCOPE_LABEL[scope]}
+                {ranks.map((r) => (
+                  <TabsTrigger key={leaderboardScopeKey(r.scope)} value={leaderboardScopeKey(r.scope)} className="flex-1">
+                    {r.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <TabsContent value={currentScope} className="mt-4">
+              <TabsContent value={leaderboardScopeKey(currentRank.scope)} className="mt-4">
                 <LeaderboardTable
                   scope={currentScope}
+                  label={currentRank.label}
                   rows={rows}
                   currentAmbassadorId={ambassador?.id}
                   isLoading={leaderboardLoading}

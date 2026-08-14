@@ -15,6 +15,7 @@
  */
 
 import { CertificateMetadata } from "./certificate.types";
+import { formatDateInTimezone } from "../../utils/timezone";
 
 // ─── Template Variants ────────────────────────────────────────────────────────
 
@@ -57,11 +58,12 @@ export interface CertificateRenderContext {
  */
 export function buildRenderContext(
     meta:          CertificateMetadata,
-    certificateId: string
+    certificateId: string,
+    timezone:      string | null = null,
 ): CertificateRenderContext {
     const rawDate   = meta.contestDate ?? meta.issuedAt;
-    const contestDate = formatDateHuman(rawDate);
-    const issuedAt    = formatDateHuman(meta.issuedAt);
+    const contestDate = formatDateHuman(rawDate, timezone);
+    const issuedAt    = formatDateHuman(meta.issuedAt, timezone);
     const variant     = resolveVariant(meta);
 
     return {
@@ -108,9 +110,10 @@ function resolveVariant(meta: CertificateMetadata): TemplateVariant {
  */
 export function renderCertificateHtml(
     meta:          CertificateMetadata,
-    certificateId: string
+    certificateId: string,
+    timezone:      string | null = null,
 ): string {
-    const ctx = buildRenderContext(meta, certificateId);
+    const ctx = buildRenderContext(meta, certificateId, timezone);
     return buildHtml(ctx);
 }
 
@@ -463,15 +466,12 @@ function formatDuration(secs: number): string {
     return `${m}m ${s}s`;
 }
 
-/** Format an ISO date string → "DD Month YYYY". */
-function formatDateHuman(raw: string | Date): string {
+/** Format an ISO date string → "DD Month YYYY", in the organization's own configured
+ *  timezone (falls back to the platform default — see utils/timezone.ts) rather than
+ *  the server process's local time. */
+function formatDateHuman(raw: string | Date, timezone: string | null): string {
     try {
-        const d = typeof raw === "string" ? new Date(raw) : raw;
-        return d.toLocaleDateString("en-IN", {
-            day:   "2-digit",
-            month: "long",
-            year:  "numeric",
-        });
+        return formatDateInTimezone(raw, timezone, { day: "2-digit", month: "long", year: "numeric" });
     } catch {
         return String(raw);
     }
@@ -501,9 +501,10 @@ function medalEmoji(rank: number): string {
 export function renderCustomTemplateHtml(
     htmlTemplate:  string,
     meta:          CertificateMetadata,
-    certificateId: string
+    certificateId: string,
+    timezone:      string | null = null,
 ): string {
-    const ctx = buildRenderContext(meta, certificateId);
+    const ctx = buildRenderContext(meta, certificateId, timezone);
 
     let out = htmlTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
         const value = (ctx as unknown as Record<string, unknown>)[key];

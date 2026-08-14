@@ -24,6 +24,7 @@ import { config } from "../../config";
 // middleware ahead of these routes — see src/middlewares/plan-limit.middleware.ts.
 // This service no longer calls src/common/plan-entitlements.ts directly.
 import { verifyContactToken } from "../../utils/tokens";
+import { formatDateHuman, formatDateTimeHuman, formatTimeHuman } from "../../utils/timezone";
 import { ContactService } from "../contact/contact.service";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
@@ -478,8 +479,9 @@ export class ContestService {
         });
 
         if (input.notifyParticipants && contest.status !== ContestStatus.DRAFT) {
+            const timezone = await this.orgRepo.findTimezone(organizationId);
             await this.notifyParticipants(contestId, organizationId, MessageTemplate.CONTEST_RESCHEDULED, {
-                previousDate: this.formatForParticipant(previousStartTime),
+                previousDate: this.formatForParticipant(previousStartTime, timezone),
                 reason: input.reason ?? "",
             });
         }
@@ -760,12 +762,8 @@ export class ContestService {
         logger.info(`[contest] Queued ${template} notification for contest ${contestId}`);
     }
 
-    private formatForParticipant(date: Date): string {
-        return new Date(date).toLocaleString("en-IN", {
-            dateStyle: "long",
-            timeStyle: "short",
-            timeZone: "Asia/Kolkata",
-        });
+    private formatForParticipant(date: Date, timezone: string | null): string {
+        return formatDateTimeHuman(date, timezone);
     }
 
     async deleteContest(contestId: string, organizationId: string) {
@@ -1000,6 +998,7 @@ export class ContestService {
         // 5. Free contest — done
         if (!contest.paymentEnabled) {
             // Enqueue confirmation message
+            const timezone = await this.orgRepo.findTimezone(contest.organizationId);
             this.messagingService.enqueueMessage(contest.organizationId, {
                 participantId: participant.id,
                 contestId: contest.id,
@@ -1009,12 +1008,8 @@ export class ContestService {
                 params: {
                     name: dto.firstName,
                     eventName: contest.title,
-                    date: contest.startTime
-                        ? new Date(contest.startTime).toLocaleDateString('en-IN', { dateStyle: 'long' })
-                        : 'TBD',
-                    time: contest.startTime
-                        ? new Date(contest.startTime).toLocaleTimeString('en-IN', { timeStyle: 'short' })
-                        : 'TBD',
+                    date: contest.startTime ? formatDateHuman(contest.startTime, timezone) : 'TBD',
+                    time: contest.startTime ? formatTimeHuman(contest.startTime, timezone) : 'TBD',
                     link: `${config.app.frontendUrl}/quiz/${contest.slug}/join`,
                     joinCode: contest.joinCode || 'N/A',
                 },

@@ -32,6 +32,14 @@ const envSchema = z.object({
     INSTANCE_ID: z.string(),
     INSTANCE_COUNT: z.coerce.number().default(1),
 
+    // LOCALIZATION — fallback IANA timezone used to format any date shown to a user
+    // (emails, certificates, exports) when the organization hasn't set its own via
+    // OrganizationProfile.timezone (captured from the browser at onboarding). Never
+    // read implicitly from the server process's local time: that's whatever the OS
+    // happens to default to (UTC on a fresh AWS instance, something else on a dev
+    // machine), and would silently drift per-instance under auto-scaling.
+    DEFAULT_TIMEZONE: z.string().default("Asia/Kolkata"),
+
     // OPS & BILLING HANDOFF
     BILLING_HANDOFF_SECRET: z.string().default("billing_handoff_secret_shared_key_998877"),
     OPS_BASE_URL: z.string().default("http://localhost:3010"),
@@ -276,6 +284,7 @@ export const config = {
         instanceCount: env.INSTANCE_COUNT,
         maxSlugRetries: env.MAX_SLUG_RETRIES,
         joinCodeLength: env.JOIN_CODE_LENGTH,
+        defaultTimezone: env.DEFAULT_TIMEZONE,
     },
 
     billing: {

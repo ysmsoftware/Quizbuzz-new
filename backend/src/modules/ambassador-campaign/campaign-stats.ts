@@ -28,10 +28,11 @@ export async function computeEnrollmentStats(
     const registrationCount = await campaignRepo.countReferrals(enrollmentId);
 
     let thresholdReachedAt: Date | null = null;
-    if (rewardConfig.speedBonus?.enabled && registrationCount >= rewardConfig.speedBonus.milestoneThreshold) {
+    const threshold = rewardConfig.speedBonus?.milestoneThreshold;
+    if (rewardConfig.speedBonus?.enabled && threshold !== undefined && registrationCount >= threshold) {
         thresholdReachedAt = await campaignRepo.findNthReferralCreatedAt(
             enrollmentId,
-            rewardConfig.speedBonus.milestoneThreshold,
+            threshold,
         );
     }
 
@@ -55,30 +56,21 @@ export interface LeaderboardGroup {
 }
 
 /**
- * ponytail: DEPARTMENT/COLLEGE/INTER_COLLEGE_DEPARTMENT group by reading
- * conventional 'college'/'department' keys out of Ambassador.applicationData
- * (there's no dedicated column — an org whose type uses different field keys
- * falls into "Unknown"). rankedBy: "REGISTRATION_RATE_PERCENT" is not
- * computed (no denominator exists anywhere in the schema, e.g. audience
- * size) — every scope ranks by raw registrationCount. Upgrade path: once a
- * denominator field exists on the ambassador type or campaign, rank by rate
- * here instead.
+ * ponytail: rankedBy: "REGISTRATION_RATE_PERCENT" is not computed (no
+ * denominator exists anywhere in the schema, e.g. audience size) — every
+ * scope ranks by raw registrationCount. Upgrade path: once a denominator
+ * field exists on the ambassador type or campaign, rank by rate here instead.
  */
 function groupKeyAndLabel(scope: LeaderboardScope, ambassador: Ambassador): { key: string; label: string } {
-    const data = (ambassador.applicationData ?? {}) as Record<string, unknown>;
-    const college = String(data.college ?? "Unknown");
-    const department = String(data.department ?? "Unknown");
-
-    switch (scope) {
-        case "INDIVIDUAL_AMBASSADOR":
-            return { key: ambassador.id, label: `${ambassador.firstName} ${ambassador.lastName ?? ""}`.trim() };
-        case "COLLEGE":
-            return { key: college, label: college };
-        case "DEPARTMENT":
-            return { key: department, label: department };
-        case "INTER_COLLEGE_DEPARTMENT":
-            return { key: `${college}::${department}`, label: `${college} / ${department}` };
+    if (scope.kind === "INDIVIDUAL_AMBASSADOR") {
+        return { key: ambassador.id, label: `${ambassador.firstName} ${ambassador.lastName ?? ""}`.trim() };
     }
+
+    const data = (ambassador.applicationData ?? {}) as Record<string, unknown>;
+    const keys = scope.groupByFieldKeys ?? [];
+    const values = keys.map((k) => String(data[k] ?? "Unknown"));
+
+    return { key: values.join("::"), label: values.join(" / ") };
 }
 
 /** Ranked groups for a campaign + scope, highest registrationCount first. */
@@ -104,6 +96,23 @@ export async function computeLeaderboardGroups(
     }
 
     return [...groups.values()].sort((a, b) => b.registrationCount - a.registrationCount);
+}
+
+/**
+ * Structural equality for LeaderboardScope — needed because `scope` now round-trips through
+ * two independent sources (a query-param parse on the request side, a JSON blob deserialize on
+ * the stored-campaign side) that are never the same object reference. A `===` comparison here
+ * would silently always be false once LeaderboardScope became an object instead of a string
+ * literal — this is the fix for that regression. groupByFieldKeys order matters (it's meaningful
+ * for the composite group key/label, e.g. ["college","department"] vs ["department","college"]
+ * produce different labels), so this compares element-by-element in order, not as sets.
+ */
+export function leaderboardScopeEquals(a: LeaderboardScope, b: LeaderboardScope): boolean {
+    if (a.kind !== b.kind) return false;
+    if (a.kind === "INDIVIDUAL_AMBASSADOR") return true;
+    const aKeys = a.groupByFieldKeys ?? [];
+    const bKeys = b.groupByFieldKeys ?? [];
+    return aKeys.length === bKeys.length && aKeys.every((k, i) => k === bKeys[i]);
 }
 
 export function findPrizeForRank(cut: LeaderboardCut, rank: number): LeaderboardCut["ranks"][number] | null {

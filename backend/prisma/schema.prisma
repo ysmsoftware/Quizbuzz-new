@@ -200,7 +200,10 @@ enum AmbassadorStatus {
 }
 
 enum AmbassadorCampaignStatus {
-  ACTIVE
+  DRAFT
+  PUBLISHED
+  LIVE
+  ENDED
   ARCHIVED
 }
 
@@ -261,6 +264,7 @@ model Organization {
   planUsageCheckLogs   PlanUsageCheckLog[]
   ambassadors          Ambassador[]
   ambassadorCampaigns  AmbassadorCampaign[]
+  ambassadorCampaignTemplates AmbassadorCampaignTemplate[]
   ambassadorTypeAccess OrganizationAmbassadorTypeAccess[]
 
   @@index([slug])
@@ -1133,24 +1137,85 @@ model Ambassador {
 model AmbassadorCampaign {
   id                      String                    @id @default(ulid())
   organizationId          String
-  contestId               String
+  contestId               String?                    // optional while DRAFT — required by PublishCampaignSchema at publish time
   name                    String
-  ambassadorTypesAllowed  String[]
-  rewardConfig            Json                       // see ambassador-campaign.types.ts RewardConfig
+  ambassadorTypesAllowed  String[]                   @default([])
+  rewardConfig            Json      @default("{}")   // see ambassador-campaign.types.ts RewardConfig — incomplete while DRAFT
   shareTemplates          Json      @default("{}")   // { whatsappText, instagramText, posterImageUrl }
   sourceCampaignId        String?
-  status                  AmbassadorCampaignStatus  @default(ACTIVE)
+  sourceTemplateId        String?                    // set when instantiated from an AmbassadorCampaignTemplate — not a FK, same lineage-only treatment as sourceCampaignId
+  status                  AmbassadorCampaignStatus  @default(DRAFT)
+  wizardStep              Int                       @default(1)  // last completed creation-wizard step, for resume
+  startDate               DateTime?                  // Timeline step — required by PublishCampaignSchema at publish time
+  endDate                 DateTime?
+  phases                  Json?     @default("[]")   // generated CampaignPhase[] snapshot — see campaign-timeline.ts
+  phaseTemplate           Json?                       // CampaignPhaseTemplateEntry[] override; null = use the built-in default
+  publishedAt             DateTime?
   createdById             String
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
   organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest                 Contest                   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  contest                 Contest?                  @relation(fields: [contestId], references: [id], onDelete: Cascade)
   enrollments             AmbassadorCampaignEnrollment[]
+  groups                  AmbassadorGroup[]
 
   @@unique([contestId])
   @@index([organizationId, status])
   @@map("ambassador_campaigns")
+}
+
+/**
+ * Ambassador Structure (wizard step 3, docs/ambassador-campaign-wizard-plan.md §3.3) — an
+ * org-admin's planning breakdown of a campaign, e.g. "50 departments, 1 ambassador each,
+ * target 100 registrations per ambassador". Replaces having to eyeball capacity: totals are
+ * computed from these rows (see campaign-capacity.ts). Deliberately NOT linked to individual
+ * Ambassador rows yet — `college`/`department` on Ambassador.applicationData stay free text
+ * (a real applicant-to-group link needs an apply-time field, which is a separate module's
+ * concern) — so this is a target-setting table, not yet a denominator for per-group
+ * leaderboard rates. See the note in campaign-stats.ts for that upgrade path.
+ */
+model AmbassadorGroup {
+  id                 String   @id @default(ulid())
+  campaignId         String
+  groupType          String   // "DEPARTMENT" | "COLLEGE" | "CUSTOM" — validated at the API boundary, not a DB enum (config-driven, matches how PlatformAmbassadorType.key works)
+  name               String
+  ambassadorTarget   Int?     // e.g. 1 ambassador for this group
+  registrationTarget Int?     // e.g. 100 registrations per ambassador in this group
+  createdAt          DateTime @default(now())
+
+  campaign           AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("ambassador_groups")
+}
+
+/**
+ * Reusable snapshot of a campaign's config (§3.4, Phase 5) — org-admins save a campaign (at
+ * any status) as a template, then instantiate new DRAFT campaigns from it instead of
+ * starting from a blank wizard every time. Kept as its own table rather than an `isTemplate`
+ * flag on AmbassadorCampaign: a template has no contestId (campaigns require one, unique
+ * 1:1) and shouldn't carry any campaign-only fields (status, enrollments, publishedAt).
+ * `groups` is a plain JSON snapshot of AmbassadorGroupInput[] rather than its own relational
+ * table — templates aren't queried/joined the way live campaign groups are, so there's
+ * nothing a real FK-backed table would buy here.
+ */
+model AmbassadorCampaignTemplate {
+  id                     String   @id @default(ulid())
+  organizationId         String
+  name                   String
+  ambassadorTypesAllowed String[] @default([])
+  rewardConfig           Json     @default("{}")
+  shareTemplates         Json     @default("{}")
+  groups                 Json     @default("[]")
+  sourceCampaignId       String?  // the campaign this was saved from, if any — lineage only, not a FK (that campaign may later be archived/deleted without invalidating the template)
+  createdById            String
+  createdAt              DateTime @default(now())
+
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("ambassador_campaign_templates")
 }
 
 model AmbassadorCampaignEnrollment {

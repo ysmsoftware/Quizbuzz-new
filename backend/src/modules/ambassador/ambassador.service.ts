@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { Ambassador, AmbassadorCampaignStatus, Prisma } from "@prisma/client";
 import { AmbassadorRepository } from "./ambassador.repository";
 import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
-import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank } from "../ambassador-campaign/campaign-stats";
+import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
 import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
@@ -214,12 +214,15 @@ export class AmbassadorService {
             take: limit,
         });
 
+        // contestId/contest are guaranteed non-null here: findActiveForOrgAndType only returns
+        // LIVE campaigns, and a campaign can only reach LIVE via publishCampaign(), which
+        // requires contestId to be set (PublishCampaignSchema).
         const data: AvailableCampaignItem[] = rows.map((c) => ({
             id: c.id,
             name: c.name,
-            contestId: c.contestId,
-            contestSlug: c.contest.slug,
-            contestTitle: c.contest.title,
+            contestId: c.contestId as string,
+            contestSlug: c.contest!.slug,
+            contestTitle: c.contest!.title,
             ambassadorTypesAllowed: c.ambassadorTypesAllowed,
         }));
 
@@ -245,13 +248,15 @@ export class AmbassadorService {
                 const rewardConfig = enrollment.campaign.rewardConfig as unknown as RewardConfig;
                 const stats = await computeEnrollmentStats(this.campaignRepo, enrollment.id, rewardConfig);
 
+                // An enrollment can only exist for a campaign that was LIVE (contestId set)
+                // at join time — see the note in listAvailableCampaigns above.
                 return {
                     enrollmentId: enrollment.id,
                     campaignId: enrollment.campaignId,
                     name: enrollment.campaign.name,
-                    contestId: enrollment.campaign.contestId,
-                    contestSlug: enrollment.campaign.contest.slug,
-                    contestTitle: enrollment.campaign.contest.title,
+                    contestId: enrollment.campaign.contestId as string,
+                    contestSlug: enrollment.campaign.contest!.slug,
+                    contestTitle: enrollment.campaign.contest!.title,
                     referralCode: enrollment.referralCode,
                     shareTemplates: enrollment.campaign.shareTemplates as unknown as ShareTemplates,
                     stats: { ...stats, leaderboardRanks: [] },
@@ -271,7 +276,7 @@ export class AmbassadorService {
 
         const campaign = await this.campaignRepo.findById(campaignId, organizationId);
         if (!campaign) throw new NotFoundError("Campaign not found.");
-        if (campaign.status !== AmbassadorCampaignStatus.ACTIVE) {
+        if (campaign.status !== AmbassadorCampaignStatus.LIVE) {
             throw new BadRequestError("This campaign is not currently active.");
         }
         if (!campaign.ambassadorTypesAllowed.includes(ambassador.ambassadorType)) {
@@ -327,8 +332,8 @@ export class AmbassadorService {
             campaign: {
                 id: campaign.id,
                 name: campaign.name,
-                contestId: campaign.contestId,
-                contestSlug: campaign.contest.slug,
+                contestId: campaign.contestId as string,
+                contestSlug: campaign.contest!.slug,
                 referralCode: enrollment.referralCode,
                 ambassadorTypesAllowed: campaign.ambassadorTypesAllowed,
                 shareTemplates: campaign.shareTemplates as unknown as ShareTemplates,
@@ -347,7 +352,7 @@ export class AmbassadorService {
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
         const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
-        const cut = rewardConfig.leaderboardPrizes.find((c) => c.scope === scope);
+        const cut = rewardConfig.leaderboardPrizes.find((c) => leaderboardScopeEquals(c.scope, scope));
 
         const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope);
         const total = groups.length;

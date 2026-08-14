@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils';
 export interface RepeatingRowColumn<T> {
   key: keyof T;
   label: string;
-  type: 'text' | 'number' | 'select';
-  options?: string[];
+  type: 'text' | 'number' | 'select' | 'combobox';
+  options?: string[]; // for 'select': the only allowed values; for 'combobox': suggestions only, free text still accepted
   placeholder?: string;
 }
 
@@ -83,6 +83,22 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                               ))}
                             </SelectContent>
                           </Select>
+                        ) : col.type === 'combobox' ? (
+                          <>
+                            <Input
+                              className={cn('h-8', cellError && 'border-destructive focus-visible:ring-destructive/20')}
+                              list={`${String(col.key)}-${index}-suggestions`}
+                              placeholder={col.placeholder}
+                              value={row[col.key] ?? ''}
+                              aria-invalid={!!cellError}
+                              onChange={(e) => updateCell(index, col.key, e.target.value)}
+                            />
+                            <datalist id={`${String(col.key)}-${index}-suggestions`}>
+                              {(col.options ?? []).map((opt) => (
+                                <option key={opt} value={opt} />
+                              ))}
+                            </datalist>
+                          </>
                         ) : (
                           <Input
                             className={cn('h-8', cellError && 'border-destructive focus-visible:ring-destructive/20')}

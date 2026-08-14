@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LeaderboardQuerySchema as CampaignLeaderboardQuerySchema } from "../ambassador-campaign/ambassador-campaign.validator";
 
 const emailField = z.string().email("Invalid email address").toLowerCase().trim();
 
@@ -46,11 +47,9 @@ export const ListCampaignsQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export const LeaderboardQuerySchema = z.object({
-    scope: z.enum(["INDIVIDUAL_AMBASSADOR", "DEPARTMENT", "INTER_COLLEGE_DEPARTMENT", "COLLEGE"]),
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(20),
-});
+// Same query shape as the org-admin leaderboard endpoint — reused, not duplicated, so both
+// stay in sync with LeaderboardScope's shape (see ambassador-campaign.validator.ts).
+export const LeaderboardQuerySchema = CampaignLeaderboardQuerySchema;
 
 export type ApplyInput = z.infer<typeof ApplySchema>;
 export type UploadProofRequestInput = z.infer<typeof UploadProofRequestSchema>;

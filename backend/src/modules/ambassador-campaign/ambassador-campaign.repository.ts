@@ -1,18 +1,28 @@
-import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, Prisma } from "@prisma/client";
+import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, AmbassadorCampaignTemplate, AmbassadorGroup, Prisma } from "@prisma/client";
 import { prisma } from "../../config/db";
 
 export interface FindCampaignsFilter {
     organizationId: string;
-    status?: AmbassadorCampaignStatus | undefined;
+    statuses?: AmbassadorCampaignStatus[] | undefined;
+    ambassadorType?: string | undefined;
+    q?: string | undefined;
+    skip: number;
+    take: number;
+    sortBy: "createdAt" | "name" | "startDate" | "status";
+    sortOrder: "asc" | "desc";
+}
+
+export interface FindTemplatesFilter {
+    organizationId: string;
     skip: number;
     take: number;
     sortBy: "createdAt" | "name";
     sortOrder: "asc" | "desc";
 }
 
-export type CampaignWithContestTitle = AmbassadorCampaign & { contest: { title: string; slug: string }; _count: { enrollments: number } };
+export type CampaignWithContestTitle = AmbassadorCampaign & { contest: { title: string; slug: string } | null; _count: { enrollments: number } };
 export type EnrollmentWithCampaign = AmbassadorCampaignEnrollment & {
-    campaign: AmbassadorCampaign & { contest: { title: string; slug: string } };
+    campaign: AmbassadorCampaign & { contest: { title: string; slug: string } | null };
 };
 export type EnrollmentWithAmbassador = AmbassadorCampaignEnrollment & { ambassador: Ambassador };
 
@@ -22,13 +32,19 @@ export class AmbassadorCampaignRepository {
 
     async create(data: {
         organizationId: string;
-        contestId: string;
+        contestId?: string | null;
         name: string;
         ambassadorTypesAllowed: string[];
         rewardConfig: Prisma.InputJsonValue;
         shareTemplates: Prisma.InputJsonValue;
         sourceCampaignId?: string | null;
+        sourceTemplateId?: string | null;
+        status?: AmbassadorCampaignStatus;
         createdById: string;
+        startDate?: Date | null;
+        endDate?: Date | null;
+        phases?: Prisma.InputJsonValue;
+        phaseTemplate?: Prisma.InputJsonValue;
     }): Promise<AmbassadorCampaign> {
         return prisma.ambassadorCampaign.create({ data });
     }
@@ -47,7 +63,9 @@ export class AmbassadorCampaignRepository {
     async findAll(filter: FindCampaignsFilter): Promise<{ rows: CampaignWithContestTitle[]; total: number }> {
         const where: Prisma.AmbassadorCampaignWhereInput = {
             organizationId: filter.organizationId,
-            ...(filter.status ? { status: filter.status } : {}),
+            ...(filter.statuses?.length ? { status: { in: filter.statuses } } : {}),
+            ...(filter.ambassadorType ? { ambassadorTypesAllowed: { has: filter.ambassadorType } } : {}),
+            ...(filter.q ? { name: { contains: filter.q, mode: "insensitive" } } : {}),
         };
 
         const [rows, total] = await prisma.$transaction([
@@ -69,10 +87,17 @@ export class AmbassadorCampaignRepository {
         organizationId: string,
         data: Partial<{
             name: string;
+            contestId: string | null;
             ambassadorTypesAllowed: string[];
             rewardConfig: Prisma.InputJsonValue;
             shareTemplates: Prisma.InputJsonValue;
             status: AmbassadorCampaignStatus;
+            wizardStep: number;
+            publishedAt: Date | null;
+            startDate: Date | null;
+            endDate: Date | null;
+            phases: Prisma.InputJsonValue;
+            phaseTemplate: Prisma.InputJsonValue;
         }>,
     ): Promise<AmbassadorCampaign> {
         return prisma.ambassadorCampaign.update({ where: { id, organizationId }, data });
@@ -89,7 +114,7 @@ export class AmbassadorCampaignRepository {
     }): Promise<{ rows: CampaignWithContestTitle[]; total: number }> {
         const where: Prisma.AmbassadorCampaignWhereInput = {
             organizationId: params.organizationId,
-            status: AmbassadorCampaignStatus.ACTIVE,
+            status: AmbassadorCampaignStatus.LIVE,
             ambassadorTypesAllowed: { has: params.ambassadorType },
             ...(params.excludeCampaignIds.length ? { id: { notIn: params.excludeCampaignIds } } : {}),
         };
@@ -176,7 +201,7 @@ export class AmbassadorCampaignRepository {
         });
         if (!enrollment) return null;
         if (enrollment.campaign.contestId !== contestId) return null;
-        if (enrollment.campaign.status !== AmbassadorCampaignStatus.ACTIVE) return null;
+        if (enrollment.campaign.status !== AmbassadorCampaignStatus.LIVE) return null;
         return enrollment;
     }
 
@@ -218,5 +243,72 @@ export class AmbassadorCampaignRepository {
             where: { campaignId },
             include: { ambassador: true },
         });
+    }
+
+    // Ambassador Structure (§3.3)
+
+    async listGroups(campaignId: string): Promise<AmbassadorGroup[]> {
+        return prisma.ambassadorGroup.findMany({ where: { campaignId }, orderBy: { createdAt: "asc" } });
+    }
+
+    /** Transactional delete-all + recreate — see the note on ReplaceGroupsSchema for why this
+     *  module treats the group list as one replace-all unit rather than per-row CRUD. */
+    async replaceGroups(
+        campaignId: string,
+        groups: { groupType: string; name: string; ambassadorTarget?: number | undefined; registrationTarget?: number | undefined }[],
+    ): Promise<AmbassadorGroup[]> {
+        return prisma.$transaction(async (tx) => {
+            await tx.ambassadorGroup.deleteMany({ where: { campaignId } });
+            if (groups.length === 0) return [];
+            await tx.ambassadorGroup.createMany({
+                data: groups.map((g) => ({
+                    campaignId,
+                    groupType: g.groupType,
+                    name: g.name,
+                    ambassadorTarget: g.ambassadorTarget ?? null,
+                    registrationTarget: g.registrationTarget ?? null,
+                })),
+            });
+            return tx.ambassadorGroup.findMany({ where: { campaignId }, orderBy: { createdAt: "asc" } });
+        });
+    }
+
+    // ─── Campaign Templates (§3.4, Phase 5) ─────────────────────────────────────
+
+    async createTemplate(data: {
+        organizationId: string;
+        name: string;
+        ambassadorTypesAllowed: string[];
+        rewardConfig: Prisma.InputJsonValue;
+        shareTemplates: Prisma.InputJsonValue;
+        groups: Prisma.InputJsonValue;
+        sourceCampaignId?: string | null;
+        createdById: string;
+    }): Promise<AmbassadorCampaignTemplate> {
+        return prisma.ambassadorCampaignTemplate.create({ data });
+    }
+
+    async findTemplateById(id: string, organizationId: string): Promise<AmbassadorCampaignTemplate | null> {
+        return prisma.ambassadorCampaignTemplate.findFirst({ where: { id, organizationId } });
+    }
+
+    async findAllTemplates(filter: FindTemplatesFilter): Promise<{ rows: AmbassadorCampaignTemplate[]; total: number }> {
+        const where: Prisma.AmbassadorCampaignTemplateWhereInput = { organizationId: filter.organizationId };
+
+        const [rows, total] = await prisma.$transaction([
+            prisma.ambassadorCampaignTemplate.findMany({
+                where,
+                skip: filter.skip,
+                take: filter.take,
+                orderBy: { [filter.sortBy]: filter.sortOrder },
+            }),
+            prisma.ambassadorCampaignTemplate.count({ where }),
+        ]);
+
+        return { rows, total };
+    }
+
+    async deleteTemplate(id: string, organizationId: string): Promise<void> {
+        await prisma.ambassadorCampaignTemplate.deleteMany({ where: { id, organizationId } });
     }
 }

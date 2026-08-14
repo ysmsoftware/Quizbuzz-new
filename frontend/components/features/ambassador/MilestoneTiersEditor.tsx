@@ -5,12 +5,6 @@ import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable'
 import type { FieldErrorMap } from './campaign-schema';
 import type { MilestoneTier } from '@/lib/types/ambassador';
 
-/**
- * Flat row shape for the table. `goodie` is a nested optional object on MilestoneTier
- * ({ label, cashEquivalent }), but RepeatingRowTable only edits flat scalar columns —
- * so it's split into two flat columns here and reassembled into `goodie` on every
- * change (same flatten/reconstruct pattern LeaderboardPrizesEditor uses for `rank`).
- */
 interface MilestoneRow {
   label: string;
   minRegistrations: number;
@@ -52,13 +46,13 @@ export function MilestoneTiersEditor({
   const handleChange = (nextRows: MilestoneRow[]) => {
     onChange(
       nextRows.map((r) => ({
-        label: r.label || undefined,
+        label: r.label.trim() || undefined,
         minRegistrations: r.minRegistrations,
         maxRegistrations: r.maxRegistrations,
         rewardType: 'PER_REGISTRATION' as const,
         amountPerRegistration: r.amountPerRegistration,
-        goodie: r.goodieLabel
-          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined }
+        goodie: r.goodieLabel.trim()
+          ? { label: r.goodieLabel.trim(), cashEquivalent: r.goodieCashEquivalent || undefined }
           : undefined,
       })),
     );
@@ -76,7 +70,17 @@ export function MilestoneTiersEditor({
           onChange={handleChange}
           addLabel="Add tier"
           arrayError={errors[PREFIX]}
-          getCellError={(index, key) => errors[`${PREFIX}.${index}.${String(key)}`]}
+          getCellError={(index, key) => {
+            const k = String(key);
+            const baseKey = `${PREFIX}.${index}.${k}`;
+            if (k === 'goodieLabel') {
+              return errors[`${PREFIX}.${index}.goodie.label`] || errors[`${PREFIX}.${index}.goodie`] || errors[baseKey];
+            }
+            if (k === 'goodieCashEquivalent') {
+              return errors[`${PREFIX}.${index}.goodie.cashEquivalent`] || errors[`${PREFIX}.${index}.goodie`] || errors[baseKey];
+            }
+            return errors[baseKey];
+          }}
           newRow={() => ({
             label: '',
             minRegistrations: 0,

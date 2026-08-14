@@ -174,7 +174,10 @@ export class CertificateTemplateService {
             html = sanitizeHtml(input.htmlContent!);
         }
 
-        const org = await this.organizationRepo.findById(organizationId);
+        const [org, timezone] = await Promise.all([
+            this.organizationRepo.findById(organizationId),
+            this.organizationRepo.findTimezone(organizationId),
+        ]);
         const dummyMetadata: CertificateMetadata = {
             participantName: "Jordan Sample",
             contestTitle:    "Sample Contest 2026",
@@ -188,7 +191,7 @@ export class CertificateTemplateService {
             orgLogoUrl:      org?.logoUrl ?? undefined,
         };
 
-        const rendered = renderCustomTemplateHtml(html, dummyMetadata, "PREVIEW-0000001");
+        const rendered = renderCustomTemplateHtml(html, dummyMetadata, "PREVIEW-0000001", timezone);
         const { known, unknown } = detectVariables(html);
         const { widthMm, heightMm } = detectPageSizeMm(html);
         return {

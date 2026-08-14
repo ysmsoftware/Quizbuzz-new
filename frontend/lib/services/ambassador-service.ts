@@ -23,6 +23,7 @@ import type {
   LeaderboardEntryResult,
   PaginatedResult,
 } from '@/lib/types/ambassador';
+import { leaderboardScopeQueryParams } from '@/lib/types/ambassador';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
@@ -141,7 +142,7 @@ class AmbassadorService {
     params?: { page?: number; limit?: number }
   ) {
     return publicGet<PaginatedResult<LeaderboardEntryResult>>(`/ambassador/campaigns/${campaignId}/leaderboard`, {
-      scope,
+      ...leaderboardScopeQueryParams(scope),
       ...params,
     });
   }

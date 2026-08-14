@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { LEADERBOARD_SCOPES } from '@/lib/types/ambassador';
 
 const numberField = (label: string) =>
   z.number({ invalid_type_error: `${label} must be a number` });
@@ -22,6 +21,7 @@ const speedBonusTierSchema = z.object({
   withinDays: numberField('Within days').positive('Must be greater than 0'),
   bonusAmount: numberField('Bonus amount').positive('Must be greater than 0'),
   label: z.string().min(1, 'Label is required'),
+  maxWinners: z.number().optional(),
   goodie: z.object({ label: z.string(), cashEquivalent: z.number().optional() }).optional(),
 });
 
@@ -62,8 +62,19 @@ const leaderboardRankSchema = z
     path: ['cashAmount'],
   });
 
+const leaderboardScopeSchema = z
+  .object({
+    kind: z.enum(['INDIVIDUAL_AMBASSADOR', 'APPLICATION_FIELD_GROUP']),
+    groupByFieldKeys: z.array(z.string().min(1)).min(1).max(3).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.kind === 'APPLICATION_FIELD_GROUP' && (!data.groupByFieldKeys || data.groupByFieldKeys.length === 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Select at least one field to group by.', path: ['groupByFieldKeys'] });
+    }
+  });
+
 const leaderboardCutSchema = z.object({
-  scope: z.enum(LEADERBOARD_SCOPES as [string, ...string[]]),
+  scope: leaderboardScopeSchema,
   label: z.string().min(1, 'Label is required'),
   rankedBy: z.literal('REGISTRATION_RATE_PERCENT').optional(),
   winnerCount: z.number().optional(),

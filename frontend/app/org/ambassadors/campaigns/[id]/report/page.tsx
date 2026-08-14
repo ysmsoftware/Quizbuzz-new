@@ -14,7 +14,7 @@ import { useOrgAmbassadorReport } from '@/lib/hooks/useOrgAmbassadorReport';
 import { useOrgAmbassadorCampaign } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 import { LeaderboardTable } from '@/components/features/ambassador/LeaderboardTable';
-import type { LeaderboardScope } from '@/lib/types/ambassador';
+import { leaderboardScopeKey } from '@/lib/types/ambassador';
 
 function formatPaise(paise: number, currency = 'INR') {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
@@ -29,21 +29,21 @@ export default function AmbassadorCampaignReportPage() {
   const { campaign } = useOrgAmbassadorCampaign(campaignId);
   const { rows, pagination, isLoading, exportUrl } = useOrgAmbassadorReport(campaignId, { page, limit: 20 });
 
-  const scopes = useMemo(() => campaign?.rewardConfig.leaderboardPrizes.map((c) => c.scope) ?? [], [campaign]);
-  const [scope, setScope] = useState<LeaderboardScope | null>(null);
-  const activeScope = scope ?? scopes[0] ?? null;
+  const cuts = useMemo(() => campaign?.rewardConfig.leaderboardPrizes ?? [], [campaign]);
+  const [activeCutKey, setActiveCutKey] = useState<string | null>(null);
+  const activeCut = cuts.find((c) => leaderboardScopeKey(c.scope) === activeCutKey) ?? cuts[0] ?? null;
 
   const { data: leaderboardRes, isLoading: leaderboardLoading } = useQuery({
-    queryKey: ['org-ambassador-leaderboard', campaignId, activeScope],
-    queryFn: () => ambassadorCampaignApi.getLeaderboard(campaignId, activeScope as LeaderboardScope, { limit: 10 }),
-    enabled: !!activeScope,
+    queryKey: ['org-ambassador-leaderboard', campaignId, activeCut ? leaderboardScopeKey(activeCut.scope) : null],
+    queryFn: () => ambassadorCampaignApi.getLeaderboard(campaignId, (activeCut as NonNullable<typeof activeCut>).scope, { limit: 10 }),
+    enabled: !!activeCut,
   });
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/ambassadors/campaigns')}>
+      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push(`/org/ambassadors/campaigns/${campaignId}`)}>
         <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Campaigns
+        Back to Campaign
       </Button>
 
       <div className="flex items-center justify-between gap-3">
@@ -102,19 +102,19 @@ export default function AmbassadorCampaignReportPage() {
         <PaginationBar page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.limit} onPageChange={setPage} />
       )}
 
-      {scopes.length > 0 && activeScope && (
+      {cuts.length > 0 && activeCut && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Leaderboards</h2>
-          <Tabs value={activeScope} onValueChange={(v) => setScope(v as LeaderboardScope)}>
+          <Tabs value={leaderboardScopeKey(activeCut.scope)} onValueChange={setActiveCutKey}>
             <TabsList className="w-full flex-wrap h-auto">
-              {scopes.map((s) => (
-                <TabsTrigger key={s} value={s} className="flex-1">
-                  {s}
+              {cuts.map((c) => (
+                <TabsTrigger key={leaderboardScopeKey(c.scope)} value={leaderboardScopeKey(c.scope)} className="flex-1">
+                  {c.label}
                 </TabsTrigger>
               ))}
             </TabsList>
-            <TabsContent value={activeScope} className="mt-4">
-              <LeaderboardTable scope={activeScope} rows={leaderboardRes?.data?.data ?? []} isLoading={leaderboardLoading} />
+            <TabsContent value={leaderboardScopeKey(activeCut.scope)} className="mt-4">
+              <LeaderboardTable scope={activeCut.scope} label={activeCut.label} rows={leaderboardRes?.data?.data ?? []} isLoading={leaderboardLoading} />
             </TabsContent>
           </Tabs>
         </div>

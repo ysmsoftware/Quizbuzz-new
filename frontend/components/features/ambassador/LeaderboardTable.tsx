@@ -13,26 +13,20 @@ const RANK_COLOR: Record<number, string> = {
   3: 'text-secondary-foreground',
 };
 
-const SCOPE_LABEL: Record<LeaderboardScope, string> = {
-  INDIVIDUAL_AMBASSADOR: 'Ambassador',
-  DEPARTMENT: 'Department',
-  INTER_COLLEGE_DEPARTMENT: 'Inter-college Department',
-  COLLEGE: 'College',
-};
-
 function formatPaise(paise: number, currency = 'INR') {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
 }
 
 interface LeaderboardTableProps {
   scope: LeaderboardScope;
+  label: string;
   rows: LeaderboardEntryResult[];
-  /** Only meaningful when scope === 'INDIVIDUAL_AMBASSADOR' — groupKey is the ambassador's own id there. */
+  /** Only meaningful when scope.kind === 'INDIVIDUAL_AMBASSADOR' — groupKey is the ambassador's own id there. */
   currentAmbassadorId?: string;
   isLoading?: boolean;
 }
 
-export function LeaderboardTable({ scope, rows, currentAmbassadorId, isLoading }: LeaderboardTableProps) {
+export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLoading }: LeaderboardTableProps) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -50,7 +44,7 @@ export function LeaderboardTable({ scope, rows, currentAmbassadorId, isLoading }
           <Trophy className="h-5 w-5" />
         </EmptyMedia>
         <EmptyTitle>No rankings yet</EmptyTitle>
-        <EmptyDescription>Registrations will populate the {SCOPE_LABEL[scope].toLowerCase()} leaderboard.</EmptyDescription>
+        <EmptyDescription>Registrations will populate the {label.toLowerCase()} leaderboard.</EmptyDescription>
       </Empty>
     );
   }
@@ -61,14 +55,14 @@ export function LeaderboardTable({ scope, rows, currentAmbassadorId, isLoading }
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">Rank</TableHead>
-            <TableHead>{SCOPE_LABEL[scope]}</TableHead>
+            <TableHead>{label}</TableHead>
             <TableHead className="text-right">Registrations</TableHead>
             <TableHead className="text-right">Prize</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((row) => {
-            const isYou = scope === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
+            const isYou = scope.kind === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
             return (
               <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/5 font-medium')}>
                 <TableCell className={cn('font-bold', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>

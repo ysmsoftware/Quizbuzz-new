@@ -1,29 +1,137 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trophy } from 'lucide-react';
+import { Plus, Trophy, Search, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { PaginationBar } from '@/components/ui/pagination-bar';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useOrgAmbassadorCampaigns } from '@/lib/hooks/useOrgAmbassadorCampaigns';
+import { CAMPAIGN_STATUS_BADGE_VARIANT } from './campaign-status';
+import type { AmbassadorCampaignStatus } from '@/lib/types/ambassador';
+
+const STATUS_OPTIONS: AmbassadorCampaignStatus[] = ['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'ARCHIVED'];
+
+const SORT_OPTIONS: { value: 'createdAt' | 'name' | 'startDate' | 'status'; label: string }[] = [
+  { value: 'createdAt', label: 'Created' },
+  { value: 'name', label: 'Name' },
+  { value: 'startDate', label: 'Start Date' },
+  { value: 'status', label: 'Status' },
+];
 
 export function CampaignsList() {
   const [page, setPage] = useState(1);
-  const { campaigns, pagination, isLoading } = useOrgAmbassadorCampaigns({ page, limit: 20 });
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<AmbassadorCampaignStatus[]>([]);
+  const [ambassadorType, setAmbassadorType] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'startDate' | 'status'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const { activeOrg } = useAuth();
+  const { types } = useAmbassadorTypes(activeOrg?.id ?? '');
+  const typeLabel = (key: string) => types.find((t) => t.key === key)?.label ?? key;
+
+  const { campaigns, pagination, isLoading } = useOrgAmbassadorCampaigns({
+    q: q || undefined,
+    status: status.length ? status : undefined,
+    ambassadorType: ambassadorType || undefined,
+    sortBy,
+    sortOrder,
+    page,
+    limit: 20,
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, status, ambassadorType, sortBy, sortOrder]);
+
+  const toggleStatus = (s: AmbassadorCampaignStatus, checked: boolean) => {
+    setStatus((prev) => (checked ? [...prev, s] : prev.filter((v) => v !== s)));
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button asChild size="sm">
-          <Link href="/org/ambassadors/campaigns/new">
-            <Plus className="h-4 w-4 mr-2" />
-            New Campaign
-          </Link>
-        </Button>
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+          <div className="relative sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search campaigns…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="justify-between sm:w-40">
+                Status{status.length ? ` (${status.length})` : ''}
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="space-y-2">
+                {STATUS_OPTIONS.map((s) => (
+                  <div key={s} className="flex items-center gap-2">
+                    <Checkbox id={`status-${s}`} checked={status.includes(s)} onCheckedChange={(v) => toggleStatus(s, v === true)} />
+                    <Label htmlFor={`status-${s}`} className="font-normal cursor-pointer">
+                      {s}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <Select value={ambassadorType || 'ALL'} onValueChange={(v) => setAmbassadorType(v === 'ALL' ? '' : v)}>
+            <SelectTrigger className="sm:w-44">
+              <SelectValue placeholder="Ambassador type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All types</SelectItem>
+              {types.map((t) => (
+                <SelectItem key={t.key} value={t.key}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            aria-label={sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+          >
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/org/ambassadors/campaigns/new">
+              <Plus className="h-4 w-4 mr-2" />
+              New Campaign
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -37,8 +145,10 @@ export function CampaignsList() {
           <EmptyMedia variant="icon">
             <Trophy className="h-5 w-5" />
           </EmptyMedia>
-          <EmptyTitle>No campaigns yet</EmptyTitle>
-          <EmptyDescription>Create one to get started.</EmptyDescription>
+          <EmptyTitle>No campaigns found</EmptyTitle>
+          <EmptyDescription>
+            {q || status.length || ambassadorType ? 'Try adjusting your filters.' : 'Create one to get started.'}
+          </EmptyDescription>
         </Empty>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border/50">
@@ -47,6 +157,7 @@ export function CampaignsList() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Ambassador Types</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -54,18 +165,35 @@ export function CampaignsList() {
             <TableBody>
               {campaigns.map((campaign) => (
                 <TableRow key={campaign.id}>
-                  <TableCell className="font-medium">{campaign.name}</TableCell>
+                  <TableCell className="font-medium">{campaign.name || <span className="text-muted-foreground italic">Untitled</span>}</TableCell>
                   <TableCell>
-                    <Badge variant={campaign.status === 'ACTIVE' ? 'default' : 'secondary'}>{campaign.status}</Badge>
+                    <Badge variant={CAMPAIGN_STATUS_BADGE_VARIANT[campaign.status]}>{campaign.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {campaign.ambassadorTypesAllowed.map((key) => (
+                        <Badge key={key} variant="outline" className="font-normal">
+                          {typeLabel(key)}
+                        </Badge>
+                      ))}
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{new Date(campaign.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/org/ambassadors/campaigns/${campaign.id}/edit`}>Edit</Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/org/ambassadors/campaigns/${campaign.id}/report`}>Report</Link>
-                    </Button>
+                    {campaign.status === 'DRAFT' ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/org/ambassadors/campaigns/${campaign.id}/wizard`}>Continue setup</Link>
+                      </Button>
+                    ) : (
+                      <>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/org/ambassadors/campaigns/${campaign.id}`}>View</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/org/ambassadors/campaigns/${campaign.id}/report`}>Report</Link>
+                        </Button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

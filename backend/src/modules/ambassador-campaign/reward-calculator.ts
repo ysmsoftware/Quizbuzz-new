@@ -62,7 +62,7 @@ export function computeSpeedBonus(
     registrationCount: number,
     thresholdReachedAt: Date | null,
 ): SpeedBonusResult | null {
-    if (!config || !config.enabled) return null;
+    if (!config || !config.enabled || !config.campaignStartAt || config.milestoneThreshold === undefined) return null;
     if (registrationCount < config.milestoneThreshold || !thresholdReachedAt) {
         return { earned: false, tier: null, daysToMilestone: null };
     }

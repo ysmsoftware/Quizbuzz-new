@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AmbassadorCampaignService } from "./ambassador-campaign.service";
-import { storageService } from "../../services/storage.service";
-import { BadRequestError, UnauthorizedError } from "../../error/http-errors";
+import { UnauthorizedError } from "../../error/http-errors";
 import {
     CreateCampaignSchema,
     UpdateCampaignSchema,
@@ -11,6 +10,11 @@ import {
     RejectApplicationSchema,
     ListReportQuerySchema,
     LeaderboardQuerySchema,
+    ReplaceGroupsSchema,
+    CreateTemplateSchema,
+    InstantiateTemplateSchema,
+    ListTemplatesQuerySchema,
+    RequestPosterUploadUrlSchema,
 } from "./ambassador-campaign.validator";
 
 export class AmbassadorCampaignController {
@@ -18,44 +22,25 @@ export class AmbassadorCampaignController {
     constructor(private readonly service: AmbassadorCampaignService) { }
 
     /**
-     * POST /org/ambassadors/campaigns/upload-poster
-     * Same base64-body upload shape as ContestController.uploadBanner — a
-     * campaign poster is the same kind of asset (org-admin-supplied marketing
-     * image), not the presigned-PUT-URL flow the ambassador-proof upload uses.
+     * POST /org/ambassadors/campaigns/poster-upload-url
+     * Presigned-PUT-URL flow — same shape as the ambassador-proof upload
+     * (AmbassadorController.getUploadUrl): the frontend PUTs the file straight to S3 with
+     * the returned URL, then strips the query string off it to get the permanent object URL.
+     * No file body ever passes through this backend.
      */
-    uploadPoster = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    getPosterUploadUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const user = req.user;
             if (!user) {
                 throw new UnauthorizedError("User not authorized.");
             }
-            const { fileData, fileName } = req.body;
-            if (!fileData || !fileName) {
-                throw new BadRequestError("File data and file name are required.");
-            }
-
-            // Data URL format: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
-            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            let buffer: Buffer;
-            let contentType: string;
-
-            if (matches && matches.length === 3) {
-                contentType = matches[1];
-                buffer = Buffer.from(matches[2], "base64");
-            } else {
-                contentType = "image/png";
-                buffer = Buffer.from(fileData, "base64");
-            }
-
-            const cleanFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-            const key = `ambassador-posters/${user.organizationId}/${Date.now()}_${cleanFileName}`;
-
-            const uploadResult = await storageService.upload(key, buffer, contentType);
+            const dto = RequestPosterUploadUrlSchema.parse(req.body);
+            const result = await this.service.getPosterUploadUrl(user.organizationId, dto.filename, dto.mimeType);
 
             res.status(200).json({
                 success: true,
-                message: "Poster uploaded successfully",
-                data: { url: uploadResult.url, key: uploadResult.key },
+                message: "Upload URL generated successfully",
+                data: result,
                 requestId: req.id,
             });
         } catch (err) {
@@ -152,12 +137,118 @@ export class AmbassadorCampaignController {
         }
     };
 
+    publishCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.publishCampaign(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, message: "Campaign published", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    activateCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.activateCampaign(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, message: "Campaign activated", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    endCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.endCampaign(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, message: "Campaign ended", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    archiveCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.archiveCampaign(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, message: "Campaign archived", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getGroups = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.getGroups(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    replaceGroups = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const data = ReplaceGroupsSchema.parse(req.body);
+            const result = await this.service.replaceGroups(organizationId, req.params.id as string, data);
+            res.status(200).json({ success: true, message: "Ambassador structure saved", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     duplicateCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { id: createdById, organizationId } = req.user!;
             const data = DuplicateCampaignSchema.parse(req.body);
             const result = await this.service.duplicateCampaign(organizationId, createdById, req.params.id as string, data);
             res.status(201).json({ success: true, message: "Campaign duplicated", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // ─── Campaign Templates ──────────────────────────────────────────────────────
+
+    createTemplate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id: createdById, organizationId } = req.user!;
+            const data = CreateTemplateSchema.parse(req.body);
+            const result = await this.service.createTemplate(organizationId, createdById, data);
+            res.status(201).json({ success: true, message: "Template saved", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    listTemplates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const query = ListTemplatesQuerySchema.parse(req.query);
+            const result = await this.service.listTemplates(organizationId, query);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    deleteTemplate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            await this.service.deleteTemplate(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, message: "Template deleted", data: null, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    instantiateTemplate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id: createdById, organizationId } = req.user!;
+            const data = InstantiateTemplateSchema.parse(req.body);
+            const result = await this.service.instantiateTemplate(organizationId, createdById, req.params.id as string, data);
+            res.status(201).json({ success: true, message: "Campaign created from template", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

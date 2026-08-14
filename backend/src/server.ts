@@ -1,3 +1,11 @@
+// Pin every instance's baseline timezone to UTC, before anything else runs — Date
+// formatting that doesn't pass an explicit IANA timezone (see utils/timezone.ts for
+// the ones that must) would otherwise silently follow whatever the OS defaults to,
+// which differs between a developer's machine and a fresh AWS instance, and can even
+// differ instance-to-instance under auto-scaling. Pinning this gives every instance
+// the same deterministic starting point regardless of where/when it was spun up.
+process.env.TZ = "UTC";
+
 import "./instrument";
 import * as Sentry from "@sentry/node";
 import logger from "./config/logger";

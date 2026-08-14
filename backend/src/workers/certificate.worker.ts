@@ -22,7 +22,7 @@ import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import puppeteer, { Browser } from "puppeteer";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { certificateService, certificateTemplateService } from "../container";
+import { certificateService, certificateTemplateService, organizationRepository } from "../container";
 import { storageService } from "../services/storage.service";
 import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 import { CertificateQueueJobData } from "../queues";
@@ -133,8 +133,11 @@ async function processTestCertificate(
 
     logger.info(`[certificate-worker] Test job ${job.id} started — template: ${templateId}`);
 
-    const template = await certificateTemplateService.getTemplate(templateId, organizationId);
-    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`);
+    const [template, timezone] = await Promise.all([
+        certificateTemplateService.getTemplate(templateId, organizationId),
+        organizationRepository.findTimezone(organizationId),
+    ]);
+    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`, timezone);
 
     let pdfBuffer: Buffer;
     try {
@@ -178,15 +181,20 @@ async function processRealCertificate(job: Job<CertificateJobPayload>): Promise<
     await certificateService.markGenerating(certificateId, organizationId);
 
     // ── Step 3: Render HTML ───────────────────────────────────────────────────
+    // Dates on the certificate (contest date, issued date) are formatted in the
+    // organization's own configured timezone — see utils/timezone.ts — rather than
+    // implicitly using this worker process's local time.
+    const timezone = await organizationRepository.findTimezone(organizationId);
+
     let html: string;
     let usesCustomTemplate = false;
 
     if (metadata.templateId) {
         const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
-        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId);
+        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId, timezone);
         usesCustomTemplate = true;
     } else {
-        html = renderCertificateHtml(metadata, certificateId);
+        html = renderCertificateHtml(metadata, certificateId, timezone);
     }
 
     // ── Step 4: Generate PDF via Puppeteer ────────────────────────────────────
