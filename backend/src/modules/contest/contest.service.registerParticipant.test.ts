@@ -55,7 +55,9 @@ describe("ContestService.registerParticipant — ambassador referral capture (§
         mockedIsFeatureEnabled.mockResolvedValue(false);
         mockedVerifyContactToken.mockResolvedValue({ email: baseDto.email, organizationId: "org_1" });
 
-        mockOrgRepo = {};
+        mockOrgRepo = {
+            findTimezone: jest.fn().mockResolvedValue("Asia/Kolkata"),
+        };
         mockContestRepo = {
             findBySlugPublic: jest.fn().mockResolvedValue({ ...baseContest }),
         };
