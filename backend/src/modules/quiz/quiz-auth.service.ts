@@ -21,6 +21,7 @@ import type { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { MessagingService } from "../messaging/messaging.service";
 import { MessageTemplate } from "../../types/message-template.enum";
+import { logAudit } from "../../common/audit-log";
 
 // Redis key used by QuizRegistrationService for registration OTPs.
 // Must stay in sync with quiz-registration.service.ts → regOtpKey()
@@ -395,6 +396,17 @@ export class QuizAuthService {
         const sessionToken = this.createSessionToken(participant.id, contest.id, contest.organizationId);
 
         logger.info(`[quiz-auth] participantLogin: participant ${participant.id} authenticated for contest ${contest.id}`);
+
+        logAudit({
+            action: "auth.participant_login",
+            targetType: "PARTICIPANT",
+            targetId: participant.id,
+            targetLabel: email,
+            organizationId: contest.organizationId,
+            actorId: participant.id,
+            actorType: "PARTICIPANT",
+            actorLabel: email,
+        });
 
         return {
             sessionToken,

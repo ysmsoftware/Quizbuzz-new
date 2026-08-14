@@ -1104,6 +1104,60 @@ model OrganizationFeatureFlagOverride {
   @@map("organization_feature_flag_overrides")
 }
 
+// AUDIT LOG
+// Global audit trail for this app's own actions (auth, payments, contest
+// lifecycle, certificates, etc). Written only by this app — see
+// src/lib/audit/log-audit.ts. Never read by this app; ops reads it cross-DB
+// via queryMainDb (same read-only pattern it already uses for organizations/
+// entitlements), exposed there as a second Audit Ledger tab. No FKs on
+// purpose — actorId can point at either Admin or Contact and the row must
+// survive the referenced actor being deleted later.
+
+enum AuditActorType {
+  ADMIN
+  PARTICIPANT
+  SYSTEM
+  WEBHOOK
+}
+
+enum AuditTargetType {
+  ORGANIZATION
+  ADMIN
+  CONTEST
+  PARTICIPANT
+  PAYMENT
+  SUBMISSION
+  CERTIFICATE
+  QUESTION
+  MESSAGE
+  AUTH
+  SYSTEM
+}
+
+model AuditLog {
+  id             String          @id @default(ulid())
+  requestId      String?
+  organizationId String?
+  actorId        String?
+  actorType      AuditActorType
+  actorLabel     String
+  action         String
+  targetType     AuditTargetType
+  targetId       String
+  targetLabel    String
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime        @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([requestId])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
 // AMBASSADOR PROGRAM
 
 model Ambassador {

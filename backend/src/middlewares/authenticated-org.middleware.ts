@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { verifyToken } from "../utils/jwt";
 import logger from "../config/logger";
 import { UnauthorizedError, ForbiddenError } from "../error/http-errors";
+import { setAuditActor } from "../common/audit-context";
 
 export const authenticatedOrgMiddleware = async (
     req: Request,
@@ -32,6 +33,12 @@ export const authenticatedOrgMiddleware = async (
             throw new ForbiddenError("No active organization");
         }
 
+        setAuditActor({
+            organizationId: payload.organizationId,
+            actorId: payload.userId,
+            actorType: "ADMIN",
+            actorLabel: payload.userId,
+        });
 
         Sentry.getCurrentScope().setUser({
             id: payload.userId,

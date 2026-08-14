@@ -148,4 +148,6 @@ export interface EvaluationJobPayload {
     submissionId: string;
     participantId: string;
     contestId: string;
+    /** Carries the originating request's id across the queue boundary — see common/audit-context.ts */
+    requestId?: string | undefined;
 }

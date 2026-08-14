@@ -30,6 +30,7 @@ import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { messageQueue, quizTimerQueue, contestReconciliationQueue } from "../../queues";
 import { rankRows } from "../../workers/leaderboard.worker";
+import { logAudit } from "../../common/audit-log";
 import logger from "../../config/logger";
 
 
@@ -137,7 +138,17 @@ export class ContestService {
             startTime,
         };
 
-        return this.contestRepo.create(organizationId, createdById, data);
+        const contest = await this.contestRepo.create(organizationId, createdById, data);
+
+        logAudit({
+            action: "contest.created",
+            targetType: "CONTEST",
+            targetId: contest.id,
+            targetLabel: contest.title,
+            organizationId,
+        });
+
+        return contest;
     }
 
     async getContest(contestId: string, organizationId: string) {
@@ -340,6 +351,15 @@ export class ContestService {
             contest.showResultsAfter ?? 24,
         );
 
+        logAudit({
+            action: "contest.published",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+            metadata: { joinCode },
+        });
+
         return { status: updated.status, joinCode };
     }
 
@@ -533,6 +553,15 @@ export class ContestService {
 
         logger.info(`[contest] Cancelled ${contestId} (was ${contest.status}): ${input.reason}`);
 
+        logAudit({
+            action: "contest.cancelled",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+            metadata: { reason: input.reason },
+        });
+
         return { status: updated.status };
     }
 
@@ -718,6 +747,17 @@ export class ContestService {
         }
 
         logger.info(`[contest-reconciliation] Sweep complete — checked=${candidates.length}, fixed=${fixed}`);
+
+        if (fixed > 0) {
+            logAudit({
+                action: "system.contest_reconciliation_fired",
+                targetType: "SYSTEM",
+                targetId: "contest-reconciliation",
+                targetLabel: "Contest start reconciliation sweep",
+                actorType: "SYSTEM",
+                metadata: { checked: candidates.length, fixed },
+            });
+        }
 
         return { checked: candidates.length, fixed };
     }
@@ -1143,6 +1183,14 @@ export class ContestService {
         // Publish all entries and update contest status
         await this.leaderboardRepo.publishAll(contestId, organizationId);
         await this.contestRepo.updateStatus(contestId, organizationId, ContestStatus.RESULTS_OUT);
+
+        logAudit({
+            action: "contest.results_declared",
+            targetType: "CONTEST",
+            targetId: contestId,
+            targetLabel: contest.title,
+            organizationId,
+        });
 
         // Notify all participants that results are out (fan-out via worker)
         // Pass contest slug so the worker can build the leaderboard URL

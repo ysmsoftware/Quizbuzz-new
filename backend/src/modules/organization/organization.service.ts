@@ -12,6 +12,7 @@ import logger from "../../config/logger";
 // Plan-limit enforcement (org members) now runs as middleware ahead of this
 // route — see src/middlewares/plan-limit.middleware.ts::enforceOrgMemberInviteLimit.
 import { getPlanUsageSummary, PlanUsageSummary } from "../../common/plan-usage-summary";
+import { logAudit } from "../../common/audit-log";
 
 
 
@@ -173,6 +174,15 @@ export class OrganizationService {
             logger.error(`[organization] Failed to enqueue invite email: ${(err as Error).message}`);
         });
 
+        logAudit({
+            action: "organization.member_invited",
+            targetType: "ADMIN",
+            targetId: targetAdmin.id,
+            targetLabel: dto.email,
+            organizationId: orgId,
+            metadata: { role: dto.role },
+        });
+
         return {
             memberId: targetAdmin.id,
             email: dto.email,
@@ -227,6 +237,15 @@ export class OrganizationService {
 
         await this.organizationRepo.updateMemberRole(memberId, role);
 
+        logAudit({
+            action: "organization.member_role_changed",
+            targetType: "ADMIN",
+            targetId: member.adminId,
+            targetLabel: member.adminId,
+            organizationId: orgId,
+            metadata: { from: member.role, to: role },
+        });
+
         const members = await this.organizationRepo.findOrgMembers(orgId);
         const updated = members.find((m) => m.id === memberId);
         if (!updated) throw new NotFoundError("Member not found after update");
@@ -271,6 +290,14 @@ export class OrganizationService {
         }
 
         await this.organizationRepo.deactivateMember(memberId);
+
+        logAudit({
+            action: "organization.member_removed",
+            targetType: "ADMIN",
+            targetId: member.adminId,
+            targetLabel: member.adminId,
+            organizationId: orgId,
+        });
     }
     async generateUniqueSlug(name: string): Promise<string> {
         let slug = createSlug(name);

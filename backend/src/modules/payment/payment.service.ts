@@ -14,6 +14,7 @@ import { PaymentListResult, PaymentDetailResult } from "./payment.types";
 import { PayoutService } from "../payout/payout.service";
 import { routeTransferQueue, RouteTransferJobPayload, paymentCleanupQueue } from "../../queues";
 import { config } from "../../config";
+import { logAudit } from "../../common/audit-log";
 
 
 export class PaymentService {
@@ -299,6 +300,17 @@ export class PaymentService {
                     throw err;
                 }
 
+                logAudit({
+                    action: "payment.captured",
+                    targetType: "PAYMENT",
+                    targetId: payment.id,
+                    targetLabel: `₹${(payment.amount / 100).toFixed(2)} ${payment.currency}`,
+                    organizationId: payment.organizationId,
+                    actorType: "WEBHOOK",
+                    actorLabel: "Razorpay webhook",
+                    metadata: { razorpayOrderId, razorpayPaymentId: paymentEntity.id, method: paymentEntity.method },
+                });
+
                 // Confirm the participant's seat: PENDING_PAYMENT → REGISTERED
                 // This is the source-of-truth gate for paid contests.
                 if (payment.participantId) {
@@ -508,6 +520,12 @@ export class PaymentService {
         for (const payment of missingPayments) {
             if (!payment.razorpayPaymentId) continue; // defensive — query already filters this
             try {
+                // This sweep runs recurringly — if a prior sweep's attempt for this
+                // payment already failed, its job hash is still retained under this
+                // same jobId (removeOnFail keeps the last N), and add() would silently
+                // no-op instead of re-enqueuing. Same class of bug as the stuck-transfer
+                // loop below already documents — evict any stale job first.
+                await routeTransferQueue.remove(`route-transfer-${payment.id}`);
                 await routeTransferQueue.add(
                     "create-route-transfer",
                     {

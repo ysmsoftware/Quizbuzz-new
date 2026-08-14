@@ -14,6 +14,7 @@ export interface SendMessageDTO {
 
 export interface MessageLogResult {
     id: string;
+    organizationId: string;
     participantId: string | null;
     contestId: string | null;
     channel: MessageChannel;

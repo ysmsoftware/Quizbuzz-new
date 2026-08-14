@@ -1,35 +1,28 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useOrgAmbassadorCampaign } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from '@/components/features/ambassador/campaign-status';
-import { SettingsTab } from '@/components/features/ambassador/dashboard/SettingsTab';
-import { StructureTab } from '@/components/features/ambassador/dashboard/StructureTab';
-import { RewardsTab } from '@/components/features/ambassador/dashboard/RewardsTab';
-import { LeaderboardsTab } from '@/components/features/ambassador/dashboard/LeaderboardsTab';
-import { TimelineTab } from '@/components/features/ambassador/dashboard/TimelineTab';
-import { KitTab } from '@/components/features/ambassador/dashboard/KitTab';
+import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/dashboard/CampaignManagePanel';
 
 /**
- * Campaign edit surface — reached only via the explicit "Edit Campaign" button on the
- * read-only Overview ([id]/page.tsx). Each tab enforces the same status-gated field locks as
- * the backend (see campaign-field-locks.ts), so editing here never means "everything's always
- * editable" the way the old single-page CampaignForm did. The Overview is where an admin
- * checks on a campaign; this is only where they change it.
+ * Campaign edit surface — the standalone-page fallback for direct links/bookmarks. The
+ * primary way in is now the "Edit Campaign" drawer on the Overview page ([id]/page.tsx),
+ * which renders this same CampaignManagePanel inline instead of navigating here.
  */
 export default function CampaignManagePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const [tab, setTab] = useState<ManageTabKey>('settings');
 
   const { campaign, isLoading } = useOrgAmbassadorCampaign(id);
   const { activeOrg } = useAuth();
@@ -81,34 +74,7 @@ export default function CampaignManagePage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="settings">
-        <TabsList>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="structure">Structure</TabsTrigger>
-          <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          <TabsTrigger value="leaderboards">Leaderboards</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="kit">Ambassador Kit</TabsTrigger>
-        </TabsList>
-        <TabsContent value="settings" className="mt-4">
-          <SettingsTab campaign={campaign} />
-        </TabsContent>
-        <TabsContent value="structure" className="mt-4">
-          <StructureTab campaign={campaign} />
-        </TabsContent>
-        <TabsContent value="rewards" className="mt-4">
-          <RewardsTab campaign={campaign} />
-        </TabsContent>
-        <TabsContent value="leaderboards" className="mt-4">
-          <LeaderboardsTab campaign={campaign} />
-        </TabsContent>
-        <TabsContent value="timeline" className="mt-4">
-          <TimelineTab campaign={campaign} />
-        </TabsContent>
-        <TabsContent value="kit" className="mt-4">
-          <KitTab campaign={campaign} />
-        </TabsContent>
-      </Tabs>
+      <CampaignManagePanel campaign={campaign} activeTab={tab} onTabChange={setTab} />
     </div>
   );
 }

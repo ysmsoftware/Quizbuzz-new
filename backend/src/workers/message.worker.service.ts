@@ -6,6 +6,7 @@ import { TemplateParamsMap } from "../types/message-template";
 import { prisma } from "../config/db";
 import { config } from "../config";
 import { formatDateHuman, formatTimeHuman } from "../utils/timezone";
+import { logAudit } from "../common/audit-log";
 
 
 export class MessageWorkerService {
@@ -57,6 +58,15 @@ export class MessageWorkerService {
                 metadata: response ?? null,
             });
 
+            logAudit({
+                action: "message.sent",
+                targetType: "MESSAGE",
+                targetId: log.id,
+                targetLabel: destination,
+                organizationId: log.organizationId,
+                actorType: "SYSTEM",
+                metadata: { channel: log.channel, template: log.template },
+            });
 
         } catch (error) {
             const errMessage = (error as Error).message;
@@ -69,6 +79,16 @@ export class MessageWorkerService {
             if (Number(log.attemptCount) + 1 >= 3) {
                 await this.messageService.updateMessageStatus(log.id, "FAILED", {
                     failureReason: errMessage,
+                });
+
+                logAudit({
+                    action: "message.failed",
+                    targetType: "MESSAGE",
+                    targetId: log.id,
+                    targetLabel: destination,
+                    organizationId: log.organizationId,
+                    actorType: "SYSTEM",
+                    metadata: { channel: log.channel, template: log.template, reason: errMessage },
                 });
             }
 

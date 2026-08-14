@@ -34,3 +34,23 @@ export function computeEffectiveFlagState(
     }
     return { value: globalValue, overridden: false };
 }
+
+/**
+ * For "opt-in" flags (see OPT_IN_ONLY_FLAGS in feature-flags.ts) — the
+ * inverse default from computeEffectiveFlagState. There, global=true means
+ * "on for everyone unless an org opts out"; here, global=true only means
+ * "available to be granted" — an org is off by default and needs its own
+ * active override to actually have it. global=false is an absolute kill
+ * switch either way: it beats even an active override, so "turn this off
+ * platform-wide" can never be silently bypassed by a stale per-org grant.
+ */
+export function computeOptInFlagState(
+    globalValue: boolean,
+    orgOverride: OrgOverrideInput | null,
+): EffectiveFlagState {
+    if (!globalValue) return { value: false, overridden: false };
+    if (orgOverride && isOrgOverrideActive(orgOverride)) {
+        return { value: orgOverride.isEnabled, overridden: true };
+    }
+    return { value: false, overridden: false };
+}

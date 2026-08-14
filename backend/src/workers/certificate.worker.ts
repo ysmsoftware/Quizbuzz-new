@@ -27,6 +27,8 @@ import { storageService } from "../services/storage.service";
 import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 import { CertificateQueueJobData } from "../queues";
 import { renderCertificateHtml, renderCustomTemplateHtml } from "../modules/certificate/certificate.template";
+import { auditContextStorage } from "../common/audit-context";
+import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -156,6 +158,10 @@ async function processTestCertificate(
 }
 
 async function processRealCertificate(job: Job<CertificateJobPayload>): Promise<void> {
+    return auditContextStorage.run({ requestId: job.data.requestId }, () => processRealCertificateInner(job));
+}
+
+async function processRealCertificateInner(job: Job<CertificateJobPayload>): Promise<void> {
     const { certificateId, organizationId, contestId, participantId, metadata } = job.data;
 
     logger.info(
@@ -294,6 +300,17 @@ export class CertificateWorker implements Worker {
                     );
                 }
             }
+
+            const certificateId = job?.data && "certificateId" in job.data ? job.data.certificateId : undefined;
+            auditIfRetriesExhausted({
+                queueName: "certificate-queue",
+                job,
+                err,
+                targetType: "CERTIFICATE",
+                targetId: certificateId ?? job?.id ?? "unknown",
+                targetLabel: certificateId ?? job?.id ?? "unknown",
+                organizationId: job?.data?.organizationId,
+            });
         });
 
         this.worker.on("error", (err) => {

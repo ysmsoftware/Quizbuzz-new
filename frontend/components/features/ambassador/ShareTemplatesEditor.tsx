@@ -30,7 +30,7 @@ const SAMPLE_VALUES = {
   ambassadorName: 'Priya',
 };
 
-function substitutePlaceholders(text: string, contestTitle?: string): string {
+export function substitutePlaceholders(text: string, contestTitle?: string): string {
   const values = { ...SAMPLE_VALUES, contestName: contestTitle || 'Sample Quiz' };
   return Object.entries(values).reduce((acc, [key, val]) => acc.split(`{${key}}`).join(val), text);
 }

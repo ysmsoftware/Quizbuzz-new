@@ -53,7 +53,7 @@ export default function NewAmbassadorCampaignPage() {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">New Ambassador Campaign</h1>
         <p className="text-sm text-muted-foreground">Start from scratch, or reuse a saved template to skip the setup you&apos;ve already done before.</p>

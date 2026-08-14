@@ -138,11 +138,17 @@ export class QuizSchedulerService {
      * and an admin force-end — so the grace period can never differ between them.
      */
     async scheduleMarkAbsent(contestId: string, organizationId: string): Promise<void> {
+        // Called from two independent paths for the same contest (AUTO_SUBMIT +
+        // admin force-end) — if the first one's job already ran to completion/failure,
+        // add() with the same jobId would silently no-op on the second call instead
+        // of scheduling the sweep. Evict any stale job first — same fix as scheduleJob.
+        const jobId = `MARK_ABSENT-${contestId}`;
+        await quizTimerQueue.remove(jobId);
         await quizTimerQueue.add(
             "mark-absent",
             { contestId, organizationId, type: "MARK_ABSENT" },
             {
-                jobId: `MARK_ABSENT-${contestId}`,
+                jobId,
                 delay: config.quiz.markAbsentDelay * 1000,
             },
         );
