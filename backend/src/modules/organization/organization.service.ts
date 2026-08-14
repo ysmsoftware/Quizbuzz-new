@@ -186,7 +186,7 @@ export class OrganizationService {
         logAudit({
             action: "organization.member_invited",
             targetType: "ADMIN",
-            targetId: targetAdmin.id,
+            targetId: targetAdmin?.id ?? dto.email,
             targetLabel: dto.email,
             organizationId: orgId,
             metadata: { role: dto.role },
