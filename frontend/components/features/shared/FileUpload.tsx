@@ -24,6 +24,11 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
   auto: '',
 };
 
+/** Sub-1MB caps (e.g. 0.5 for 500KB) read as "0.5MB" otherwise — show KB instead. */
+function formatMaxSize(maxSizeMB: number): string {
+  return maxSizeMB < 1 ? `${Math.round(maxSizeMB * 1024)}KB` : `${maxSizeMB}MB`;
+}
+
 export function FileUpload({
   label,
   onFileSelect,
@@ -46,11 +51,23 @@ export function FileUpload({
 
       const sizeMB = file.size / (1024 * 1024);
       if (sizeMB > maxSizeMB) {
-        setError(`File size must be less than ${maxSizeMB}MB`);
+        setError(`File size must be less than ${formatMaxSize(maxSizeMB)}`);
         return;
       }
 
-      if (accept !== '*' && !file.type.match(accept.replace(/\*/g, '.*'))) {
+      // `accept` can be a comma-separated list of exact MIME types and/or wildcards
+      // (e.g. "image/*,application/pdf") — matching it as a single regex (the old
+      // approach) silently rejected every file, since a comma-joined pattern like
+      // "image/.*,application/pdf" never appears verbatim inside a real MIME type.
+      const isAccepted =
+        accept === '*' ||
+        accept.split(',').some((rawPattern) => {
+          const pattern = rawPattern.trim();
+          if (pattern.endsWith('/*')) return file.type.startsWith(pattern.slice(0, -1));
+          return file.type === pattern;
+        });
+
+      if (!isAccepted) {
         setError(`Invalid file type. Accepted: ${accept}`);
         return;
       }
@@ -172,7 +189,7 @@ export function FileUpload({
             </p>
           </div>
           <p className="text-[10px] text-muted-foreground/70 mt-1">
-            Max {maxSizeMB}MB · {accept}
+            Max {formatMaxSize(maxSizeMB)} · {accept}
           </p>
         </div>
       )}

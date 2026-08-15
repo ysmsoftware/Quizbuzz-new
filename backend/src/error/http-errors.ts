@@ -93,7 +93,7 @@ export class FeatureUnavailableError extends AppError {
 
 export class AmbassadorApplicationExistsError extends ConflictError {
     constructor(public readonly email: string) {
-        super(`An ambassador application for "${email}" already exists for this organization.`);
+        super(`An ambassador account for "${email}" already exists. Please log in instead.`);
     }
 }
 

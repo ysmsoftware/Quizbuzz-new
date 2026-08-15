@@ -20,18 +20,44 @@ export interface AmbassadorTypeDefinition {
 
 export type AmbassadorStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 
-/** AmbassadorResult — returned by apply/me/applications endpoints. */
+/**
+ * Ambassador — a platform-level identity, not scoped to any organization. Captured once at
+ * signup (name/email/phone/OTP, then type + ID proof) and reused as-is against every
+ * campaign this person later applies to. Approval/rejection is NOT a field here anymore —
+ * see ApplicationResult below, which is the per-campaign decision.
+ */
 export interface Ambassador {
   id: string;
-  organizationId: string;
   email: string;
   phone: string | null;
   firstName: string;
   lastName: string | null;
   ambassadorType: string;
   applicationData: Record<string, string>;
-  status: AmbassadorStatus;
   proofUrl: string;
+  createdAt: string;
+}
+
+/**
+ * An ambassador's application to one specific campaign — what an org admin reviews.
+ * `ambassador` is that person's shared platform identity (same across every org they've
+ * applied to); `status`/`reviewedAt`/`rejectionReason` are specific to *this* campaign's
+ * decision only.
+ */
+export interface ApplicationResult {
+  id: string; // enrollment id
+  campaignId: string;
+  campaignName: string;
+  ambassador: {
+    id: string;
+    email: string;
+    phone: string | null;
+    firstName: string;
+    lastName: string | null;
+    ambassadorType: string;
+    applicationData: Record<string, string>;
+  };
+  status: AmbassadorStatus;
   appliedAt: string;
   reviewedAt: string | null;
   rejectionReason: string | null;
@@ -44,13 +70,13 @@ export interface MilestoneTier {
   minRegistrations: number;
   maxRegistrations: number | null; // null = uncapped top tier
   rewardType: "PER_REGISTRATION" | "FLAT_PLUS_PER_REG";
-  amountPerRegistration: number; // paise
+  amountPerRegistration: number; // rupees
   goodie?: { label: string; cashEquivalent?: number };
 }
 
 export interface SpeedBonusTier {
   withinDays: number;
-  bonusAmount: number; // paise
+  bonusAmount: number; // rupees
   label: string;
   maxWinners?: number;
   goodie?: { label: string; cashEquivalent?: number };
@@ -112,7 +138,6 @@ export interface LeaderboardCut {
 
 export interface RewardConfig {
   currency: string;
-  amountsInPaise: true;
   milestoneTiers: MilestoneTier[];
   speedBonus?: SpeedBonusConfig;
   leaderboardPrizes: LeaderboardCut[];
@@ -162,6 +187,8 @@ export interface AvailableCampaignItem {
   contestSlug: string;
   contestTitle: string;
   ambassadorTypesAllowed: string[];
+  organizationName: string;
+  organizationSlug: string;
 }
 
 export interface CampaignStatsProgress {
@@ -187,7 +214,7 @@ export interface CampaignStats {
   currentTier: MilestoneTier | null;
   nextTier: MilestoneTier | null;
   progressToNextTier: CampaignStatsProgress | null;
-  accruedAmount: number; // paise
+  accruedAmount: number; // rupees
   speedBonus: CampaignSpeedBonusStatus | null;
   leaderboardRanks: LeaderboardRankEntry[];
 }
@@ -199,7 +226,11 @@ export interface MyCampaignItem {
   contestId: string;
   contestSlug: string;
   contestTitle: string;
+  organizationName: string;
+  organizationSlug: string;
   referralCode: string;
+  status: AmbassadorStatus;
+  rejectionReason: string | null;
   shareTemplates: ShareTemplates;
   stats: CampaignStats;
 }
@@ -224,6 +255,7 @@ export interface EnrollmentResult {
   campaignId: string;
   ambassadorId: string;
   referralCode: string;
+  status: AmbassadorStatus;
   createdAt: string;
 }
 
@@ -333,6 +365,30 @@ export interface ApplicationReportRow {
   email: string;
   registrationCount: number;
   currentTierLabel: string | null;
-  accruedAmount: number; // paise
+  accruedAmount: number; // rupees
   createdAt: string;
+}
+
+// One entry per configured milestone tier (same order as rewardConfig.milestoneTiers) plus a
+// trailing "No Tier" bucket for ambassadors who haven't reached the first tier yet.
+export interface TierCount {
+  label: string;
+  count: number;
+}
+
+export interface RecentlyJoinedAmbassador {
+  ambassadorId: string;
+  firstName: string;
+  lastName: string | null;
+  createdAt: string;
+}
+
+/** Dashboard aggregate — computed over every approved enrollment, not a paginated page of
+ *  them, so it stays correct past the report endpoint's page-size cap. */
+export interface CampaignStatsSummary {
+  ambassadorCount: number;
+  totalRegistrations: number;
+  totalAccruedAmount: number; // rupees
+  tierCounts: TierCount[];
+  recentlyJoined: RecentlyJoinedAmbassador[];
 }

@@ -6,16 +6,13 @@ import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { LeaderboardEntryResult, LeaderboardScope } from '@/lib/types/ambassador';
+import { Rupees } from './Rupees';
 
 const RANK_COLOR: Record<number, string> = {
   1: 'text-warning',
   2: 'text-muted-foreground',
   3: 'text-secondary-foreground',
 };
-
-function formatPaise(paise: number, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
-}
 
 interface LeaderboardTableProps {
   scope: LeaderboardScope;
@@ -72,7 +69,7 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
                 </TableCell>
                 <TableCell className="text-right">{row.registrationCount}</TableCell>
                 <TableCell className="text-right text-muted-foreground">
-                  {row.prize ? (row.prize.cashAmount ? formatPaise(row.prize.cashAmount) : row.prize.label ?? row.prize.goodie?.label) : '—'}
+                  {row.prize ? (row.prize.cashAmount ? <Rupees amount={row.prize.cashAmount} /> : row.prize.label ?? row.prize.goodie?.label) : '—'}
                 </TableCell>
               </TableRow>
             );

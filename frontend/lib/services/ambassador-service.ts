@@ -6,10 +6,9 @@
 // different token from the org-admin session apiClient.ts manages, so this
 // intentionally does not go through apiClient's 401/admin-refresh logic).
 //
-// NOTE: the frontend route is /ambassador/[orgSlug]/..., but the backend
-// contract takes an `organizationId` param, not a slug. Until the backend
-// exposes a public slug→id lookup, `orgSlug` is passed straight through as
-// `organizationId` — flagged as a divergence to confirm with the backend.
+// Platform-level identity: an ambassador signs up once (no organizationId
+// anywhere in this file) and browses/applies to campaigns across every
+// organization — mirrors how /contests isn't scoped to one org either.
 // ────────────────────────────────────────────────────────────────
 
 import type {
@@ -80,38 +79,51 @@ const publicPost = <T>(path: string, body?: unknown) =>
 class AmbassadorService {
   // ── Public (/api/v1/public/ambassador) ────────────────────────────────────
 
+  /** Org-scoped — which ambassador types THIS org has enabled (campaign config screens). */
   getTypes(organizationId: string) {
     return publicGet<AmbassadorTypeDefinition[]>('/public/ambassador/types', { organizationId });
   }
 
-  requestUploadUrl(body: { organizationId: string; filename: string; mimeType: string }) {
+  /** Platform-wide — every active type, used at signup before any org relationship exists. */
+  getPlatformTypes() {
+    return publicGet<AmbassadorTypeDefinition[]>('/public/ambassador/platform-types');
+  }
+
+  requestUploadUrl(body: { filename: string; mimeType: string }) {
     return publicPost<{ storageKey: string; url: string }>('/public/ambassador/upload-proof', body);
   }
 
-  apply(body: {
-    organizationId: string;
-    firstName: string;
-    lastName?: string;
+  // ── Signup (2-step platform identity) ──────────────────────────────────────
+
+  signupStart(body: { firstName: string; lastName?: string; email: string; phone?: string }) {
+    return publicPost<void>('/public/ambassador/signup/start', body);
+  }
+
+  signupVerifyOtp(body: { email: string; otp: string }) {
+    return publicPost<{ firstName: string; lastName: string | null; phone: string | null }>(
+      '/public/ambassador/signup/verify-otp',
+      body,
+    );
+  }
+
+  signupComplete(body: {
     email: string;
-    phone?: string;
     ambassadorType: string;
     applicationData: Record<string, string>;
     proofStorageKey: string;
     proofUrl: string;
   }) {
-    return publicPost<Ambassador>('/public/ambassador/apply', body);
+    return publicPost<{ expiresIn: number }>('/public/ambassador/signup/complete', body);
   }
 
-  requestOtp(email: string, organizationId: string) {
-    return publicPost<void>('/public/ambassador/auth/request-otp', { email, organizationId });
+  // ── Login (returning ambassador) ────────────────────────────────────────────
+
+  requestOtp(email: string) {
+    return publicPost<void>('/public/ambassador/auth/request-otp', { email });
   }
 
-  verifyOtp(email: string, organizationId: string, otp: string) {
-    return publicPost<{ status: Ambassador['status']; expiresIn: number }>('/public/ambassador/auth/verify-otp', {
-      email,
-      organizationId,
-      otp,
-    });
+  verifyOtp(email: string, otp: string) {
+    return publicPost<{ expiresIn: number }>('/public/ambassador/auth/verify-otp', { email, otp });
   }
 
   // ── Ambassador-authenticated (/api/v1/ambassador, ambassadorToken cookie) ──
@@ -128,8 +140,8 @@ class AmbassadorService {
     return publicGet<PaginatedResult<MyCampaignItem>>('/ambassador/campaigns/mine', params);
   }
 
-  joinCampaign(campaignId: string) {
-    return publicPost<EnrollmentResult>(`/ambassador/campaigns/${campaignId}/join`);
+  applyToCampaign(campaignId: string) {
+    return publicPost<EnrollmentResult>(`/ambassador/campaigns/${campaignId}/apply`);
   }
 
   getCampaignStats(campaignId: string) {

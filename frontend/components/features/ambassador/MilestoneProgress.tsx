@@ -1,6 +1,7 @@
 'use client';
 
 import { Progress } from '@/components/ui/progress';
+import { Rupees } from './Rupees';
 import type { CampaignStats } from '@/lib/types/ambassador';
 
 function tierRange(tier: CampaignStats['currentTier']) {
@@ -33,7 +34,11 @@ export function MilestoneProgress({ stats }: { stats: CampaignStats }) {
       {goodie && (
         <p className="text-xs text-primary">
           Includes: {goodie.label}
-          {goodie.cashEquivalent ? ` (worth ₹${(goodie.cashEquivalent / 100).toLocaleString('en-IN')})` : ''}
+          {goodie.cashEquivalent !== undefined && (
+            <>
+              {' '}(worth <Rupees amount={goodie.cashEquivalent} />)
+            </>
+          )}
         </p>
       )}
     </div>

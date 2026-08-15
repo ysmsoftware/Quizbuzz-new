@@ -2,24 +2,37 @@ import { Request, Response, NextFunction } from "express";
 import { config } from "../../config";
 import { AmbassadorService } from "./ambassador.service";
 import {
-    ApplySchema,
+    SignupStartSchema,
+    SignupVerifyOtpSchema,
+    SignupCompleteSchema,
     UploadProofRequestSchema,
     RequestOtpSchema,
     VerifyOtpSchema,
     ListCampaignsQuerySchema,
     LeaderboardQuerySchema,
-    GetTypesQuerySchema,
+    GetOrgTypesQuerySchema,
 } from "./ambassador.validator";
 
 export class AmbassadorController {
 
     constructor(private readonly service: AmbassadorService) { }
 
-    // ─── Public (5.1) ───────────────────────────────────────────────────────────
+    // ─── Public catalog + upload ─────────────────────────────────────────────────
 
+    /** Platform-wide catalog — used by the generic ambassador signup flow. */
+    getPlatformTypes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const result = await this.service.getPlatformTypes();
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /** Org-scoped catalog — used by org-admin campaign config screens. */
     getTypes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { organizationId } = GetTypesQuerySchema.parse(req.query);
+            const { organizationId } = GetOrgTypesQuerySchema.parse(req.query);
             const result = await this.service.getTypes(organizationId);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
@@ -37,20 +50,59 @@ export class AmbassadorController {
         }
     };
 
-    apply = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // ─── Signup (2-step) ─────────────────────────────────────────────────────────
+
+    signupStart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const data = ApplySchema.parse(req.body);
-            const result = await this.service.apply(data);
-            res.status(201).json({ success: true, message: "Application submitted", data: result, requestId: req.id });
+            const data = SignupStartSchema.parse(req.body);
+            await this.service.signupStart(data);
+            res.status(200).json({ success: true, message: "OTP sent to your email", requestId: req.id });
         } catch (err) {
             next(err);
         }
     };
 
+    signupVerifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { email, otp } = SignupVerifyOtpSchema.parse(req.body);
+            const result = await this.service.signupVerifyOtp(email, otp);
+            res.status(200).json({ success: true, message: "OTP verified", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    signupComplete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const data = SignupCompleteSchema.parse(req.body);
+            const result = await this.service.signupComplete(data);
+
+            const { domain, secure, sameSite } = config.auth.cookie;
+            res.cookie("ambassadorToken", result.token, {
+                httpOnly: true,
+                secure,
+                sameSite: sameSite as any,
+                domain: domain || undefined,
+                maxAge: result.expiresIn * 1000,
+            });
+
+            res.status(201).json({
+                success: true,
+                message: "Signup complete",
+                data: { expiresIn: result.expiresIn },
+                requestId: req.id,
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // ─── Login (returning ambassador) ───────────────────────────────────────────
+
     requestOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { email, organizationId } = RequestOtpSchema.parse(req.body);
-            await this.service.requestOtp(email, organizationId);
+            const { email } = RequestOtpSchema.parse(req.body);
+            await this.service.requestOtp(email);
             res.status(200).json({ success: true, message: "OTP sent to your email", requestId: req.id });
         } catch (err) {
             next(err);
@@ -59,8 +111,8 @@ export class AmbassadorController {
 
     verifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { email, organizationId, otp } = VerifyOtpSchema.parse(req.body);
-            const result = await this.service.verifyOtp(email, organizationId, otp);
+            const { email, otp } = VerifyOtpSchema.parse(req.body);
+            const result = await this.service.verifyOtp(email, otp);
 
             const { domain, secure, sameSite } = config.auth.cookie;
             res.cookie("ambassadorToken", result.token, {
@@ -74,7 +126,7 @@ export class AmbassadorController {
             res.status(200).json({
                 success: true,
                 message: "OTP verified",
-                data: { status: result.status, expiresIn: result.expiresIn },
+                data: { expiresIn: result.expiresIn },
                 requestId: req.id,
             });
         } catch (err) {
@@ -82,12 +134,12 @@ export class AmbassadorController {
         }
     };
 
-    // ─── Ambassador-authenticated (§5.2) ────────────────────────────────────────
+    // ─── Ambassador-authenticated ────────────────────────────────────────────────
 
     getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { id, organizationId } = req.ambassador!;
-            const result = await this.service.getMe(id, organizationId);
+            const { id } = req.ambassador!;
+            const result = await this.service.getMe(id);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
@@ -96,9 +148,9 @@ export class AmbassadorController {
 
     listAvailableCampaigns = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { id, organizationId } = req.ambassador!;
+            const { id } = req.ambassador!;
             const { page, limit } = ListCampaignsQuerySchema.parse(req.query);
-            const result = await this.service.listAvailableCampaigns(id, organizationId, page, limit);
+            const result = await this.service.listAvailableCampaigns(id, page, limit);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
@@ -107,20 +159,20 @@ export class AmbassadorController {
 
     listMyCampaigns = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { id, organizationId } = req.ambassador!;
+            const { id } = req.ambassador!;
             const { page, limit } = ListCampaignsQuerySchema.parse(req.query);
-            const result = await this.service.listMyCampaigns(id, organizationId, page, limit);
+            const result = await this.service.listMyCampaigns(id, page, limit);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }
     };
 
-    joinCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    applyToCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { id, organizationId } = req.ambassador!;
-            const result = await this.service.joinCampaign(id, organizationId, req.params.campaignId as string);
-            res.status(201).json({ success: true, message: "Joined campaign", data: result, requestId: req.id });
+            const { id } = req.ambassador!;
+            const result = await this.service.applyToCampaign(id, req.params.campaignId as string);
+            res.status(201).json({ success: true, message: "Application submitted", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }
@@ -128,8 +180,8 @@ export class AmbassadorController {
 
     getCampaignStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { id, organizationId } = req.ambassador!;
-            const result = await this.service.getCampaignStats(id, organizationId, req.params.campaignId as string);
+            const { id } = req.ambassador!;
+            const result = await this.service.getCampaignStats(id, req.params.campaignId as string);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
@@ -138,10 +190,8 @@ export class AmbassadorController {
 
     getCampaignLeaderboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { organizationId } = req.ambassador!;
             const { scope, page, limit } = LeaderboardQuerySchema.parse(req.query);
             const result = await this.service.getCampaignLeaderboard(
-                organizationId,
                 req.params.campaignId as string,
                 scope,
                 page,

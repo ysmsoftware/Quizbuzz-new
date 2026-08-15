@@ -1,11 +1,13 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { calculateCampaignCapacity } from '../campaign-capacity';
+import { Rupees } from '../Rupees';
 import type { WizardDraft } from './wizard-types';
 import type { AmbassadorGroupInput } from '@/lib/types/ambassador';
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
@@ -30,7 +32,7 @@ export function CampaignSummarySidebar({
   const capacity = calculateCampaignCapacity(groups);
 
   // Calculate Speed Bonus Total
-  const speedBonusBudgetPaise = draft.rewardConfig.speedBonus?.enabled
+  const speedBonusBudget = draft.rewardConfig.speedBonus?.enabled
     ? (draft.rewardConfig.speedBonus.tiers ?? []).reduce(
         (acc, t) => acc + (t.maxWinners ? t.maxWinners * t.bonusAmount : t.bonusAmount),
         0,
@@ -38,7 +40,7 @@ export function CampaignSummarySidebar({
     : 0;
 
   // Calculate Leaderboards Total
-  const leaderboardBudgetPaise = (draft.rewardConfig.leaderboardPrizes ?? []).reduce((accCut, cut) => {
+  const leaderboardBudget = (draft.rewardConfig.leaderboardPrizes ?? []).reduce((accCut, cut) => {
     const rankSum = (cut.ranks ?? []).reduce((accRank, r) => {
       const cash = r.cashAmount ?? 0;
       const goodie = r.goodie?.cashEquivalent ?? 0;
@@ -48,7 +50,7 @@ export function CampaignSummarySidebar({
     return accCut + rankSum + consolationSum;
   }, 0);
 
-  const totalEstimatedInvestmentRupees = Math.round((speedBonusBudgetPaise + leaderboardBudgetPaise) / 100);
+  const totalEstimatedInvestment = speedBonusBudget + leaderboardBudget;
 
   return (
     <Card className="border-border/50 sticky top-4">
@@ -64,9 +66,9 @@ export function CampaignSummarySidebar({
         <Row label="Milestone tiers" value={tierCount ? String(tierCount) : '—'} />
         <Row label="Speed bonus" value={speedBonusOn} />
         <Row label="Leaderboards" value={leaderboardCount ? String(leaderboardCount) : '—'} />
-        {totalEstimatedInvestmentRupees > 0 && (
+        {totalEstimatedInvestment > 0 && (
           <div className="pt-2 border-t border-border/40">
-            <Row label="Est. Prize/Bonus Cost" value={`₹${totalEstimatedInvestmentRupees.toLocaleString('en-IN')}`} />
+            <Row label="Est. Prize/Bonus Cost" value={<Rupees amount={totalEstimatedInvestment} />} />
           </div>
         )}
         <Row

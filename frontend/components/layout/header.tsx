@@ -5,13 +5,14 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
-import { Menu, X, Trophy, Users, HelpCircle, Download } from 'lucide-react';
+import { Menu, X, Trophy, Users, HelpCircle, Download, Megaphone } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 
 const navigation = [
     { name: 'Browse Contests', href: '/contests', icon: Trophy },
     { name: 'How It Works', href: '/#how-it-works', icon: HelpCircle },
     { name: 'For Organizers', href: '/#organizers', icon: Users },
+    { name: 'Ambassador Program', href: '/ambassador', icon: Megaphone },
 ];
 
 export function Header() {

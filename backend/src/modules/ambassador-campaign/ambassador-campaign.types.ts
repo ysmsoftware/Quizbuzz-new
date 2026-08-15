@@ -1,4 +1,4 @@
-import { AmbassadorCampaignStatus } from "@prisma/client";
+import { AmbassadorCampaignStatus, AmbassadorStatus } from "@prisma/client";
 
 // ─── Reward config — the Open/Closed point of this module (§6.4) ──────────────
 // The service must walk milestoneTiers/leaderboardPrizes generically and never
@@ -6,7 +6,6 @@ import { AmbassadorCampaignStatus } from "@prisma/client";
 
 export interface RewardConfig {
     currency: string;
-    amountsInPaise: true;
     milestoneTiers: MilestoneTier[];
     speedBonus?: SpeedBonusConfig | undefined;
     leaderboardPrizes: LeaderboardCut[];
@@ -82,12 +81,11 @@ export interface ShareTemplates {
 
 /** Shape while a campaign is still DRAFT — mirrors draftRewardConfigSchema's *inferred output*
  *  exactly (not just `Partial<RewardConfig>`): milestoneTiers/leaderboardPrizes are always
- *  present (Zod `.default([])` fills them in), while currency/amountsInPaise/speedBonus stay
- *  optional. Defined this way — rather than `Partial<RewardConfig>` — so it's structurally
- *  assignable from `z.infer<typeof draftRewardConfigSchema>` under `exactOptionalPropertyTypes`. */
+ *  present (Zod `.default([])` fills them in), while currency/speedBonus stay optional.
+ *  Defined this way — rather than `Partial<RewardConfig>` — so it's structurally assignable
+ *  from `z.infer<typeof draftRewardConfigSchema>` under `exactOptionalPropertyTypes`. */
 export interface DraftRewardConfig {
     currency?: string | undefined;
-    amountsInPaise?: true | undefined;
     milestoneTiers: MilestoneTier[];
     speedBonus?: SpeedBonusConfig | undefined;
     leaderboardPrizes: LeaderboardCut[];
@@ -307,6 +305,7 @@ export interface EnrollmentResult {
     campaignId: string;
     ambassadorId: string;
     referralCode: string;
+    status: AmbassadorStatus;
     createdAt: Date;
 }
 
@@ -317,6 +316,8 @@ export interface AvailableCampaignItem {
     contestSlug: string;
     contestTitle: string;
     ambassadorTypesAllowed: string[];
+    organizationName: string;
+    organizationSlug: string;
 }
 
 export interface MyCampaignItem {
@@ -326,9 +327,39 @@ export interface MyCampaignItem {
     contestId: string;
     contestSlug: string;
     contestTitle: string;
+    organizationName: string;
+    organizationSlug: string;
     referralCode: string;
+    status: AmbassadorStatus;
+    rejectionReason: string | null;
     shareTemplates: ShareTemplates;
     stats: CampaignStats;
+}
+
+/**
+ * An ambassador's application to a single campaign, as seen by that campaign's
+ * organization — the per-campaign review unit (replaces the old org-wide "Ambassador"
+ * approval). `ambassador` is the applicant's platform-level identity, reused as-is across
+ * every campaign they apply to; only `status`/`reviewedAt`/`rejectionReason` are specific
+ * to *this* campaign's decision.
+ */
+export interface ApplicationResult {
+    id: string; // enrollment id
+    campaignId: string;
+    campaignName: string;
+    ambassador: {
+        id: string;
+        email: string;
+        phone: string | null;
+        firstName: string;
+        lastName: string | null;
+        ambassadorType: string;
+        applicationData: Record<string, unknown>;
+    };
+    status: AmbassadorStatus;
+    appliedAt: Date;
+    reviewedAt: Date | null;
+    rejectionReason: string | null;
 }
 
 /**
@@ -373,4 +404,29 @@ export interface LeaderboardEntryResult {
     label: string;
     registrationCount: number;
     prize: LeaderboardCut["ranks"][number] | null;
+}
+
+// ─── Campaign stats summary (org-admin dashboard aggregate) ────────────────────
+// One entry per configured milestone tier (same order as rewardConfig.milestoneTiers)
+// plus a trailing "No Tier" bucket for ambassadors who haven't reached the first tier yet.
+export interface TierCount {
+    label: string;
+    count: number;
+}
+
+export interface RecentlyJoinedAmbassador {
+    ambassadorId: string;
+    firstName: string;
+    lastName: string | null;
+    createdAt: Date;
+}
+
+/** Computed as aggregate/group-by queries over ALL enrolled ambassadors — never a paginated
+ *  list — so it stays correct past the report endpoint's page-size cap. */
+export interface CampaignStatsSummary {
+    ambassadorCount: number;
+    totalRegistrations: number;
+    totalAccruedAmount: number; // rupees
+    tierCounts: TierCount[];
+    recentlyJoined: RecentlyJoinedAmbassador[];
 }

@@ -6,7 +6,7 @@
 import { get, post, patch, put, del } from './apiClient';
 import type { ApiResponse } from './apiClient';
 import type {
-  Ambassador,
+  ApplicationResult,
   AmbassadorCampaignStatus,
   AmbassadorGroupInput,
   AmbassadorGroupResult,
@@ -22,6 +22,7 @@ import type {
   LeaderboardScope,
   LeaderboardEntryResult,
   ApplicationReportRow,
+  CampaignStatsSummary,
 } from '../types/ambassador';
 import { leaderboardScopeQueryParams } from '../types/ambassador';
 
@@ -65,18 +66,19 @@ export const ambassadorCampaignApi = {
   getPosterUploadUrl: (body: { filename: string; mimeType: string }) =>
     post<{ url: string; storageKey: string }>('/org/ambassadors/campaigns/poster-upload-url', body),
 
-  // Applications
+  // Applications — per-campaign (an ambassador's applicant identity is shared across orgs,
+  // but each campaign's org reviews its own applications independently).
   getApplications: (params?: ApplicationsFilters) =>
-    get<PaginatedResult<Ambassador>>('/org/ambassadors/applications', { params: params as Record<string, string | number | boolean | undefined> }),
+    get<PaginatedResult<ApplicationResult>>('/org/ambassadors/applications', { params: params as Record<string, string | number | boolean | undefined> }),
 
   getApplication: (id: string) =>
-    get<Ambassador & { proofDownloadUrl: string }>(`/org/ambassadors/applications/${id}`),
+    get<ApplicationResult & { proofDownloadUrl: string }>(`/org/ambassadors/applications/${id}`),
 
   approveApplication: (id: string) =>
-    post<Ambassador>(`/org/ambassadors/applications/${id}/approve`),
+    post<ApplicationResult>(`/org/ambassadors/applications/${id}/approve`),
 
   rejectApplication: (id: string, reason: string) =>
-    post<Ambassador>(`/org/ambassadors/applications/${id}/reject`, { reason }),
+    post<ApplicationResult>(`/org/ambassadors/applications/${id}/reject`, { reason }),
 
   // Campaigns
   getCampaigns: (params?: CampaignsFilters) =>
@@ -152,6 +154,12 @@ export const ambassadorCampaignApi = {
 
   getReport: (id: string, params?: ReportFilters) =>
     get<PaginatedResult<ApplicationReportRow>>(`/org/ambassadors/campaigns/${id}/report`, { params: params as Record<string, string | number | boolean | undefined> }),
+
+  // Dashboard aggregate — totals/tier-counts/recently-joined computed over every approved
+  // enrollment, not a paginated report page. Use this for campaign-wide sums; use getReport
+  // only for the ranked/paginated ambassador list itself.
+  getCampaignStats: (id: string) =>
+    get<CampaignStatsSummary>(`/org/ambassadors/campaigns/${id}/stats`),
 
   // Returns a raw CSV file (Content-Disposition: attachment), not the JSON
   // envelope — used directly as an <a href> download link, never fetched via apiClient.

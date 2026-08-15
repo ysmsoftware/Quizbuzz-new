@@ -3,11 +3,8 @@
 import { Zap, Wallet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { MilestoneProgress } from './MilestoneProgress';
+import { Rupees } from './Rupees';
 import type { CampaignStats } from '@/lib/types/ambassador';
-
-function formatPaise(paise: number, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
-}
 
 export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
   return (
@@ -54,7 +51,7 @@ export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
           <Wallet className="h-5 w-5 text-primary shrink-0" />
           <div>
             <p className="text-xs text-muted-foreground">Accrued reward</p>
-            <p className="text-xl font-bold text-foreground">{formatPaise(stats.accruedAmount)}</p>
+            <p className="text-xl font-bold text-foreground"><Rupees amount={stats.accruedAmount} /></p>
           </div>
         </CardContent>
       </Card>

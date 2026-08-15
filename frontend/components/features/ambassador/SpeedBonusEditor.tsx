@@ -1,12 +1,13 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable';
+import { Rupees } from './Rupees';
 import { addWeeksIso } from './campaign-timeline';
 import { cn } from '@/lib/utils';
 import type { FieldErrorMap } from './campaign-schema';
@@ -26,11 +27,11 @@ interface SpeedBonusRow {
 
 const COLUMNS: RepeatingRowColumn<SpeedBonusRow>[] = [
   { key: 'withinDays', label: 'Within Days', type: 'number' },
-  { key: 'bonusAmount', label: 'Bonus Amount (paise)', type: 'number' },
+  { key: 'bonusAmount', label: 'Bonus Amount (₹)', type: 'number' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Fast Starter' },
   { key: 'maxWinners', label: 'Max Winners (optional)', type: 'number', placeholder: '10' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Badge, merch…' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (paise, optional)', type: 'number' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number' },
 ];
 
 const EMPTY: SpeedBonusConfig = { enabled: false, milestoneThreshold: 0, tiers: [] };
@@ -99,27 +100,27 @@ export function SpeedBonusEditor({
     });
   };
 
-  const totalSpeedBudgetPaise = rows.reduce(
+  const totalSpeedBudget = rows.reduce(
     (sum, r) => sum + (r.maxWinners > 0 ? r.maxWinners * r.bonusAmount : r.bonusAmount),
     0,
   );
 
   return (
     <Card className="border-border/50">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader>
         <div>
           <CardTitle className="text-base">Speed Bonus</CardTitle>
           <p className="text-xs text-muted-foreground mt-0.5">
             Decaying time-linked bonus starting automatically when the campaign goes live.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <CardAction className="flex items-center gap-2">
           <Switch
             checked={speedBonus.enabled}
             onCheckedChange={(checked) => onChange({ ...speedBonus, enabled: checked })}
           />
           <Label className="text-sm text-muted-foreground">Enabled</Label>
-        </div>
+        </CardAction>
       </CardHeader>
       {speedBonus.enabled && (
         <CardContent className="space-y-4">
@@ -219,7 +220,7 @@ export function SpeedBonusEditor({
             <div className="flex items-center justify-between rounded-md bg-muted/40 px-4 py-2.5 text-sm">
               <span className="text-muted-foreground">Estimated Speed Bonus Budget:</span>
               <span className="font-semibold text-foreground">
-                ₹{(totalSpeedBudgetPaise / 100).toLocaleString('en-IN')}
+                <Rupees amount={totalSpeedBudget} />
               </span>
             </div>
           )}

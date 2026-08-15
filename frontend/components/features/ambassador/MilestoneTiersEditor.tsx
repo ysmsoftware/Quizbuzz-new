@@ -18,9 +18,9 @@ const COLUMNS: RepeatingRowColumn<MilestoneRow>[] = [
   { key: 'label', label: 'Tier Name', type: 'text', placeholder: 'Level 1' },
   { key: 'minRegistrations', label: 'Min Registrations', type: 'number' },
   { key: 'maxRegistrations', label: 'Max (blank = uncapped)', type: 'number' },
-  { key: 'amountPerRegistration', label: 'Amount / Registration (paise)', type: 'number' },
+  { key: 'amountPerRegistration', label: 'Amount / Registration (₹)', type: 'number' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Gift voucher, Bluetooth earbuds…' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (paise, optional)', type: 'number' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number' },
 ];
 
 const PREFIX = 'rewardConfig.milestoneTiers';

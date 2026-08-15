@@ -262,7 +262,6 @@ model Organization {
   analyticsSnapshots   ContestAnalyticsSnapshot[]
   exportLogs           ExportLog[]
   planUsageCheckLogs   PlanUsageCheckLog[]
-  ambassadors          Ambassador[]
   ambassadorCampaigns  AmbassadorCampaign[]
   ambassadorCampaignTemplates AmbassadorCampaignTemplate[]
   ambassadorTypeAccess OrganizationAmbassadorTypeAccess[]
@@ -1160,31 +1159,28 @@ model AuditLog {
 
 // AMBASSADOR PROGRAM
 
+// Platform-level identity — one Ambassador account per person, not per organization.
+// Signup captures identity + OTP verification, then ambassador type + ID proof, once.
+// That same identity is then reused ("one click apply") against any organization's
+// campaign; per-campaign review/approval lives on AmbassadorCampaignEnrollment below,
+// not here — an ambassador can be APPROVED on one org's campaign and PENDING/REJECTED
+// on another's, simultaneously.
 model Ambassador {
   id                String            @id @default(ulid())
-  organizationId    String
-  email             String
+  email             String            @unique
   phone             String?
   firstName         String
   lastName          String?
-  ambassadorType    String            // PlatformAmbassadorType.key — validated at application time, not a DB FK
+  ambassadorType    String            // PlatformAmbassadorType.key — validated at signup time, not a DB FK
   applicationData   Json              @default("{}")   // type-specific answers, keyed by that type's applicationFields[].key
-  status            AmbassadorStatus  @default(PENDING)
   proofStorageKey   String
   proofUrl          String
-  appliedAt         DateTime          @default(now())
-  reviewedAt        DateTime?
-  reviewedById      String?
-  rejectionReason   String?
-  isActive          Boolean           @default(true)
+  isActive          Boolean           @default(true)   // platform-level moderation flag (not per-campaign)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  organization      Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   enrollments       AmbassadorCampaignEnrollment[]
 
-  @@unique([organizationId, email])
-  @@index([organizationId, status])
   @@map("ambassadors")
 }
 
@@ -1272,12 +1268,23 @@ model AmbassadorCampaignTemplate {
   @@map("ambassador_campaign_templates")
 }
 
+// An ambassador's application to a single campaign — this is the per-campaign approval
+// unit. Created (status PENDING) the moment an ambassador one-click-applies to a
+// campaign, reusing their already-verified global identity/proof from Ambassador above.
+// That campaign's organization reviews and approves/rejects independently of any other
+// campaign this ambassador has applied to. referralCode is assigned at apply time but
+// only treated as live/usable once status is APPROVED (see findEnrollmentByReferralCodeForContest).
 model AmbassadorCampaignEnrollment {
-  id              String     @id @default(ulid())
+  id              String            @id @default(ulid())
   campaignId      String
   ambassadorId    String
-  referralCode    String     @unique
-  createdAt       DateTime   @default(now())
+  referralCode    String            @unique
+  status          AmbassadorStatus  @default(PENDING)
+  reviewedAt      DateTime?
+  reviewedById    String?
+  rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   campaign        AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   ambassador      Ambassador         @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
@@ -1285,6 +1292,7 @@ model AmbassadorCampaignEnrollment {
 
   @@unique([campaignId, ambassadorId])
   @@index([referralCode])
+  @@index([campaignId, status])
   @@map("ambassador_campaign_enrollments")
 }
 

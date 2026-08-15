@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ const MAX_GROUP_FIELD_KEYS = 3;
 // actually needs banded prizes (e.g. rank 4-10 share a reward).
 const RANK_COLUMNS: RepeatingRowColumn<{ rank: number; cashAmount: number; label: string }>[] = [
   { key: 'rank', label: 'Rank', type: 'number' },
-  { key: 'cashAmount', label: 'Cash Amount (paise)', type: 'number' },
+  { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner' },
 ];
 
@@ -126,12 +126,12 @@ export function LeaderboardPrizesEditor({
   return (
     <div className="space-y-3">
       <Card className="border-border/50">
-        <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardHeader>
           <CardTitle className="text-base">Individual Ambassador</CardTitle>
-          <div className="flex items-center gap-2">
+          <CardAction className="flex items-center gap-2">
             <Switch checked={!!individualCut} onCheckedChange={toggleIndividual} />
             <Label className="text-sm text-muted-foreground">Enabled</Label>
-          </div>
+          </CardAction>
         </CardHeader>
         {individualCut && (
           <CardContent className="space-y-4">
@@ -152,16 +152,18 @@ export function LeaderboardPrizesEditor({
 
         return (
           <Card key={index} className="border-border/50">
-            <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardHeader>
               <Input
                 value={cut.label}
                 onChange={(e) => updateCutAt(index, { label: e.target.value })}
                 className={cn('max-w-xs font-medium', errors[`${cutPrefix}.label`] && 'border-destructive focus-visible:ring-destructive/20')}
                 aria-invalid={!!errors[`${cutPrefix}.label`]}
               />
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removeCutAt(index)} aria-label="Remove leaderboard">
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              <CardAction>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removeCutAt(index)} aria-label="Remove leaderboard">
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent className="space-y-4">
               {errors[`${cutPrefix}.label`] && <p className="text-xs text-destructive -mt-2">{errors[`${cutPrefix}.label`]}</p>}

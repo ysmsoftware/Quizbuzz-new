@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { AmbassadorCampaignStatus, Prisma } from "@prisma/client";
-import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
+import { AmbassadorCampaignStatus, AmbassadorStatus, Prisma } from "@prisma/client";
+import { AmbassadorCampaignRepository, EnrollmentWithAmbassadorAndCampaignName } from "./ambassador-campaign.repository";
 import { AmbassadorRepository } from "../ambassador/ambassador.repository";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
@@ -10,20 +10,28 @@ import { config } from "../../config";
 import logger from "../../config/logger";
 import { BadRequestError, ConflictError, NotFoundError } from "../../error/http-errors";
 import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
+import { computeMilestoneReward } from "./reward-calculator";
 import { calculateCampaignCapacity } from "./campaign-capacity";
 import { generateCampaignPhases } from "./campaign-timeline";
-import { AmbassadorResult } from "../ambassador/ambassador.types";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
 import { editableFieldsFor, PublishCampaignSchema } from "./ambassador-campaign.validator";
+import {
+    leaderboardEntryPaiseToRupees,
+    rewardConfigPaiseToRupees,
+    rewardConfigRupeesToPaise,
+} from "./reward-config-currency";
+import { paisaToRupees } from "../../utils/currency";
 import {
     AmbassadorGroupInput,
     AmbassadorGroupResult,
     ApplicationReportRow,
+    ApplicationResult,
     CampaignCapacity,
     CampaignListItem,
     CampaignPhase,
     CampaignPhaseTemplateEntry,
     CampaignResult,
+    CampaignStatsSummary,
     CampaignTarget,
     CreateCampaignDTO,
     CreateTemplateDTO,
@@ -43,6 +51,9 @@ import {
     TemplateResult,
     UpdateCampaignDTO,
 } from "./ambassador-campaign.types";
+
+// Same row count as "Top 5 Ambassadors" — a dashboard widget, not a paginated list.
+const RECENTLY_JOINED_LIMIT = 5;
 
 export class AmbassadorCampaignService {
     constructor(
@@ -70,14 +81,18 @@ export class AmbassadorCampaignService {
         });
     }
 
-    // ─── Applications review (§5.3) ─────────────────────────────────────────────
+    // ─── Applications review — per-campaign, not per-org-wide-ambassador ───────
+    // Reviews AmbassadorCampaignEnrollment rows scoped to campaigns this org owns. The
+    // applicant's identity (name/email/type/proof) is their platform-level Ambassador
+    // record, included read-only here — approving/rejecting only ever changes *this*
+    // enrollment's status, never anything on the Ambassador itself.
 
     async listApplications(
         organizationId: string,
         query: ListApplicationsQueryDTO,
-    ): Promise<PaginatedResult<AmbassadorResult>> {
+    ): Promise<PaginatedResult<ApplicationResult>> {
         const skip = (query.page - 1) * query.limit;
-        const { rows, total } = await this.ambassadorRepo.findAll({
+        const { rows, total } = await this.campaignRepo.findApplications({
             organizationId,
             statuses: query.statuses && query.statuses.length > 0 ? query.statuses : ["PENDING"],
             skip,
@@ -87,7 +102,7 @@ export class AmbassadorCampaignService {
         });
 
         return {
-            data: rows.map((a) => this._toAmbassadorResult(a)),
+            data: rows.map((e) => this._toApplicationResult(e)),
             total,
             page: query.page,
             limit: query.limit,
@@ -95,60 +110,60 @@ export class AmbassadorCampaignService {
         };
     }
 
-    async getApplication(organizationId: string, id: string): Promise<AmbassadorResult & { proofDownloadUrl: string }> {
-        const ambassador = await this.ambassadorRepo.findById(id, organizationId);
-        if (!ambassador) throw new NotFoundError("Ambassador application not found.");
+    async getApplication(organizationId: string, id: string): Promise<ApplicationResult & { proofDownloadUrl: string }> {
+        const enrollment = await this.campaignRepo.findApplicationById(id, organizationId);
+        if (!enrollment) throw new NotFoundError("Application not found.");
 
         const { url } = await this.storageProvider.getPresignedGetUrl({
-            storageKey: ambassador.proofStorageKey,
+            storageKey: enrollment.ambassador.proofStorageKey,
             expiresInSeconds: 3600,
         });
 
-        return { ...this._toAmbassadorResult(ambassador), proofDownloadUrl: url };
+        return { ...this._toApplicationResult(enrollment), proofDownloadUrl: url };
     }
 
-    async approveApplication(organizationId: string, id: string, reviewedById: string): Promise<AmbassadorResult> {
-        const ambassador = await this.ambassadorRepo.findById(id, organizationId);
-        if (!ambassador) throw new NotFoundError("Ambassador application not found.");
+    async approveApplication(organizationId: string, id: string, reviewedById: string): Promise<ApplicationResult> {
+        const enrollment = await this.campaignRepo.findApplicationById(id, organizationId);
+        if (!enrollment) throw new NotFoundError("Application not found.");
 
-        const updated = await this.ambassadorRepo.updateStatus(id, organizationId, {
-            status: "APPROVED",
+        const updated = await this.campaignRepo.updateApplicationStatus(id, {
+            status: AmbassadorStatus.APPROVED,
             reviewedById,
             rejectionReason: null,
         });
 
         const organization = await this.organizationRepo.findById(organizationId);
         this.emailProvider
-            .send(MessageTemplate.AMBASSADOR_APPLICATION_APPROVED, updated.email, {
-                name: updated.firstName,
+            .send(MessageTemplate.AMBASSADOR_APPLICATION_APPROVED, updated.ambassador.email, {
+                name: updated.ambassador.firstName,
                 orgName: organization?.name ?? "the organization",
                 link: `${config.app.frontendUrl}/ambassador/dashboard`,
             })
             .catch((err) => logger.error(`[ambassador-campaign] Failed to send approval email: ${(err as Error).message}`));
 
-        return this._toAmbassadorResult(updated);
+        return this._toApplicationResult(updated);
     }
 
-    async rejectApplication(organizationId: string, id: string, reviewedById: string, reason: string): Promise<AmbassadorResult> {
-        const ambassador = await this.ambassadorRepo.findById(id, organizationId);
-        if (!ambassador) throw new NotFoundError("Ambassador application not found.");
+    async rejectApplication(organizationId: string, id: string, reviewedById: string, reason: string): Promise<ApplicationResult> {
+        const enrollment = await this.campaignRepo.findApplicationById(id, organizationId);
+        if (!enrollment) throw new NotFoundError("Application not found.");
 
-        const updated = await this.ambassadorRepo.updateStatus(id, organizationId, {
-            status: "REJECTED",
+        const updated = await this.campaignRepo.updateApplicationStatus(id, {
+            status: AmbassadorStatus.REJECTED,
             reviewedById,
             rejectionReason: reason,
         });
 
         const organization = await this.organizationRepo.findById(organizationId);
         this.emailProvider
-            .send(MessageTemplate.AMBASSADOR_APPLICATION_REJECTED, updated.email, {
-                name: updated.firstName,
+            .send(MessageTemplate.AMBASSADOR_APPLICATION_REJECTED, updated.ambassador.email, {
+                name: updated.ambassador.firstName,
                 orgName: organization?.name ?? "the organization",
                 reason,
             })
             .catch((err) => logger.error(`[ambassador-campaign] Failed to send rejection email: ${(err as Error).message}`));
 
-        return this._toAmbassadorResult(updated);
+        return this._toApplicationResult(updated);
     }
 
     // ─── Campaign CRUD (§5.3) ────────────────────────────────────────────────────
@@ -172,7 +187,7 @@ export class AmbassadorCampaignService {
             contestId: dto.contestId ?? null,
             name: dto.name,
             ambassadorTypesAllowed: dto.ambassadorTypesAllowed ?? [],
-            rewardConfig: (dto.rewardConfig ?? {}) as unknown as Prisma.InputJsonValue,
+            rewardConfig: (dto.rewardConfig ? rewardConfigRupeesToPaise(dto.rewardConfig) : {}) as unknown as Prisma.InputJsonValue,
             shareTemplates: (dto.shareTemplates ?? {}) as unknown as Prisma.InputJsonValue,
             createdById,
             startDate,
@@ -309,7 +324,7 @@ export class AmbassadorCampaignService {
             ...(dto.name !== undefined && { name: dto.name }),
             ...(dto.contestId !== undefined && { contestId: dto.contestId }),
             ...(dto.ambassadorTypesAllowed !== undefined && { ambassadorTypesAllowed: dto.ambassadorTypesAllowed }),
-            ...(dto.rewardConfig !== undefined && { rewardConfig: dto.rewardConfig as unknown as Prisma.InputJsonValue }),
+            ...(dto.rewardConfig !== undefined && { rewardConfig: rewardConfigRupeesToPaise(dto.rewardConfig) as unknown as Prisma.InputJsonValue }),
             ...(dto.shareTemplates !== undefined && { shareTemplates: dto.shareTemplates as unknown as Prisma.InputJsonValue }),
             ...(dto.wizardStep !== undefined && { wizardStep: dto.wizardStep }),
             ...(dto.startDate !== undefined && { startDate }),
@@ -590,7 +605,7 @@ export class AmbassadorCampaignService {
             organizationId: t.organizationId,
             name: t.name,
             ambassadorTypesAllowed: t.ambassadorTypesAllowed,
-            rewardConfig: t.rewardConfig as unknown as DraftRewardConfig,
+            rewardConfig: rewardConfigPaiseToRupees(t.rewardConfig as unknown as DraftRewardConfig),
             shareTemplates: t.shareTemplates as unknown as ShareTemplates,
             groups: (t.groups ?? []) as unknown as AmbassadorGroupInput[],
             sourceCampaignId: t.sourceCampaignId,
@@ -600,6 +615,63 @@ export class AmbassadorCampaignService {
     }
 
     // ─── Report + leaderboard (§5.3, §6.3) ──────────────────────────────────────
+
+    /** Dashboard aggregate — totals, tier distribution, and a small recently-joined list
+     *  computed over EVERY approved enrollment, not a paginated page of them. Exists because
+     *  getCampaignReport() is capped at 100 rows per page; a frontend summing/re-sorting that
+     *  page silently goes wrong past 100 ambassadors. Two queries total (enrollments +
+     *  countReferralsForEnrollments), same cost the report already pays per page — this just
+     *  doesn't ship all the rows to the client to get the totals. */
+    async getCampaignStatsSummary(organizationId: string, campaignId: string): Promise<CampaignStatsSummary> {
+        const campaign = await this.campaignRepo.findById(campaignId, organizationId);
+        if (!campaign) throw new NotFoundError("Campaign not found.");
+
+        const milestoneTiers = (campaign.rewardConfig as unknown as DraftRewardConfig).milestoneTiers ?? [];
+
+        const enrollments = (await this.campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
+            (e) => e.status === AmbassadorStatus.APPROVED,
+        );
+        const counts = await this.campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
+
+        const tierCounts = milestoneTiers.map((tier) => ({
+            label: tier.label ?? tier.goodie?.label ?? `${tier.minRegistrations}+`,
+            count: 0,
+        }));
+        let noTierCount = 0;
+        let totalRegistrations = 0;
+        let totalAccruedAmount = 0;
+
+        for (const enrollment of enrollments) {
+            const registrationCount = counts.get(enrollment.id) ?? 0;
+            totalRegistrations += registrationCount;
+
+            const { currentTier, accruedAmount } = computeMilestoneReward(milestoneTiers, registrationCount);
+            totalAccruedAmount += accruedAmount;
+
+            const tierIndex = currentTier ? milestoneTiers.indexOf(currentTier) : -1;
+            if (tierIndex >= 0) tierCounts[tierIndex]!.count++;
+            else noTierCount++;
+        }
+        tierCounts.push({ label: "No Tier", count: noTierCount });
+
+        const recentlyJoined = [...enrollments]
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, RECENTLY_JOINED_LIMIT)
+            .map((e) => ({
+                ambassadorId: e.ambassadorId,
+                firstName: e.ambassador.firstName,
+                lastName: e.ambassador.lastName,
+                createdAt: e.createdAt,
+            }));
+
+        return {
+            ambassadorCount: enrollments.length,
+            totalRegistrations,
+            totalAccruedAmount: paisaToRupees(totalAccruedAmount),
+            tierCounts,
+            recentlyJoined,
+        };
+    }
 
     async getCampaignReport(organizationId: string, campaignId: string, query: ListReportQueryDTO): Promise<PaginatedResult<ApplicationReportRow>> {
         const campaign = await this.campaignRepo.findById(campaignId, organizationId);
@@ -627,14 +699,14 @@ export class AmbassadorCampaignService {
 
         const rows = await this._buildReportRows(campaign.id, campaign.rewardConfig as unknown as RewardConfig);
 
-        const header = ["Ambassador", "Email", "Registrations", "Current Tier", "Amount Owed (paise)"];
+        const header = ["Ambassador", "Email", "Registrations", "Current Tier", "Amount Owed (₹)"];
         const lines = rows.map((r) =>
             [
                 `${r.firstName} ${r.lastName ?? ""}`.trim(),
                 r.email,
                 String(r.registrationCount),
                 r.currentTierLabel ?? "",
-                String(r.accruedAmount),
+                r.accruedAmount.toFixed(2),
             ]
                 .map((cell) => `"${cell.replace(/"/g, '""')}"`)
                 .join(","),
@@ -663,20 +735,24 @@ export class AmbassadorCampaignService {
 
         const data: LeaderboardEntryResult[] = paged.map((g, i) => {
             const rank = skip + i + 1;
-            return {
+            const entry: LeaderboardEntryResult = {
                 rank,
                 groupKey: g.groupKey,
                 label: g.label,
                 registrationCount: g.registrationCount,
                 prize: cut ? findPrizeForRank(cut, rank) : null,
             };
+            return leaderboardEntryPaiseToRupees(entry);
         });
 
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     }
 
     private async _buildReportRows(campaignId: string, rewardConfig: RewardConfig): Promise<ApplicationReportRow[]> {
-        const enrollments = await this.campaignRepo.listEnrollmentsForCampaign(campaignId);
+        const allEnrollments = await this.campaignRepo.listEnrollmentsForCampaign(campaignId);
+        // Only APPROVED applications actually promote/earn (see findEnrollmentByReferralCodeForContest) —
+        // PENDING/REJECTED ones have no live referral link, so they'd just be zero-rows noise here.
+        const enrollments = allEnrollments.filter((e) => e.status === AmbassadorStatus.APPROVED);
 
         return Promise.all(
             enrollments.map(async (enrollment) => {
@@ -688,31 +764,31 @@ export class AmbassadorCampaignService {
                     email: enrollment.ambassador.email,
                     registrationCount: stats.registrationCount,
                     currentTierLabel: stats.currentTier?.label ?? stats.currentTier?.goodie?.label ?? (stats.currentTier ? `${stats.currentTier.minRegistrations}+` : null),
-                    accruedAmount: stats.accruedAmount,
+                    accruedAmount: paisaToRupees(stats.accruedAmount),
                     createdAt: enrollment.createdAt,
                 };
             }),
         );
     }
 
-    private _toAmbassadorResult(a: {
-        id: string; organizationId: string; email: string; phone: string | null; firstName: string; lastName: string | null;
-        ambassadorType: string; applicationData: unknown; status: any; proofUrl: string; appliedAt: Date; reviewedAt: Date | null; rejectionReason: string | null;
-    }): AmbassadorResult {
+    private _toApplicationResult(e: EnrollmentWithAmbassadorAndCampaignName): ApplicationResult {
         return {
-            id: a.id,
-            organizationId: a.organizationId,
-            email: a.email,
-            phone: a.phone,
-            firstName: a.firstName,
-            lastName: a.lastName,
-            ambassadorType: a.ambassadorType,
-            applicationData: a.applicationData as Record<string, unknown>,
-            status: a.status,
-            proofUrl: a.proofUrl,
-            appliedAt: a.appliedAt,
-            reviewedAt: a.reviewedAt,
-            rejectionReason: a.rejectionReason,
+            id: e.id,
+            campaignId: e.campaignId,
+            campaignName: e.campaign.name,
+            ambassador: {
+                id: e.ambassador.id,
+                email: e.ambassador.email,
+                phone: e.ambassador.phone,
+                firstName: e.ambassador.firstName,
+                lastName: e.ambassador.lastName,
+                ambassadorType: e.ambassador.ambassadorType,
+                applicationData: e.ambassador.applicationData as Record<string, unknown>,
+            },
+            status: e.status,
+            appliedAt: e.createdAt,
+            reviewedAt: e.reviewedAt,
+            rejectionReason: e.rejectionReason,
         };
     }
 
@@ -728,7 +804,7 @@ export class AmbassadorCampaignService {
             contestId: c.contestId,
             name: c.name,
             ambassadorTypesAllowed: c.ambassadorTypesAllowed,
-            rewardConfig: c.rewardConfig as unknown as DraftRewardConfig,
+            rewardConfig: rewardConfigPaiseToRupees(c.rewardConfig as unknown as DraftRewardConfig),
             shareTemplates: c.shareTemplates as unknown as ShareTemplates,
             sourceCampaignId: c.sourceCampaignId,
             status: c.status,

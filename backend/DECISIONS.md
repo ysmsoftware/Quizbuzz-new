@@ -18,6 +18,7 @@ Built a write-only audit trail for the main app, read cross-DB by ops-next,
 mirroring the pattern ops-next's own `PlatformAuditLog` already used.
 
 **Where it lives:**
+
 - Schema: `prisma/schema.prisma` — `AuditLog` model, `AuditActorType` /
   `AuditTargetType` enums. No FKs on purpose (actor can be Admin or Contact;
   row must survive the actor being deleted later).
@@ -57,21 +58,39 @@ as their id convention (`@default(ulid())` in Prisma for the main app;
 `generateUlid()` from `server/utils/ulid.ts` in ops-next) — followed the
 existing convention instead of introducing `crypto.randomUUID()`.
 
-**Coverage:** ~27 call sites instrumented (auth, org lifecycle, contest
-lifecycle, payments, payouts, submissions, certificates, question bank,
-messaging, system/reconciliation events). Confirmed non-existent, not
-invented: payment refunds (no refund feature exists in this codebase yet),
-certificate "delivered" status (defined in the enum, never actually set
-anywhere), route-transfer manual retry (the `forceRetry` flag is fully
-plumbed end-to-end but has zero live callers — no admin retry endpoint
-exists). Don't add audit calls for these without first building the actual
-feature they'd be logging.
+**Coverage — every `logAudit()` call site, by domain.** 27 distinct
+`action` values across 29 call sites (two actions — `certificate.issue_triggered`
+and `message.retried` — each have a single-item and a bulk variant). All
+`Applied? Yes` rows are live in the codebase today, not aspirational; grep
+`action: "` under `src/` to re-derive this table if it ever drifts.
+
+| Domain | Action | Fires when | Applied? |
+| --- | --- | --- | --- |
+| Auth | • `auth.admin_login`<br>• `auth.admin_logout`<br>• `auth.admin_email_verified`<br>• `auth.participant_login` | • Admin successfully logs in<br>• Admin logs out (refresh token revoked)<br>• Admin verifies their email via OTP<br>• Participant authenticates into a contest | • Yes<br>• Yes<br>• Yes<br>• Yes |
+| Organization | • `organization.created`<br>• `organization.member_invited`<br>• `organization.member_role_changed`<br>• `organization.member_removed` | • New org created (admin registration)<br>• Member invited to an org<br>• A member's role is changed<br>• A member is removed from an org | • Yes<br>• Yes<br>• Yes<br>• Yes |
+| Contest | • `contest.created`<br>• `contest.published`<br>• `contest.cancelled`<br>• `contest.results_declared` | • New contest created<br>• Contest published (goes live for registration)<br>• Contest cancelled before it starts<br>• Results published for a contest | • Yes<br>• Yes<br>• Yes<br>• Yes |
+| Participant | • `participant.disqualified` | • A participant is disqualified | • Yes |
+| Payment | • `payment.captured`<br>• *refund issued* | • Razorpay webhook confirms a payment<br>• — | • Yes<br>• **No** — no refund feature exists in this codebase yet; don't log what doesn't exist |
+| Payout | • `payout.route_transfer_processed`<br>• *route-transfer manual retry* | • A payout route-transfer succeeds<br>• — | • Yes<br>• **No** — `forceRetry` flag is fully plumbed but has zero live callers; no admin retry endpoint exists |
+| Submission | • `submission.submitted`<br>• `submission.evaluated`<br>• `submission.invalidated` | • A submission is persisted<br>• A submission finishes evaluation<br>• Admin manually invalidates a submission | • Yes<br>• Yes<br>• Yes |
+| Certificate | • `certificate.issue_triggered`<br>• `certificate.generated`<br>• `certificate.failed`<br>• *delivered* | • Certificate generation queued (single **and** bulk-issue)<br>• Certificate PDF successfully generated<br>• Certificate generation fails<br>• — | • Yes<br>• Yes<br>• Yes<br>• **No** — `DELIVERED` exists in the `CertificateStatus` enum but nothing in this codebase ever transitions a cert to it; there's no delivery step to log |
+| Question bank | • `question.bulk_imported` | • Bulk question import completes | • Yes |
+| Messaging | • `message.sent`<br>• `message.retried`<br>• `message.failed` | • A queued message is sent successfully<br>• A failed message is retried (single **and** bulk retry-all)<br>• A message exhausts all send attempts | • Yes<br>• Yes<br>• Yes |
+| System | • `system.contest_reconciliation_fired`<br>• `system.job_retries_exhausted` | • The recurring sweep actually re-enqueues a missing CONTEST_START job (no-op sweeps aren't logged)<br>• A BullMQ job (evaluation/submission/certificate) fails on its final retry attempt | • Yes<br>• Yes |
+
+**Not yet instrumented, real gap (not "doesn't exist" like the rows
+above):** org-lifecycle deletion/deactivation if one gets built, question
+edit/delete (only bulk *import* is logged today), and any admin-facing
+"manual retry" action that doesn't exist yet for route transfers. Add these
+the same way — find the success point, call `logAudit()`, verify with
+`tsc --noEmit`.
 
 ---
 
 ## 2. Dependency/tooling incidents
 
 ### 2a. `next lint` circular-JSON crash (ops-next)
+
 Root cause: `next@15.5.20` paired with `eslint-config-next@16.2.12` — a full
 major-version mismatch (someone bumped one without the other). `eslint-config-next@16`
 ships flat-config-only plugin objects with a self-referential structure that
@@ -82,11 +101,13 @@ diagnostic method (checking `next`/`eslint-config-next` version pairing
 first, before touching config) is the reusable lesson.
 
 ### 2b. Next.js 15 → 16 + nodemailer 6 → 9 (ops-next)
+
 Both were CVE-driven major bumps (`npm audit` flagged real CVEs: SSRF in
 Server Actions, unauthenticated disclosure of internal Server Function
 endpoints, cache confusion, several nodemailer SMTP/header-injection CVEs).
 
 Non-obvious parts of the Next 16 migration:
+
 - **`middleware.ts` → `proxy.ts`.** Next 16 renamed the concept outright
   (function renamed `middleware` → `proxy` too). The official codemod
   (`npx @next/codemod@canary upgrade latest`) handles this correctly —
@@ -118,6 +139,7 @@ Non-obvious parts of the Next 16 migration:
   Search for `set-state-in-effect` in a fresh `npx eslint .` run to find them.
 
 ### 2c. `dotenv`'s "vestauth" tip — investigated, not a security issue
+
 `npx prisma generate` (and other npx invocations) print a rotating "tip"
 line, one of which reads `⌁ auth for agents [www.vestauth.com]`. Traced to
 `node_modules/dotenv/lib/main.js`'s hardcoded `TIPS` array — this is
@@ -130,6 +152,7 @@ call anywhere in the file. **Don't re-investigate this as a compromise** —
 it's genuine (if obnoxious) upstream content.
 
 ### 2d. npm's native `approve-scripts` gate breaks `prisma generate` silently
+
 npm 11's built-in install-script gate (not a project config — native to the
 npm version) skips postinstall scripts for packages it doesn't have
 pre-approved, including Prisma's, which normally auto-runs `prisma generate`
@@ -153,11 +176,13 @@ worker log line, nothing in the queue. Silent, permanent stall.
 guessed:** `certificateQueue.add(..., { jobId: cert.id })` (and similar
 calls elsewhere) uses a stable, reusable ID as a "dedup key." But
 `node_modules/bullmq/dist/cjs/commands/addStandardJob-9.lua`:
+
 ```lua
 if rcall("EXISTS", jobIdKey) == 1 then
     return handleDuplicatedJob(jobIdKey, jobId, ...)
 end
 ```
+
 `handleDuplicatedJob.lua` just emits a `"duplicated"` event and returns —
 **it never re-adds the job to the wait list**, regardless of whether the
 existing job is active, completed, or failed. Since `defaultJobOptions` in
@@ -171,11 +196,13 @@ same ID silently no-ops.
 re-trigger something. This is safe by construction —
 `node_modules/bullmq/dist/cjs/commands/removeJob-2.lua` explicitly refuses
 to remove a **locked** (actively-processing) job:
+
 ```lua
 -- In order to be able to remove a job, it cannot be active.
 if not isLocked(prefix, jobId, shouldRemoveChildren) then ... return 1 end
 return 0
 ```
+
 So a retry click while a job is genuinely mid-processing is still a safe
 no-op (remove does nothing, the following add still collides and no-ops
 too) — the "only one worker ever processes a given job" guarantee this
@@ -184,6 +211,7 @@ ever succeeds in clearing a job that's already in a terminal state, which
 is exactly when a legitimate retry needs to actually happen.
 
 **Fixed:**
+
 - `src/modules/certificate/certificate.service.ts` — `_enqueueGeneration`
   (covers single issue + single retry) and `retryFailedCertificates` (bulk
   retry).
@@ -203,6 +231,7 @@ is exactly when a legitimate retry needs to actually happen.
   contest — the second call could silently no-op).
 
 **Already safe, confirmed by reasoning not just fixed-in-place:**
+
 - `messaging.service.ts`'s retry paths use a timestamp-suffixed jobId per
   attempt (`retry-${id}-${Date.now()}`) — never collides.
 - `quiz-scheduler.service.ts`'s `scheduleJob` (CONTEST_START/TIME_WARNING)
@@ -212,8 +241,7 @@ is exactly when a legitimate retry needs to actually happen.
   behind 'I moved the start time but the contest still began at the old
   time.'"* Read that comment before touching timer scheduling.
 - All periodic/repeatable jobs (contest-reconciliation, payment-cleanup,
-  analytics-snapshot, audit-retention-sweep) use `removeOnComplete: true,
-  removeOnFail: true` (full removal, not retained) — never a stale hash to
+  analytics-snapshot, audit-retention-sweep) use `removeOnComplete: true, removeOnFail: true` (full removal, not retained) — never a stale hash to
   collide with. This is the right pattern for anything repeatable; don't use
   count-based retention (`{count: N}`) on a queue whose jobId is reused
   across scheduled runs.
@@ -227,6 +255,7 @@ is exactly when a legitimate retry needs to actually happen.
   idempotency guard, not a bug.
 
 **Checklist for auditing a new `.add()`/`.addBulk()` call site:**
+
 1. Is the `jobId` stable/reused across more than one logical "please do this
    again" trigger (an explicit retry button, a recurring sweep re-touching
    the same entity, two independent code paths that can target the same
@@ -236,8 +265,7 @@ is exactly when a legitimate retry needs to actually happen.
    blocked (e.g. don't double-notify on an automatic in-job retry) or
    *undesired* (an explicit human retry action)? Only the second case needs
    the fix.
-3. If it needs the fix: does the queue use `removeOnComplete: true,
-   removeOnFail: true`? If so and the trigger only ever fires after success,
+3. If it needs the fix: does the queue use `removeOnComplete: true, removeOnFail: true`? If so and the trigger only ever fires after success,
    you're already safe — no fix needed. If it uses count-based retention
    (the `defaultJobOptions` default) or `removeOnFail` retains failures,
    call `queue.remove(jobId)` immediately before the `.add()`.
@@ -266,12 +294,12 @@ conceptually needed.
 **Fix:** added `computeOptInFlagState` alongside the original function,
 with this truth table:
 
-| global | org override | effective |
-|---|---|---|
-| `false` | any (even active `true`) | **off** — kill switch always wins |
-| `true`  | none | **off** — no silent inherit (this was the bug) |
-| `true`  | `true` | on |
-| `true`  | `false` | off |
+| global    | org override               | effective                                             |
+| --------- | -------------------------- | ----------------------------------------------------- |
+| `false` | any (even active `true`) | **off** — kill switch always wins              |
+| `true`  | none                       | **off** — no silent inherit (this was the bug) |
+| `true`  | `true`                   | on                                                    |
+| `true`  | `false`                  | off                                                   |
 
 `src/common/feature-flags.ts`'s `isFeatureEnabled()` picks between the two
 via a small `OPT_IN_ONLY_FLAGS` set — currently just
@@ -294,8 +322,9 @@ Feature Flags UI (unlike `label`/`description`/`severity`/`supportsOrgOverride`,
 which `sync-feature-flags.ts` already syncs on every boot). An ops admin
 reading the dashboard currently has no way to tell which model a flag uses
 without reading source. Wiring that through (migration + `sync-feature-flags.ts`
+
 + `feature-flags.types.ts`/`toFlagDetail` + a UI badge) is a reasonable,
-contained follow-up — ask before doing it, since it's a schema change.
+  contained follow-up — ask before doing it, since it's a schema change.
 
 **Also worth someone's attention, not fixed:** the ops→main-app sync
 (`syncFlagToMainApp`/`syncOrgOverrideToMainApp` in ops-next's
@@ -308,3 +337,59 @@ configured with a role that restricted, every flag toggle would appear to
 succeed in ops while silently never reaching the main app. Worth hardening
 (surface the failure in the UI, or retry) before it's needed under
 pressure.
+
+---
+
+## 5. Ambassador campaign reward-config unit: rupees (API) vs paise (DB)
+
+**Symptom:** the campaign-creation wizard asked admins to type reward
+amounts directly in paise (e.g. "Amount / Registration (paise)") —
+confusing for anyone not mentally dividing by 100, and every dashboard/report
+number was silently 100x too small once the display formatters were fixed to
+stop double-dividing.
+
+**Fix:** storage stays paise (integer, smallest currency unit — correct,
+no schema/migration change) but the API contract is now rupees end to end:
+
+- **Request side** (`POST /campaigns`, `PATCH /campaigns/:id`) — the
+  frontend sends `rewardConfig` amounts in rupees; `ambassador-campaign.service.ts`
+  runs `rewardConfigRupeesToPaise()` (new file: `reward-config-currency.ts`)
+  before handing the JSON blob to the repo. Rupees→paise rounds to the
+  nearest whole paisa (`Math.round(rupees * 100)`) — paisa can't be
+  fractional, this is the correct rounding point, not a precision loss.
+- **Response side** (every GET/create/update/publish/duplicate/template/stats/report/leaderboard
+  endpoint touching `rewardConfig`, `accruedAmount`, `totalAccruedAmount`, or
+  a leaderboard `prize`) — converted back to rupees via
+  `rewardConfigPaiseToRupees()` / `campaignStatsPaiseToRupees()` /
+  `leaderboardEntryPaiseToRupees()`, same file. paisa→rupees divides exactly
+  (paisa is the smallest unit, so `paisa/100` always has ≤2 decimal places)
+  and is rounded to 2dp purely to clear binary float noise
+  (`100.30000000000001`), not because any precision is being discarded.
+- Both directions live in `backend/src/utils/currency.ts`
+  (`convertMinorUnitToMajor`/`convertMajorUnitToMinor`, INR-fixed wrappers
+  `paisaToRupees`/`rupeesToPaisa`) — this utility already existed
+  (`convertMinorUnitToMajor`/`paisaToRupees`) but had zero callers before
+  this change; reused rather than duplicated.
+- **Correctness trap avoided:** `reward-calculator.ts`'s `computeSpeedBonus`
+  and `campaign-stats.ts`'s `findPrizeForRank` return object *references*
+  straight into the campaign's stored `rewardConfig` (reused across every
+  ambassador in a report/stats loop). The paise→rupees conversion always
+  builds new objects (`reward-config-currency.ts`), never mutates in place —
+  an in-place divide would have corrupted the number for every ambassador
+  computed after the first one in the same request.
+- **Dropped, not renamed:** `RewardConfig.amountsInPaise: true` — a literal
+  contract field the frontend used to send/receive on create/update/publish.
+  Once the contract is rupees, asserting "amounts are in paise" is backwards;
+  it carried no runtime validation weight (never read outside its own Zod
+  literal check), so it was removed from both `ambassador-campaign.types.ts`/
+  `.validator.ts` and the frontend's mirrors (`lib/types/ambassador.ts`,
+  `campaign-schema.ts`, `wizard-types.ts`'s `EMPTY_DRAFT`) rather than
+  flipped to a new value.
+- **No Prisma migration.** `AmbassadorCampaign.rewardConfig` /
+  `AmbassadorCampaignTemplate.rewardConfig` are `Json` columns, not typed
+  Int columns — JSON already stores a rupee float (e.g. `100.5`) losslessly,
+  so there was no scalar column type to change. (The schema *does* have
+  real `Int` money columns — `Payment.amount`, `PaymentConfig.amount`,
+  `PaymentRouteTransfer.*` — but those belong to the unrelated contest-payment
+  feature and were deliberately left untouched; don't fold them into this
+  change without a separate, explicit decision.)

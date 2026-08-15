@@ -1,4 +1,4 @@
-import { Ambassador } from "@prisma/client";
+import { Ambassador, AmbassadorStatus } from "@prisma/client";
 import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
 import { computeFullReward } from "./reward-calculator";
 import { LeaderboardCut, LeaderboardScope, RewardConfig, SpeedBonusResult } from "./ambassador-campaign.types";
@@ -79,7 +79,12 @@ export async function computeLeaderboardGroups(
     campaignId: string,
     scope: LeaderboardScope,
 ): Promise<LeaderboardGroup[]> {
-    const enrollments = await campaignRepo.listEnrollmentsForCampaign(campaignId);
+    // Only APPROVED applications have a live referral link (see
+    // findEnrollmentByReferralCodeForContest) — PENDING/REJECTED ones would just be
+    // permanent 0-count noise at the bottom of every leaderboard.
+    const enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
+        (e) => e.status === AmbassadorStatus.APPROVED,
+    );
     const counts = await campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
 
     const groups = new Map<string, LeaderboardGroup>();

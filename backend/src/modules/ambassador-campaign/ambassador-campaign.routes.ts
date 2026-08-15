@@ -26,6 +26,7 @@ ambassadorCampaignRouter.post("/campaigns/:id/archive",           (req, res, nex
 ambassadorCampaignRouter.get("/campaigns/:id/groups",              (req, res, next) => ctrl().getGroups(req, res, next));
 ambassadorCampaignRouter.put("/campaigns/:id/groups",              (req, res, next) => ctrl().replaceGroups(req, res, next));
 ambassadorCampaignRouter.post("/campaigns/:id/duplicate",         (req, res, next) => ctrl().duplicateCampaign(req, res, next));
+ambassadorCampaignRouter.get("/campaigns/:id/stats",              (req, res, next) => ctrl().getCampaignStatsSummary(req, res, next));
 ambassadorCampaignRouter.get("/campaigns/:id/report",             (req, res, next) => ctrl().getCampaignReport(req, res, next));
 ambassadorCampaignRouter.get("/campaigns/:id/report/export",      (req, res, next) => ctrl().exportCampaignReport(req, res, next));
 ambassadorCampaignRouter.get("/campaigns/:id/leaderboard",        (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));

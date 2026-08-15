@@ -27,8 +27,8 @@ export function useMyCampaigns(params: { page?: number; limit?: number } = {}) {
     staleTime: 1000 * 30,
   });
 
-  const joinMutation = useMutation({
-    mutationFn: (campaignId: string) => ambassadorService.joinCampaign(campaignId),
+  const applyMutation = useMutation({
+    mutationFn: (campaignId: string) => ambassadorService.applyToCampaign(campaignId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ambassador-campaigns'] });
     },
@@ -39,8 +39,8 @@ export function useMyCampaigns(params: { page?: number; limit?: number } = {}) {
     pagination: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    join: joinMutation.mutateAsync,
-    joinLoading: joinMutation.isPending,
+    apply: applyMutation.mutateAsync,
+    applyLoading: applyMutation.isPending,
   };
 }
 

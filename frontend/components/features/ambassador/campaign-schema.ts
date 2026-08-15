@@ -88,7 +88,6 @@ export const campaignFormSchema = z.object({
   ambassadorTypesAllowed: z.array(z.string()).min(1, 'Select at least one ambassador type'),
   rewardConfig: z.object({
     currency: z.string(),
-    amountsInPaise: z.literal(true),
     milestoneTiers: z.array(milestoneTierSchema).min(1, 'Add at least one milestone tier'),
     speedBonus: speedBonusSchema.optional(),
     leaderboardPrizes: z.array(leaderboardCutSchema),

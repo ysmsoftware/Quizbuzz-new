@@ -95,6 +95,7 @@ export function ApplicationsQueue() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Campaign</TableHead>
                 <TableHead>Applied</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -103,12 +104,13 @@ export function ApplicationsQueue() {
               {applications.map((app) => (
                 <TableRow key={app.id}>
                   <TableCell className="font-medium">
-                    {app.firstName} {app.lastName}
+                    {app.ambassador.firstName} {app.ambassador.lastName}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{app.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{app.ambassador.email}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{app.ambassadorType}</Badge>
+                    <Badge variant="secondary">{app.ambassador.ambassadorType}</Badge>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{app.campaignName}</TableCell>
                   <TableCell className="text-muted-foreground">{new Date(app.appliedAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right space-x-1.5">
                     <Button size="sm" variant="outline" onClick={() => setReviewId(app.id)}>

@@ -31,20 +31,17 @@ export const authenticatedAmbassadorMiddleware = async (
         try {
             const payload = jwt.verify(token, config.auth.jwt.accessSecret) as {
                 ambassadorId: string;
-                organizationId: string;
             };
 
             req.ambassador = {
                 id: payload.ambassadorId,
-                organizationId: payload.organizationId,
             };
 
             Sentry.getCurrentScope().setUser({
                 id: payload.ambassadorId,
-                organizationId: payload.organizationId,
             } as any);
 
-            logger.debug(`Ambassador authenticated: ${payload.ambassadorId} org: ${payload.organizationId}`);
+            logger.debug(`Ambassador authenticated: ${payload.ambassadorId}`);
             next();
         } catch (err) {
             throw new UnauthorizedError("Invalid ambassador session token");
