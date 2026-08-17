@@ -63,6 +63,7 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/api/queryClient';
 import { parseQuestionFile } from '@/lib/utils/question-parser';
+import { buildQuestionsAiPrompt } from '@/lib/utils/ai-prompts';
 import { useBatchUpload, type BatchStep } from '@/lib/hooks/useBatchUpload';
 import { MultiStepLoader } from '@/components/ui/multi-step-loader';
 import { chunkArray } from '@/lib/utils';
@@ -675,9 +676,17 @@ function ImportCSVModal({
     const [csvErrors, setCsvErrors] = useState<string[]>([]);
     const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
     const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+    const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
+
+    const handleCopyAiPrompt = () => {
+        navigator.clipboard.writeText(buildQuestionsAiPrompt());
+        setCopiedAiPrompt(true);
+        toast.success('Prompt copied — paste it into ChatGPT, Claude, or any AI tool');
+        setTimeout(() => setCopiedAiPrompt(false), 2000);
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -1032,9 +1041,19 @@ function ImportCSVModal({
                                     <p className="text-xs text-muted-foreground">Download the required column structure</p>
                                 </div>
                             </div>
-                            <Button size="sm" variant="outline" onClick={downloadTemplate}>
-                                Download CSV
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleCopyAiPrompt}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                >
+                                    {copiedAiPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                    {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt (to fix)'}
+                                </button>
+                                <Button size="sm" variant="outline" onClick={downloadTemplate}>
+                                    Download CSV
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 )}

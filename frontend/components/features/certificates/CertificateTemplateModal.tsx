@@ -31,84 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Award, Eye, Upload, CheckCircle2, Copy, Check, FileText, ArrowRight, ArrowLeft, Code, AlertTriangle, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-
-const AVAILABLE_PLACEHOLDERS = [
-    'participantName',
-    'contestTitle',
-    'contestDate',
-    'score',
-    'percentage',
-    'rank',
-    'timeTakenSecs',
-    'issuedAt',
-    'orgName',
-    'orgLogoUrl',
-    'primaryColor',
-    'certificateId',
-];
-
-const PLACEHOLDER_EXAMPLES: Record<string, string> = {
-    participantName: '"Aditi Sharma" — plain text',
-    contestTitle: '"Winter Coding Sprint 2026" — plain text',
-    contestDate: '"14 September 2026" — already formatted, human-readable',
-    score: '42 — a plain number',
-    percentage: '87.5 — a plain number, no % sign included',
-    rank: '2 — a plain number',
-    timeTakenSecs: '1725 — seconds, as a plain number',
-    issuedAt: '"01 June 2026" — already formatted, human-readable',
-    orgName: 'the organization\'s display name',
-    orgLogoUrl: 'a URL — only usable inside <img src="{{orgLogoUrl}}">',
-    primaryColor: '"#1a3a6b" — a hex color, only usable inside CSS like color: {{primaryColor}};',
-    certificateId: 'a unique certificate identifier string',
-};
-
-/**
- * Grounded in the exact backend implementation — every rule here is enforced by the
- * actual code, not aspirational. Deliberately written to work for BOTH use cases:
- * generating a brand-new template from a description, or reviewing/fixing an existing
- * one the admin already has — so this is the one prompt to copy for either job.
- */
-function buildAiPrompt(): string {
-    const placeholderLines = AVAILABLE_PLACEHOLDERS
-        .map((v) => `   - {{${v}}} — ${PLACEHOLDER_EXAMPLES[v]}`)
-        .join('\n');
-
-    return `I'm working with a custom HTML certificate template system for an online contest/exam platform. It accepts a single, self-contained HTML file (inline CSS only inside a <style> tag, no external stylesheets or fonts, no JavaScript/<script> tags — any <script> tags get silently stripped before saving) that gets pasted directly into the platform's certificate template upload box.
-
-This prompt covers two different jobs — read both option blocks near the bottom, fill in ONLY the one that matches what I'm doing right now, and ignore the other:
-- OPTION A — CREATE A NEW TEMPLATE: I'll describe the design I want; generate a brand-new HTML file that follows every rule below.
-- OPTION B — FIX / VALIDATE AN EXISTING TEMPLATE: I'll paste my existing HTML below; check it against every rule below, list every violation you find, then return the corrected HTML — keep my original design, layout, and wording intact, only fix what's actually broken against the rules.
-
-Technical rules the HTML MUST follow (these apply the same whether you're creating new or fixing existing — when fixing, treat each one as a checklist item to verify):
-
-1. Use ONLY these exact placeholder tokens for dynamic data — written literally as {{tokenName}} (double curly braces, letters/numbers/underscore only, no spaces inside the braces):
-${placeholderLines}
-
-2. No placeholder names outside this exact list are allowed — things like a custom award title or a signature line have no matching token. Anything outside this list silently renders as BLANK text on the real certificate, not an error. If fixing an existing file, flag any placeholder not on this list as a bug and either remove it or tell me it needs to become static text instead.
-
-3. No conditional logic or loops are supported — it's a literal find-and-replace of each {{token}}, so never write or keep things like {{#if rank}}...{{/if}}. If fixing an existing file, flag any such syntax as a bug and replace it with the plain token or static text.
-
-4. Default page size is A4 landscape (297mm × 210mm). If a different size is wanted, it must be declared explicitly with a CSS rule like:
-   @page { size: 279mm 216mm; margin: 0; }
-   html, body { width: 279mm; height: 216mm; }
-   Otherwise leave @page out entirely and it defaults to A4 landscape automatically. If fixing an existing file, check that any declared @page size has matching html/body width/height — a mismatch here is a common bug.
-
-5. Any images (logo, decorative graphics) must be referenced via a public https:// URL in an <img src="..."> tag — no local file paths, no base64 unless already inlined. Flag any non-https or local-path image reference as a bug if fixing an existing file.
-
-6. Keep the whole file under 200KB. Flag it if an existing file is over this.
-
-7. <script> tags get stripped automatically before saving, so any JavaScript in the file is dead weight at best — don't add any if creating new, and flag/remove any found if fixing an existing file.
-
---- FILL IN ONLY ONE OF THE TWO SECTIONS BELOW ---
-
-OPTION A — Creating a new template from scratch:
-[Describe the design here — the occasion, tone/formality, color scheme, logo placement, layout style, exact wording you want, portrait vs landscape, etc. Leave blank if using Option B instead.]
-
-OPTION B — Fixing/validating an existing template:
-[Paste the full contents of your existing HTML file here. Leave blank if using Option A instead.]
-
-Give me back the complete HTML file only, ready to paste in as-is. If you were fixing an existing file, also include a short bullet list of exactly what was wrong and what you changed.`;
-}
+import { buildCertificateAiPrompt, CERTIFICATE_AVAILABLE_PLACEHOLDERS as AVAILABLE_PLACEHOLDERS } from '@/lib/utils/ai-prompts';
 
 /** Inject auto-scaling script into iframe srcDoc so preview fits 100% inside container without cropping */
 function formatPreviewSrcDoc(rawHtml: string): string {
@@ -258,7 +181,7 @@ export function CertificateTemplateModal({
 
     const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
     const handleCopyAiPrompt = () => {
-        navigator.clipboard.writeText(buildAiPrompt());
+        navigator.clipboard.writeText(buildCertificateAiPrompt());
         setCopiedAiPrompt(true);
         toast.success('Prompt copied — paste it into ChatGPT, Claude, or any AI tool');
         setTimeout(() => setCopiedAiPrompt(false), 2000);
