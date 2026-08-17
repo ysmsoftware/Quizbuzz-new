@@ -18,7 +18,7 @@ import {
 } from "./contest.validator";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, FeatureUnavailableError } from "../../error/http-errors";
 import { isFeatureEnabled } from "../../common/feature-flags";
-import { createSlug } from "../../utils/slug";
+import { createSlug, generateRandomString } from "../../utils/slug";
 import { generateRegistrationRef } from "../../utils/ref";
 import { config } from "../../config";
 // Plan-limit enforcement (contests/cycle, participants/contest) now runs as
@@ -1298,12 +1298,15 @@ export class ContestService {
 
     private async ensureUniqueSlug(title: string, organizationId: string): Promise<string> {
         let slug = createSlug(title);
+        if (!slug) slug = "contest";
         let attempt = 0;
 
         while (true) {
-            const suffix = attempt > 0 ? `-${attempt}` : "";
+            const suffix = attempt > 0 ? `-${generateRandomString(4).toLowerCase()}` : "";
             const candidate = `${slug}${suffix}`;
-            const existing = await this.contestRepo.findBySlug(candidate, organizationId);
+            const existing = await prisma.contest.findFirst({
+                where: { slug: candidate }
+            });
 
             if (!existing) return candidate;
             attempt++;
