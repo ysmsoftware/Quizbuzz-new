@@ -1031,29 +1031,29 @@ function ImportCSVModal({
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/10">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-primary/5 border border-primary/10">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                                     <Download className="h-5 w-5 text-primary" />
                                 </div>
-                                <div>
+                                <div className="min-w-0 space-y-0.5">
                                     <p className="text-sm font-bold">Import Template</p>
-                                    <p className="text-xs text-muted-foreground">Download the required column structure</p>
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                        <p className="text-xs text-muted-foreground">Download the required column structure</p>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyAiPrompt}
+                                            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline shrink-0"
+                                        >
+                                            {copiedAiPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                            {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleCopyAiPrompt}
-                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                                >
-                                    {copiedAiPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                    {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt (to fix)'}
-                                </button>
-                                <Button size="sm" variant="outline" onClick={downloadTemplate}>
-                                    Download CSV
-                                </Button>
-                            </div>
+                            <Button size="sm" variant="outline" onClick={downloadTemplate} className="shrink-0">
+                                Download CSV
+                            </Button>
                         </div>
                     </div>
                 )}

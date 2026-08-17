@@ -332,7 +332,7 @@ export default function CreateQuestionPage() {
                   className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                 >
                   {copiedAiPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt (to fix)'}
+                  {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt'}
                 </button>
               </CardDescription>
             </CardHeader>
