@@ -12,6 +12,10 @@ export class AmbassadorRepository {
         return prisma.ambassador.findUnique({ where: { email } });
     }
 
+    async update(id: string, data: Partial<Pick<Ambassador, "firstName" | "lastName" | "phone" | "proofStorageKey" | "proofUrl">>): Promise<Ambassador> {
+        return prisma.ambassador.update({ where: { id }, data });
+    }
+
     async create(data: CreateAmbassadorInput): Promise<Ambassador> {
         return prisma.ambassador.create({
             data: {

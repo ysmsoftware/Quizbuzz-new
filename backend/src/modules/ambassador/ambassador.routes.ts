@@ -28,6 +28,10 @@ export const ambassadorRouter = Router();
 ambassadorRouter.use(authenticatedAmbassadorMiddleware);
 
 ambassadorRouter.get("/me",                                     (req, res, next) => ctrl().getMe(req, res, next));
+ambassadorRouter.patch("/me",                                   (req, res, next) => ctrl().updateMe(req, res, next));
+ambassadorRouter.patch("/me/proof",                              (req, res, next) => ctrl().updateProof(req, res, next));
+ambassadorRouter.post("/upload-proof",                          (req, res, next) => ctrl().getAuthenticatedUploadUrl(req, res, next));
+ambassadorRouter.post("/logout",                                (req, res, next) => ctrl().logout(req, res, next));
 ambassadorRouter.get("/campaigns/available",                    (req, res, next) => ctrl().listAvailableCampaigns(req, res, next));
 ambassadorRouter.get("/campaigns/mine",                         (req, res, next) => ctrl().listMyCampaigns(req, res, next));
 ambassadorRouter.post("/campaigns/:campaignId/apply",            (req, res, next) => ctrl().applyToCampaign(req, res, next));

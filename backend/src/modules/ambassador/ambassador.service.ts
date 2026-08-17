@@ -4,8 +4,8 @@ import { Ambassador, AmbassadorCampaignStatus, AmbassadorStatus, Prisma } from "
 import { AmbassadorRepository } from "./ambassador.repository";
 import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
 import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
-import { campaignStatsPaiseToRupees, leaderboardEntryPaiseToRupees } from "../ambassador-campaign/reward-config-currency";
-import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
+import { campaignStatsPaiseToRupees, leaderboardEntryPaiseToRupees, rewardConfigPaiseToRupees } from "../ambassador-campaign/reward-config-currency";
+import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, CampaignPhase, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
 import { FileStorageProvider } from "../../providers/storage.provider";
@@ -29,6 +29,7 @@ import {
     RequestUploadUrlDTO,
     UploadUrlResult,
 } from "./ambassador.types";
+import { UpdateProfileInput, UpdateProofInput } from "./ambassador.validator";
 
 /** Pending-signup state, kept in Redis between signupStart and signupComplete — there is
  *  deliberately no half-created Ambassador row while someone is mid-signup (a person who
@@ -267,6 +268,30 @@ export class AmbassadorService {
         return this._toResult(ambassador);
     }
 
+    async updateProfile(ambassadorId: string, dto: UpdateProfileInput): Promise<AmbassadorResult> {
+        const ambassador = await this.ambassadorRepo.findById(ambassadorId);
+        if (!ambassador) throw new NotFoundError("Ambassador not found.");
+        const updated = await this.ambassadorRepo.update(ambassadorId, dto as any);
+        return this._toResult(updated);
+    }
+
+    async getAuthenticatedUploadUrl(ambassadorId: string, dto: RequestUploadUrlDTO): Promise<UploadUrlResult> {
+        const folder = `ambassador-proof/${ambassadorId}/${crypto.randomUUID()}`;
+        return this.storageProvider.getPresignedPutUrl({
+            filename: dto.filename,
+            folder,
+            mimeType: dto.mimeType,
+            expiresInSeconds: 300,
+        });
+    }
+
+    async updateProof(ambassadorId: string, dto: UpdateProofInput): Promise<AmbassadorResult> {
+        const ambassador = await this.ambassadorRepo.findById(ambassadorId);
+        if (!ambassador) throw new NotFoundError("Ambassador not found.");
+        const updated = await this.ambassadorRepo.update(ambassadorId, dto);
+        return this._toResult(updated);
+    }
+
     // ─── Campaigns — cross-organization, mirrors how /contests isn't org-scoped ─
 
     async listAvailableCampaigns(
@@ -336,6 +361,7 @@ export class AmbassadorService {
                     organizationSlug: enrollment.campaign.organization.slug,
                     referralCode: enrollment.referralCode,
                     status: enrollment.status,
+                    campaignStatus: enrollment.campaign.status,
                     rejectionReason: enrollment.rejectionReason,
                     shareTemplates: enrollment.campaign.shareTemplates as unknown as ShareTemplates,
                     stats: campaignStatsPaiseToRupees({ ...stats, leaderboardRanks: [] }),
@@ -447,6 +473,11 @@ export class AmbassadorService {
                 referralCode: enrollment.referralCode,
                 ambassadorTypesAllowed: campaign.ambassadorTypesAllowed,
                 shareTemplates: campaign.shareTemplates as unknown as ShareTemplates,
+                status: campaign.status,
+                startDate: campaign.startDate,
+                endDate: campaign.endDate,
+                phases: campaign.phases as unknown as CampaignPhase[],
+                milestoneTiers: rewardConfigPaiseToRupees(rewardConfig).milestoneTiers,
             },
         };
     }

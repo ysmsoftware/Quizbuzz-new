@@ -21,7 +21,7 @@ import { useOrgAmbassadorReport } from '@/lib/hooks/useOrgAmbassadorReport';
 import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from '@/components/features/ambassador/campaign-status';
 import { calculateCampaignCapacity } from '@/components/features/ambassador/campaign-capacity';
-import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/dashboard/CampaignManagePanel';
+import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/admin/CampaignManagePanel';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';

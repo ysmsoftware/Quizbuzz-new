@@ -132,6 +132,22 @@ class AmbassadorService {
     return request<Ambassador>('/ambassador/me', { method: 'GET' });
   }
 
+  updateProfile(body: { firstName?: string; lastName?: string | null; phone?: string }) {
+    return request<Ambassador>('/ambassador/me', { method: 'PATCH', body: JSON.stringify(body) });
+  }
+
+  logout() {
+    return publicPost<void>('/ambassador/logout');
+  }
+
+  requestAuthenticatedUploadUrl(body: { filename: string; mimeType: string }) {
+    return publicPost<{ storageKey: string; url: string }>('/ambassador/upload-proof', body);
+  }
+
+  updateProof(body: { proofStorageKey: string; proofUrl: string }) {
+    return request<Ambassador>('/ambassador/me/proof', { method: 'PATCH', body: JSON.stringify(body) });
+  }
+
   getAvailableCampaigns(params?: { page?: number; limit?: number }) {
     return publicGet<PaginatedResult<AvailableCampaignItem>>('/ambassador/campaigns/available', params);
   }

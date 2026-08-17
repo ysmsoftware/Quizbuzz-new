@@ -9,3 +9,9 @@ export function Rupees({ amount, className }: { amount: number; className?: stri
     </span>
   );
 }
+
+/** Non-JSX counterpart to <Rupees> — for toasts, aria-labels, CSV/text contexts where a
+ *  component can't be used. Keep the two in sync. */
+export function formatRupees(amount: number): string {
+  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}

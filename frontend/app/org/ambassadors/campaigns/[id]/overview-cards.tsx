@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CampaignLifecycleActions } from '@/components/features/ambassador/dashboard/CampaignLifecycleActions';
+import { CampaignLifecycleActions } from '@/components/features/ambassador/admin/CampaignLifecycleActions';
 import { substitutePlaceholders } from '@/components/features/ambassador/ShareTemplatesEditor';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { cn } from '@/lib/utils';

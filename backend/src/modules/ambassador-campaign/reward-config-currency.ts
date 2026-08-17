@@ -25,7 +25,7 @@ function convertGoodie(goodie: Goodie, convert: (n: number) => number): Goodie {
     return { ...goodie, ...(goodie.cashEquivalent !== undefined && { cashEquivalent: convert(goodie.cashEquivalent) }) };
 }
 
-function convertTier(tier: MilestoneTier, convert: (n: number) => number): MilestoneTier {
+export function convertTier(tier: MilestoneTier, convert: (n: number) => number): MilestoneTier {
     return { ...tier, amountPerRegistration: convert(tier.amountPerRegistration), goodie: convertGoodie(tier.goodie, convert) };
 }
 
@@ -73,6 +73,8 @@ export function rewardConfigPaiseToRupees(config: DraftRewardConfig): DraftRewar
 export function campaignStatsPaiseToRupees(stats: CampaignStats): CampaignStats {
     return {
         ...stats,
+        currentTier: stats.currentTier ? convertTier(stats.currentTier, paisaToRupees) : null,
+        nextTier: stats.nextTier ? convertTier(stats.nextTier, paisaToRupees) : null,
         accruedAmount: paisaToRupees(stats.accruedAmount),
         speedBonus: stats.speedBonus ? speedBonusResultPaiseToRupees(stats.speedBonus) : null,
     };

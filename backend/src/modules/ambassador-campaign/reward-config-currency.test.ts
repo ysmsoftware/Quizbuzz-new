@@ -57,6 +57,22 @@ describe("reward-config-currency", () => {
         expect(result.registrationCount).toBe(5);
     });
 
+    it("converts currentTier and nextTier amounts (regression: previously passed through unconverted)", () => {
+        const stats: CampaignStats = {
+            registrationCount: 45,
+            currentTier: { minRegistrations: 41, maxRegistrations: 70, rewardType: "PER_REGISTRATION", amountPerRegistration: 1500, goodie: { label: "Gift Voucher", cashEquivalent: 80000 } },
+            nextTier: { minRegistrations: 71, maxRegistrations: 100, rewardType: "PER_REGISTRATION", amountPerRegistration: 1800 },
+            progressToNextTier: { current: 45, required: 71 },
+            accruedAmount: 67500,
+            speedBonus: null,
+            leaderboardRanks: [],
+        };
+        const result = campaignStatsPaiseToRupees(stats);
+        expect(result.currentTier!.amountPerRegistration).toBe(15);
+        expect(result.currentTier!.goodie!.cashEquivalent).toBe(800);
+        expect(result.nextTier!.amountPerRegistration).toBe(18);
+    });
+
     it("converts a leaderboard entry's prize", () => {
         const entry: LeaderboardEntryResult = { rank: 1, groupKey: "a", label: "A", registrationCount: 3, prize: { rank: 1, cashAmount: 999 } };
         expect(leaderboardEntryPaiseToRupees(entry).prize!.cashAmount).toBe(9.99);

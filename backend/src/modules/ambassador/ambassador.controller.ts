@@ -11,6 +11,8 @@ import {
     ListCampaignsQuerySchema,
     LeaderboardQuerySchema,
     GetOrgTypesQuerySchema,
+    UpdateProfileSchema,
+    UpdateProofSchema,
 } from "./ambassador.validator";
 
 export class AmbassadorController {
@@ -141,6 +143,49 @@ export class AmbassadorController {
             const { id } = req.ambassador!;
             const result = await this.service.getMe(id);
             res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    updateMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const data = UpdateProfileSchema.parse(req.body);
+            const result = await this.service.updateProfile(id, data);
+            res.status(200).json({ success: true, message: "Profile updated", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { domain, secure, sameSite } = config.auth.cookie;
+            res.clearCookie("ambassadorToken", { httpOnly: true, secure, sameSite: sameSite as any, domain: domain || undefined });
+            res.status(200).json({ success: true, message: "Logged out", requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getAuthenticatedUploadUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const data = UploadProofRequestSchema.parse(req.body);
+            const result = await this.service.getAuthenticatedUploadUrl(id, data);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    updateProof = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const data = UpdateProofSchema.parse(req.body);
+            const result = await this.service.updateProof(id, data);
+            res.status(200).json({ success: true, message: "Proof document updated", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

@@ -42,6 +42,19 @@ export const UploadProofRequestSchema = z.object({
     mimeType: z.string().min(1),
 });
 
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export const UpdateProfileSchema = z.object({
+    firstName: z.string().min(1, "First name is required").max(100).trim().optional(),
+    lastName: z.string().max(100).trim().nullable().optional(),
+    phone: phoneField,
+}).refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided" });
+
+export const UpdateProofSchema = z.object({
+    proofStorageKey: z.string().min(1),
+    proofUrl: z.string().min(1),
+});
+
 // ─── Login (returning ambassador) ───────────────────────────────────────────
 
 export const RequestOtpSchema = z.object({
@@ -69,6 +82,8 @@ export type SignupStartInput = z.infer<typeof SignupStartSchema>;
 export type SignupVerifyOtpInput = z.infer<typeof SignupVerifyOtpSchema>;
 export type SignupCompleteInput = z.infer<typeof SignupCompleteSchema>;
 export type UploadProofRequestInput = z.infer<typeof UploadProofRequestSchema>;
+export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+export type UpdateProofInput = z.infer<typeof UpdateProofSchema>;
 export type RequestOtpInput = z.infer<typeof RequestOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof VerifyOtpSchema>;
 export type ListCampaignsQueryInput = z.infer<typeof ListCampaignsQuerySchema>;

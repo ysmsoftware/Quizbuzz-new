@@ -230,6 +230,7 @@ export interface MyCampaignItem {
   organizationSlug: string;
   referralCode: string;
   status: AmbassadorStatus;
+  campaignStatus: AmbassadorCampaignStatus;
   rejectionReason: string | null;
   shareTemplates: ShareTemplates;
   stats: CampaignStats;
@@ -244,6 +245,11 @@ export interface StatsCampaignSummary {
   referralCode: string;
   ambassadorTypesAllowed: string[];
   shareTemplates: ShareTemplates;
+  status: AmbassadorCampaignStatus;
+  startDate: string | null; // ISO
+  endDate: string | null; // ISO
+  phases: CampaignPhase[];
+  milestoneTiers: MilestoneTier[];
 }
 
 export interface CampaignStatsDetail extends CampaignStats {
