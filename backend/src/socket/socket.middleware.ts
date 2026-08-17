@@ -37,8 +37,10 @@ export const socketAuthMiddleware = (socket: Socket, next: (err?: ExtendedError)
         socket.data.organizationId = payload.organizationId;
         socket.data.contestId = payload.contestId;
         socket.data.role = payload.role || (payload.participantId ? "participant" : "admin");
+        // Device ID for single-device enforcement — prioritize token payload, fallback to handshake auth
+        socket.data.deviceId = payload.deviceId || socket.handshake.auth?.deviceId || "unknown";
 
-        logger.debug(`[socket-auth] Authenticated ${socket.data.role}: ${socket.data.userId} (socket: ${socket.id})`);
+        logger.debug(`[socket-auth] Authenticated ${socket.data.role}: ${socket.data.userId} (socket: ${socket.id}, device: ${socket.data.deviceId})`);
 
         next();
     } catch (error: any) {

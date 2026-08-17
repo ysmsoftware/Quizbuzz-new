@@ -601,6 +601,22 @@ export class QuizService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // ACTIVE DEVICE TRACKING (single-device enforcement)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    async getActiveDevice(contestId: string, participantId: string) {
+        return this.session.getActiveDevice(contestId, participantId);
+    }
+
+    async setActiveDevice(contestId: string, participantId: string, deviceId: string, socketId: string) {
+        return this.session.setActiveDevice(contestId, participantId, deviceId, socketId);
+    }
+
+    async clearActiveDeviceIfMatch(contestId: string, participantId: string, socketId: string) {
+        return this.session.clearActiveDeviceIfMatch(contestId, participantId, socketId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PARTICIPANT PROGRESS
     // ─────────────────────────────────────────────────────────────────────────
 

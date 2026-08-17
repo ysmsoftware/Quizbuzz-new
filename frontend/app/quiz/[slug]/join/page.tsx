@@ -7,9 +7,7 @@ import {
     ArrowLeft,
     Loader2,
     Shield,
-    Monitor,
     Smartphone,
-    AlertTriangle,
     Lock,
     CheckCircle,
     Video,
@@ -59,7 +57,6 @@ export default function QuizJoinPage() {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showConflict, setShowConflict] = useState(false);
 
     const requestCameraPermission = useProctoringStore((s) => s.requestCameraPermission);
     const setSession = useAuthStore((s) => s.setSession);
@@ -160,26 +157,6 @@ export default function QuizJoinPage() {
         }, 1500);
     };
 
-    const handleForceSession = async () => {
-        setLoading(true);
-        try {
-            const pId = useAuthStore.getState().participantId;
-            if (pId) {
-                await authService.forceSession(pId, contest?.id || slug);
-            }
-            setShowConflict(false);
-            if (contest?.proctoringEnabled && contest?.webcamRequired) {
-                setStep("CAMERA");
-            } else {
-                handleRedirect();
-            }
-        } catch {
-            setError("Failed to take over session. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     if (contestLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
@@ -203,46 +180,6 @@ export default function QuizJoinPage() {
             {/* Ambient Background Glows */}
             <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-primary/10 blur-[130px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[130px] pointer-events-none" />
-
-            {showConflict && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md px-4">
-                    <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="bg-card/90 border border-border rounded-3xl shadow-2xl p-6 max-w-sm w-full"
-                    >
-                        <div className="flex justify-center gap-4 mb-5">
-                            <div className="w-12 h-12 rounded-2xl bg-muted border border-border flex items-center justify-center text-muted-foreground">
-                                <Monitor className="w-6 h-6" />
-                            </div>
-                            <div className="w-12 h-12 rounded-2xl bg-muted border border-border flex items-center justify-center text-destructive">
-                                <AlertTriangle className="w-6 h-6" />
-                            </div>
-                        </div>
-                        <h3 className="text-lg font-bold text-center text-foreground mb-2">Session Conflict</h3>
-                        <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                            You have an active quiz session on another device. Logging in here will close the other session.
-                        </p>
-                        <div className="flex gap-3">
-                            <Button
-                                variant="outline"
-                                className="flex-1 rounded-xl border-border bg-muted/40 hover:bg-muted text-foreground"
-                                onClick={() => setShowConflict(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                className="flex-1 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
-                                onClick={handleForceSession}
-                                disabled={loading}
-                            >
-                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continue Here"}
-                            </Button>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
 
             <motion.div 
                 initial={{ opacity: 0, y: 15 }} 

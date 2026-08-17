@@ -20,6 +20,7 @@ const ParticipantLoginSchema = z.object({
     contestSlug: z.string().min(1).optional(),
     contestId: z.string().min(1).optional(),
     joinCode: z.string().min(1).optional(),
+    deviceId: z.string().min(1).optional(),
 });
 
 // ─── Controller ───────────────────────────────────────────────────────────────
@@ -91,8 +92,8 @@ export class QuizRegistrationController {
      */
     participantLogin = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { email, otp, contestSlug, contestId, joinCode } = ParticipantLoginSchema.parse(req.body);
-            const result = await this.quizAuthService.participantLogin(email, otp, contestSlug, contestId, joinCode);
+            const { email, otp, contestSlug, contestId, joinCode, deviceId } = ParticipantLoginSchema.parse(req.body);
+            const result = await this.quizAuthService.participantLogin(email, otp, contestSlug, contestId, joinCode, deviceId);
 
             res.status(200).json({
                 success: true,

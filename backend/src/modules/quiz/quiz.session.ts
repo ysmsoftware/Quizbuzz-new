@@ -9,6 +9,7 @@
  *   quiz:{cid}:meta:{pid}         ← immutable participant metadata (name, contactId) — written once at join
  *   quiz:{cid}:ready:{pid}        ← readiness flags (camera, otp, joincode)
  *   quiz:{cid}:violations:{pid}   ← violation event log (list)
+ *   quiz:{cid}:device:{pid}        ← active device hash (deviceId, socketId, connectedAt) — single-device enforcement
  *
  *   quiz:{cid}:waiting            ← Redis Set  — participants in waiting room
  *   quiz:{cid}:active             ← Redis Set  — participants currently in quiz
@@ -90,6 +91,7 @@ export class QuizSession {
             meta: `quiz:${cid}:meta:${pid}`,
             ready: `quiz:${cid}:ready:${pid}`,
             violations: `quiz:${cid}:violations:${pid}`,
+            device: `quiz:${cid}:device:${pid}`,
         };
     }
 
@@ -429,6 +431,45 @@ export class QuizSession {
 
     async getViolationCount(cid: string, pid: string): Promise<number> {
         return redis.llen(this.keys(cid, pid).violations);
+    }
+
+    // ── Active device tracking (single-device enforcement) ────────────────────
+    // Stores which device/socket currently owns this participant's session.
+    // When a new device connects, the gateway compares deviceIds and evicts
+    // the old socket if they differ.
+
+    async setActiveDevice(cid: string, pid: string, deviceId: string, socketId: string): Promise<void> {
+        const key = this.keys(cid, pid).device;
+        await redis.hset(key, {
+            deviceId,
+            socketId,
+            connectedAt: new Date().toISOString(),
+        });
+        await redis.expire(key, SESSION_TTL);
+    }
+
+    async getActiveDevice(cid: string, pid: string): Promise<{ deviceId: string; socketId: string; connectedAt: string } | null> {
+        const raw = await redis.hgetall(this.keys(cid, pid).device);
+        if (!raw?.deviceId) return null;
+        return { deviceId: raw.deviceId, socketId: raw.socketId ?? "", connectedAt: raw.connectedAt ?? "" };
+    }
+
+    /**
+     * Clear device key only if the given socketId matches the stored one.
+     * Prevents an evicted socket's disconnect handler from clearing the
+     * new device's registration.
+     */
+    async clearActiveDeviceIfMatch(cid: string, pid: string, socketId: string): Promise<void> {
+        const lua = `
+            local key = KEYS[1]
+            local expected = ARGV[1]
+            local current = redis.call('HGET', key, 'socketId')
+            if current == expected then
+                redis.call('DEL', key)
+            end
+            return 1
+        `;
+        await redis.eval(lua, 1, this.keys(cid, pid).device, socketId);
     }
 
     // ── Single-participant full snapshot (one pipeline call) ───────────────────

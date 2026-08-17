@@ -42,6 +42,7 @@ export class QuizAuthService {
     async authenticateParticipant(
         contestSlug: string,
         contactToken: string,
+        deviceId?: string,
     ): Promise<QuizAuthResult> {
         // 1. Verify JWT
         const tokenPayload = await verifyContactToken(contactToken);
@@ -118,7 +119,7 @@ export class QuizAuthService {
         const existingSession = await this.sessionRepo.getSession(contest.id, participant.id);
         if (existingSession && existingSession.phase === "IN_QUIZ") {
             // This is a reconnect — skip auth steps, return session token
-            const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId);
+            const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId, deviceId);
             return {
                 participantId: participant.id,
                 contactId: contact.id,
@@ -163,7 +164,7 @@ export class QuizAuthService {
         });
 
         // 8. Create session token
-        const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId);
+        const sessionToken = this.createSessionToken(participant.id, contest.id, organizationId, deviceId);
 
         return {
             participantId: participant.id,
@@ -300,19 +301,20 @@ export class QuizAuthService {
         return participant?.contestId ?? null;
     }
 
-    private createSessionToken(participantId: string, contestId: string, organizationId: string): string {
+    private createSessionToken(participantId: string, contestId: string, organizationId: string, deviceId?: string): string {
         return jwt.sign(
-            { participantId, contestId, organizationId },
+            { participantId, contestId, organizationId, deviceId },
             config.auth.jwt.accessSecret,
             { expiresIn: config.redis.ttl.socketToken },
         );
     }
 
-    verifySessionToken(token: string): { participantId: string; contestId: string; organizationId: string } {
+    verifySessionToken(token: string): { participantId: string; contestId: string; organizationId: string; deviceId?: string } {
         return jwt.verify(token, config.auth.jwt.accessSecret) as {
             participantId: string;
             contestId: string;
             organizationId: string;
+            deviceId?: string;
         };
     }
 
@@ -328,6 +330,7 @@ export class QuizAuthService {
         contestSlug?: string,
         contestId?: string,
         joinCode?: string,
+        deviceId?: string,
     ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string; proctoringEnabled: boolean }> {
         // OTP verification is bypassed/removed since the email identity is already verified during registration.
 
@@ -393,7 +396,7 @@ export class QuizAuthService {
         }
 
         // 4. Issue session token scoped to this participant + contest
-        const sessionToken = this.createSessionToken(participant.id, contest.id, contest.organizationId);
+        const sessionToken = this.createSessionToken(participant.id, contest.id, contest.organizationId, deviceId);
 
         logger.info(`[quiz-auth] participantLogin: participant ${participant.id} authenticated for contest ${contest.id}`);
 

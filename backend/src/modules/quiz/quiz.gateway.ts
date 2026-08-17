@@ -128,14 +128,82 @@ export class QuizGateway {
     }
 
     async handleConnection(socket: Socket) {
-        const { participantId, contestId } = socket.data;
-        logger.info(`[QuizGateway] Participant ${participantId} connected to socket ${socket.id}`);
+        const { participantId, contestId, deviceId } = socket.data;
+        logger.info(`[QuizGateway] Participant ${participantId} connected to socket ${socket.id} (device: ${deviceId})`);
+
+        // ── Single-device enforcement ────────────────────────────────────────────
+        // Check if another device currently owns this participant's session.
+        // If so, evict the old socket before the new one fully joins.
+        if (participantId && contestId) {
+            await this.evictConflictingDevice(socket);
+        }
+
         await socket.join(`contest:${contestId}`);
         await socket.join(`participant:${participantId}`);
+
+        // Register this device as the active one
+        if (participantId && contestId) {
+            await this.quizService.setActiveDevice(contestId, participantId, deviceId || "unknown", socket.id);
+        }
 
         // Cache per-contest proctoring flag on the socket so handleViolation
         // doesn't hit the DB on every proctoring event.
         socket.data.proctoringEnabled = await this.isContestProctoringEnabled(contestId);
+    }
+
+    /**
+     * Evict any existing socket for this participant that belongs to a different device.
+     * Emits quiz:v1:session_killed to the old device and force-disconnects it.
+     * Also notifies the admin dashboard with an admin:v1:device_switched event.
+     */
+    private async evictConflictingDevice(newSocket: Socket): Promise<void> {
+        const { participantId, contestId, organizationId, deviceId } = newSocket.data;
+        const existing = await this.quizService.getActiveDevice(contestId, participantId);
+
+        if (!existing) return;
+
+        // Same device reconnecting (e.g. page refresh, network flap) — no conflict
+        if (existing.deviceId === deviceId) {
+            logger.debug(`[QuizGateway] Same device reconnect for ${participantId} (device: ${deviceId})`);
+            return;
+        }
+
+        logger.warn(
+            `[QuizGateway] Device conflict for participant ${participantId}: ` +
+            `old=${existing.deviceId} (socket ${existing.socketId}) → new=${deviceId} (socket ${newSocket.id})`
+        );
+
+        // Notify old device(s) BEFORE disconnecting them
+        const participantRoom = `participant:${participantId}`;
+        this.server.of("participant").to(participantRoom).emit("quiz:v1:session_killed", {
+            reason: "Your quiz session was opened on another device.",
+        });
+
+        // Force-disconnect all old sockets for this participant (there should be at most one,
+        // but fetchSockets handles edge cases with stale connections)
+        try {
+            const oldSockets = await this.server.of("participant")
+                .in(participantRoom)
+                .fetchSockets();
+            for (const old of oldSockets) {
+                if (old.id !== newSocket.id) {
+                    old.disconnect(true);
+                    logger.info(`[QuizGateway] Evicted old socket ${old.id} for participant ${participantId}`);
+                }
+            }
+        } catch (err) {
+            logger.error(`[QuizGateway] Failed to evict old sockets for ${participantId}: ${err}`);
+        }
+
+        // Notify admin dashboard
+        const name = await this.getParticipantName(participantId);
+        this.broadcastAdminEvent(contestId, "admin:v1:device_switched", {
+            participantId,
+            name,
+            oldDeviceId: existing.deviceId,
+            newDeviceId: deviceId,
+            timestamp: new Date().toISOString(),
+        });
     }
 
     // Per-contest "does this contest have a camera module" setting — distinct
@@ -152,9 +220,13 @@ export class QuizGateway {
 
     async handleDisconnect(socket: Socket) {
         const { participantId, contestId, organizationId } = socket.data;
-        logger.info(`[QuizGateway] Participant ${participantId} disconnected`);
+        logger.info(`[QuizGateway] Participant ${participantId} disconnected (socket: ${socket.id})`);
 
         if (participantId && contestId) {
+            // Only clear device registration if THIS socket is still the active one.
+            // An evicted socket's disconnect must NOT clear the new device's registration.
+            await this.quizService.clearActiveDeviceIfMatch(contestId, participantId, socket.id);
+
             await this.quizService.handleDisconnect(contestId, participantId);
             // Push updated counts to admin
             await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });

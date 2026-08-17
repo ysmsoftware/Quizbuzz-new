@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useRouter, useParams } from 'next/navigation';
+import { getDeviceId } from '../ws-client';
 
 export interface BroadcastMessage {
   type: 'info' | 'warning' | 'urgent';
@@ -34,6 +36,9 @@ export function useWaitingRoomSocket(
     onUnauthorized?: () => void;
   },
 ) {
+  const router = useRouter();
+  const params = useParams();
+  const slug = params?.slug as string;
   const [status, setStatus] = useState<WaitingStatus>('connecting');
   const [participantCount, setParticipantCount] = useState<number>(0);
   const [broadcastMessage, setBroadcastMessage] = useState<BroadcastMessage | null>(null);
@@ -65,7 +70,7 @@ export function useWaitingRoomSocket(
 
     const socket = io(`${wsUrl}/participant`, {
       path: '/socket.io',
-      auth: { token: sessionToken },
+      auth: { token: sessionToken, deviceId: getDeviceId() },
       transports: ['polling', 'websocket'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
@@ -106,6 +111,17 @@ export function useWaitingRoomSocket(
 
     socket.on('quiz:v1:broadcast', (msg: BroadcastMessage) => {
       setBroadcastMessage(msg);
+    });
+
+    socket.on('quiz:v1:session_killed', (data: { reason?: string }) => {
+      console.warn('Session killed by server in waiting room:', data.reason);
+      killSocket();
+      setStatus('error');
+      if (slug) {
+        router.push(`/quiz/${slug}/conflict`);
+      } else {
+        router.push('/contests');
+      }
     });
 
     // ── Schedule moved while we're sitting here ───────────────────────────────

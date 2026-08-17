@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { MonitorOff, ArrowRight, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 
 // ═══════════════════════════════════════════════════════
 // SessionConflictPage — Shown when another device takes over
@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation';
 
 export function SessionConflictPage() {
   const router = useRouter();
+  const params = useParams();
+  const slug = params?.slug as string;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background p-6">
@@ -44,7 +46,7 @@ export function SessionConflictPage() {
           </div>
 
           <Button
-            onClick={() => router.push('/contests')}
+            onClick={() => router.push(slug ? `/quiz/${slug}/join` : '/contests')}
             className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
           >
             Re-enter from this device

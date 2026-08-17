@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { useRouter, useParams } from 'next/navigation';
+import { getDeviceId } from '../ws-client';
 
 interface UseQuizSocketProps {
     contestId: string;
@@ -64,6 +66,9 @@ export function useQuizSocket({
     onCaptureRequest,
     onBroadcast,
 }: UseQuizSocketProps) {
+    const router = useRouter();
+    const params = useParams();
+    const slug = params?.slug as string;
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,7 +115,7 @@ export function useQuizSocket({
             `${process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000'}/participant`,
             {
                 path: '/socket.io',
-                auth: { token: socketToken },
+                auth: { token: socketToken, deviceId: getDeviceId() },
                 transports: ['polling', 'websocket'],
                 reconnectionAttempts: 5,
                 reconnectionDelay: 2000,
@@ -139,6 +144,20 @@ export function useQuizSocket({
         socket.on('connect_error', (err) => {
             if (err.message === 'UNAUTHORIZED') {
                 toast.error('Session expired. Please log in again.');
+            }
+        });
+
+        socket.on('quiz:v1:session_killed', (data: { reason?: string }) => {
+            console.warn('Session killed by server:', data.reason);
+            toast.error(data.reason || 'Your session has been terminated because you logged in on another device.');
+            stopHeartbeat();
+            socket.disconnect();
+            socketRef.current = null;
+            setIsConnected(false);
+            if (slug) {
+                router.push(`/quiz/${slug}/conflict`);
+            } else {
+                router.push('/contests');
             }
         });
 

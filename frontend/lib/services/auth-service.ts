@@ -1,4 +1,5 @@
 import type { ApiResponse } from '@/lib/types';
+import { getDeviceId } from '@/lib/ws-client';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
@@ -47,14 +48,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 class AuthService {
     // Generate device ID
     private getDeviceId(): string {
-        let deviceId = typeof window !== 'undefined' ? localStorage.getItem('quizbuzz_device_id') : null;
-        if (!deviceId) {
-            deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('quizbuzz_device_id', deviceId);
-            }
-        }
-        return deviceId;
+        return getDeviceId();
     }
 
     // Mask phone/email for display
@@ -114,6 +108,8 @@ class AuthService {
         contestId?: string
     ): Promise<ApiResponse<OTPVerifyResponse>> {
         try {
+            const deviceId = this.getDeviceId();
+
             const res = await apiPost<{
                 success: boolean;
                 data: {
@@ -128,10 +124,9 @@ class AuthService {
                 otp,
                 contestSlug,
                 joinCode,
-                contestId
+                contestId,
+                deviceId
             });
-
-            const deviceId = this.getDeviceId();
 
             // Store session
             const sessionData: SessionData = {
@@ -189,29 +184,6 @@ class AuthService {
         if (typeof window !== 'undefined') {
             sessionStorage.removeItem(SESSION_KEY);
         }
-    }
-
-    // Check for session conflict (another device)
-    async checkSessionConflict(
-        participantId: string,
-        contestId: string
-    ): Promise<ApiResponse<{ hasConflict: boolean; currentDeviceId?: string }>> {
-        // Simulating no conflict for this environment
-        return {
-            success: true,
-            data: { hasConflict: false }
-        };
-    }
-
-    // Force session on this device (override other sessions)
-    async forceSession(
-        participantId: string,
-        contestId: string
-    ): Promise<ApiResponse<{ success: boolean }>> {
-        return {
-            success: true,
-            data: { success: true }
-        };
     }
 }
 
