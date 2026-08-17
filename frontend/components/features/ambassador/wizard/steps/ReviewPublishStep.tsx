@@ -1,14 +1,16 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { FieldErrorMap } from '../../campaign-schema';
 import { calculateCampaignCapacity } from '../../campaign-capacity';
+import { Rupees } from '../../Rupees';
 import { stepForErrorPath, stepLabel, type StepKey, type WizardDraft } from '../wizard-types';
 import type { AmbassadorGroupInput } from '@/lib/types/ambassador';
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between py-1.5 text-sm border-b border-border/40 last:border-0">
       <span className="text-muted-foreground">{label}</span>
@@ -38,14 +40,14 @@ export function ReviewPublishStep({
   const errorEntries = publishErrors ? Object.entries(publishErrors) : [];
   const capacity = calculateCampaignCapacity(groups);
 
-  const speedBonusBudgetPaise = draft.rewardConfig.speedBonus?.enabled
+  const speedBonusBudget = draft.rewardConfig.speedBonus?.enabled
     ? (draft.rewardConfig.speedBonus.tiers ?? []).reduce(
         (acc, t) => acc + (t.maxWinners ? t.maxWinners * t.bonusAmount : t.bonusAmount),
         0,
       )
     : 0;
 
-  const leaderboardBudgetPaise = (draft.rewardConfig.leaderboardPrizes ?? []).reduce((accCut, cut) => {
+  const leaderboardBudget = (draft.rewardConfig.leaderboardPrizes ?? []).reduce((accCut, cut) => {
     const rankSum = (cut.ranks ?? []).reduce((accRank, r) => {
       const cash = r.cashAmount ?? 0;
       const goodie = r.goodie?.cashEquivalent ?? 0;
@@ -55,7 +57,7 @@ export function ReviewPublishStep({
     return accCut + rankSum + consolationSum;
   }, 0);
 
-  const totalPrizeInvestmentRupees = Math.round((speedBonusBudgetPaise + leaderboardBudgetPaise) / 100);
+  const totalPrizeInvestment = speedBonusBudget + leaderboardBudget;
 
   return (
     <div className="space-y-4">
@@ -85,20 +87,20 @@ export function ReviewPublishStep({
         </CardContent>
       </Card>
 
-      {totalPrizeInvestmentRupees > 0 && (
+      {totalPrizeInvestment > 0 && (
         <Card className="border-border/50 bg-muted/20">
           <CardHeader>
             <CardTitle className="text-base">Estimated Investment Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {speedBonusBudgetPaise > 0 && (
-              <SummaryRow label="Speed Bonus Budget" value={`₹${Math.round(speedBonusBudgetPaise / 100).toLocaleString('en-IN')}`} />
+            {speedBonusBudget > 0 && (
+              <SummaryRow label="Speed Bonus Budget" value={<Rupees amount={speedBonusBudget} />} />
             )}
-            {leaderboardBudgetPaise > 0 && (
-              <SummaryRow label="Leaderboard Prizes Budget" value={`₹${Math.round(leaderboardBudgetPaise / 100).toLocaleString('en-IN')}`} />
+            {leaderboardBudget > 0 && (
+              <SummaryRow label="Leaderboard Prizes Budget" value={<Rupees amount={leaderboardBudget} />} />
             )}
             <div className="pt-2 font-semibold">
-              <SummaryRow label="Est. Total Prize/Bonus Investment" value={`₹${totalPrizeInvestmentRupees.toLocaleString('en-IN')}`} />
+              <SummaryRow label="Est. Total Prize/Bonus Investment" value={<Rupees amount={totalPrizeInvestment} />} />
             </div>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, AmbassadorCampaignTemplate, AmbassadorGroup, Prisma } from "@prisma/client";
+import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, AmbassadorCampaignTemplate, AmbassadorGroup, AmbassadorStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../config/db";
 
 export interface FindCampaignsFilter {
@@ -21,10 +21,19 @@ export interface FindTemplatesFilter {
 }
 
 export type CampaignWithContestTitle = AmbassadorCampaign & { contest: { title: string; slug: string } | null; _count: { enrollments: number } };
+export type CampaignWithContestAndOrg = AmbassadorCampaign & {
+    contest: { title: string; slug: string } | null;
+    organization: { name: string; slug: string };
+    _count: { enrollments: number };
+};
 export type EnrollmentWithCampaign = AmbassadorCampaignEnrollment & {
     campaign: AmbassadorCampaign & { contest: { title: string; slug: string } | null };
 };
+export type EnrollmentWithCampaignAndOrg = AmbassadorCampaignEnrollment & {
+    campaign: AmbassadorCampaign & { contest: { title: string; slug: string } | null; organization: { name: string; slug: string } };
+};
 export type EnrollmentWithAmbassador = AmbassadorCampaignEnrollment & { ambassador: Ambassador };
+export type EnrollmentWithAmbassadorAndCampaignName = AmbassadorCampaignEnrollment & { ambassador: Ambassador; campaign: { name: string } };
 
 export class AmbassadorCampaignRepository {
 
@@ -58,6 +67,16 @@ export class AmbassadorCampaignRepository {
 
     async findByContestId(contestId: string, organizationId: string): Promise<AmbassadorCampaign | null> {
         return prisma.ambassadorCampaign.findFirst({ where: { contestId, organizationId } });
+    }
+
+    /** Org-agnostic lookup — used by the ambassador-facing side, where a campaign's
+     *  organization is just data to display, not a scoping/access-control boundary
+     *  (an ambassador identity isn't tied to any one org). */
+    async findByIdGlobal(id: string): Promise<CampaignWithContestTitle | null> {
+        return prisma.ambassadorCampaign.findUnique({
+            where: { id },
+            include: { contest: { select: { title: true, slug: true } }, _count: { select: { enrollments: true } } },
+        });
     }
 
     async findAll(filter: FindCampaignsFilter): Promise<{ rows: CampaignWithContestTitle[]; total: number }> {
@@ -105,15 +124,15 @@ export class AmbassadorCampaignRepository {
 
     // Ambassador-facing reads
 
-    async findActiveForOrgAndType(params: {
-        organizationId: string;
+    /** Cross-organization browse — same "not scoped to one org" shape as the public
+     *  /contests listing, just filtered to this ambassador's own type. */
+    async findActiveForType(params: {
         ambassadorType: string;
         excludeCampaignIds: string[];
         skip: number;
         take: number;
-    }): Promise<{ rows: CampaignWithContestTitle[]; total: number }> {
+    }): Promise<{ rows: CampaignWithContestAndOrg[]; total: number }> {
         const where: Prisma.AmbassadorCampaignWhereInput = {
-            organizationId: params.organizationId,
             status: AmbassadorCampaignStatus.LIVE,
             ambassadorTypesAllowed: { has: params.ambassadorType },
             ...(params.excludeCampaignIds.length ? { id: { notIn: params.excludeCampaignIds } } : {}),
@@ -125,7 +144,11 @@ export class AmbassadorCampaignRepository {
                 skip: params.skip,
                 take: params.take,
                 orderBy: { createdAt: "desc" },
-                include: { contest: { select: { title: true, slug: true } }, _count: { select: { enrollments: true } } },
+                include: {
+                    contest: { select: { title: true, slug: true } },
+                    organization: { select: { name: true, slug: true } },
+                    _count: { select: { enrollments: true } },
+                },
             }),
             prisma.ambassadorCampaign.count({ where }),
         ]);
@@ -141,16 +164,14 @@ export class AmbassadorCampaignRepository {
         return rows.map((r) => r.campaignId);
     }
 
-    async findEnrollmentsByAmbassador(params: {
+    /** Cross-organization — an ambassador's applications, whichever org each campaign
+     *  belongs to (mirrors findActiveForType's org-agnostic browsing below). */
+    async findEnrollmentsByAmbassadorGlobal(params: {
         ambassadorId: string;
-        organizationId: string;
         skip: number;
         take: number;
-    }): Promise<{ rows: EnrollmentWithCampaign[]; total: number }> {
-        const where: Prisma.AmbassadorCampaignEnrollmentWhereInput = {
-            ambassadorId: params.ambassadorId,
-            campaign: { organizationId: params.organizationId },
-        };
+    }): Promise<{ rows: EnrollmentWithCampaignAndOrg[]; total: number }> {
+        const where: Prisma.AmbassadorCampaignEnrollmentWhereInput = { ambassadorId: params.ambassadorId };
 
         const [rows, total] = await prisma.$transaction([
             prisma.ambassadorCampaignEnrollment.findMany({
@@ -158,7 +179,14 @@ export class AmbassadorCampaignRepository {
                 skip: params.skip,
                 take: params.take,
                 orderBy: { createdAt: "desc" },
-                include: { campaign: { include: { contest: { select: { title: true, slug: true } } } } },
+                include: {
+                    campaign: {
+                        include: {
+                            contest: { select: { title: true, slug: true } },
+                            organization: { select: { name: true, slug: true } },
+                        },
+                    },
+                },
             }),
             prisma.ambassadorCampaignEnrollment.count({ where }),
         ]);
@@ -190,6 +218,11 @@ export class AmbassadorCampaignRepository {
      * contestId + ACTIVE check as a data-integrity guard rather than the
      * primary scoping mechanism (@@unique([contestId]) on AmbassadorCampaign
      * already makes "this contest's one active campaign" unambiguous).
+     *
+     * Also gates on enrollment.status === APPROVED: a referral code is assigned the
+     * moment someone one-click-applies (status PENDING), but only counts toward
+     * attribution once that campaign's organization has approved the application —
+     * otherwise anyone could grab a link before ever being reviewed.
      */
     async findEnrollmentByReferralCodeForContest(
         referralCode: string,
@@ -200,9 +233,62 @@ export class AmbassadorCampaignRepository {
             include: { campaign: { select: { contestId: true, status: true } } },
         });
         if (!enrollment) return null;
+        if (enrollment.status !== AmbassadorStatus.APPROVED) return null;
         if (enrollment.campaign.contestId !== contestId) return null;
         if (enrollment.campaign.status !== AmbassadorCampaignStatus.LIVE) return null;
         return enrollment;
+    }
+
+    // ─── Applications review (org-admin) — operates on enrollments, the per-campaign
+    // approval unit, not on Ambassador (which is now a global identity with no status) ──
+
+    async findApplications(params: {
+        organizationId: string;
+        statuses: string[];
+        skip: number;
+        take: number;
+        sortBy: "appliedAt" | "firstName";
+        sortOrder: "asc" | "desc";
+    }): Promise<{ rows: EnrollmentWithAmbassadorAndCampaignName[]; total: number }> {
+        const where: Prisma.AmbassadorCampaignEnrollmentWhereInput = {
+            campaign: { organizationId: params.organizationId },
+            ...(params.statuses.length > 0 ? { status: { in: params.statuses as AmbassadorStatus[] } } : {}),
+        };
+        const orderBy: Prisma.AmbassadorCampaignEnrollmentOrderByWithRelationInput =
+            params.sortBy === "firstName"
+                ? { ambassador: { firstName: params.sortOrder } }
+                : { createdAt: params.sortOrder };
+
+        const [rows, total] = await prisma.$transaction([
+            prisma.ambassadorCampaignEnrollment.findMany({
+                where,
+                skip: params.skip,
+                take: params.take,
+                orderBy,
+                include: { ambassador: true, campaign: { select: { name: true } } },
+            }),
+            prisma.ambassadorCampaignEnrollment.count({ where }),
+        ]);
+
+        return { rows, total };
+    }
+
+    async findApplicationById(id: string, organizationId: string): Promise<EnrollmentWithAmbassadorAndCampaignName | null> {
+        return prisma.ambassadorCampaignEnrollment.findFirst({
+            where: { id, campaign: { organizationId } },
+            include: { ambassador: true, campaign: { select: { name: true } } },
+        });
+    }
+
+    async updateApplicationStatus(
+        id: string,
+        data: { status: AmbassadorStatus; reviewedById?: string; rejectionReason?: string | null },
+    ): Promise<EnrollmentWithAmbassadorAndCampaignName> {
+        return prisma.ambassadorCampaignEnrollment.update({
+            where: { id },
+            data: { ...data, reviewedAt: new Date() },
+            include: { ambassador: true, campaign: { select: { name: true } } },
+        });
     }
 
     // Live stats support — computed at read time, never stored (§6.3)

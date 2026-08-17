@@ -1,13 +1,22 @@
-import { AmbassadorStatus } from "@prisma/client";
-
 // ─── DTOs (controller → service) ───────────────────────────────────────────────
+//
+// Signup is a 2-step flow, mirroring the platform-level identity model:
+//   1. signupStart   — name/email/phone, sends an OTP. No Ambassador row yet.
+//   2. signupComplete — after OTP is verified, the ambassador picks their type and
+//      uploads proof. This is the point the Ambassador row is actually created.
+// Between the two steps, the pending identity + OTP hash + "verified" flag live in
+// Redis (see ambassadorSignupKey in ambassador.service.ts) — there's deliberately no
+// partial/half-created Ambassador row while someone is mid-signup.
 
-export interface ApplyAmbassadorDTO {
-    organizationId: string;
+export interface SignupStartDTO {
     firstName: string;
     lastName?: string | undefined;
     email: string;
     phone?: string | undefined;
+}
+
+export interface SignupCompleteDTO {
+    email: string;
     ambassadorType: string;
     applicationData: Record<string, unknown>;
     proofStorageKey: string;
@@ -15,27 +24,8 @@ export interface ApplyAmbassadorDTO {
 }
 
 export interface RequestUploadUrlDTO {
-    organizationId: string;
     filename: string;
     mimeType: string;
-}
-
-// ─── Result / Filter shapes ─────────────────────────────────────────────────────
-
-export interface AmbassadorResult {
-    id: string;
-    organizationId: string;
-    email: string;
-    phone: string | null;
-    firstName: string;
-    lastName: string | null;
-    ambassadorType: string;
-    applicationData: Record<string, unknown>;
-    status: AmbassadorStatus;
-    proofUrl: string;
-    appliedAt: Date;
-    reviewedAt: Date | null;
-    rejectionReason: string | null;
 }
 
 export interface UploadUrlResult {
@@ -43,8 +33,21 @@ export interface UploadUrlResult {
     url: string;
 }
 
+// ─── Result / input shapes ──────────────────────────────────────────────────────
+
+export interface AmbassadorResult {
+    id: string;
+    email: string;
+    phone: string | null;
+    firstName: string;
+    lastName: string | null;
+    ambassadorType: string;
+    applicationData: Record<string, unknown>;
+    proofUrl: string;
+    createdAt: Date;
+}
+
 export interface CreateAmbassadorInput {
-    organizationId: string;
     email: string;
     phone?: string | null | undefined;
     firstName: string;
@@ -53,13 +56,4 @@ export interface CreateAmbassadorInput {
     applicationData: Record<string, unknown>;
     proofStorageKey: string;
     proofUrl: string;
-}
-
-export interface FindAmbassadorsFilter {
-    organizationId: string;
-    statuses?: string[] | undefined;
-    skip: number;
-    take: number;
-    sortBy: "appliedAt" | "firstName";
-    sortOrder: "asc" | "desc";
 }

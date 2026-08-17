@@ -39,7 +39,7 @@ export const EMPTY_DRAFT: WizardDraft = {
   name: '',
   contestId: '',
   ambassadorTypesAllowed: [],
-  rewardConfig: { currency: 'INR', amountsInPaise: true, milestoneTiers: [], leaderboardPrizes: [] },
+  rewardConfig: { currency: 'INR', milestoneTiers: [], leaderboardPrizes: [] },
   shareTemplates: {},
   startDate: '',
   endDate: '',

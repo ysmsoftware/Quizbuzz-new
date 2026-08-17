@@ -3,15 +3,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { ambassadorService } from '@/lib/services/ambassador-service';
 
+/** Login for a returning ambassador — platform-level, email only (no organizationId). */
 export function useAmbassadorAuth() {
   const requestOtpMutation = useMutation({
-    mutationFn: ({ email, organizationId }: { email: string; organizationId: string }) =>
-      ambassadorService.requestOtp(email, organizationId),
+    mutationFn: (email: string) => ambassadorService.requestOtp(email),
   });
 
   const verifyOtpMutation = useMutation({
-    mutationFn: ({ email, organizationId, otp }: { email: string; organizationId: string; otp: string }) =>
-      ambassadorService.verifyOtp(email, organizationId, otp),
+    mutationFn: ({ email, otp }: { email: string; otp: string }) => ambassadorService.verifyOtp(email, otp),
   });
 
   return {

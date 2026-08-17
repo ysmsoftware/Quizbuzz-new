@@ -19,32 +19,37 @@ export function ProofReviewSheet({ applicationId, onClose }: { applicationId: st
             <Skeleton className="h-64 w-full rounded-lg" />
           ) : (
             <>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Campaign</p>
+                <p className="text-sm font-medium">{application.campaignName}</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-muted-foreground">Name</p>
                   <p className="font-medium">
-                    {application.firstName} {application.lastName}
+                    {application.ambassador.firstName} {application.ambassador.lastName}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Email</p>
-                  <p className="font-medium">{application.email}</p>
+                  <p className="font-medium">{application.ambassador.email}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Phone</p>
-                  <p className="font-medium">{application.phone || '—'}</p>
+                  <p className="font-medium">{application.ambassador.phone || '—'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Type</p>
-                  <p className="font-medium">{application.ambassadorType}</p>
+                  <p className="font-medium">{application.ambassador.ambassadorType}</p>
                 </div>
               </div>
 
-              {Object.keys(application.applicationData || {}).length > 0 && (
+              {Object.keys(application.ambassador.applicationData || {}).length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Application Details</p>
                   <div className="space-y-1 text-sm">
-                    {Object.entries(application.applicationData).map(([key, value]) => (
+                    {Object.entries(application.ambassador.applicationData).map(([key, value]) => (
                       <div key={key} className="flex justify-between gap-2">
                         <span className="text-muted-foreground">{key}</span>
                         <span className="font-medium text-right">{String(value)}</span>

@@ -100,6 +100,7 @@ export function useOrgAmbassadorCampaign(id: string) {
     campaign: query.data?.data,
     isLoading: query.isLoading,
     isError: query.isError,
+    refetch: query.refetch,
     updateCampaign: updateMutation.mutateAsync,
     updateCampaignLoading: updateMutation.isPending,
     updateCampaignError: updateMutation.error as Error | null,

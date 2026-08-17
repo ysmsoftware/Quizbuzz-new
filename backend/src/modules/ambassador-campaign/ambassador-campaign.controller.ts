@@ -256,6 +256,16 @@ export class AmbassadorCampaignController {
 
     // ─── Report + leaderboard ────────────────────────────────────────────────────
 
+    getCampaignStatsSummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.getCampaignStatsSummary(organizationId, req.params.id as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     getCampaignReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const organizationId = req.user!.organizationId;

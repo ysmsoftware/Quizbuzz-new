@@ -115,7 +115,6 @@ const leaderboardCutSchema = z.object({ scope: leaderboardScopeSchema, ...leader
 // at publish time (POST /campaigns/:id/publish), never against a single wizard-step PATCH.
 const rewardConfigSchema = z.object({
     currency: z.string().min(1, "Currency is required"),
-    amountsInPaise: z.literal(true),
     milestoneTiers: z.array(milestoneTierSchema).min(1, "Add at least one milestone reward tier."),
     speedBonus: speedBonusSchema.optional(),
     leaderboardPrizes: z.array(leaderboardCutSchema),
@@ -126,7 +125,6 @@ const rewardConfigSchema = z.object({
 // CreateCampaignSchema (start a draft) and UpdateCampaignSchema (save a step / edit later).
 const draftRewardConfigSchema = z.object({
     currency: z.string().min(1, "Currency is required").optional(),
-    amountsInPaise: z.literal(true).optional(),
     milestoneTiers: z.array(milestoneTierSchema).default([]),
     // Lenient fields-only shape (no superRefine) — an admin can flip Speed Bonus on and fill it
     // in gradually across several step-saves without every field needing to be complete yet.

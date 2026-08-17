@@ -4,6 +4,9 @@ import jwt from "jsonwebtoken";
 import { config } from "../config";
 import logger from "../config/logger";
 import { UnauthorizedError } from "../error/http-errors";
+import { AmbassadorRepository } from "../modules/ambassador/ambassador.repository";
+
+const ambassadorRepo = new AmbassadorRepository();
 
 export const authenticatedAmbassadorMiddleware = async (
     req: Request,
@@ -28,27 +31,28 @@ export const authenticatedAmbassadorMiddleware = async (
             throw new UnauthorizedError("Unauthorized ambassador");
         }
 
+        let payload: { ambassadorId: string };
         try {
-            const payload = jwt.verify(token, config.auth.jwt.accessSecret) as {
-                ambassadorId: string;
-                organizationId: string;
-            };
-
-            req.ambassador = {
-                id: payload.ambassadorId,
-                organizationId: payload.organizationId,
-            };
-
-            Sentry.getCurrentScope().setUser({
-                id: payload.ambassadorId,
-                organizationId: payload.organizationId,
-            } as any);
-
-            logger.debug(`Ambassador authenticated: ${payload.ambassadorId} org: ${payload.organizationId}`);
-            next();
+            payload = jwt.verify(token, config.auth.jwt.accessSecret) as { ambassadorId: string };
         } catch (err) {
             throw new UnauthorizedError("Invalid ambassador session token");
         }
+
+        const ambassador = await ambassadorRepo.findById(payload.ambassadorId);
+        if (!ambassador || !ambassador.isActive) {
+            throw new UnauthorizedError("This ambassador account has been deactivated.");
+        }
+
+        req.ambassador = {
+            id: payload.ambassadorId,
+        };
+
+        Sentry.getCurrentScope().setUser({
+            id: payload.ambassadorId,
+        } as any);
+
+        logger.debug(`Ambassador authenticated: ${payload.ambassadorId}`);
+        next();
     } catch (error) {
         next(error);
     }

@@ -15,10 +15,7 @@ import { useOrgAmbassadorCampaign } from '@/lib/hooks/useOrgAmbassadorCampaigns'
 import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 import { LeaderboardTable } from '@/components/features/ambassador/LeaderboardTable';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
-
-function formatPaise(paise: number, currency = 'INR') {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(paise / 100);
-}
+import { Rupees } from '@/components/features/ambassador/Rupees';
 
 export default function AmbassadorCampaignReportPage() {
   const params = useParams();
@@ -90,7 +87,7 @@ export default function AmbassadorCampaignReportPage() {
                   <TableCell className="text-muted-foreground">{row.email}</TableCell>
                   <TableCell className="text-right">{row.registrationCount}</TableCell>
                   <TableCell>{row.currentTierLabel ?? '—'}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatPaise(row.accruedAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold"><Rupees amount={row.accruedAmount} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

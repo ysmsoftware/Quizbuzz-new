@@ -11,8 +11,7 @@ declare global {
                 organizationId: string;
             };
             ambassador?: {
-                id: string;
-                organizationId: string;
+                id: string; // platform-level identity — not scoped to an organization
             };
             id: string;
         }

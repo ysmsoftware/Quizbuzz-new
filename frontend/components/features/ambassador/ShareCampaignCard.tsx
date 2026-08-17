@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Copy, Check, Share2, MessageCircle, Download } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -83,16 +84,29 @@ export function ShareCampaignCard({ campaignName, referralLink, whatsappText, po
           </Button>
         )}
 
-        {posterImageUrl && (
-          <a
-            href={posterImageUrl}
-            download
-            className="flex items-center justify-center gap-2 text-sm text-primary hover:underline font-medium py-2"
-          >
-            <Download className="h-4 w-4" />
-            Download poster
-          </a>
-        )}
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-3">
+            {/* White plate behind the code so it stays scannable in dark mode too. */}
+            <div className="rounded-md bg-white p-1.5 shrink-0">
+              <QRCodeSVG value={referralLink} size={44} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Scan to share</p>
+              <p className="text-xs text-muted-foreground">Same link, as a QR code</p>
+            </div>
+          </div>
+
+          {posterImageUrl && (
+            <a
+              href={posterImageUrl}
+              download
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline font-medium shrink-0"
+            >
+              <Download className="h-4 w-4" />
+              Poster
+            </a>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

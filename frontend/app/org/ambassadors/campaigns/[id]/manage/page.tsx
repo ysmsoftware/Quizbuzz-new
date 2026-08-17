@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useOrgAmbassadorCampaign } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from '@/components/features/ambassador/campaign-status';
-import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/dashboard/CampaignManagePanel';
+import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/admin/CampaignManagePanel';
 
 /**
  * Campaign edit surface — the standalone-page fallback for direct links/bookmarks. The
