@@ -17,6 +17,7 @@ import {
 import {
   ArrowLeft, Plus, Trash2, Save, CheckCircle2, Loader2,
   Upload, FileText, X, AlertCircle, AlertTriangle, ChevronDown,
+  Copy, Check,
 } from 'lucide-react';
 import { useQuestions, useQuestionTags } from '@/lib/hooks/useQuestions';
 import { toast } from 'sonner';
@@ -45,6 +46,46 @@ interface QuestionForm {
   options: Option[];
 }
 
+// ─── AI prompt (mirrors buildAiPrompt in CertificateTemplateModal.tsx) ─────────
+// Grounded in the real bulk-upload contract: question-parser.ts's primary column
+// detection (questionText/difficulty/category/option1-6/correctOption) and the
+// actual template at /templates/questions_template.csv — not aspirational.
+// Works for both generating new questions from a topic and fixing an existing
+// file already in the wrong format (e.g. isCorrect boolean columns).
+
+function buildQuestionsAiPrompt(): string {
+  return `I'm building a multiple-choice question bank for an online contest/quiz platform. Questions are uploaded as a CSV/Excel file with this exact header row and column order:
+
+questionText,difficulty,category,option1,option2,option3,option4,correctOption
+
+- questionText: the question itself, 5-2000 characters.
+- difficulty: exactly one of EASY, MEDIUM, or HARD (case-insensitive).
+- category: a single topic/tag for the question (e.g. "React", "SQL", "General Knowledge").
+- option1..option4: the four answer choices, 1-500 characters each. You can add up to two more columns (option5, option6) if a question needs 5 or 6 choices — 2 is the minimum, 6 is the maximum.
+- correctOption: the 1-based index of the correct answer among the options you provided for that row (e.g. 2 means option2 is correct). One number, not a boolean, and never more than one correct answer per question.
+
+Two optional extra columns are also supported if wanted: hint (max 500 characters) and explanation (max 2000 characters) — add them as extra columns after correctOption, with those exact header names.
+
+This prompt covers two different jobs — read both option blocks near the bottom, fill in ONLY the one that matches what I'm doing right now, and ignore the other:
+- OPTION A — GENERATE NEW QUESTIONS FROM A TOPIC: I'll give you a topic and how many questions I want; write brand-new multiple-choice questions in the exact CSV format above.
+- OPTION B — FIX AN EXISTING FILE: I'll paste my existing CSV/spreadsheet data below, in whatever format it's currently in; convert it to the exact CSV format above, correcting anything that doesn't match — wrong header names, separate per-option "isCorrect" boolean columns instead of a single correctOption index, wrong difficulty casing, etc. Keep the original question wording and answers intact, only fix the structure/format.
+
+Rules that apply either way:
+1. Output plain CSV text only — the header row exactly as shown, then one row per question, comma-separated, with any field containing a comma or quote wrapped in double quotes.
+2. Every row needs exactly one correct answer marked via the correctOption index — never zero, never more than one.
+3. Don't invent extra columns beyond questionText, difficulty, category, option1-6, correctOption, hint, explanation — anything else is ignored by the system.
+
+--- FILL IN ONLY ONE OF THE TWO SECTIONS BELOW ---
+
+OPTION A — Generate new questions:
+[Topic, number of questions, difficulty mix, and any other requirements. Leave blank if using Option B instead.]
+
+OPTION B — Fix an existing file:
+[Paste your existing CSV/spreadsheet content here, including its header row. Leave blank if using Option A instead.]
+
+Give me back the complete CSV file content only, ready to save as a .csv and upload as-is. If you were fixing an existing file, also include a short bullet list of exactly what was wrong and what you changed.`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CreateQuestionPage() {
@@ -63,6 +104,14 @@ export default function CreateQuestionPage() {
   const [categoryInput, setCategoryInput] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copiedAiPrompt, setCopiedAiPrompt] = useState(false);
+
+  const handleCopyAiPrompt = () => {
+    navigator.clipboard.writeText(buildQuestionsAiPrompt());
+    setCopiedAiPrompt(true);
+    toast.success('Prompt copied — paste it into ChatGPT, Claude, or any AI tool');
+    setTimeout(() => setCopiedAiPrompt(false), 2000);
+  };
 
   // Use existing tags from the backend, fallback to 'General' if empty
   const allCategories = existingTags.length > 0 ? existingTags : ['General'];
@@ -312,8 +361,18 @@ export default function CreateQuestionPage() {
           <Card className="border-border/50">
             <CardHeader>
               <CardTitle>Bulk Upload (CSV)</CardTitle>
-              <CardDescription>
-                Download the <a href="/templates/questions_template.csv" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CSV Template</a> to get started.
+              <CardDescription className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                <span>
+                  Download the <a href="/templates/questions_template.csv" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CSV Template</a> to get started.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyAiPrompt}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                >
+                  {copiedAiPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt (to fix)'}
+                </button>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
