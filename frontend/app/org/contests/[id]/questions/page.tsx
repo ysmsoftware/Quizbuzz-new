@@ -833,17 +833,13 @@ function ImportCSVModal({
         }
     };
 
+    // Single source of truth: the static file at /templates/questions_template.csv
+    // (also linked from /org/questions/create). Never duplicate its column format
+    // here — a future format change only has to happen in that one file.
     const downloadTemplate = () => {
-        const csvContent =
-            "questionText,difficulty,marks,negativeMark,option1,option1Correct,option2,option2Correct,option3,option3Correct,option4,option4Correct,hint,explanation,tags\n" +
-            '"What is the capital of France?","EASY",4,1,"Paris",true,"London",false,"Berlin",false,"Madrid",false,"Think of Eiffel Tower","Paris is the capital of France.","geography,capitals"\n' +
-            '"Which programming language is a typed superset of JavaScript?","MEDIUM",4,1,"TypeScript",true,"Python",false,"Java",false,"C++",false,"Developed by Microsoft","TypeScript compiles to clean JavaScript.","programming,web"';
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", "quizbuzz_questions_template.csv");
+        link.href = "/templates/questions_template.csv";
+        link.download = "questions_template.csv";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
