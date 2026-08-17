@@ -14,24 +14,13 @@ import {
     AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 import {
-    Calendar,
-    Clock,
-    Users,
     ShieldCheck,
-    Trophy,
     CreditCard,
-    ExternalLink,
-    CheckCircle2,
     AlertCircle,
-    FileText,
-    Settings,
-    ChevronDown,
-    ChevronUp,
     Tag,
     Monitor,
     Tablet,
     Smartphone,
-    Copy,
     Plus,
     Loader2,
     Trash2,
@@ -40,8 +29,7 @@ import {
     Pencil
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
+
 import { fmtDateTime } from '@/lib/formatDate';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
 import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
@@ -52,7 +40,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EditableField } from '@/components/ui/editable-field';
 import { ContestPrizeBracket } from '@/components/features/contests/ContestPrizeBracket';
 import { EditPrizesModal, PrizeBracketDraft } from '@/components/features/contests/EditPrizesModal';
@@ -135,7 +122,7 @@ export default function ContestOverviewPage() {
         isOpen: false,
         title: '',
         description: '',
-        onConfirm: () => {},
+        onConfirm: () => { },
     });
 
     const phase = useMemo(() => {
@@ -251,7 +238,7 @@ export default function ContestOverviewPage() {
         const reader = new FileReader();
         reader.onloadend = async () => {
             const preview = reader.result as string;
-            
+
             const performUpload = async () => {
                 setUploadingBanner(true);
                 try {
@@ -519,9 +506,9 @@ export default function ContestOverviewPage() {
                         <div className="flex items-center justify-between">
                             <h2 className="text-xl font-bold tracking-tight">Rules & Proctoring</h2>
                             {(isDraft || isPublished) && (
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     className="text-primary hover:text-primary/80"
                                     onClick={() => {
                                         setIsAddingRule(true);
@@ -567,9 +554,9 @@ export default function ContestOverviewPage() {
                                                         <span className="text-foreground/80 leading-relaxed pt-0.5">{rule}</span>
                                                         {(isDraft || isPublished) && (
                                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <Button 
-                                                                    size="icon" 
-                                                                    variant="ghost" 
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
                                                                     className="h-7 w-7 text-muted-foreground hover:text-foreground"
                                                                     onClick={() => {
                                                                         setEditingRuleIdx(idx);
@@ -578,9 +565,9 @@ export default function ContestOverviewPage() {
                                                                 >
                                                                     <Pencil className="h-3 w-3" />
                                                                 </Button>
-                                                                <Button 
-                                                                    size="icon" 
-                                                                    variant="ghost" 
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
                                                                     className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
                                                                     onClick={() => handleDeleteRule(idx)}
                                                                 >
@@ -641,15 +628,6 @@ export default function ContestOverviewPage() {
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Tab Switching</label>
                                         <span className="text-sm font-medium">Auto-Flag after 2 switches</span>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Allowed Devices</label>
-                                        <div className="flex gap-2">
-                                            {contest.allowedDevices?.includes('desktop') && <Monitor className="h-4 w-4 text-muted-foreground" />}
-                                            {contest.allowedDevices?.includes('tablet') && <Tablet className="h-4 w-4 text-muted-foreground" />}
-                                            {contest.allowedDevices?.includes('mobile') && <Smartphone className="h-4 w-4 text-muted-foreground" />}
-                                        </div>
                                     </div>
                                 </div>
                             </CardContent>

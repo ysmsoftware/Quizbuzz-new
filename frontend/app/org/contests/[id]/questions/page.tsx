@@ -24,7 +24,8 @@ import {
     FileSpreadsheet,
     Loader2,
     X,
-    Check
+    Check,
+    Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
@@ -71,7 +72,37 @@ import { BULK_UPLOAD_BATCH_SIZE } from '@/lib/constants/bulk-upload';
 
 export default function QuestionsTabPage() {
     const { id } = useParams() as { id: string };
-    const { data: contest } = useContestDetail(id);
+    const queryClient = useQueryClient();
+    const { data: contest, updateContestMutation, refetch: refetchContest } = useContestDetail(id);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [settingsMarks, setSettingsMarks] = useState('1');
+    const [settingsNegativeMark, setSettingsNegativeMark] = useState(0.5);
+    const [applyToExisting, setApplyToExisting] = useState(false);
+
+    useEffect(() => {
+        if (contest && isSettingsOpen) {
+            setSettingsMarks(String((contest as any).defaultQuestionMarks ?? 1));
+            setSettingsNegativeMark(Number((contest as any).defaultQuestionNegativeMark ?? 0.5));
+        }
+    }, [contest?.id, isSettingsOpen]);
+
+    const handleSaveSettings = async () => {
+        const marksNum = Math.max(1, parseInt(settingsMarks) || 1);
+        try {
+            await updateContestMutation.mutateAsync({
+                defaultQuestionMarks: marksNum,
+                defaultQuestionNegativeMark: settingsNegativeMark,
+                applyToExistingQuestions: applyToExisting,
+            });
+            toast.success("Contest question defaults updated successfully");
+            setIsSettingsOpen(false);
+            if (applyToExisting) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.questions.contestQuestions(id) });
+            }
+        } catch (err) {
+            toast.error("Failed to update question defaults settings");
+        }
+    };
     const {
         data: questions,
         isLoading,
@@ -194,7 +225,7 @@ export default function QuestionsTabPage() {
                                 {stats.total} questions |
                                 <span className="text-green-600 dark:text-green-400 ml-1">Easy: {stats.easy}</span> |
                                 <span className="text-amber-600 dark:text-amber-400 ml-1">Medium: {stats.medium}</span> |
-                                <span className="text-destructive ml-1">Hard: {stats.hard}</span>
+                                <span className="text-destructive ml-1">Hard: {stats.hard}</span> |
                             </span>
                         </div>
                         {/* Difficulty Bar */}
@@ -208,6 +239,10 @@ export default function QuestionsTabPage() {
 
                 {canAdd && (
                     <div className="flex gap-3">
+                        <Button variant="outline" onClick={() => setIsSettingsOpen(true)}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Default Scoring
+                        </Button>
                         <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
                             <Upload className="mr-2 h-4 w-4" />
                             Import CSV
@@ -629,6 +664,8 @@ export default function QuestionsTabPage() {
                 }}
                 contestId={id}
                 editingQuestion={editingQuestion}
+                defaultQuestionMarks={(contest as any)?.defaultQuestionMarks}
+                defaultQuestionNegativeMark={(contest as any)?.defaultQuestionNegativeMark}
             />
 
             {/* QUESTION BANK SELECTOR MODAL */}
@@ -637,7 +674,69 @@ export default function QuestionsTabPage() {
                 onClose={() => setIsBankModalOpen(false)}
                 contestId={id}
                 currentCount={questions?.length || 0}
+                defaultQuestionMarks={(contest as any)?.defaultQuestionMarks}
+                defaultQuestionNegativeMark={(contest as any)?.defaultQuestionNegativeMark}
             />
+
+            {/* CONTEST DEFAULT SCORING SETTINGS DIALOG */}
+            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-bold">Default Scoring Settings</DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            Configure fallback scoring settings for questions added to this contest.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Default Marks Per Question</Label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={settingsMarks}
+                                onChange={(e) => setSettingsMarks(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Default Negative Mark</Label>
+                            <div className="flex flex-col gap-2">
+                                <NegativeMarkPicker
+                                    value={settingsNegativeMark}
+                                    onChange={setSettingsNegativeMark}
+                                />
+                                <div className="text-[10px] text-muted-foreground italic mt-0.5">
+                                    Penalty subtracted from score on an incorrect answer response.
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 border-t pt-3 mt-1">
+                            <Checkbox
+                                id="apply-existing-chk"
+                                checked={applyToExisting}
+                                onCheckedChange={(checked) => setApplyToExisting(!!checked)}
+                            />
+                            <Label htmlFor="apply-existing-chk" className="text-xs font-bold text-foreground cursor-pointer select-none leading-relaxed">
+                                Apply these default scores to all existing questions in this contest.
+                            </Label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                            onClick={handleSaveSettings}
+                            disabled={updateContestMutation.isPending}
+                        >
+                            {updateContestMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
+                            Save Settings
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -1265,11 +1364,15 @@ function QuestionModal({
     onClose,
     contestId,
     editingQuestion,
+    defaultQuestionMarks = 4,
+    defaultQuestionNegativeMark = 1,
 }: {
     isOpen: boolean;
     onClose: () => void;
     contestId: string;
     editingQuestion?: any | null;
+    defaultQuestionMarks?: number;
+    defaultQuestionNegativeMark?: number;
 }) {
     const { createAndAssignQuestion, updateContestQuestion } = useContestQuestions(contestId);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1318,8 +1421,8 @@ function QuestionModal({
                 setExplanation('');
                 setTags([]);
                 setTagInput('');
-                setMarks('4');
-                setNegativeMark('1');
+                setMarks(String(defaultQuestionMarks));
+                setNegativeMark(String(defaultQuestionNegativeMark));
                 setOptions([
                     { text: '', isCorrect: false },
                     { text: '', isCorrect: false },

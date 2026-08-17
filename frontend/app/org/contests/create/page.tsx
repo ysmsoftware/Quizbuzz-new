@@ -121,7 +121,16 @@ export default function CreateContestPage() {
     const startValue = form.startTime ? new Date(form.startTime) : undefined;
 
     const handleDeadlineChange = (date?: Date) => {
-        setForm(prev => ({ ...prev, registrationDeadline: date ? toLocalInputValue(date) : '' }));
+        setForm(prev => {
+            const nextForm = { ...prev, registrationDeadline: date ? toLocalInputValue(date) : '' };
+            if (date && prev.startTime) {
+                const currentStart = new Date(prev.startTime);
+                if (currentStart < date) {
+                    nextForm.startTime = '';
+                }
+            }
+            return nextForm;
+        });
         if (errors.registrationDeadline) {
             setErrors(prev => ({ ...prev, registrationDeadline: '' }));
         }
@@ -633,6 +642,8 @@ export default function CreateContestPage() {
                                             value={startValue}
                                             onChange={handleStartChange}
                                             placeholder="Pick date & time"
+                                            disabled={!form.registrationDeadline}
+                                            disabledDays={deadlineValue ? { before: deadlineValue } : undefined}
                                             className={cn(errors.startTime ? 'border-destructive' : '')}
                                         />
                                         {errors.startTime && (

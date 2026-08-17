@@ -39,6 +39,8 @@ const PERSISTABLE_CONTEST_FIELDS = new Set([
   'shuffleOptions',
   'proctoringEnabled',
   'showResultsAfter',
+  'defaultQuestionMarks',
+  'defaultQuestionNegativeMark',
   'prizes',
 ]);
 
@@ -158,6 +160,10 @@ export function adaptServerContest(server: ServerContest): Contest {
     updatedAt: server.updatedAt,
     organizerId: '',
     joinCode: server.joinCode,
+
+    // Scoring defaults
+    defaultQuestionMarks: server.defaultQuestionMarks ?? 1,
+    defaultQuestionNegativeMark: Number(server.defaultQuestionNegativeMark ?? 0.5),
 
     _count: {
       questions: _count.questions || 0,

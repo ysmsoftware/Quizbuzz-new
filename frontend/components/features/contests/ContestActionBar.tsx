@@ -3,14 +3,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  Rocket, 
-  ExternalLink, 
-  Trash2, 
-  Settings, 
-  Share2, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  Rocket,
+  ExternalLink,
+  Trash2,
+  Settings,
+  Share2,
+  AlertTriangle,
+  CheckCircle2,
   XCircle,
   Copy,
   Send,
@@ -30,16 +30,16 @@ import { StartNowCountdown } from './StartNowCountdown';
 import { useCancelContest, useForceEndContest, useStartContestNow } from '@/lib/hooks/useContestLifecycle';
 import { useUpdateContest } from '@/lib/hooks/useUpdateContest';
 import { splitPersistableContestFields } from '@/lib/utils/contest';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -78,8 +78,8 @@ interface ContestActionBarProps {
   onDelete?: () => void;
 }
 
-export function ContestActionBar({ 
-  contest, 
+export function ContestActionBar({
+  contest,
   contestPhase,
   onPublish,
   isPublishing: isPublishingProp,
@@ -89,7 +89,7 @@ export function ContestActionBar({
   isDeclaringResults,
   onCancel,
   onArchive,
-  onDelete 
+  onDelete
 }: ContestActionBarProps) {
   const router = useRouter();
   const [localIsPublishing, setLocalIsPublishing] = useState(false);
@@ -217,14 +217,14 @@ export function ContestActionBar({
         // Simulate API call
         await new Promise(r => setTimeout(r, 1500));
       }
-      
+
       confetti({
         particleCount: 150,
         spread: 70,
         origin: { y: 0.6 },
         colors: ['#22c55e', '#3b82f6', '#f59e0b']
       });
-      
+
       toast.success('Contest published! Share your link.');
       setIsConfirmingPublish(false);
     } catch (err: any) {
@@ -328,13 +328,6 @@ export function ContestActionBar({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Button variant="outline" size="sm" asChild>
-        <a href={publicUrl} target="_blank" rel="noopener noreferrer">
-          <ExternalLink className="mr-2 h-4 w-4" />
-          Preview
-        </a>
-      </Button>
-
       <Dialog open={isConfirmingPublish} onOpenChange={setIsConfirmingPublish}>
         <DialogTrigger asChild>
           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20">
@@ -416,8 +409,8 @@ export function ContestActionBar({
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
       </Button>
-      <Button 
-        size="sm" 
+      <Button
+        size="sm"
         className="bg-primary shadow-lg shadow-primary/20"
         onClick={() => setIsSendMessageOpen(true)}
       >
@@ -447,9 +440,9 @@ export function ContestActionBar({
               <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800">
                 Type <strong>END CONTEST</strong> below to confirm.
               </div>
-              <Input 
-                placeholder="END CONTEST" 
-                value={confirmText} 
+              <Input
+                placeholder="END CONTEST"
+                value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 className="mt-2"
               />
@@ -494,7 +487,7 @@ export function ContestActionBar({
         setLocalIsDeclaringResults(true);
         const res = await resultsApi.getResultsDeclarationInfo(contest.id);
         const info = res.data;
-        
+
         if (info.isEarlyDeclare && !info.isAlreadyDeclared) {
           setEarlyDeclareInfo(info);
           setIsEarlyDeclareModalOpen(true);
@@ -576,7 +569,7 @@ export function ContestActionBar({
 
   if (contestPhase === 'CANCELLED') {
     const isOld = new Date(Date.now() - (new Date(contest.cancelledAt || Date.now()).getTime())) > new Date(1000 * 60 * 60 * 24 * 30);
-    
+
     return (
       <div className="flex items-center gap-4">
         <Badge variant="outline" className="border-destructive text-destructive px-3 py-1 flex items-center gap-2">
@@ -726,8 +719,8 @@ export function ContestActionBar({
             <Button variant="outline" onClick={() => setIsEarlyDeclareModalOpen(false)} disabled={localIsDeclaringResults}>
               Cancel
             </Button>
-            <Button 
-              className="bg-amber-600 hover:bg-amber-700 text-white" 
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
               onClick={confirmDeclareResults}
               disabled={localIsDeclaringResults || (earlyDeclareInfo?.pendingCount > 0)}
             >

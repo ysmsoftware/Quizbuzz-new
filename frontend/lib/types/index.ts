@@ -59,6 +59,9 @@ export interface Contest {
     webcamRequired: boolean;
     tabSwitchLimit: number;
     allowedDevices?: ('mobile' | 'desktop' | 'tablet')[];
+    cutoffScore?: number;
+    showResultsAfter?: number;
+    paymentEnabled?: boolean;
 
     // Registration & Fees
     fee: number;
@@ -81,6 +84,10 @@ export interface Contest {
     updatedAt: string;
     organizerId: string;
     joinCode?: string | null;
+
+    // Scoring defaults
+    defaultQuestionMarks?: number;
+    defaultQuestionNegativeMark?: number;
 
     // Stats
     _count?: {
@@ -472,6 +479,8 @@ export interface ServerContest {
     proctoringEnabled?: boolean;
     showResultsAfter: number;
     bannerImage?: string | null;
+    defaultQuestionMarks?: number;
+    defaultQuestionNegativeMark?: number | string | any;
     prizes?: Array<{
         rankFrom: number;
         rankTo: number;

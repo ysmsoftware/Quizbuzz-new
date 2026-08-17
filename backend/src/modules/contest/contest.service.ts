@@ -1,6 +1,7 @@
 import { ContestStatus, ParticipantStatus, SubmissionStatus } from "@prisma/client";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { ContestRepository } from "./contest.repository";
+import { prisma } from "../../config/db";
 import { ParticipantService } from "../participant/participant.service";
 import { LeaderboardRepository } from "./leaderboard.repository";
 import { MessagingService } from "../messaging/messaging.service";
@@ -316,10 +317,31 @@ export class ContestService {
         const newDuration = dto.duration ?? contest.duration;
         const newEndTime = new Date(newStartTime.getTime() + newDuration * 60 * 1000);
 
-        // No job (re)scheduling here: timing fields are rejected above for anything
-        // past DRAFT, and a DRAFT contest has no lifecycle jobs yet — they are created
-        // by publishContest(). Post-publish timing changes go through rescheduleContest().
-        return this.contestRepo.update(contestId, organizationId, { ...dto, endTime: newEndTime } as any);
+        const { applyToExistingQuestions, ...contestData } = dto;
+
+        return await prisma.$transaction(async (tx) => {
+            const updatedContest = await this.contestRepo.update(
+                contestId,
+                organizationId,
+                { ...contestData, endTime: newEndTime } as any,
+                tx
+            );
+
+            if (applyToExistingQuestions) {
+                const marksVal = contestData.defaultQuestionMarks ?? contest.defaultQuestionMarks;
+                const negMarksVal = contestData.defaultQuestionNegativeMark ?? contest.defaultQuestionNegativeMark;
+
+                await tx.contestQuestion.updateMany({
+                    where: { contestId, organizationId },
+                    data: {
+                        marks: marksVal,
+                        negativeMark: negMarksVal,
+                    },
+                });
+            }
+
+            return updatedContest;
+        });
     }
 
     async publishContest(contestId: string, organizationId: string) {

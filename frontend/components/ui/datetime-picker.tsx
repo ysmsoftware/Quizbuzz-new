@@ -23,6 +23,7 @@ export interface DateTimePickerProps {
   /** Opens the popover immediately on mount — used where the picker replaces an inline
    * edit affordance that previously auto-focused a native input. */
   autoOpen?: boolean
+  disabledDays?: any
 }
 
 const CALENDAR_CLASSNAMES = {
@@ -64,6 +65,7 @@ export function DateTimePicker({
   align = 'start',
   disabled = false,
   autoOpen = false,
+  disabledDays,
 }: DateTimePickerProps) {
   const options = React.useMemo(() => getTimeSlotOptions(stepMinutes), [stepMinutes])
 
@@ -138,6 +140,7 @@ export function DateTimePicker({
             onSelect={setDraftDate}
             defaultMonth={draftDate}
             showOutsideDays
+            disabled={disabledDays}
             className="p-3 border-none bg-transparent"
             classNames={CALENDAR_CLASSNAMES}
           />

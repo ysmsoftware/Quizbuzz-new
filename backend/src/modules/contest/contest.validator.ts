@@ -59,6 +59,8 @@ const CreateContestBase = z.object({
     shuffleOptions: z.boolean().default(false),
     proctoringEnabled: z.boolean().default(true),
     showResultsAfter: z.number().int().min(0).max(168).default(24), // max 7 days
+    defaultQuestionMarks: z.number().int().min(1).default(4),
+    defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),
     prizes: z.array(PrizeSchema).optional(),
 });
 
@@ -93,6 +95,7 @@ export const CreateContestSchema = CreateContestBase.refine(
 export const UpdateContestSchema = CreateContestBase.partial()
     .extend({
         durationMinutes: z.number().int().min(10).max(480).optional(),
+        applyToExistingQuestions: z.boolean().optional(),
     })
     .strict()
     .transform(({ durationMinutes, ...rest }) => {

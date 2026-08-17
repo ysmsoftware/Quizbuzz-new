@@ -180,13 +180,17 @@ interface QuestionBankModalProps {
     onClose: () => void;
     contestId: string;
     currentCount: number;
+    defaultQuestionMarks?: number;
+    defaultQuestionNegativeMark?: number;
 }
 
 export default function QuestionBankModal({
     isOpen,
     onClose,
     contestId,
-    currentCount
+    currentCount,
+    defaultQuestionMarks = 1,
+    defaultQuestionNegativeMark = 0.5
 }: QuestionBankModalProps) {
     const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -196,7 +200,7 @@ export default function QuestionBankModal({
 
     // Auto-generate state variables
     const [totalQuestions, setTotalQuestions] = useState(10);
-    const [defaultMarks, setDefaultMarks] = useState(4);
+    const [defaultMarks, setDefaultMarks] = useState<string | number>(4);
     const [defaultNegativeMarks, setDefaultNegativeMarks] = useState(1);
     const [customTagInput, setCustomTagInput] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -212,6 +216,42 @@ export default function QuestionBankModal({
             difficultyDistribution: { EASY: 40, MEDIUM: 40, HARD: 20 },
         }
     ]);
+
+    const [ruleAvailableCounts, setRuleAvailableCounts] = useState<Record<number, number>>({});
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let isCancelled = false;
+
+        const fetchAvailableCounts = async () => {
+            const counts: Record<number, number> = {};
+            for (let i = 0; i < rules.length; i++) {
+                const rule = rules[i];
+                try {
+                    const res = await questionsApi.listQuestions({
+                        tags: rule.tags.length > 0 ? rule.tags : undefined,
+                        unassignedFor: contestId,
+                        page: 1,
+                        limit: 1
+                    });
+                    if (isCancelled) return;
+                    counts[i] = res.data?.pagination?.total ?? 0;
+                } catch (err) {
+                    if (isCancelled) return;
+                    counts[i] = 0;
+                }
+            }
+            if (!isCancelled) {
+                setRuleAvailableCounts(counts);
+            }
+        };
+
+        fetchAvailableCounts();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [rules, contestId, isOpen]);
 
     // Hooks for fetching questions and tags
     const { tags: availableTags } = useQuestionTags();
@@ -238,8 +278,8 @@ export default function QuestionBankModal({
             setDifficulty('all');
             setActiveTab('manual');
             setTotalQuestions(10);
-            setDefaultMarks(4);
-            setDefaultNegativeMarks(1);
+            setDefaultMarks(defaultQuestionMarks);
+            setDefaultNegativeMarks(defaultQuestionNegativeMark);
             setCustomTagInput('');
             setSelectedTags([]);
             setRules([
@@ -249,6 +289,7 @@ export default function QuestionBankModal({
                     difficultyDistribution: { EASY: 40, MEDIUM: 40, HARD: 20 },
                 }
             ]);
+            setRuleAvailableCounts({});
             autoGenerateChecklist.reset();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,7 +318,7 @@ export default function QuestionBankModal({
             const payload = selectedIds.map((questionId, idx) => ({
                 questionId,
                 position: currentCount + idx + 1,
-                marks: defaultMarks,
+                marks: Math.max(1, parseInt(String(defaultMarks)) || 4),
                 negativeMark: defaultNegativeMarks,
             }));
 
@@ -558,7 +599,7 @@ export default function QuestionBankModal({
             run: async () => {
                 const res = await autoGenerateMutation.mutateAsync({
                     contestId,
-                    body: { totalQuestions, defaultMarks, defaultNegativeMarks, rules },
+                    body: { totalQuestions, defaultMarks: Math.max(1, parseInt(String(defaultMarks)) || 4), defaultNegativeMarks, rules },
                 });
                 return { ok: true, data: res?.data };
             },
@@ -678,6 +719,55 @@ export default function QuestionBankModal({
                                     </div>
                                 </div>
 
+                                {/* Parameter Overrides for Selected Questions */}
+                                <div className="p-3 rounded-xl border bg-muted/10 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Marks Per Question</Label>
+                                            <span className="text-[11px] font-bold text-emerald-600">+{defaultMarks} pts</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-background border rounded-lg p-0.5">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
+                                                onClick={() => setDefaultMarks(prev => String(Math.max(1, (parseInt(String(prev)) || 1) - 1)))}
+                                            >
+                                                -
+                                            </Button>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                className="h-7 border-none text-center font-bold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                                                value={defaultMarks}
+                                                onChange={(e) => setDefaultMarks(e.target.value)}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
+                                                onClick={() => setDefaultMarks(prev => String((parseInt(String(prev)) || 1) + 1))}
+                                            >
+                                                +
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Negative Penalty</Label>
+                                            <span className="text-[11px] font-bold text-destructive">
+                                                {defaultNegativeMarks > 0 ? `-${defaultNegativeMarks} pts` : 'None'}
+                                            </span>
+                                        </div>
+                                        <NegativeMarkPicker
+                                            value={defaultNegativeMarks}
+                                            onChange={setDefaultNegativeMarks}
+                                        />
+                                    </div>
+                                </div>
+
                                 {/* List */}
                                 {isLoading ? (
                                     <div className="flex flex-col items-center justify-center py-16 gap-2">
@@ -755,8 +845,50 @@ export default function QuestionBankModal({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -5 }}
                                 transition={{ duration: 0.15 }}
-                                className="flex-1 flex flex-col min-h-0 h-full overflow-hidden"
+                                className="flex-1 flex flex-col min-h-0 h-full overflow-hidden gap-3"
                             >
+                                {/* Pinned Error Alert Callout Banner */}
+                                {(!isRulePercentageValid || !isDiffBreakdownValid || (!autoGenerateChecklist.isRunning && autoGenerateChecklist.statuses.includes('error'))) && (
+                                    <div className="flex flex-col gap-2 p-3 rounded-xl border border-destructive/20 bg-destructive/5 text-destructive text-xs shrink-0 max-h-[22vh] overflow-y-auto shadow-sm">
+                                        <div className="flex items-center gap-1.5 font-bold border-b border-destructive/10 pb-1.5 text-[11px] uppercase tracking-wider">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            <span>Validation Errors & Limitation Alerts</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {!isRulePercentageValid && (
+                                                <div className="flex gap-1.5 items-start">
+                                                    <div className="h-1.5 w-1.5 rounded-full bg-destructive mt-1.5 shrink-0" />
+                                                    <div>
+                                                        <span className="font-bold">Invalid Weight: </span>
+                                                        <span className="opacity-90 font-semibold">Rules total {totalRulePercentage}%. Adjust sliders to sum to exactly 100%.</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {!isDiffBreakdownValid && (
+                                                <div className="flex gap-1.5 items-start">
+                                                    <div className="h-1.5 w-1.5 rounded-full bg-destructive mt-1.5 shrink-0" />
+                                                    <div>
+                                                        <span className="font-bold">Difficulty Mismatch: </span>
+                                                        <span className="opacity-90 font-semibold">Check that all individual rules' difficulty distributions sum to 100%.</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {!autoGenerateChecklist.isRunning && autoGenerateChecklist.statuses.includes('error') && (
+                                                <div className="space-y-1">
+                                                    <div className="font-bold text-[11px]">Not Enough Questions Available:</div>
+                                                    <ul className="space-y-1 pl-4 list-disc font-semibold opacity-90">
+                                                        {autoGenerateChecklist.steps.map((step, i) =>
+                                                            autoGenerateChecklist.statuses[i] === 'error' ? (
+                                                                <li key={i}>{autoGenerateChecklist.details[i]}</li>
+                                                            ) : null
+                                                        )}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full min-h-0 overflow-hidden flex-1">
                                     {/* Left Column: General Configuration (5 cols) */}
                                     <div className="lg:col-span-5 flex flex-col gap-3 overflow-y-auto pr-1 h-full pb-4">
@@ -816,7 +948,7 @@ export default function QuestionBankModal({
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
-                                                        onClick={() => setDefaultMarks(prev => Math.max(1, prev - 1))}
+                                                        onClick={() => setDefaultMarks(prev => String(Math.max(1, (parseInt(String(prev)) || 1) - 1)))}
                                                     >
                                                         -
                                                     </Button>
@@ -825,14 +957,14 @@ export default function QuestionBankModal({
                                                         min={1}
                                                         className="h-7 border-none text-center font-bold text-xs focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
                                                         value={defaultMarks}
-                                                        onChange={(e) => setDefaultMarks(Math.max(1, parseInt(e.target.value) || 1))}
+                                                        onChange={(e) => setDefaultMarks(e.target.value)}
                                                     />
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-7 w-7 hover:bg-muted font-extrabold text-foreground"
-                                                        onClick={() => setDefaultMarks(prev => prev + 1)}
+                                                        onClick={() => setDefaultMarks(prev => String((parseInt(String(prev)) || 1) + 1))}
                                                     >
                                                         +
                                                     </Button>
@@ -984,7 +1116,7 @@ export default function QuestionBankModal({
 
                                             {/* Validation feedback block */}
                                             <div className="space-y-1.5 pt-0.5">
-                                                {isRulePercentageValid ? (
+                                                {isRulePercentageValid && isDiffBreakdownValid && !autoGenerateChecklist.statuses.includes('error') && (
                                                     <div className="flex gap-1.5 p-2 rounded-lg border border-success/20 bg-success/5 text-success text-[11px] items-start">
                                                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-success" />
                                                         <div>
@@ -992,52 +1124,7 @@ export default function QuestionBankModal({
                                                             <p className="opacity-90 mt-0.5 font-semibold">Pool rules sum up to exactly 100%.</p>
                                                         </div>
                                                     </div>
-                                                ) : (
-                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] items-start">
-                                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-destructive" />
-                                                        <div>
-                                                            <p className="font-bold">Invalid Weight</p>
-                                                            <p className="opacity-90 mt-0.5 font-semibold">
-                                                                Rules total {totalRulePercentage}%. Adjust sliders to sum to exactly 100%.
-                                                            </p>
-                                                        </div>
-                                                    </div>
                                                 )}
-
-                                                {!isDiffBreakdownValid && (
-                                                    <div className="flex gap-1.5 p-2 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] items-start">
-                                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                                        <div>
-                                                            <p className="font-bold">Difficulty Mismatch</p>
-                                                            <p className="opacity-90 mt-0.5 font-semibold">Check that all individual rules' difficulty distributions sum to 100%.</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Pool-availability report, populated after "Auto Generate Set" runs
-                                                    its preflight checklist. Only shown once the checklist has finished
-                                                    and something didn't have enough matching questions. */}
-                                                {!autoGenerateChecklist.isRunning &&
-                                                    autoGenerateChecklist.statuses.includes('error') && (
-                                                        <div className="p-2.5 rounded-lg border border-destructive/20 bg-destructive/5 text-destructive text-[11px] space-y-1.5">
-                                                            <div className="flex gap-1.5 items-start font-bold">
-                                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                                                Not Enough Questions Available
-                                                            </div>
-                                                            <ul className="space-y-1 pl-5 list-disc">
-                                                                {autoGenerateChecklist.steps.map((step, i) =>
-                                                                    autoGenerateChecklist.statuses[i] === 'error' ? (
-                                                                        <li key={i} className="opacity-90 font-semibold">
-                                                                            {autoGenerateChecklist.details[i]}
-                                                                        </li>
-                                                                    ) : null
-                                                                )}
-                                                            </ul>
-                                                            <p className="opacity-80 italic font-medium pt-0.5">
-                                                                Lower the total, adjust the allocation/difficulty split, or add more questions to your bank, then try again.
-                                                            </p>
-                                                        </div>
-                                                    )}
                                             </div>
                                         </div>
                                     </div>
@@ -1071,7 +1158,7 @@ export default function QuestionBankModal({
                                                                     {ruleTopicName} Pool
                                                                 </span>
                                                                 <Badge variant="secondary" className="font-bold text-[8px] px-1.5 py-0 bg-primary/10 text-primary border-none">
-                                                                    {ruleQty} Question(s)
+                                                                    {ruleQty} of {ruleAvailableCounts[idx] !== undefined ? ruleAvailableCounts[idx] : '...'} Question(s)
                                                                 </Badge>
                                                             </div>
                                                             {rules.length > 1 && (
@@ -1116,7 +1203,7 @@ export default function QuestionBankModal({
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-[9px] text-muted-foreground/80 leading-relaxed italic">
-                                                                    This pool contributes approximately <strong>{ruleQty}</strong> of the <strong>{totalQuestions}</strong> total questions.
+                                                                    This pool selects <strong>{ruleQty}</strong> of the <strong>{ruleAvailableCounts[idx] !== undefined ? ruleAvailableCounts[idx] : '...'}</strong> total available questions in the question bank.
                                                                 </p>
                                                             </div>
 
@@ -1160,6 +1247,9 @@ export default function QuestionBankModal({
                                                                         const val = rule.difficultyDistribution[level];
                                                                         const labelColor = level === 'EASY' ? 'text-green-600' : level === 'MEDIUM' ? 'text-amber-600' : 'text-red-600';
 
+                                                                        const diffTargetsForRule = computeDifficultyTargets(ruleQty, rule.difficultyDistribution);
+                                                                        const levelTarget = diffTargetsForRule.find(d => d.difficulty === level)?.target ?? 0;
+
                                                                         return (
                                                                             <div key={level} className="flex items-center gap-2">
                                                                                 <span className={cn("text-[9px] font-extrabold w-11 uppercase", labelColor)}>{level}</span>
@@ -1170,6 +1260,9 @@ export default function QuestionBankModal({
                                                                                     max={100}
                                                                                     className="flex-1"
                                                                                 />
+                                                                                <span className="text-[10px] font-bold text-muted-foreground min-w-[32px] text-right">
+                                                                                    {levelTarget} q
+                                                                                </span>
                                                                                 <div className="flex items-center bg-background border rounded-lg px-1 py-0.5 shrink-0">
                                                                                     <Input
                                                                                         type="number"

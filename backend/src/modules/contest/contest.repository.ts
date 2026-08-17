@@ -15,7 +15,7 @@ export interface IContestRepository {
     findBySlug(slug: string, organizationId: string): Promise<Contest | null>;
     findBySlugPublic(slug: string): Promise<Contest | null>;
     list(organizationId: string, query: ListContestsFilter): Promise<{ data: ContestSummary[]; total: number }>;
-    update(contestId: string, organizationId: string, data: UpdateContestDTO): Promise<Contest>;
+    update(contestId: string, organizationId: string, data: UpdateContestDTO, tx?: Prisma.TransactionClient): Promise<Contest>;
     updateStatus(contestId: string, organizationId: string, status: ContestStatus, joinCode?: string): Promise<any>;
     listByIds(ids: string[], organizationId: string, status?: ContestStatus): Promise<{ total: number }>;
     softDelete(contestId: string, organizationId: string): Promise<void>;
@@ -211,7 +211,7 @@ export class ContestRepository implements IContestRepository {
         return { data: formattedContests, total };
     }
 
-    async update(contestId: string, organizationId: string, data: UpdateContestDTO): Promise<Contest> {
+    async update(contestId: string, organizationId: string, data: UpdateContestDTO, tx?: Prisma.TransactionClient): Promise<Contest> {
         const { prizes, paymentConfig, ...contestData } = data;
 
         const parsed: any = stripUndefined(contestData);
@@ -241,7 +241,8 @@ export class ContestRepository implements IContestRepository {
             };
         }
 
-        return await prisma.contest.update({
+        const client = tx || prisma;
+        return await client.contest.update({
             where: { id: contestId, organizationId },
             data: parsed,
             include: { paymentConfig: true, prizes: true }
