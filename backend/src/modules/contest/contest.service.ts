@@ -123,6 +123,16 @@ export class ContestService {
         // Plan enforcement (contests-per-cycle, participant cap) already ran
         // in enforceContestCreateLimits middleware before this handler.
 
+        // Fail fast at configuration time, not at checkout: an admin enabling
+        // payment on a contest whose org has the Razorpay gateway disabled
+        // (platform-wide kill switch or a per-org override) should find out
+        // right here, not have every participant hit "Payment failed" later.
+        // See PaymentService.createOrder's own (still-required) runtime check
+        // for the same flag — this is a second, earlier gate, not a replacement.
+        if (input.paymentEnabled) {
+            await this.assertPaymentGatewayAvailable(organizationId);
+        }
+
         if (registrationDeadline >= startTime) {
             throw new BadRequestError("Registration deadline must be before the start time")
         }
@@ -266,6 +276,17 @@ export class ContestService {
             throw new BadRequestError("Contest can only be edited while in DRAFT, PUBLISHED, or REGISTRATION_CLOSED status");
         }
 
+        // Same fail-fast-at-configuration-time gate as createContest: re-verify
+        // whenever the admin is actually turning payment on or editing its
+        // configuration (fee amount, currency, etc.) — not on every unrelated
+        // PATCH to a contest that already has payment enabled.
+        const isConfiguringPayment =
+            dto.paymentEnabled === true ||
+            (dto.paymentConfig !== undefined && (dto.paymentEnabled ?? contest.paymentEnabled));
+        if (isConfiguringPayment) {
+            await this.assertPaymentGatewayAvailable(organizationId);
+        }
+
         // Timing changes on a published contest must go through rescheduleContest():
         // it applies the whole new schedule atomically and notifies registrants.
         // Allowing them here would let a timing change slip through unnotified, and
@@ -350,6 +371,14 @@ export class ContestService {
 
         if (contest.status !== ContestStatus.DRAFT) {
             throw new BadRequestError("Only DRAFT contests can be published");
+        }
+
+        // The gateway flag can change in the window between a contest being
+        // created and it being published (draft contests can sit for days) —
+        // re-check right before it goes live to real participants, one last
+        // time, so this never becomes the participant's problem to discover.
+        if (contest.paymentEnabled) {
+            await this.assertPaymentGatewayAvailable(organizationId);
         }
 
         if (new Date(contest.registrationDeadline) <= new Date()) {
@@ -1321,5 +1350,24 @@ export class ContestService {
         const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         const length = 5;
         return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    }
+
+    /**
+     * Admin-facing counterpart to the runtime gate in PaymentService.createOrder
+     * (same "razorpay_gateway_active" flag). That check has to stay — it's what
+     * protects an already-published paid contest if the flag gets flipped off
+     * mid-flight — but it was the *only* check, which meant an org admin could
+     * fully configure and publish a paid contest whose org had payments disabled
+     * and never find out until a real participant hit "Payment failed" at
+     * checkout. This surfaces the same condition to the admin, at the moment
+     * they enable/configure payment, instead of to the participant at checkout.
+     */
+    private async assertPaymentGatewayAvailable(organizationId: string): Promise<void> {
+        if (!(await isFeatureEnabled("razorpay_gateway_active", { organizationId }))) {
+            throw new FeatureUnavailableError(
+                "razorpay_gateway_active",
+                "Payments are not enabled for your organization right now, so this contest can't accept a registration fee. Contact support to enable payments, or publish this contest as a free contest.",
+            );
+        }
     }
 }
