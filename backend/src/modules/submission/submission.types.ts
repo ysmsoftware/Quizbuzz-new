@@ -4,7 +4,7 @@ type Decimal = Prisma.Decimal;
 // ─── Enums (mirror Prisma — avoids importing Prisma in every consumer) ────────
 
 export type SubmissionStatus = "PENDING" | "SUBMITTED" | "EVALUATED" | "INVALIDATED";
-export type SubmissionSource = "MANUAL" | "AUTO";
+export type SubmissionSource = "MANUAL" | "AUTO" | "RECOVERED";
 
 // ─── Repository input types ───────────────────────────────────────────────────
 

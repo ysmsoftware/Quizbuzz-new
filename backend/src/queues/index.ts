@@ -244,3 +244,21 @@ export const auditRetentionQueue = new Queue("audit-retention-queue", {
     prefix: config.queue.prefix,
     defaultJobOptions,
 });
+
+// ─── Progress Snapshot (Redis durability) ─────────────────────────────────────
+
+/**
+ * Progress snapshot queue.
+ * Producers : DurabilityService.ensureRecurringJob (repeatable, no per-contest payload)
+ * Consumers : progress-snapshot.worker.ts
+ *
+ * Periodic sweep that upserts every live-contest participant's in-progress Redis
+ * state (answers, phase, question order) into participant_progress_snapshots, so
+ * submitQuiz() can rehydrate from the last snapshot instead of a zero-answer
+ * fallback when a participant's Redis session is unexpectedly gone.
+ */
+export const progressSnapshotQueue = new Queue("progress-snapshot-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});

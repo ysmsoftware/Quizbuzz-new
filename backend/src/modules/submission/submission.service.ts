@@ -2,7 +2,7 @@ import { NotFoundError, BadRequestError, ConflictError } from "../../error/http-
 import { SubmissionRepository } from "./submission.repository";
 import { ParticipantRepository } from "../participant/participant.repository";
 import { ContestRepository } from "../contest/contest.repository";
-import { SubmissionStatus, ContestStatus, ParticipantStatus } from "@prisma/client";
+import { Prisma, SubmissionStatus, ContestStatus, ParticipantStatus } from "@prisma/client";
 import { prisma } from "../../config/db";
 import {
     ApplyEvaluationInput,
@@ -66,7 +66,27 @@ export class SubmissionService {
             return { submissionId: existing!.id, organizationId };
         }
 
-        const submission = await this.submissionRepo.createWithAnswers(resolvedInput);
+        // Belt-and-suspenders under the submitQuiz() lock (§2.1): the lock closes
+        // the race at the source, but Submission.participantId is @unique so the
+        // DB itself stays safe even if this path is ever reached concurrently
+        // (worker crash between lock acquisition and write, a future caller that
+        // bypasses the lock, etc).
+        let submission;
+        try {
+            submission = await this.submissionRepo.createWithAnswers(resolvedInput);
+        } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+                logger.warn(
+                    `[SubmissionService.persistSubmission] Unique constraint hit for participant ${resolvedInput.participantId} — another writer won the race, returning existing`
+                );
+                const existing = await this.submissionRepo.findByParticipantId(
+                    resolvedInput.organizationId,
+                    resolvedInput.participantId
+                );
+                if (existing) return { submissionId: existing.id, organizationId };
+            }
+            throw err;
+        }
 
         logger.info(
             `[SubmissionService.persistSubmission] Persisted ${submission.id} for participant ${resolvedInput.participantId}`
@@ -81,6 +101,22 @@ export class SubmissionService {
             actorId: resolvedInput.participantId,
             actorType: "PARTICIPANT",
         });
+
+        // Traceability: a submission recovered from a progress snapshot after a
+        // Redis wipe is only as fresh as the last snapshot interval — ops needs
+        // to be able to tell this apart from a normal submission if a participant
+        // disputes their score.
+        if (resolvedInput.source === "RECOVERED") {
+            logAudit({
+                action: "submission.recovered",
+                targetType: "SUBMISSION",
+                targetId: submission.id,
+                targetLabel: submission.id,
+                organizationId,
+                actorId: resolvedInput.participantId,
+                actorType: "PARTICIPANT",
+            });
+        }
 
         return { submissionId: submission.id, organizationId };
     }

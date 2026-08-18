@@ -1,5 +1,6 @@
 import { Prisma, SubmissionStatus } from "@prisma/client";
 import { prisma } from "../../config/db";
+import { config } from "../../config";
 import {
     ApplyEvaluationInput,
     CreateSubmissionInput,
@@ -108,6 +109,12 @@ export class SubmissionRepository {
             });
 
             return submission;
+        }, {
+            // Explicit, config-driven bounds — generous enough to absorb legitimate
+            // DB pool burst (e.g. mass AUTO_SUBMIT) without false-failing an
+            // ordinary-latency submission. See config.database.transaction*.
+            maxWait: config.database.transactionMaxWaitMs,
+            timeout: config.database.transactionTimeoutMs,
         });
     }
 
@@ -156,6 +163,9 @@ export class SubmissionRepository {
                       AND "questionId" IN (${Prisma.join(questionIds)})
                 `;
             }
+        }, {
+            maxWait: config.database.transactionMaxWaitMs,
+            timeout: config.database.transactionTimeoutMs,
         });
     }
 

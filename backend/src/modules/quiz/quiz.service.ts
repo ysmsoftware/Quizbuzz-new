@@ -23,6 +23,7 @@ import { SubmissionService } from "../submission/submission.service";
 import { submissionQueue } from "../../queues";
 import { buildSessionSeed, shuffleQuestionsForParticipant } from "../question/question.shuffle";
 import { QuizSchedulerService } from "./quiz-scheduler.service";
+import { DurabilityService } from "../durability/durability.service";
 import { config } from "../../config";
 
 export class QuizService {
@@ -31,6 +32,7 @@ export class QuizService {
         private proctoring: ProctoringService,
         private submissionService: SubmissionService,
         private scheduler: QuizSchedulerService,
+        private durability: DurabilityService,
     ) { }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -387,6 +389,63 @@ export class QuizService {
         participantId: string,
         reason: "MANUAL" | "AUTO" | "TIMEOUT",
     ): Promise<QuizSubmitResult> {
+        const gotLock = await this.session.acquireSubmissionLock(
+            contestId, participantId, config.quiz.submissionLockTtlMs
+        );
+
+        if (!gotLock) {
+            // Someone else (manual submit racing AUTO_SUBMIT, or a flaky-Redis
+            // recovery racing a live submission) is already submitting this
+            // participant right now. Give it a short grace window to finish
+            // and report its result instead of racing a second submission job.
+            logger.warn(`[quiz-service] submitQuiz already in flight for participant ${participantId} — waiting instead of racing`);
+            return this.waitForInFlightSubmission(contestId, participantId);
+        }
+
+        try {
+            return await this.doSubmitQuiz(contestId, participantId, reason);
+        } finally {
+            await this.session.releaseSubmissionLock(contestId, participantId);
+        }
+    }
+
+    private async waitForInFlightSubmission(contestId: string, participantId: string): Promise<QuizSubmitResult> {
+        const jobId = `${participantId}-${contestId}`;
+        const attempts = 4;
+        const delayMs = 400;
+
+        // Poll for the persisted row on every attempt, regardless of whether the
+        // lock has cleared yet. The lock releases as soon as the winning call
+        // finishes enqueueing the BullMQ job — well before the submission worker
+        // has actually picked it up and written the DB row, since that persist
+        // happens asynchronously. Checking only once, right when the lock first
+        // clears, and giving up immediately if the row isn't there yet (the
+        // previous behaviour) meant this almost always returned a false
+        // zero-answer result even though the real submission was seconds away
+        // from succeeding. Only give up after every attempt is exhausted.
+        for (let i = 0; i < attempts; i++) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+
+            const existing = await prisma.submission.findUnique({ where: { participantId } });
+            if (existing) {
+                return {
+                    submissionRef: existing.id,
+                    timeTakenSecs: existing.timeTakenSecs ?? 0,
+                    totalQuestions: existing.totalQuestions ?? 0,
+                    attempted: existing.attempted ?? 0,
+                };
+            }
+        }
+
+        logger.warn(`[quiz-service] Timed out waiting for in-flight submission for participant ${participantId} — returning best-effort result`);
+        return { submissionRef: jobId, timeTakenSecs: 0, totalQuestions: 0, attempted: 0 };
+    }
+
+    private async doSubmitQuiz(
+        contestId: string,
+        participantId: string,
+        reason: "MANUAL" | "AUTO" | "TIMEOUT",
+    ): Promise<QuizSubmitResult> {
         const [answers, state, questionOrder] = await Promise.all([
             this.session.getAllAnswers(contestId, participantId),
             this.session.getSession(contestId, participantId),
@@ -394,6 +453,54 @@ export class QuizService {
         ]);
 
         if (!state) {
+            const recovered = await this.durability.rehydrateParticipant(contestId, participantId);
+
+            if (recovered) {
+                logger.warn(
+                    `[quiz-service] Session expired for participant ${participantId} in contest ${contestId} — ` +
+                    `recovered ${recovered.attempted}/${recovered.totalQuestions} answers from progress snapshot`
+                );
+                const jobId = `${participantId}-${contestId}`;
+                // Anchor to the earlier of "now" and the contest's actual end time —
+                // recovery can run well after the participant's session went missing
+                // (whenever submitQuiz() next gets called for them), so anchoring to
+                // raw Date.now() would count the entire outage/recovery-delay window
+                // as quiz-taking time and inflate timeTakenSecs (which feeds
+                // leaderboard display/tie-breaking).
+                const recoveryAnchorMs = recovered.contestEndTime
+                    ? Math.min(Date.now(), new Date(recovered.contestEndTime).getTime())
+                    : Date.now();
+                const recoveredTimeTakenMs = recovered.startedAt
+                    ? Math.max(0, recoveryAnchorMs - new Date(recovered.startedAt).getTime())
+                    : 0;
+                await submissionQueue.add(
+                    "persist-submission",
+                    {
+                        organizationId: recovered.organizationId,
+                        participantId,
+                        contestId,
+                        submittedAt: new Date().toISOString(),
+                        timeTakenSecs: recoveredTimeTakenMs / 1000,
+                        timeTakenMs: recoveredTimeTakenMs,
+                        source: "RECOVERED",
+                        totalQuestions: recovered.totalQuestions,
+                        attempted: recovered.attempted,
+                        joinedAt: recovered.startedAt,
+                        answers: recovered.answersArray,
+                    },
+                    { jobId }
+                );
+                await this.session.addToSubmitted(contestId, participantId).catch(() => {
+                    // Redis may still be unavailable here — non-fatal, the DB write is what matters.
+                });
+                return {
+                    submissionRef: jobId,
+                    timeTakenSecs: recoveredTimeTakenMs / 1000,
+                    totalQuestions: recovered.totalQuestions,
+                    attempted: recovered.attempted,
+                };
+            }
+
             logger.warn(
                 `[quiz-service] Session expired for participant ${participantId} in contest ${contestId} — enqueueing zero-answer submission`
             );

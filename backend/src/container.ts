@@ -56,6 +56,8 @@ import { AmbassadorCampaignRepository } from './modules/ambassador-campaign/amba
 import { AmbassadorCampaignService } from './modules/ambassador-campaign/ambassador-campaign.service.js';
 import { AmbassadorCampaignController } from './modules/ambassador-campaign/ambassador-campaign.controller.js';
 import { getStorageProvider } from './providers/storage.provider.js';
+import { DurabilityRepository } from './modules/durability/durability.repository.js';
+import { DurabilityService } from './modules/durability/durability.service.js';
 
 // Quiz Module
 import { QuizSession } from './modules/quiz/quiz.session.js';
@@ -96,6 +98,7 @@ export const payoutRepository = new PayoutRepository();
 export const dashboardRepository = new DashboardRepository();
 export const ambassadorRepository = new AmbassadorRepository();
 export const ambassadorCampaignRepository = new AmbassadorCampaignRepository();
+export const durabilityRepository = new DurabilityRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -114,12 +117,13 @@ export const paymentService = new PaymentService(paymentRepository, razorpay, co
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
 export const quizSession = new QuizSession();
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
+export const durabilityService = new DurabilityService(durabilityRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);
 export const dashboardService = new DashboardService(dashboardRepository);
 export const ambassadorService = new AmbassadorService(ambassadorRepository, ambassadorCampaignRepository, organizationRepository, emailProvider, storageProvider);
 export const ambassadorCampaignService = new AmbassadorCampaignService(ambassadorCampaignRepository, ambassadorRepository, organizationRepository, emailProvider, storageProvider);
 export const proctoringService = new ProctoringService(prisma, quizSession);
-export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService);
+export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService, durabilityService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
 export const quizRegistrationService = new QuizRegistrationService(emailProvider);
 export const socketService = new SocketService();

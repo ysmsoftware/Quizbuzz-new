@@ -557,4 +557,89 @@ export class QuizSession {
         }
         return [...ids];
     }
+
+    // ── Batched multi-participant snapshot read — used by durability worker ──────
+    // Same shape as getParticipantSnapshot(), but for many participants in one
+    // pipeline round-trip instead of one call per participant.
+
+    async getManyParticipantSnapshots(
+        cid: string,
+        pids: string[]
+    ): Promise<Map<string, {
+        session: QuizSessionState | null;
+        answers: Record<string, SavedAnswer>;
+        questionOrder: string[] | null;
+    }>> {
+        const result = new Map<string, {
+            session: QuizSessionState | null;
+            answers: Record<string, SavedAnswer>;
+            questionOrder: string[] | null;
+        }>();
+        if (pids.length === 0) return result;
+
+        const p = redis.pipeline();
+        for (const pid of pids) {
+            const k = this.keys(cid, pid);
+            p.hgetall(k.session);   // 3N+0
+            p.hgetall(k.answers);   // 3N+1
+            p.get(k.questions);     // 3N+2
+        }
+        const results = await p.exec();
+
+        pids.forEach((pid, i) => {
+            const base = i * 3;
+            const sessionRaw = (results?.[base]?.[1] as Record<string, string> | null) ?? {};
+            const answersRaw = (results?.[base + 1]?.[1] as Record<string, string> | null) ?? {};
+            const questionOrderRaw = results?.[base + 2]?.[1] as string | null;
+
+            const session: QuizSessionState | null = sessionRaw?.contactId
+                ? {
+                    contestId: cid,
+                    participantId: pid,
+                    organizationId: sessionRaw.organizationId ?? "",
+                    contactId: sessionRaw.contactId ?? "",
+                    socketId: sessionRaw.socketId ?? "",
+                    phase: (sessionRaw.phase as QuizPhase) ?? "WAITING",
+                    seed: sessionRaw.seed ?? "",
+                    startedAt: sessionRaw.startedAt ?? "",
+                    currentQuestion: parseInt(sessionRaw.currentQuestion ?? "0", 10),
+                    totalQuestions: parseInt(sessionRaw.totalQuestions ?? "0", 10),
+                    contestEndTime: sessionRaw.contestEndTime ?? "",
+                    violationCount: parseInt(sessionRaw.violationCount ?? "0", 10),
+                    lastHeartbeatAt: sessionRaw.lastHeartbeatAt ?? "",
+                }
+                : null;
+
+            const answers: Record<string, SavedAnswer> = {};
+            for (const [qid, json] of Object.entries(answersRaw)) {
+                try { answers[qid] = JSON.parse(json); } catch { /* skip corrupt */ }
+            }
+
+            result.set(pid, {
+                session,
+                answers,
+                questionOrder: questionOrderRaw ? JSON.parse(questionOrderRaw) : null,
+            });
+        });
+
+        return result;
+    }
+
+    // ── Submission lock — guards submitQuiz() against duplicate/concurrent runs ──
+    // `SET key val PX ttl NX` is the standard atomic Redis lock: single command,
+    // no separate check-then-set race.
+
+    async acquireSubmissionLock(cid: string, pid: string, ttlMs: number): Promise<boolean> {
+        const key = `lock:submission:${cid}:${pid}`;
+        const result = await redis.set(key, "1", "PX", ttlMs, "NX");
+        return result === "OK";
+    }
+
+    async releaseSubmissionLock(cid: string, pid: string): Promise<void> {
+        await redis.del(`lock:submission:${cid}:${pid}`);
+    }
+
+    async isSubmissionLocked(cid: string, pid: string): Promise<boolean> {
+        return (await redis.exists(`lock:submission:${cid}:${pid}`)) === 1;
+    }
 }

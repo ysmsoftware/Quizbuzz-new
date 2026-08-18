@@ -49,6 +49,12 @@ const envSchema = z.object({
     DB_POOL_MIN: z.coerce.number().default(5),
     DB_POOL_MAX: z.coerce.number().default(20),
     DB_QUERY_TIMEOUT: z.coerce.number().default(5000),
+    // Explicit transaction-level bounds (distinct from DB_QUERY_TIMEOUT, which
+    // actually controls pg.Pool's idleTimeoutMillis — see config/db.ts). Sized
+    // generously above Prisma's interactive-transaction defaults (maxWait 2000ms,
+    // timeout 5000ms) so a legitimate DB pool burst doesn't false-fail a submission.
+    DB_TRANSACTION_MAX_WAIT_MS: z.coerce.number().default(5000),
+    DB_TRANSACTION_TIMEOUT_MS: z.coerce.number().default(10000),
 
     // REDIS
     REDIS_HOST: z.string(),
@@ -155,6 +161,11 @@ const envSchema = z.object({
     ANALYTICS_SNAPSHOT_INTERVAL: z.coerce.number(),
     ANALYTICS_RETENTION_DAYS: z.coerce.number(),
 
+    // DURABILITY — periodic Redis→DB progress snapshot + recovery
+    DURABILITY_SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().default(5),
+    DURABILITY_SNAPSHOT_BATCH_SIZE: z.coerce.number().default(300),
+    DURABILITY_SNAPSHOT_BATCH_CONCURRENCY: z.coerce.number().default(4),
+
     // ORG DASHBOARD
     // All limits below are ceilings + defaults for the /org/:orgId/dashboard/* endpoints.
     // Callers can request anything from 1 up to the *_MAX value via query params —
@@ -237,6 +248,10 @@ const envSchema = z.object({
     QUIZ_RECONCILIATION_INTERVAL_MS: z.coerce.number().default(15 * 60 * 1000), // 15 min
     QUIZ_RECONCILIATION_LOOKAHEAD_MS: z.coerce.number().default(30 * 60 * 1000), // 2x interval
     QUIZ_RECONCILIATION_GRACE_MS: z.coerce.number().default(5 * 60 * 1000), // catch recently-due misses too
+    // Redis lock (`lock:submission:{cid}:{pid}`) TTL guarding submitQuiz() against
+    // duplicate/concurrent submissions — safety net if a worker crashes mid-submit
+    // without hitting the lock's `finally` release.
+    QUIZ_SUBMISSION_LOCK_TTL_MS: z.coerce.number().default(15000),
     // 15-minute start-time grid (contest-start-reliability spec §6.4).
     CONTEST_START_TIME_SLOT_MINUTES: z.coerce.number().default(15),
     MAX_SLUG_RETRIES: z.coerce.number().default(5),
@@ -299,6 +314,8 @@ export const config = {
             max: env.DB_POOL_MAX,
         },
         timeout: env.DB_QUERY_TIMEOUT,
+        transactionMaxWaitMs: env.DB_TRANSACTION_MAX_WAIT_MS,
+        transactionTimeoutMs: env.DB_TRANSACTION_TIMEOUT_MS,
     },
 
     redis: {
@@ -437,6 +454,12 @@ export const config = {
         retentionDays: env.ANALYTICS_RETENTION_DAYS,
     },
 
+    durability: {
+        snapshotIntervalMinutes: env.DURABILITY_SNAPSHOT_INTERVAL_MINUTES,
+        snapshotBatchSize: env.DURABILITY_SNAPSHOT_BATCH_SIZE,
+        snapshotBatchConcurrency: env.DURABILITY_SNAPSHOT_BATCH_CONCURRENCY,
+    },
+
     dashboard: {
         upcomingContests: {
             defaultLimit: env.DASHBOARD_UPCOMING_CONTESTS_LIMIT_DEFAULT,
@@ -513,6 +536,7 @@ export const config = {
         reconciliationIntervalMs: env.QUIZ_RECONCILIATION_INTERVAL_MS,
         reconciliationLookaheadMs: env.QUIZ_RECONCILIATION_LOOKAHEAD_MS,
         reconciliationGraceMs: env.QUIZ_RECONCILIATION_GRACE_MS,
+        submissionLockTtlMs: env.QUIZ_SUBMISSION_LOCK_TTL_MS,
     },
 
     contest: {

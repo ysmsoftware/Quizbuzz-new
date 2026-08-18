@@ -250,6 +250,7 @@ model Organization {
   payoutAccount        OrganizationPayoutAccount?
   routeTransfers       PaymentRouteTransfer[]
   quizSessions         QuizSession[]
+  progressSnapshots    ParticipantProgressSnapshot[]
   submissions          Submission[]
   answers              Answer[]
   leaderboard          LeaderboardEntry[]
@@ -713,6 +714,33 @@ model QuizSession {
   @@index([participantId, isActive])
   @@index([socketId])
   @@map("quiz_sessions")
+}
+
+// PARTICIPANT PROGRESS SNAPSHOT — recovery cache, not the system of record.
+// Periodically upserted from Redis so a wipe loses at most one snapshot
+// interval; submitQuiz() rehydrates from here when the Redis session is gone.
+
+model ParticipantProgressSnapshot {
+  id              String    @id @default(ulid())
+  organizationId  String
+  contestId       String
+  participantId   String    @unique   // one row per participant — repeatedly upserted, not appended
+  phase           String              // QuizPhase at snapshot time (WAITING / IN_QUIZ / SUBMITTED)
+  answers         Json                // Record<questionId, SavedAnswer> — same shape as QuizSession.getAllAnswers()
+  questionOrder   Json?               // string[] — shuffled question order, needed to rebuild the answers array on rehydrate
+  currentQuestion Int       @default(0)
+  totalQuestions  Int       @default(0)
+  violationCount  Int       @default(0)
+  startedAt       DateTime?           // participant's quiz start (Redis session's startedAt) — needed to recompute timeTakenSecs
+  contestEndTime  DateTime?
+  lastSnapshotAt  DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([contestId])
+  @@index([organizationId])
+  @@map("participant_progress_snapshots")
 }
 
 // SUBMISSION  (final answer record — persisted from Redis at submit time)

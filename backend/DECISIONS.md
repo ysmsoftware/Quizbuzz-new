@@ -58,9 +58,10 @@ as their id convention (`@default(ulid())` in Prisma for the main app;
 `generateUlid()` from `server/utils/ulid.ts` in ops-next) — followed the
 existing convention instead of introducing `crypto.randomUUID()`.
 
-**Coverage — every `logAudit()` call site, by domain.** 27 distinct
-`action` values across 29 call sites (two actions — `certificate.issue_triggered`
-and `message.retried` — each have a single-item and a bulk variant). All
+**Coverage — every `logAudit()` call site, by domain.** 28 distinct
+`action` values across 30 call sites (two actions — `certificate.issue_triggered`
+and `message.retried` — each have a single-item and a bulk variant; a third,
+`submission.recovered`, was added by the durability work in §6). All
 `Applied? Yes` rows are live in the codebase today, not aspirational; grep
 `action: "` under `src/` to re-derive this table if it ever drifts.
 
@@ -72,7 +73,7 @@ and `message.retried` — each have a single-item and a bulk variant). All
 | Participant | • `participant.disqualified` | • A participant is disqualified | • Yes |
 | Payment | • `payment.captured`<br>• *refund issued* | • Razorpay webhook confirms a payment<br>• — | • Yes<br>• **No** — no refund feature exists in this codebase yet; don't log what doesn't exist |
 | Payout | • `payout.route_transfer_processed`<br>• *route-transfer manual retry* | • A payout route-transfer succeeds<br>• — | • Yes<br>• **No** — `forceRetry` flag is fully plumbed but has zero live callers; no admin retry endpoint exists |
-| Submission | • `submission.submitted`<br>• `submission.evaluated`<br>• `submission.invalidated` | • A submission is persisted<br>• A submission finishes evaluation<br>• Admin manually invalidates a submission | • Yes<br>• Yes<br>• Yes |
+| Submission | • `submission.submitted`<br>• `submission.evaluated`<br>• `submission.invalidated`<br>• `submission.recovered` | • A submission is persisted<br>• A submission finishes evaluation<br>• Admin manually invalidates a submission<br>• A submission is rehydrated from the durability snapshot after live Redis session state was lost (`source=RECOVERED`) — see §6 | • Yes<br>• Yes<br>• Yes<br>• Yes |
 | Certificate | • `certificate.issue_triggered`<br>• `certificate.generated`<br>• `certificate.failed`<br>• *delivered* | • Certificate generation queued (single **and** bulk-issue)<br>• Certificate PDF successfully generated<br>• Certificate generation fails<br>• — | • Yes<br>• Yes<br>• Yes<br>• **No** — `DELIVERED` exists in the `CertificateStatus` enum but nothing in this codebase ever transitions a cert to it; there's no delivery step to log |
 | Question bank | • `question.bulk_imported` | • Bulk question import completes | • Yes |
 | Messaging | • `message.sent`<br>• `message.retried`<br>• `message.failed` | • A queued message is sent successfully<br>• A failed message is retried (single **and** bulk retry-all)<br>• A message exhausts all send attempts | • Yes<br>• Yes<br>• Yes |
@@ -393,3 +394,271 @@ no schema/migration change) but the API contract is now rupees end to end:
   `PaymentRouteTransfer.*` — but those belong to the unrelated contest-payment
   feature and were deliberately left untouched; don't fold them into this
   change without a separate, explicit decision.)
+
+---
+
+## 6. Redis durability for live quiz sessions: snapshot + recovery, HA replication, and a chaos-testing harness
+
+**Problem.** During a live quiz, everything between join and submit
+(session phase, answers, heartbeat, question order, violations) lives
+*only* in Redis (`quiz:{contestId}:*` keys — see `quiz.session.ts`). Nothing
+is written to Postgres until `submitQuiz()` enqueues a submission job. Before
+this work, a Redis failure mid-contest meant total loss of every
+in-progress participant's answers, with no recovery path at all — verified
+against the actual pre-existing code, not assumed. Terraform also had
+`automatic_failover_enabled = false`, `num_cache_clusters = 1` on the live
+`cache.t4g.micro` ElastiCache node (`terraform/modules/live_contest/elasticache.tf`)
+— a single point of failure with no replica, deliberately cost-optimized
+down from the `DEPLOYMENT_PLAN.md` design's original `r6g.large` two-node
+setup, but never restored after the cost-cutting pass.
+
+**Decision: periodic BullMQ snapshot job, not a cron job, not a synchronous
+write-through-with-fallback on every answer.** Three options were
+evaluated:
+
+- **Plain OS cron** — rejected outright, per the project's own hard rule
+  against out-of-band scheduling (everything periodic in this codebase is a
+  BullMQ repeatable job so it scales/monitors the same way as every other
+  worker — see `contest-reconciliation.worker.ts`, `payment-cleanup.worker.ts`).
+- **Synchronous write-through-with-fallback** (try Redis first on every
+  answer save, fall back to a direct DB write on failure) — considered and
+  rejected. `saveAnswer()` is on the hottest path in the system (every
+  keystroke-equivalent event, for up to 10,000 concurrent participants per
+  `LOAD_TEST_PLAN.md`'s ceiling stage); adding a synchronous Postgres
+  fallback to *every* answer write means every answer either pays Redis
+  latency (fine) or, on any Redis hiccup, blocks on a Postgres round-trip
+  on the request path — trading a rare full-outage risk for a permanent
+  tail-latency risk on the normal path. Not worth it when a periodic
+  snapshot bounds the same risk to a small, known window.
+- **Periodic BullMQ repeatable snapshot job (chosen).** Every
+  `DURABILITY_SNAPSHOT_INTERVAL_MINUTES` (config-driven, default 5), a
+  worker sweeps every live contest's participants and writes their current
+  Redis state to a new `ParticipantProgressSnapshot` table. Answers in
+  progress between snapshots are still exposed to loss, but that window is
+  now minutes, not "the entire contest," and it costs zero added latency on
+  the live answer-save path.
+
+**What this gained:** bounded, known data-loss window (≤1 snapshot
+interval) instead of unbounded loss, achieved with zero hot-path latency
+cost and using a pattern (`ensureRecurringJob` — jobId dedup, remove-then-
+re-add on worker boot) already proven safe in this exact codebase — see §3's
+"already safe" list, which names this identical pattern in
+`analytics.worker.ts` and `quiz-timer.worker.ts`'s self-reschedule. Not a
+new risk class, a reused one.
+
+**Where it lives:**
+
+- Schema: `prisma/schema.prisma` — `ParticipantProgressSnapshot` model,
+  unique index on `participantId` (one snapshot row per participant, upserted
+  in place — not an append-only history table), indexes on `contestId` /
+  `organizationId`, FK to `organizations` with `ON DELETE CASCADE`.
+- Config: `DURABILITY_SNAPSHOT_INTERVAL_MINUTES`,
+  `DURABILITY_SNAPSHOT_BATCH_SIZE` (default 300),
+  `DURABILITY_SNAPSHOT_BATCH_CONCURRENCY` (default 4) — all in `.env` /
+  `src/config/index.ts` under `config.durability`, per the project's own
+  "no hardcoded limits" rule (`system-architecture-design.md` guideline §2).
+- Read path (Redis → snapshot worker): `quiz.session.ts`'s
+  `getManyParticipantSnapshots()` — one pipelined multi-participant read
+  per batch, same batching shape as `seed-load-test-data.js`'s 500-record
+  batches, chosen specifically to avoid reproducing incident #18 (DB pool
+  exhaustion during a mass participant-login burst, originally fixed by
+  raising `DB_POOL_MAX` 5→20 — see `quizbuzz-load-test-incident-log.md`).
+  Unbounded per-participant queries during a sweep across thousands of live
+  participants would risk the same exhaustion; batching with a config-driven
+  concurrency cap avoids it by construction.
+- Write path (snapshot → DB): `durability.service.ts` / `durability.repository.ts`
+  — bulk raw-SQL `INSERT ... ON CONFLICT ("participantId") DO UPDATE` via
+  `Prisma.sql`/`Prisma.join`, using `ulidx` for manual id generation since
+  raw SQL bypasses Prisma's `@default(ulid())`.
+- Worker: `src/workers/progress-snapshot.worker.ts`, `concurrency: 1`,
+  registered in `src/workers/index.ts`. New queue: `progressSnapshotQueue`
+  in `src/queues/index.ts`.
+- Recovery path: `durability.service.ts#rehydrateParticipant()`, called from
+  `quiz.service.ts#doSubmitQuiz()` when `getSession()` returns null (Redis
+  state is gone) — rebuilds the submission payload from the last snapshot
+  instead of falling back to a hardcoded zero-answer result.
+
+---
+
+**Decision: dynamic session TTL, not a static `QUIZ_SESSION_TTL` env
+value — flagged, not yet implemented.** `createSession()` sets a single
+fixed TTL (`config.redis.ttl.quizSession`, a static env value) on every
+participant's session hash. `contest.validator.ts` allows contest
+`duration` up to 480 minutes (8 hours). If the static TTL is set below a
+given contest's actual duration + buffer, Redis will expire and silently
+wipe that contest's live sessions mid-quiz — a bug, not a durability
+trade-off. The fix (compute TTL per-contest from `startTime`/`endTime` +
+a fixed buffer, at `createSession()` time, instead of one global constant)
+was diagnosed and agreed on, but **is not yet implemented in code** — it
+was out of scope for the two-phase implementation plan that was actually
+executed (which covered the snapshot/recovery and duplicate-submission work
+below). Anyone picking this up: the fix point is `createSession()`'s call
+to `redis.expire()`, and the value should come from the same
+`contestEndTime` already threaded through `QuizSessionState`.
+
+---
+
+**Decision: restore ElastiCache HA (`num_cache_clusters=2`,
+`automatic_failover_enabled=true`, `multi_az_enabled=true`), scoped to
+live-mode-only cost.** These flags were present in the original
+`DEPLOYMENT_PLAN.md` design, removed during a cost-cutting pass for testing,
+and never restored. Real-world ElastiCache failover (not the AWS-marketing
+"under a minute" figure) was researched and caveated before this decision —
+detection + promotion + client reconnect realistically lands in the
+tens-of-seconds range, not sub-minute in the best case, though this
+project's own `ioredis` `retryStrategy` (`Math.min(times*50, 2000)`,
+capped 2s backoff) already tolerates a gap that size without the
+application crashing. **Why restore now, applied manually by the repo
+owner rather than in code:** it's a `terraform apply` on the *live-mode*
+resource group only (`terraform/modules/live_contest/elasticache.tf`), zero
+application code changes required, and cost only accrues while a contest
+is actually live — the idle-mode single-node config is untouched. **What
+this gained:** the snapshot/recovery mechanism above protects against
+*application-level* session loss (crash, bad deploy, eviction under memory
+pressure); replica + automatic failover protects against *infrastructure*
+loss (node/AZ failure) without waiting for the next snapshot interval or
+losing in-flight submissions currently mid-flight through BullMQ on the
+same Redis. The two mechanisms cover different failure classes — this was
+the reasoning for keeping both rather than treating either as sufficient
+on its own.
+
+---
+
+**Decision: `lock:submission:{contestId}:{participantId}` as a Redis
+mutex around `submitQuiz()`, not a hard "reject the second submit"
+error.** The project's own engineering guidelines (`system-architecture-design.md`
+§12, Concurrency Control) already specified this exact lock key pattern as
+a requirement — it had never actually been implemented. Two ways this class
+of bug can surface here: (1) the periodic snapshot and a live AUTO_SUBMIT
+racing on the same participant, (2) a genuine concurrent double-submit
+(reconnect + auto-submit-on-timeout firing close together). **Decision:**
+`quiz.session.ts#acquireSubmissionLock()` (`SET key val PX ttl NX` — atomic,
+no separate check-then-set race) gates the actual submit logic
+(`doSubmitQuiz()`); a caller that loses the lock race doesn't error out —
+it polls `waitForInFlightSubmission()` for the winner's result instead.
+**The lock is a fast-path optimization, not the actual correctness
+guarantee** — that's `Submission.participantId`'s DB-level `@unique`
+constraint, backstopped in `submission.service.ts#persistSubmission()` by
+catching Prisma's `P2002` (unique-violation) error and falling back to
+`findByParticipantId()` for the already-committed row. **Why layer both:**
+the Redis lock avoids wasted work (two full submission pipelines running
+concurrently for nothing) in the common case; the DB constraint is what
+actually prevents a duplicate row from ever landing, even in the rare case
+where the lock itself is lost to a Redis failure between acquire and
+release. **What this gained:** the one open concurrency gap named in the
+project's own guidelines is now closed, and it's closed at the layer
+(Postgres) that can't be raced around, not just at the layer (Redis) that
+can.
+
+**Bug found and fixed — `waitForInFlightSubmission()` gave up after one
+miss.** The version delivered by the implementation pass checked
+`isSubmissionLocked()` and `break`-ed out of its retry loop the moment the
+lock cleared, before checking whether the winning caller's DB write had
+actually landed yet — since the lock releases right after the BullMQ
+enqueue, well before the async submission worker persists the row, this
+meant the *losing* caller in a concurrent-submit race almost always got
+told `{attempted: 0, totalQuestions: 0}` even though the real submission
+was seconds away from succeeding. Not data corruption (the DB still ends
+up with exactly one correct row, per the constraint above) but a real
+user-facing correctness bug — a participant could be shown "0 answered"
+for a quiz they actually completed. **Fixed** in `quiz.service.ts`: the
+method now polls `prisma.submission.findUnique({ where: { participantId } })`
+on every one of its 4 attempts (400ms apart) and only falls back to the
+zero-answer result once every attempt is exhausted. Covered by
+`quiz.service.durability-fixes.test.ts` (asserts `findUnique` is called 3
+times before the real row is returned on the 3rd call, and 4 times before
+the timeout fallback fires when the row never appears).
+
+**Bug found and fixed — recovered `timeTakenSecs` overstated elapsed
+time.** The `RECOVERED` branch computed `Date.now() - startedAt`, identical
+to the live-submission formula — but recovery can run arbitrarily later
+than when a participant's session actually went missing (e.g. a delayed
+reconciliation sweep), so this could count the entire outage/recovery-delay
+window as quiz-taking time. That value feeds `LeaderboardEntry.timeTakenSecs`
+directly, so an unrelated recovery delay could have inflated (or, on a
+speed-ranked leaderboard, unfairly penalized) a participant's rank. **Fixed:**
+`contestEndTime` was added to `RehydrateResult` / `rehydrateParticipant()`'s
+return, and the recovered-branch calculation now anchors to
+`Math.min(Date.now(), contestEndTime)` with a `Math.max(0, ...)` floor,
+falling back to plain `Date.now()` only when `contestEndTime` is unknown.
+Covered by two tests: a 1-hour contest recovered 4 hours after
+`contestEndTime` reports exactly 3600s (not 18000s); the `Date.now()`
+fallback is separately verified when `contestEndTime` is null.
+
+---
+
+**Decision: explicit transaction timeouts on submission-persisting
+transactions, config-driven.** Raised specifically because "the database
+can legitimately take a few seconds to write under load" is a different
+failure mode than "the database connection is down," and Prisma's default
+`$transaction()` timeout (5s) doesn't distinguish them — a slow-but-healthy
+write during a load spike could get killed and misread as a hard failure.
+**Fixed:** both `$transaction()` calls in `submission.repository.ts`
+(`createWithAnswers()`, `applyEvaluationResult()`) now pass explicit
+`{ maxWait: config.database.transactionMaxWaitMs, timeout: config.database.transactionTimeoutMs }`,
+sourced from `DB_TRANSACTION_MAX_WAIT_MS` / `DB_TRANSACTION_TIMEOUT_MS`
+(defaults 5000/10000) instead of Prisma's silent built-in default — so the
+actual tolerance is a visible, tunable number instead of an implicit
+library default nobody had decided on.
+
+---
+
+**Decision: extend `SubmissionSource` with `RECOVERED` rather than
+collapsing it into `AUTO`.** `"MANUAL" | "AUTO"` became
+`"MANUAL" | "AUTO" | "RECOVERED"` in `submission.types.ts`. **Why:** a
+submission that came from live Redis state (`AUTO`/`MANUAL`) and one
+rehydrated from a snapshot after Redis loss are operationally different
+events — an admin looking at the submissions table, or anyone querying
+`Submission.source` for an incident retro, needs to be able to tell "the
+durability path actually engaged for this participant" apart from the
+normal path. **What this gained:** the recovery mechanism is observable
+after the fact, not just functionally correct — paired with the new
+`submission.recovered` audit-log action (§1) and `verify-chaos-recovery.js`
+below, which both depend on this field existing and being distinct from
+`AUTO`.
+
+---
+
+**Decision: build a chaos-testing harness (`chaos-redis-wipe.js` +
+`verify-chaos-recovery.js`), kept explicitly outside the automated
+capacity-gated load-test flow.** The two-phase implementation above was
+verified with Jest (mocked Redis/DB/queues — proves the logic is correct
+in isolation) and with a manual local repro (proves the fix works against
+a real dev DB). Neither proves the recovery path holds up under thousands
+of real concurrent participants, which is the actual production risk
+scenario. **Considered:** folding a Redis-failure scenario directly into
+`run-stage.sh`'s stages. **Rejected:** `run-stage.sh`'s gate criteria
+(k6's `answerLatencyP95ThresholdMs`/`wsConnectSuccessRateThreshold`
+thresholds, ASG instance-count band) exist to answer "does this many users
+need this many instances, cleanly" — injecting a deliberate Redis failure
+mid-stage would spike those numbers for reasons that have nothing to do
+with capacity, and `run-all-stages.sh` would read that as "gate failed, stop
+scaling," corrupting the very signal the staged progression exists to
+produce. **Decision:** two new, separately-invoked scripts in
+`load-testing/scripts/`, dry-run-by-default with an `--execute` flag —
+the same safety convention `redis-migrate.js` already established in this
+codebase, reused rather than reinvented:
+
+- `chaos-redis-wipe.js` — samples a configurable percentage of a contest's
+  `active`-set participants and deletes their 8 per-participant session
+  keys plus their set membership, matching what a real Redis data-loss
+  event would actually erase. Deliberately never touches `bull:*` job data,
+  `leaderboard:*`, or the submission lock key — those belong to the
+  HA/replication failure mode above, not this one; blending the two would
+  make a failed run ambiguous about which mechanism actually broke. Writes
+  a manifest (`results/chaos-manifest-*.json`) of exactly which
+  participants were wiped.
+- `verify-chaos-recovery.js` — reads that manifest and queries
+  `Submission` for every wiped participant, reporting counts by `source`
+  and failing (exit 1) if any wiped participant has no submission row at
+  all. This — not k6's latency thresholds — is the actual pass/fail gate
+  for a chaos run.
+
+**What this gained:** a repeatable, low-ceremony way to validate the
+recovery path under real load whenever it's actually run, without ever
+risking contamination of the capacity-testing numbers `run-all-stages.sh`
+produces. **Not yet done:** these scripts have been written and syntax-
+checked but not yet executed against a live staged run — the recommended
+first use is mid-hold-window on the `reference-5000` stage (id 4), per the
+same reasoning `LOAD_TEST_PLAN.md` already uses that stage as the reference
+point for other cross-checks.
