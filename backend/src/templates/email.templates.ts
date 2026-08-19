@@ -26,7 +26,7 @@ export const EmailTemplates: {
 } = {
     [MessageTemplate.OTP_VERIFICATION_CODE]: {
         build: (params) => ({
-            subject: `Your OTP for YSM Info Solution`,
+            subject: `Your OTP for QuizBuzz`,
             html: renderEmailLayout({
                 brandName: "YSM Info Solution",
                 preheader: `Your verification code is ${params.otp}`,
@@ -43,14 +43,14 @@ export const EmailTemplates: {
     },
     [MessageTemplate.BIRTHDAY_WISHES_YSM]: {
         build: (params) => ({
-            subject: `Happy Birthday from YSM Info Solution! 🎂`,
+            subject: `Happy Birthday from QuizBuzz! 🎂`,
             html: renderEmailLayout({
                 brandName: "YSM Info Solution",
                 preheader: `Wishing you a very happy birthday, ${params.name}!`,
                 heading: `Happy Birthday, ${params.name}! 🎂`,
                 bodyHtml: `
                     ${pill("🎉 Wishing you a wonderful day")}
-                    <p style="${P}">Team <strong>YSM Info Solution</strong> wishes you a very <strong>Happy Birthday!</strong></p>
+                    <p style="${P}">Team <strong>QuizBuzz</strong> wishes you a very <strong>Happy Birthday!</strong></p>
                     <p style="${P}">May this year bring you success, growth and new opportunities.</p>
                     <p style="${P}">Keep shining and keep learning!</p>
                     ${signOff("YSM Info Solution")}
@@ -103,13 +103,13 @@ export const EmailTemplates: {
                 heading: "You're registered! ✅",
                 bodyHtml: `
                     <p style="${P}">Dear ${params.name},</p>
-                    <p style="${P}">Thank you for registering for <strong>${params.eventName}</strong> at YSM Info Solution.</p>
+                    <p style="${P}">Thank you for registering for <strong>${params.eventName}</strong> on QuizBuzz.</p>
                     ${infoTable([
-                        { label: "Date", value: params.date },
-                        { label: "Time", value: params.time },
-                        { label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark },
-                        { label: "Location / Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
-                    ])}
+                    { label: "Date", value: params.date },
+                    { label: "Time", value: params.time },
+                    { label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark },
+                    { label: "Location / Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
+                ])}
                     <p style="${P}">We look forward to your participation. For queries, contact: <strong>+91 898 308 3698</strong></p>
                     ${signOff("YSM Info Solution")}
                 `,
@@ -128,13 +128,34 @@ export const EmailTemplates: {
                     <p style="${P}">Dear ${params.name},</p>
                     <p style="${P}">This is a reminder for your registered program: <strong>${params.eventName}</strong></p>
                     ${infoTable([
-                        { label: "Date", value: params.date },
-                        { label: "Time", value: params.time },
-                        ...(params.joinCode ? [{ label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark }] : []),
-                        { label: "Join Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
-                    ])}
+                    { label: "Date", value: params.date },
+                    { label: "Time", value: params.time },
+                    ...(params.joinCode ? [{ label: "Join Code", value: params.joinCode, strong: true, valueColor: COLORS.primaryDark }] : []),
+                    { label: "Join Link", value: `<a href="${params.link}" style="${LINK_STYLE}">${params.link}</a>` },
+                ])}
                     <p style="${P}">Kindly be available 10 minutes before the scheduled time.</p>
                     <p style="${P}">We look forward to your participation.</p>
+                    ${signOff("YSM Info Solution")}
+                `,
+            }),
+        }),
+    },
+
+    [MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE]: {
+        build: (params) => ({
+            subject: `Payment Confirmed - ${params.eventName}`,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Your payment of ${params.amount} was successful`,
+                heading: "Payment Confirmed! 🎉",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">Your payment has been successfully processed. Thank you for your registration.</p>
+                    ${infoTable([
+                        { label: "Event / Contest", value: params.eventName },
+                        { label: "Amount Paid", value: params.amount, strong: true, valueColor: COLORS.primaryDark },
+                    ])}
+                    <p style="${P}">Your registration details will be sent to you shortly.</p>
                     ${signOff("YSM Info Solution")}
                 `,
             }),
@@ -151,13 +172,13 @@ export const EmailTemplates: {
                     <p style="${P}">Hi ${params.name},</p>
                     <p style="${P}">A payment has been received and your share has been transferred to your linked payout account. Here's the full breakdown:</p>
                     ${ledgerTable([
-                        { label: "Gross payment received", value: params.grossAmount },
-                        { label: `Platform commission (${params.commissionPercent})`, value: `− ${params.commissionAmount}`, tone: "negative" },
-                        { label: `Payment gateway fee (${params.gatewayFeePercent})`, value: `− ${params.gatewayFeeAmount}`, tone: "negative" },
-                        { label: `GST on gateway fee (${params.gstPercent})`, value: `− ${params.gstAmount}`, tone: "negative" },
-                        { label: "Total deducted", value: `− ${params.totalDeducted}`, tone: "negative", divider: true },
-                        { label: "Amount transferred to you", value: params.transferAmount, tone: "positive", strong: true, divider: true },
-                    ])}
+                    { label: "Gross payment received", value: params.grossAmount },
+                    { label: `Platform commission (${params.commissionPercent})`, value: `− ${params.commissionAmount}`, tone: "negative" },
+                    { label: `Payment gateway fee (${params.gatewayFeePercent})`, value: `− ${params.gatewayFeeAmount}`, tone: "negative" },
+                    { label: `GST on gateway fee (${params.gstPercent})`, value: `− ${params.gstAmount}`, tone: "negative" },
+                    { label: "Total deducted", value: `− ${params.totalDeducted}`, tone: "negative", divider: true },
+                    { label: "Amount transferred to you", value: params.transferAmount, tone: "positive", strong: true, divider: true },
+                ])}
                     <p style="${SMALL}">The payment gateway fee and GST are charges levied by Razorpay on every transaction and are passed through as-is — QuizBuzz does not profit from this portion.</p>
                     <p style="${SMALL}">Transfer reference: ${params.transferId}</p>
                 `,
@@ -276,9 +297,9 @@ export const EmailTemplates: {
                     <p style="${P}">Hello ${params.name},</p>
                     <p style="${P}"><strong>${params.eventName}</strong> has been rescheduled.</p>
                     ${infoTable([
-                        { label: "Previously", value: `<s style="color:${COLORS.textFaint};">${params.previousDate}</s>` },
-                        { label: "New date & time", value: `${params.date} at ${params.time}`, strong: true, valueColor: COLORS.primaryDark },
-                    ])}
+                    { label: "Previously", value: `<s style="color:${COLORS.textFaint};">${params.previousDate}</s>` },
+                    { label: "New date & time", value: `${params.date} at ${params.time}`, strong: true, valueColor: COLORS.primaryDark },
+                ])}
                     ${params.reason ? calloutBox(`<strong>Reason:</strong> ${params.reason}`, "warning") : ""}
                     <p style="${P}">Your registration remains valid — no action is needed.</p>
                     ${emailButton("View Contest Details", params.link)}
@@ -350,7 +371,7 @@ export const EmailTemplates: {
     },
     [MessageTemplate.CUSTOM]: {
         build: (params) => ({
-            subject: params.subject || `Notification from YSM Info Solution`,
+            subject: params.subject || `Notification from QuizBuzz`,
             html: renderEmailLayout({
                 brandName: "YSM Info Solution",
                 preheader: params.subject || "Announcement",
@@ -358,7 +379,7 @@ export const EmailTemplates: {
                 bodyHtml: `
                     <p style="${P}white-space:pre-wrap;">${params.body || ""}</p>
                 `,
-                footerNote: "This email was sent by YSM Info Solution. Please do not reply directly to this email.",
+                footerNote: "This email was sent by QuizBuzz (powered by YSM Info Solution). Please do not reply directly to this email.",
             }),
         }),
     },

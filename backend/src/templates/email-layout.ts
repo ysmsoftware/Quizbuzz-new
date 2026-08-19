@@ -84,7 +84,7 @@ export function renderEmailLayout(opts: EmailLayoutOptions): string {
                                 ${hasSubBrand ? `
                                 <tr>
                                     <td style="font-family:${FONT};font-size:12px;font-weight:500;color:rgba(255,255,255,0.85);letter-spacing:0.2px;padding-top:3px;">
-                                        by ${brand}
+                                        ${brand === "YSM Info Solution" ? "powered by YSM Info Solution" : `by ${brand}`}
                                     </td>
                                 </tr>` : ""}
                             </table>
@@ -96,14 +96,14 @@ export function renderEmailLayout(opts: EmailLayoutOptions): string {
                             ${opts.bodyHtml}
                         </td>
                     </tr>
-                    <tr>
-                        <td style="padding:20px 32px 32px 32px;">
-                            <hr style="border:none;border-top:1px solid ${COLORS.border};margin:0 0 20px 0;" />
-                            <p style="margin:0;font-family:${FONT};font-size:12px;color:${COLORS.textFaint};line-height:1.6;">
-                                ${opts.footerNote ?? `This is an automated message from ${brand}. Please do not reply directly to this email.`}
-                            </p>
-                        </td>
-                    </tr>
+                     <tr>
+                         <td style="padding:20px 32px 32px 32px;">
+                             <hr style="border:none;border-top:1px solid ${COLORS.border};margin:0 0 20px 0;" />
+                             <p style="margin:0;font-family:${FONT};font-size:12px;color:${COLORS.textFaint};line-height:1.6;">
+                                 ${opts.footerNote ?? `This is an automated message from ${brand === "YSM Info Solution" ? PLATFORM_BRAND : brand}. Please do not reply directly to this email.`}
+                             </p>
+                         </td>
+                     </tr>
                 </table>
             </td>
         </tr>
@@ -159,7 +159,10 @@ export function linkFallback(url: string): string {
 
 /** Closing signature line, e.g. "Thanks, — Team QuizBuzz". */
 export function signOff(brand: string, closing: string = "Thanks"): string {
-    return `<p style="margin:22px 0 0 0;font-family:${FONT};font-size:15px;line-height:1.6;color:${COLORS.textBody};">${closing},<br/><strong style="color:${COLORS.text};">Team ${brand}</strong></p>`;
+    const isYSM = brand === "YSM Info Solution" || brand === "QuizBuzz";
+    const brandNameDisplay = isYSM ? "QuizBuzz" : brand;
+    const subText = isYSM ? `<br/><span style="font-size:11px;color:${COLORS.textMuted};font-weight:normal;">powered by YSM Info Solution</span>` : "";
+    return `<p style="margin:22px 0 0 0;font-family:${FONT};font-size:15px;line-height:1.6;color:${COLORS.textBody};">${closing},<br/><strong style="color:${COLORS.text};">Team ${brandNameDisplay}</strong>${subText}</p>`;
 }
 
 /** Two-column label/value rows, e.g. contest date, time, join code. */
