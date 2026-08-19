@@ -320,17 +320,27 @@ export class PaymentService {
 
                 // Send payment confirmation email
                 if (payment.participantId) {
-                    this.messagingService.enqueueMessage(payment.organizationId, {
-                        participantId: payment.participantId,
-                        contestId: payment.contestId ?? undefined,
-                        channel: "EMAIL",
-                        template: MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE,
-                        recipient: paymentEntity.email ?? '',
-                        params: {
-                            name: paymentEntity.contact ?? 'Participant',
-                            amount: `₹${(payment.amount / 100).toFixed(2)}`,
-                            eventName: payment.contestId ?? 'Contest',
-                        },
+                    this.participantService.getParticipantById(
+                        payment.contestId,
+                        payment.participantId,
+                        payment.organizationId
+                    ).then((participant) => {
+                        const fullName = participant.contact.lastName
+                            ? `${participant.contact.firstName} ${participant.contact.lastName}`
+                            : participant.contact.firstName;
+
+                        return this.messagingService.enqueueMessage(payment.organizationId, {
+                            participantId: payment.participantId,
+                            contestId: payment.contestId ?? undefined,
+                            channel: "EMAIL",
+                            template: MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE,
+                            recipient: paymentEntity.email ?? '',
+                            params: {
+                                name: fullName,
+                                amount: `₹${(payment.amount / 100).toFixed(2)}`,
+                                eventName: participant.contest.title,
+                            },
+                        });
                     }).catch((err) => {
                         logger.error(`[payment] Failed to enqueue payment confirmation: ${(err as Error).message}`);
                     });
