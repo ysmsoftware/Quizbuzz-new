@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trophy, Search, ChevronDown } from 'lucide-react';
+import { Plus, Trophy, Search, ChevronDown, Users, CalendarDays, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { PaginationBar } from '@/components/ui/pagination-bar';
@@ -18,7 +18,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useOrgAmbassadorCampaigns } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from './campaign-status';
-import type { AmbassadorCampaignStatus } from '@/lib/types/ambassador';
+import type { AmbassadorCampaignStatus, CampaignListItem } from '@/lib/types/ambassador';
 
 const STATUS_OPTIONS: AmbassadorCampaignStatus[] = ['DRAFT', 'PUBLISHED', 'LIVE', 'ENDED', 'ARCHIVED'];
 
@@ -126,7 +126,7 @@ export function CampaignsList() {
             {sortOrder === 'asc' ? '↑' : '↓'}
           </Button>
           <Button asChild size="sm">
-            <Link href="/org/ambassadors/campaigns/new">
+            <Link href="/org/campaigns/new">
               <Plus className="h-4 w-4 mr-2" />
               New Campaign
             </Link>
@@ -135,9 +135,9 @@ export function CampaignsList() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 w-full rounded-xl" />
           ))}
         </div>
       ) : campaigns.length === 0 ? (
@@ -151,54 +151,10 @@ export function CampaignsList() {
           </EmptyDescription>
         </Empty>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Ambassador Types</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {campaigns.map((campaign) => (
-                <TableRow key={campaign.id}>
-                  <TableCell className="font-medium">{campaign.name || <span className="text-muted-foreground italic">Untitled</span>}</TableCell>
-                  <TableCell>
-                    <Badge variant={CAMPAIGN_STATUS_BADGE_VARIANT[campaign.status]}>{campaign.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {campaign.ambassadorTypesAllowed.map((key) => (
-                        <Badge key={key} variant="outline" className="font-normal">
-                          {typeLabel(key)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(campaign.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    {campaign.status === 'DRAFT' ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/org/ambassadors/campaigns/${campaign.id}/wizard`}>Continue setup</Link>
-                      </Button>
-                    ) : (
-                      <>
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/org/ambassadors/campaigns/${campaign.id}`}>View</Link>
-                        </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/org/ambassadors/campaigns/${campaign.id}/report`}>Report</Link>
-                        </Button>
-                      </>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {campaigns.map((campaign) => (
+            <CampaignCard key={campaign.id} campaign={campaign} typeLabel={typeLabel} />
+          ))}
         </div>
       )}
 
@@ -212,5 +168,70 @@ export function CampaignsList() {
         />
       )}
     </div>
+  );
+}
+
+function CampaignCard({ campaign, typeLabel }: { campaign: CampaignListItem; typeLabel: (key: string) => string }) {
+  const isDraft = campaign.status === 'DRAFT';
+
+  return (
+    <Card className="border-border/50 flex flex-col">
+      <CardHeader className="pb-3 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-foreground truncate" title={campaign.name || undefined}>
+            {campaign.name || <span className="text-muted-foreground italic font-normal">Untitled</span>}
+          </h3>
+          <Badge variant={CAMPAIGN_STATUS_BADGE_VARIANT[campaign.status]} className="shrink-0">
+            {campaign.status}
+          </Badge>
+        </div>
+        {campaign.contestTitle && <p className="text-xs text-muted-foreground truncate">Promoting {campaign.contestTitle}</p>}
+      </CardHeader>
+
+      <CardContent className="flex-1 space-y-3">
+        {campaign.ambassadorTypesAllowed.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {campaign.ambassadorTypesAllowed.map((key) => (
+              <Badge key={key} variant="outline" className="font-normal text-xs">
+                {typeLabel(key)}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">No ambassador types set yet</p>
+        )}
+
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            {campaign.enrollmentCount} {campaign.enrollmentCount === 1 ? 'ambassador' : 'ambassadors'}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {new Date(campaign.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+      </CardContent>
+
+      <CardFooter className="pt-0 gap-2">
+        {isDraft ? (
+          <Button asChild size="sm" className="w-full">
+            <Link href={`/org/campaigns/${campaign.id}/wizard`}>
+              Continue setup
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Link>
+          </Button>
+        ) : (
+          <>
+            <Button asChild size="sm" variant="outline" className="flex-1">
+              <Link href={`/org/campaigns/${campaign.id}`}>View</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="flex-1">
+              <Link href={`/org/campaigns/${campaign.id}/report`}>Report</Link>
+            </Button>
+          </>
+        )}
+      </CardFooter>
+    </Card>
   );
 }

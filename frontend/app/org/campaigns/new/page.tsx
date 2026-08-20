@@ -32,7 +32,7 @@ export default function NewAmbassadorCampaignPage() {
     setInstantiatingId(id);
     try {
       const res = await instantiateTemplate({ id });
-      router.push(`/org/ambassadors/campaigns/${res.data.id}/wizard`);
+      router.push(`/org/campaigns/${res.data.id}/wizard`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create campaign from template');
     } finally {

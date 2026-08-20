@@ -18,6 +18,7 @@ import {
     User,
     Award,
     Megaphone,
+    Target,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useOnboardingStatus } from '@/lib/hooks/useOnboarding';
@@ -52,11 +53,18 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [upgradePromptOpen, setUpgradePromptOpen] = useState(false);
 
-    // Nav item simply doesn't render when the flag is off — same "no signal" posture as the backend's 404.
-    // Direct URL navigation into /org/ambassadors is separately blocked by that section's own layout.tsx.
+    // Nav items simply don't render when the flag is off — same "no signal" posture as the backend's 404.
+    // Direct URL navigation into /org/ambassadors or /org/campaigns is separately blocked by each
+    // section's own layout.tsx. Two separate nav items, not one toggle page: applications/directory
+    // (people) and campaign management are different jobs even though they're related.
     const { enabled: ambassadorProgramEnabled } = useAmbassadorProgramEnabled(activeOrg?.id ?? '');
     const navItems = ambassadorProgramEnabled
-        ? [...baseNavItems.slice(0, 4), { label: 'Ambassadors', href: '/org/ambassadors', icon: Megaphone }, ...baseNavItems.slice(4)]
+        ? [
+            ...baseNavItems.slice(0, 4),
+            { label: 'Ambassadors', href: '/org/ambassadors', icon: Megaphone },
+            { label: 'Campaigns', href: '/org/campaigns', icon: Target },
+            ...baseNavItems.slice(4),
+          ]
         : baseNavItems;
 
     // Only query onboarding status once the user is fully logged-in + verified

@@ -190,7 +190,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
         });
         const newId = res.data.id;
         setId(newId);
-        router.replace(`/org/ambassadors/campaigns/${newId}/wizard`);
+        router.replace(`/org/campaigns/${newId}/wizard`);
       } else {
         await updateCampaign({
           name: draft.name.trim(),
@@ -329,9 +329,9 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/ambassadors')}>
+      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/campaigns')}>
         <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Ambassadors
+        Back to Campaigns
       </Button>
 
       <div>

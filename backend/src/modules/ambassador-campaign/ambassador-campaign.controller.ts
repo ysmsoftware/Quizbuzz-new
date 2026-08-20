@@ -7,6 +7,7 @@ import {
     DuplicateCampaignSchema,
     ListCampaignsQuerySchema,
     ListApplicationsQuerySchema,
+    ListOrgAmbassadorsQuerySchema,
     RejectApplicationSchema,
     ListReportQuerySchema,
     LeaderboardQuerySchema,
@@ -87,6 +88,29 @@ export class AmbassadorCampaignController {
             const { reason } = RejectApplicationSchema.parse(req.body);
             const result = await this.service.rejectApplication(organizationId, req.params.id as string, reviewedById, reason);
             res.status(200).json({ success: true, message: "Application rejected", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // ─── Ambassador directory (org-wide) ────────────────────────────────────────
+
+    listOrgAmbassadors = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const query = ListOrgAmbassadorsQuerySchema.parse(req.query);
+            const result = await this.service.listOrgAmbassadors(organizationId, query);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getOrgAmbassador = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.getOrgAmbassador(organizationId, req.params.ambassadorId as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

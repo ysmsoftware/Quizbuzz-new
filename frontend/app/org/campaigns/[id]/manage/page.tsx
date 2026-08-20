@@ -33,7 +33,7 @@ export default function CampaignManagePage() {
   // lands here directly (e.g. a stale bookmark from before it was published).
   useEffect(() => {
     if (campaign && campaign.status === 'DRAFT') {
-      router.replace(`/org/ambassadors/campaigns/${id}/wizard`);
+      router.replace(`/org/campaigns/${id}/wizard`);
     }
   }, [campaign, id, router]);
 
@@ -48,7 +48,7 @@ export default function CampaignManagePage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push(`/org/ambassadors/campaigns/${id}`)}>
+      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push(`/org/campaigns/${id}`)}>
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Overview
       </Button>
@@ -67,7 +67,7 @@ export default function CampaignManagePage() {
           <p className="text-sm text-muted-foreground">Manage rewards, leaderboards, and the ambassador kit.</p>
         </div>
         <Button asChild size="sm" variant="outline">
-          <Link href={`/org/ambassadors/campaigns/${id}/report`}>
+          <Link href={`/org/campaigns/${id}/report`}>
             <BarChart3 className="h-4 w-4 mr-2" />
             View Report
           </Link>

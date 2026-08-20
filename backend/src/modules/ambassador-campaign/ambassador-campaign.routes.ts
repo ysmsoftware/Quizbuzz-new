@@ -4,34 +4,52 @@ import { requireAmbassadorProgramEnabled } from "../../middlewares/require-ambas
 
 function ctrl() { return require("../../container").ambassadorCampaignController; }
 
-export const ambassadorCampaignRouter = Router();
+// ─── /org/ambassadors — applications review + the org-wide ambassador directory ─────────
+// "Ambassadors" is people: reviewing who applied, and listing who's actually part of the
+// program (approved, deduped across campaigns). Campaign management itself lives at
+// /org/campaigns (below) — kept separate so the URL says what's actually being addressed,
+// instead of campaign CRUD being nested under a router named for a different resource.
+export const orgAmbassadorRouter = Router();
 
-ambassadorCampaignRouter.use(authenticatedOrgMiddleware);
-ambassadorCampaignRouter.use(requireAmbassadorProgramEnabled);
+orgAmbassadorRouter.use(authenticatedOrgMiddleware);
+orgAmbassadorRouter.use(requireAmbassadorProgramEnabled);
 
-ambassadorCampaignRouter.get("/applications",                     (req, res, next) => ctrl().listApplications(req, res, next));
-ambassadorCampaignRouter.get("/applications/:id",                 (req, res, next) => ctrl().getApplication(req, res, next));
-ambassadorCampaignRouter.post("/applications/:id/approve",        (req, res, next) => ctrl().approveApplication(req, res, next));
-ambassadorCampaignRouter.post("/applications/:id/reject",         (req, res, next) => ctrl().rejectApplication(req, res, next));
+orgAmbassadorRouter.get("/applications",              (req, res, next) => ctrl().listApplications(req, res, next));
+orgAmbassadorRouter.get("/applications/:id",          (req, res, next) => ctrl().getApplication(req, res, next));
+orgAmbassadorRouter.post("/applications/:id/approve", (req, res, next) => ctrl().approveApplication(req, res, next));
+orgAmbassadorRouter.post("/applications/:id/reject",  (req, res, next) => ctrl().rejectApplication(req, res, next));
 
-ambassadorCampaignRouter.get("/campaigns",                        (req, res, next) => ctrl().listCampaigns(req, res, next));
-ambassadorCampaignRouter.post("/campaigns",                       (req, res, next) => ctrl().createCampaign(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/poster-upload-url",     (req, res, next) => ctrl().getPosterUploadUrl(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id",                    (req, res, next) => ctrl().getCampaign(req, res, next));
-ambassadorCampaignRouter.patch("/campaigns/:id",                  (req, res, next) => ctrl().updateCampaign(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/:id/publish",           (req, res, next) => ctrl().publishCampaign(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/:id/activate",          (req, res, next) => ctrl().activateCampaign(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/:id/end",                (req, res, next) => ctrl().endCampaign(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/:id/archive",           (req, res, next) => ctrl().archiveCampaign(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id/groups",              (req, res, next) => ctrl().getGroups(req, res, next));
-ambassadorCampaignRouter.put("/campaigns/:id/groups",              (req, res, next) => ctrl().replaceGroups(req, res, next));
-ambassadorCampaignRouter.post("/campaigns/:id/duplicate",         (req, res, next) => ctrl().duplicateCampaign(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id/stats",              (req, res, next) => ctrl().getCampaignStatsSummary(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id/report",             (req, res, next) => ctrl().getCampaignReport(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id/report/export",      (req, res, next) => ctrl().exportCampaignReport(req, res, next));
-ambassadorCampaignRouter.get("/campaigns/:id/leaderboard",        (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));
+// Directory routes registered after /applications so that literal path always wins over
+// the :ambassadorId param match below it.
+orgAmbassadorRouter.get("/",              (req, res, next) => ctrl().listOrgAmbassadors(req, res, next));
+orgAmbassadorRouter.get("/:ambassadorId", (req, res, next) => ctrl().getOrgAmbassador(req, res, next));
 
-ambassadorCampaignRouter.get("/campaign-templates",                (req, res, next) => ctrl().listTemplates(req, res, next));
-ambassadorCampaignRouter.post("/campaign-templates",               (req, res, next) => ctrl().createTemplate(req, res, next));
-ambassadorCampaignRouter.delete("/campaign-templates/:id",         (req, res, next) => ctrl().deleteTemplate(req, res, next));
-ambassadorCampaignRouter.post("/campaign-templates/:id/instantiate", (req, res, next) => ctrl().instantiateTemplate(req, res, next));
+// ─── /org/campaigns — campaign CRUD, groups, templates, reporting ───────────────────────
+export const campaignRouter = Router();
+
+campaignRouter.use(authenticatedOrgMiddleware);
+campaignRouter.use(requireAmbassadorProgramEnabled);
+
+campaignRouter.get("/",                   (req, res, next) => ctrl().listCampaigns(req, res, next));
+campaignRouter.post("/",                  (req, res, next) => ctrl().createCampaign(req, res, next));
+campaignRouter.post("/poster-upload-url", (req, res, next) => ctrl().getPosterUploadUrl(req, res, next));
+
+// Templates registered before /:id so "templates" is never swallowed as a campaign id.
+campaignRouter.get("/templates",                  (req, res, next) => ctrl().listTemplates(req, res, next));
+campaignRouter.post("/templates",                 (req, res, next) => ctrl().createTemplate(req, res, next));
+campaignRouter.delete("/templates/:id",           (req, res, next) => ctrl().deleteTemplate(req, res, next));
+campaignRouter.post("/templates/:id/instantiate", (req, res, next) => ctrl().instantiateTemplate(req, res, next));
+
+campaignRouter.get("/:id",               (req, res, next) => ctrl().getCampaign(req, res, next));
+campaignRouter.patch("/:id",             (req, res, next) => ctrl().updateCampaign(req, res, next));
+campaignRouter.post("/:id/publish",      (req, res, next) => ctrl().publishCampaign(req, res, next));
+campaignRouter.post("/:id/activate",     (req, res, next) => ctrl().activateCampaign(req, res, next));
+campaignRouter.post("/:id/end",          (req, res, next) => ctrl().endCampaign(req, res, next));
+campaignRouter.post("/:id/archive",      (req, res, next) => ctrl().archiveCampaign(req, res, next));
+campaignRouter.get("/:id/groups",        (req, res, next) => ctrl().getGroups(req, res, next));
+campaignRouter.put("/:id/groups",        (req, res, next) => ctrl().replaceGroups(req, res, next));
+campaignRouter.post("/:id/duplicate",    (req, res, next) => ctrl().duplicateCampaign(req, res, next));
+campaignRouter.get("/:id/stats",         (req, res, next) => ctrl().getCampaignStatsSummary(req, res, next));
+campaignRouter.get("/:id/report",        (req, res, next) => ctrl().getCampaignReport(req, res, next));
+campaignRouter.get("/:id/report/export", (req, res, next) => ctrl().exportCampaignReport(req, res, next));
+campaignRouter.get("/:id/leaderboard",   (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));

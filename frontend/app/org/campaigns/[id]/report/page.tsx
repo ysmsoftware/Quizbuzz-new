@@ -38,7 +38,7 @@ export default function AmbassadorCampaignReportPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push(`/org/ambassadors/campaigns/${campaignId}`)}>
+      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push(`/org/campaigns/${campaignId}`)}>
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Campaign
       </Button>

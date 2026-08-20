@@ -14,7 +14,7 @@ export default function EditAmbassadorCampaignRedirectPage() {
   const id = params.id as string;
 
   useEffect(() => {
-    router.replace(`/org/ambassadors/campaigns/${id}`);
+    router.replace(`/org/campaigns/${id}`);
   }, [id, router]);
 
   return <Skeleton className="h-96 w-full rounded-xl" />;

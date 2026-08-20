@@ -456,7 +456,7 @@ export class AmbassadorService {
 
         const leaderboardRanks = await Promise.all(
             (rewardConfig.leaderboardPrizes ?? []).map(async (cut) => {
-                const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, cut.scope);
+                const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, cut.scope, cut.rankedBy);
                 const rank = groups.findIndex((g) => g.ambassadorIds.includes(ambassadorId));
                 return { scope: cut.scope, label: cut.label, rank: rank === -1 ? null : rank + 1 };
             }),
@@ -494,7 +494,7 @@ export class AmbassadorService {
         const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
         const cut = rewardConfig.leaderboardPrizes.find((c) => leaderboardScopeEquals(c.scope, scope));
 
-        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope);
+        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy);
         const total = groups.length;
         const skip = (page - 1) * limit;
         const page_ = groups.slice(skip, skip + limit);

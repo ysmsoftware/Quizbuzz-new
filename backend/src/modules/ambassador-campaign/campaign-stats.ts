@@ -78,6 +78,7 @@ export async function computeLeaderboardGroups(
     campaignRepo: AmbassadorCampaignRepository,
     campaignId: string,
     scope: LeaderboardScope,
+    rankedBy?: "REGISTRATION_COUNT" | "REGISTRATION_RATE_PERCENT",
 ): Promise<LeaderboardGroup[]> {
     // Only APPROVED applications have a live referral link (see
     // findEnrollmentByReferralCodeForContest) — PENDING/REJECTED ones would just be
@@ -100,7 +101,20 @@ export async function computeLeaderboardGroups(
         }
     }
 
-    return [...groups.values()].sort((a, b) => b.registrationCount - a.registrationCount);
+    const sortedGroups = [...groups.values()];
+
+    if (rankedBy === "REGISTRATION_RATE_PERCENT") {
+        return sortedGroups.sort((a, b) => {
+            const rateA = a.registrationCount / Math.max(1, a.ambassadorIds.length);
+            const rateB = b.registrationCount / Math.max(1, b.ambassadorIds.length);
+            if (rateB !== rateA) {
+                return rateB - rateA;
+            }
+            return b.registrationCount - a.registrationCount;
+        });
+    }
+
+    return sortedGroups.sort((a, b) => b.registrationCount - a.registrationCount);
 }
 
 /**

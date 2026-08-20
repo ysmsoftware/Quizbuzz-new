@@ -24,10 +24,23 @@ import payoutRouter from "./modules/payout/payout.routes.js";
 import { quizRegistrationRouter } from "./modules/quiz/quiz-registration.routes.js";
 import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
 import { ambassadorPublicRouter, ambassadorRouter } from "./modules/ambassador/ambassador.routes";
-import { ambassadorCampaignRouter } from "./modules/ambassador-campaign/ambassador-campaign.routes";
+import { orgAmbassadorRouter, campaignRouter } from "./modules/ambassador-campaign/ambassador-campaign.routes";
 
 const apiRouter = Router();
 
+// IMPORTANT: these two must be mounted before organizationRouter/dashboardRouter below.
+// organizationRouter has GET /org/:orgId (a single-segment catch-all) and dashboardRouter
+// has GET /org/:orgId/dashboard/*; Express matches router.use() mounts in registration
+// order, not by specificity. organizationRouter's :orgId param happily matches literal
+// single-segment paths like "campaigns" or "ambassadors" — so GET /org/campaigns (list) and
+// GET /org/ambassadors (directory list) would be swallowed as "get organization id=campaigns"
+// / "id=ambassadors" and 404 before ever reaching campaignRouter/orgAmbassadorRouter, if
+// those were registered after organizationRouter. Nested sub-paths (e.g.
+// /org/campaigns/:id, /org/ambassadors/applications) aren't affected — only the two
+// single-segment root list routes are shaped like :orgId. Keep this pair above the /org
+// mounts below.
+apiRouter.use("/org/ambassadors", orgAmbassadorRouter);
+apiRouter.use("/org/campaigns", campaignRouter);
 apiRouter.use("/org", organizationRouter);
 apiRouter.use("/org", dashboardRouter);
 apiRouter.use("/auth/admin", adminAuthRouter);
@@ -47,7 +60,6 @@ apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/public/ambassador", ambassadorPublicRouter);
 apiRouter.use("/ambassador", ambassadorRouter);
-apiRouter.use("/org/ambassadors", ambassadorCampaignRouter);
 apiRouter.use("/queues", authenticatedOrgMiddleware, bullBoardRouter);
 apiRouter.use("/", submissionRouter); // submission routes carry their own full prefixes
 

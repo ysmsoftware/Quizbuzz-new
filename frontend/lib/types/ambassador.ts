@@ -273,7 +273,43 @@ export interface LeaderboardEntryResult {
   prize: LeaderboardRankReward | null;
 }
 
-// ── Org-admin (/api/v1/org/ambassadors) ─────────────────────────────────────
+// ── Org-admin: ambassador directory + applications (/api/v1/org/ambassadors) ────────────
+// Distinct from ApplicationResult above: that's the per-campaign review queue (any status,
+// one row per enrollment). This is one row per distinct APPROVED person, deduped across
+// however many of this org's campaigns they've joined.
+
+export interface OrgAmbassadorCampaignMembership {
+  campaignId: string;
+  campaignName: string;
+  campaignStatus: AmbassadorCampaignStatus;
+  enrollmentId: string;
+  referralCode: string;
+  joinedAt: string;
+  registrationCount: number;
+  currentTierLabel: string | null;
+  accruedAmount: number; // rupees
+}
+
+export interface OrgAmbassadorListItem {
+  ambassadorId: string;
+  firstName: string;
+  lastName: string | null;
+  email: string;
+  phone: string | null;
+  ambassadorType: string;
+  isActive: boolean;
+  joinedPlatformAt: string; // Ambassador signup date, not org-specific
+  campaigns: OrgAmbassadorCampaignMembership[];
+  totalRegistrations: number;
+  totalAccruedAmount: number; // rupees, summed across this org's campaigns only
+}
+
+export interface OrgAmbassadorProfile extends OrgAmbassadorListItem {
+  applicationData: Record<string, unknown>;
+  proofDownloadUrl: string;
+}
+
+// ── Org-admin: campaign management (/api/v1/org/campaigns) ─────────────────────────────
 
 export interface CampaignListItem {
   id: string;

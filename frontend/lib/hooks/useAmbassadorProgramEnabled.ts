@@ -6,15 +6,16 @@ import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 
 /**
  * There's no dedicated "is the ambassador program enabled" endpoint — the API
- * spec's own posture is that every /org/ambassadors* route 404s (not 403) when
- * the org's `ambassador_program_enabled` flag is off, and the frontend should
- * treat that 404 the same as "feature not available". This probes the
- * cheapest such route (campaigns, limit 1) purely to read that signal.
+ * spec's own posture is that every /org/ambassadors* and /org/campaigns* route 404s
+ * (not 403) when the org's `ambassador_program_enabled` flag is off (both routers apply
+ * the same requireAmbassadorProgramEnabled gate), and the frontend should treat that 404
+ * the same as "feature not available". This probes the cheapest such route (campaigns,
+ * limit 1) purely to read that signal.
  *
  * Shared by two consumers, deduped by React Query on the same query key:
- * the org sidebar (hides the "Ambassadors" nav item while off) and
- * app/org/ambassadors/layout.tsx (blocks direct URL navigation into the
- * section while off) — one probe, not two.
+ * the org sidebar (hides the "Ambassadors"/"Campaigns" nav items while off) and
+ * app/org/ambassadors/layout.tsx + app/org/campaigns/layout.tsx (block direct URL
+ * navigation into either section while off) — one probe, not two.
  */
 export function useAmbassadorProgramEnabled(orgId: string): { enabled: boolean; isLoading: boolean } {
   const query = useQuery({

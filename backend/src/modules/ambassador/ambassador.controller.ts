@@ -85,6 +85,7 @@ export class AmbassadorController {
                 secure,
                 sameSite: sameSite as any,
                 domain: domain || undefined,
+                path: "/",
                 maxAge: result.expiresIn * 1000,
             });
 
@@ -122,6 +123,7 @@ export class AmbassadorController {
                 secure,
                 sameSite: sameSite as any,
                 domain: domain || undefined,
+                path: "/",
                 maxAge: result.expiresIn * 1000,
             });
 
@@ -162,7 +164,7 @@ export class AmbassadorController {
     logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { domain, secure, sameSite } = config.auth.cookie;
-            res.clearCookie("ambassadorToken", { httpOnly: true, secure, sameSite: sameSite as any, domain: domain || undefined });
+            res.clearCookie("ambassadorToken", { httpOnly: true, secure, sameSite: sameSite as any, domain: domain || undefined, path: "/" });
             res.status(200).json({ success: true, message: "Logged out", requestId: req.id });
         } catch (err) {
             next(err);

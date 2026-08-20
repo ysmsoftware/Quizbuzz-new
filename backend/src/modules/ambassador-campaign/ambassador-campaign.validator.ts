@@ -357,6 +357,18 @@ export const RejectApplicationSchema = z.object({
     reason: z.string().min(1, "reason is required").max(500),
 });
 
+// The org-wide ambassador directory — distinct from ListApplicationsQuerySchema above (that's
+// the per-campaign review queue, any status). This lists distinct, APPROVED people.
+export const ListOrgAmbassadorsQuerySchema = z.object({
+    q: z.string().trim().max(200).optional(),
+    ambassadorType: z.string().trim().min(1).optional(),
+    campaignId: z.string().trim().min(1).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    sortBy: z.enum(["joinedAt", "name", "registrations"]).default("joinedAt"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});
+
 export const ListReportQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -393,6 +405,7 @@ export type InstantiateTemplateInput = z.infer<typeof InstantiateTemplateSchema>
 export type ListTemplatesQueryInput = z.infer<typeof ListTemplatesQuerySchema>;
 export type ListCampaignsQueryInput = z.infer<typeof ListCampaignsQuerySchema>;
 export type ListApplicationsQueryInput = z.infer<typeof ListApplicationsQuerySchema>;
+export type ListOrgAmbassadorsQueryInput = z.infer<typeof ListOrgAmbassadorsQuerySchema>;
 export type RejectApplicationInput = z.infer<typeof RejectApplicationSchema>;
 export type ListReportQueryInput = z.infer<typeof ListReportQuerySchema>;
 export type LeaderboardQueryInput = z.infer<typeof LeaderboardQuerySchema>;

@@ -218,7 +218,7 @@ export default function CampaignOverviewPage() {
   // lands here directly (e.g. a stale bookmark from before it was published).
   useEffect(() => {
     if (campaign && campaign.status === 'DRAFT') {
-      router.replace(`/org/ambassadors/campaigns/${id}/wizard`);
+      router.replace(`/org/campaigns/${id}/wizard`);
     }
   }, [campaign, id, router]);
 
@@ -239,7 +239,7 @@ export default function CampaignOverviewPage() {
         <div className="flex gap-3">
           <Button onClick={() => refetch()} variant="outline">Retry</Button>
           <Button asChild>
-            <Link href="/org/ambassadors/campaigns">Back to Campaigns</Link>
+            <Link href="/org/campaigns">Back to Campaigns</Link>
           </Button>
         </div>
       </div>
@@ -259,7 +259,7 @@ export default function CampaignOverviewPage() {
   const shareTemplates = campaign.shareTemplates;
   const whatsappTemplates = shareTemplates.whatsappTemplates ?? (shareTemplates.whatsappText ? [{ id: 'legacy', label: 'Default', text: shareTemplates.whatsappText, includePoster: true }] : []);
   const primaryTemplate = whatsappTemplates[0];
-  const reportHref = `/org/ambassadors/campaigns/${id}/report`;
+  const reportHref = `/org/campaigns/${id}/report`;
 
   return (
     <div className="space-y-4">
@@ -268,7 +268,7 @@ export default function CampaignOverviewPage() {
       <div className="lg:hidden">
         <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 -mt-4 sm:-mt-6 pt-4 sm:pt-6 pb-3 bg-background/95 backdrop-blur-sm border-b border-border/50 space-y-3">
           <div className="flex items-start gap-2">
-            <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => router.push('/org/ambassadors/campaigns')} aria-label="Back to campaigns">
+            <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => router.push('/org/campaigns')} aria-label="Back to campaigns">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="min-w-0 flex-1 pt-1">
@@ -404,7 +404,7 @@ export default function CampaignOverviewPage() {
 
       {/* ============================= DESKTOP (>= lg) ============================= */}
       <div className="hidden lg:block space-y-4">
-        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/ambassadors/campaigns')}>
+        <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/campaigns')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Campaigns
         </Button>

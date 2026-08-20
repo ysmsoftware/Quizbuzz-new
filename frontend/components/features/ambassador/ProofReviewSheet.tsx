@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { useOrgAmbassadorApplication } from '@/lib/hooks/useOrgAmbassadorApplications';
+import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 
 export function ProofReviewSheet({ applicationId, onClose }: { applicationId: string | null; onClose: () => void }) {
   const { application, isLoading } = useOrgAmbassadorApplication(applicationId ?? '');
+  const { types } = usePlatformAmbassadorTypes();
+  const ambassadorType = types.find((t) => t.key === application?.ambassador.ambassadorType);
 
   return (
     <Sheet open={!!applicationId} onOpenChange={(open) => !open && onClose()}>
@@ -49,12 +52,16 @@ export function ProofReviewSheet({ applicationId, onClose }: { applicationId: st
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Application Details</p>
                   <div className="space-y-1 text-sm">
-                    {Object.entries(application.ambassador.applicationData).map(([key, value]) => (
-                      <div key={key} className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">{key}</span>
-                        <span className="font-medium text-right">{String(value)}</span>
-                      </div>
-                    ))}
+                    {Object.entries(application.ambassador.applicationData).map(([key, value]) => {
+                      const fieldDef = ambassadorType?.applicationFields.find((f) => f.key === key);
+                      const displayLabel = fieldDef?.label || key;
+                      return (
+                        <div key={key} className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">{displayLabel}</span>
+                          <span className="font-medium text-right">{String(value)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

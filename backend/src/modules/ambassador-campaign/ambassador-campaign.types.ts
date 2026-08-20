@@ -399,6 +399,57 @@ export interface ApplicationReportRow {
     createdAt: Date;
 }
 
+// ─── Org-wide ambassador directory ──────────────────────────────────────────
+// Distinct from ApplicationResult/listApplications above: that's the per-campaign review
+// queue (any status, one row per enrollment). This is "who is actually part of our
+// ambassador program" — one row per person, APPROVED-only, deduped across however many of
+// this org's campaigns they've joined.
+
+export interface ListOrgAmbassadorsQueryDTO {
+    q?: string | undefined;
+    ambassadorType?: string | undefined;
+    campaignId?: string | undefined;
+    page: number;
+    limit: number;
+    sortBy: "joinedAt" | "name" | "registrations";
+    sortOrder: "asc" | "desc";
+}
+
+export interface OrgAmbassadorCampaignMembership {
+    campaignId: string;
+    campaignName: string;
+    campaignStatus: AmbassadorCampaignStatus;
+    enrollmentId: string;
+    referralCode: string;
+    joinedAt: Date;
+    registrationCount: number;
+    currentTierLabel: string | null;
+    accruedAmount: number; // rupees
+}
+
+export interface OrgAmbassadorListItem {
+    ambassadorId: string;
+    firstName: string;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+    ambassadorType: string;
+    isActive: boolean;
+    joinedPlatformAt: Date; // Ambassador.createdAt — platform signup date, not org-specific
+    campaigns: OrgAmbassadorCampaignMembership[];
+    totalRegistrations: number;
+    totalAccruedAmount: number; // rupees, summed across this org's campaigns only
+}
+
+/** The list item plus what a profile view needs and a list wouldn't want to pay for on
+ *  every row: raw application-form answers, and a presigned (private-bucket) download URL
+ *  for the ID-proof document — same "generate the signed URL only on the single-item read"
+ *  pattern as ApplicationResult -> getApplication's proofDownloadUrl. */
+export interface OrgAmbassadorProfile extends OrgAmbassadorListItem {
+    applicationData: Record<string, unknown>;
+    proofDownloadUrl: string;
+}
+
 // ─── Campaign target (§5) ───────────────────────────────────────────────────
 // Internal service-layer naming only — no schema/API change. Only variant today.
 // A second variant is additive to this union whenever a concrete second case exists.

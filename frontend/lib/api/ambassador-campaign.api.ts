@@ -1,6 +1,9 @@
 /**
  * Ambassador Program — org-admin API functions.
- * Base path: /org/ambassadors
+ * Two base paths, on purpose (see backend routes.ts): /org/ambassadors is people —
+ * reviewing applications and the org-wide ambassador directory — while /org/campaigns is
+ * campaign management. They used to share one nested path (campaign endpoints lived under
+ * /org/ambassadors/campaigns/*); split so each URL says what it's actually addressing.
  */
 
 import { get, post, patch, put, del } from './apiClient';
@@ -23,6 +26,8 @@ import type {
   LeaderboardEntryResult,
   ApplicationReportRow,
   CampaignStatsSummary,
+  OrgAmbassadorListItem,
+  OrgAmbassadorProfile,
 } from '../types/ambassador';
 import { leaderboardScopeQueryParams } from '../types/ambassador';
 
@@ -31,6 +36,16 @@ export interface ApplicationsFilters {
   page?: number;
   limit?: number;
   sortBy?: 'appliedAt' | 'firstName';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface OrgAmbassadorsFilters {
+  q?: string;
+  ambassadorType?: string;
+  campaignId?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: 'joinedAt' | 'name' | 'registrations';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -64,7 +79,7 @@ export const ambassadorCampaignApi = {
   // (see ShareTemplatesEditor.tsx's handlePosterSelect, mirrors the ambassador-proof upload
   // flow in app/ambassador/[orgSlug]/apply/page.tsx).
   getPosterUploadUrl: (body: { filename: string; mimeType: string }) =>
-    post<{ url: string; storageKey: string }>('/org/ambassadors/campaigns/poster-upload-url', body),
+    post<{ url: string; storageKey: string }>('/org/campaigns/poster-upload-url', body),
 
   // Applications — per-campaign (an ambassador's applicant identity is shared across orgs,
   // but each campaign's org reviews its own applications independently).
@@ -80,9 +95,18 @@ export const ambassadorCampaignApi = {
   rejectApplication: (id: string, reason: string) =>
     post<ApplicationResult>(`/org/ambassadors/applications/${id}/reject`, { reason }),
 
+  // Ambassador directory — org-wide, across every campaign this org owns. One row per
+  // distinct APPROVED ambassador, as opposed to getApplications above (per-campaign review
+  // queue, any status, one row per enrollment).
+  getOrgAmbassadors: (params?: OrgAmbassadorsFilters) =>
+    get<PaginatedResult<OrgAmbassadorListItem>>('/org/ambassadors', { params: params as Record<string, string | number | boolean | undefined> }),
+
+  getOrgAmbassador: (ambassadorId: string) =>
+    get<OrgAmbassadorProfile>(`/org/ambassadors/${ambassadorId}`),
+
   // Campaigns
   getCampaigns: (params?: CampaignsFilters) =>
-    get<PaginatedResult<CampaignListItem>>('/org/ambassadors/campaigns', {
+    get<PaginatedResult<CampaignListItem>>('/org/campaigns', {
       params: {
         ...params,
         status: Array.isArray(params?.status) ? params.status.join(',') : params?.status,
@@ -90,7 +114,7 @@ export const ambassadorCampaignApi = {
     }),
 
   getCampaign: (id: string) =>
-    get<CampaignResult>(`/org/ambassadors/campaigns/${id}`),
+    get<CampaignResult>(`/org/campaigns/${id}`),
 
   // Starts a DRAFT — only `name` is required. The creation wizard fills in the rest one
   // step at a time via updateCampaign(), then finalizes with publishCampaign().
@@ -103,7 +127,7 @@ export const ambassadorCampaignApi = {
     startDate?: string; // ISO
     endDate?: string; // ISO
     phaseTemplate?: CampaignPhaseTemplateEntry[] | null;
-  }) => post<CampaignResult>('/org/ambassadors/campaigns', body),
+  }) => post<CampaignResult>('/org/campaigns', body),
 
   // `status` is deliberately not settable here — every transition goes through its own
   // dedicated action below, each with its own preconditions (see the backend's
@@ -122,52 +146,52 @@ export const ambassadorCampaignApi = {
       endDate: string; // ISO
       phaseTemplate: CampaignPhaseTemplateEntry[] | null;
     }>
-  ) => patch<CampaignResult>(`/org/ambassadors/campaigns/${id}`, body),
+  ) => patch<CampaignResult>(`/org/campaigns/${id}`, body),
 
   // DRAFT -> PUBLISHED. Validated server-side against the campaign's accumulated state;
   // a 400 VALIDATION_ERROR response carries per-field `details` the Review step uses to
   // deep-link back into the wizard.
   publishCampaign: (id: string) =>
-    post<CampaignResult>(`/org/ambassadors/campaigns/${id}/publish`),
+    post<CampaignResult>(`/org/campaigns/${id}/publish`),
 
   // PUBLISHED -> LIVE — ambassadors can see and join the campaign.
   activateCampaign: (id: string) =>
-    post<CampaignResult>(`/org/ambassadors/campaigns/${id}/activate`),
+    post<CampaignResult>(`/org/campaigns/${id}/activate`),
 
   // LIVE -> ENDED — locks reward economics; report/leaderboard stay readable.
   endCampaign: (id: string) =>
-    post<CampaignResult>(`/org/ambassadors/campaigns/${id}/end`),
+    post<CampaignResult>(`/org/campaigns/${id}/end`),
 
   // Any non-terminal status -> ARCHIVED. One-way.
   archiveCampaign: (id: string) =>
-    post<CampaignResult>(`/org/ambassadors/campaigns/${id}/archive`),
+    post<CampaignResult>(`/org/campaigns/${id}/archive`),
 
   duplicateCampaign: (id: string, contestId: string) =>
-    post<CampaignResult>(`/org/ambassadors/campaigns/${id}/duplicate`, { contestId }),
+    post<CampaignResult>(`/org/campaigns/${id}/duplicate`, { contestId }),
 
   // Ambassador Structure — replace-all, not per-row CRUD (see ReplaceGroupsSchema on the backend).
   getGroups: (id: string) =>
-    get<{ groups: AmbassadorGroupResult[]; capacity: CampaignCapacity }>(`/org/ambassadors/campaigns/${id}/groups`),
+    get<{ groups: AmbassadorGroupResult[]; capacity: CampaignCapacity }>(`/org/campaigns/${id}/groups`),
 
   replaceGroups: (id: string, groups: AmbassadorGroupInput[]) =>
-    put<{ groups: AmbassadorGroupResult[]; capacity: CampaignCapacity }>(`/org/ambassadors/campaigns/${id}/groups`, { groups }),
+    put<{ groups: AmbassadorGroupResult[]; capacity: CampaignCapacity }>(`/org/campaigns/${id}/groups`, { groups }),
 
   getReport: (id: string, params?: ReportFilters) =>
-    get<PaginatedResult<ApplicationReportRow>>(`/org/ambassadors/campaigns/${id}/report`, { params: params as Record<string, string | number | boolean | undefined> }),
+    get<PaginatedResult<ApplicationReportRow>>(`/org/campaigns/${id}/report`, { params: params as Record<string, string | number | boolean | undefined> }),
 
   // Dashboard aggregate — totals/tier-counts/recently-joined computed over every approved
   // enrollment, not a paginated report page. Use this for campaign-wide sums; use getReport
   // only for the ranked/paginated ambassador list itself.
   getCampaignStats: (id: string) =>
-    get<CampaignStatsSummary>(`/org/ambassadors/campaigns/${id}/stats`),
+    get<CampaignStatsSummary>(`/org/campaigns/${id}/stats`),
 
   // Returns a raw CSV file (Content-Disposition: attachment), not the JSON
   // envelope — used directly as an <a href> download link, never fetched via apiClient.
   getReportExportUrl: (id: string) =>
-    `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'}/org/ambassadors/campaigns/${id}/report/export`,
+    `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'}/org/campaigns/${id}/report/export`,
 
   getLeaderboard: (id: string, scope: LeaderboardScope, params?: { page?: number; limit?: number }) =>
-    get<PaginatedResult<LeaderboardEntryResult>>(`/org/ambassadors/campaigns/${id}/leaderboard`, {
+    get<PaginatedResult<LeaderboardEntryResult>>(`/org/campaigns/${id}/leaderboard`, {
       params: { ...leaderboardScopeQueryParams(scope), ...params },
     }),
 
@@ -175,16 +199,16 @@ export const ambassadorCampaignApi = {
   // deliberately not part of a template; only ambassador types, reward config, share
   // templates, and structure are captured.
   getTemplates: (params?: TemplatesFilters) =>
-    get<PaginatedResult<CampaignTemplate>>('/org/ambassadors/campaign-templates', { params: params as Record<string, string | number | boolean | undefined> }),
+    get<PaginatedResult<CampaignTemplate>>('/org/campaigns/templates', { params: params as Record<string, string | number | boolean | undefined> }),
 
   createTemplate: (body: { sourceCampaignId: string; name: string }) =>
-    post<CampaignTemplate>('/org/ambassadors/campaign-templates', body),
+    post<CampaignTemplate>('/org/campaigns/templates', body),
 
   deleteTemplate: (id: string) =>
-    del<null>(`/org/ambassadors/campaign-templates/${id}`),
+    del<null>(`/org/campaigns/templates/${id}`),
 
   instantiateTemplate: (id: string, body?: { contestId?: string; name?: string }) =>
-    post<CampaignResult>(`/org/ambassadors/campaign-templates/${id}/instantiate`, body),
+    post<CampaignResult>(`/org/campaigns/templates/${id}/instantiate`, body),
 };
 
 export type { ApiResponse };

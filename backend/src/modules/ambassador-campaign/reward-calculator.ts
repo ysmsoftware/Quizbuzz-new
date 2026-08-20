@@ -37,14 +37,17 @@ export function computeMilestoneReward(
         : null;
 
     let accruedAmount = 0;
-    if (currentTier) {
-        // Bracket-only model (pilot brief): the per-registration rate applies only to the
-        // registrations that fall within THIS tier's own range, not the full running total —
-        // e.g. tier 71-100 at ₹18/reg on a count of 100 pays 30 * ₹18, not 100 * ₹18.
-        const registrationsInBracket = registrationCount - currentTier.minRegistrations + 1;
-        accruedAmount = registrationsInBracket * currentTier.amountPerRegistration;
-        if (currentTier.goodie?.cashEquivalent) {
-            accruedAmount += currentTier.goodie.cashEquivalent;
+    for (const tier of sorted) {
+        if (registrationCount >= tier.minRegistrations) {
+            const limit = tier.maxRegistrations === null ? registrationCount : Math.min(registrationCount, tier.maxRegistrations);
+            const registrationsInBracket = limit - tier.minRegistrations + 1;
+            
+            if (registrationsInBracket > 0) {
+                accruedAmount += registrationsInBracket * tier.amountPerRegistration;
+                if (tier.goodie?.cashEquivalent) {
+                    accruedAmount += tier.goodie.cashEquivalent;
+                }
+            }
         }
     }
 

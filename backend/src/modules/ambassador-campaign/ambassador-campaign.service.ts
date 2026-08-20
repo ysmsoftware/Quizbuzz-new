@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { AmbassadorCampaignStatus, AmbassadorStatus, Prisma } from "@prisma/client";
-import { AmbassadorCampaignRepository, EnrollmentWithAmbassadorAndCampaignName } from "./ambassador-campaign.repository";
+import {
+    AmbassadorCampaignRepository,
+    EnrollmentWithAmbassadorAndCampaignName,
+    EnrollmentWithAmbassadorAndCampaignSummary,
+} from "./ambassador-campaign.repository";
 import { AmbassadorRepository } from "../ambassador/ambassador.repository";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
@@ -42,8 +46,12 @@ import {
     LeaderboardScope,
     ListApplicationsQueryDTO,
     ListCampaignsQueryDTO,
+    ListOrgAmbassadorsQueryDTO,
     ListReportQueryDTO,
     ListTemplatesQueryDTO,
+    OrgAmbassadorCampaignMembership,
+    OrgAmbassadorListItem,
+    OrgAmbassadorProfile,
     PaginatedResult,
     ReplaceGroupsDTO,
     RewardConfig,
@@ -164,6 +172,103 @@ export class AmbassadorCampaignService {
             .catch((err) => logger.error(`[ambassador-campaign] Failed to send rejection email: ${(err as Error).message}`));
 
         return this._toApplicationResult(updated);
+    }
+
+    // ─── Ambassador directory (org-admin) — org-wide, across every campaign this org owns.
+    // Distinct from listApplications above: that's the per-campaign review queue (any
+    // status, one row per enrollment). This is "who is actually part of our ambassador
+    // program" — one row per distinct person, APPROVED-only, deduped across campaigns. Same
+    // live-compute, no-ledger approach as _buildReportRows, just spanning every campaign
+    // this org owns instead of one. ───────────────────────────────────────────────────────
+
+    async listOrgAmbassadors(organizationId: string, query: ListOrgAmbassadorsQueryDTO): Promise<PaginatedResult<OrgAmbassadorListItem>> {
+        const enrollments = await this.campaignRepo.findApprovedEnrollmentsForOrg(organizationId);
+        let rows = await this._buildOrgAmbassadorRows(enrollments);
+
+        if (query.q) {
+            const q = query.q.toLowerCase();
+            rows = rows.filter(
+                (r) => `${r.firstName} ${r.lastName ?? ""}`.toLowerCase().includes(q) || r.email.toLowerCase().includes(q),
+            );
+        }
+        if (query.ambassadorType) rows = rows.filter((r) => r.ambassadorType === query.ambassadorType);
+        if (query.campaignId) rows = rows.filter((r) => r.campaigns.some((c) => c.campaignId === query.campaignId));
+
+        rows.sort((a, b) => {
+            const dir = query.sortOrder === "asc" ? 1 : -1;
+            if (query.sortBy === "registrations") return (a.totalRegistrations - b.totalRegistrations) * dir;
+            if (query.sortBy === "name") return `${a.firstName} ${a.lastName ?? ""}`.localeCompare(`${b.firstName} ${b.lastName ?? ""}`) * dir;
+            return (a.joinedPlatformAt.getTime() - b.joinedPlatformAt.getTime()) * dir;
+        });
+
+        const total = rows.length;
+        const skip = (query.page - 1) * query.limit;
+        return { data: rows.slice(skip, skip + query.limit), total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) };
+    }
+
+    async getOrgAmbassador(organizationId: string, ambassadorId: string): Promise<OrgAmbassadorProfile> {
+        const enrollments = await this.campaignRepo.findApprovedEnrollmentsForOrg(organizationId);
+        const rows = await this._buildOrgAmbassadorRows(enrollments);
+        const row = rows.find((r) => r.ambassadorId === ambassadorId);
+        if (!row) throw new NotFoundError("Ambassador not found.");
+
+        const anyEnrollment = enrollments.find((e) => e.ambassadorId === ambassadorId)!;
+        const applicationData = (anyEnrollment.ambassador.applicationData ?? {}) as Record<string, unknown>;
+        const { url } = await this.storageProvider.getPresignedGetUrl({
+            storageKey: anyEnrollment.ambassador.proofStorageKey,
+            expiresInSeconds: 3600,
+        });
+
+        return { ...row, applicationData, proofDownloadUrl: url };
+    }
+
+    private async _buildOrgAmbassadorRows(enrollments: EnrollmentWithAmbassadorAndCampaignSummary[]): Promise<OrgAmbassadorListItem[]> {
+        const memberships = await Promise.all(
+            enrollments.map(async (e) => {
+                const rewardConfig = e.campaign.rewardConfig as unknown as RewardConfig;
+                const stats = await computeEnrollmentStats(this.campaignRepo, e.id, rewardConfig);
+                const accruedAmount = paisaToRupees(stats.accruedAmount);
+                const membership: OrgAmbassadorCampaignMembership = {
+                    campaignId: e.campaign.id,
+                    campaignName: e.campaign.name,
+                    campaignStatus: e.campaign.status,
+                    enrollmentId: e.id,
+                    referralCode: e.referralCode,
+                    joinedAt: e.createdAt,
+                    registrationCount: stats.registrationCount,
+                    currentTierLabel:
+                        stats.currentTier?.label ?? stats.currentTier?.goodie?.label ?? (stats.currentTier ? `${stats.currentTier.minRegistrations}+` : null),
+                    accruedAmount,
+                };
+                return { ambassador: e.ambassador, membership };
+            }),
+        );
+
+        const byAmbassador = new Map<string, OrgAmbassadorListItem>();
+        for (const { ambassador, membership } of memberships) {
+            const existing = byAmbassador.get(ambassador.id);
+            if (existing) {
+                existing.campaigns.push(membership);
+                existing.totalRegistrations += membership.registrationCount;
+                existing.totalAccruedAmount += membership.accruedAmount;
+            } else {
+                byAmbassador.set(ambassador.id, {
+                    ambassadorId: ambassador.id,
+                    firstName: ambassador.firstName,
+                    lastName: ambassador.lastName,
+                    email: ambassador.email,
+                    phone: ambassador.phone,
+                    ambassadorType: ambassador.ambassadorType,
+                    isActive: ambassador.isActive,
+                    joinedPlatformAt: ambassador.createdAt,
+                    campaigns: [membership],
+                    totalRegistrations: membership.registrationCount,
+                    totalAccruedAmount: membership.accruedAmount,
+                });
+            }
+        }
+
+        return [...byAmbassador.values()];
     }
 
     // ─── Campaign CRUD (§5.3) ────────────────────────────────────────────────────
@@ -728,7 +833,7 @@ export class AmbassadorCampaignService {
         const rewardConfig = campaign.rewardConfig as unknown as DraftRewardConfig;
         const cut = (rewardConfig.leaderboardPrizes ?? []).find((c) => leaderboardScopeEquals(c.scope, scope));
 
-        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope);
+        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy);
         const total = groups.length;
         const skip = (page - 1) * limit;
         const paged = groups.slice(skip, skip + limit);

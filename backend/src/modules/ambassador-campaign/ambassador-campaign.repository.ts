@@ -34,6 +34,10 @@ export type EnrollmentWithCampaignAndOrg = AmbassadorCampaignEnrollment & {
 };
 export type EnrollmentWithAmbassador = AmbassadorCampaignEnrollment & { ambassador: Ambassador };
 export type EnrollmentWithAmbassadorAndCampaignName = AmbassadorCampaignEnrollment & { ambassador: Ambassador; campaign: { name: string } };
+export type EnrollmentWithAmbassadorAndCampaignSummary = AmbassadorCampaignEnrollment & {
+    ambassador: Ambassador;
+    campaign: { id: string; name: string; status: AmbassadorCampaignStatus; rewardConfig: Prisma.JsonValue };
+};
 
 export class AmbassadorCampaignRepository {
 
@@ -288,6 +292,23 @@ export class AmbassadorCampaignRepository {
             where: { id },
             data: { ...data, reviewedAt: new Date() },
             include: { ambassador: true, campaign: { select: { name: true } } },
+        });
+    }
+
+    // ─── Ambassador directory (org-admin) — org-wide, across every campaign this org owns,
+    // as opposed to findApplications above which is per-campaign and any status ──────────
+
+    /** Every APPROVED enrollment across every campaign this org owns, ambassador + a light
+     *  campaign summary included. One ambassador can appear more than once here (once per
+     *  campaign they're approved for) — grouped into one row per person in the service
+     *  layer. Same "load it all, group/compute in memory" pilot-scale approach as
+     *  listEnrollmentsForCampaign/_buildReportRows, just spanning every campaign instead of
+     *  one. */
+    async findApprovedEnrollmentsForOrg(organizationId: string): Promise<EnrollmentWithAmbassadorAndCampaignSummary[]> {
+        return prisma.ambassadorCampaignEnrollment.findMany({
+            where: { status: AmbassadorStatus.APPROVED, campaign: { organizationId } },
+            include: { ambassador: true, campaign: { select: { id: true, name: true, status: true, rewardConfig: true } } },
+            orderBy: { createdAt: "desc" },
         });
     }
 
