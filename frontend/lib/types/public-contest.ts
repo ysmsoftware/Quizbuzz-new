@@ -78,6 +78,15 @@ export interface PublicContestDetail extends PublicContestSummary {
    * Only meaningful on an uncached read — see getContestBySlug({ fresh: true }).
    */
   serverTime: string;
+  /** Present only when the request included a valid, approved, live ?ref= referral code —
+   *  used to render a campaign-specific WhatsApp/social link-preview card (poster image +
+   *  campaign name + the referring ambassador's first name) instead of the generic site
+   *  default. Null/absent for a normal visit or an unrecognized/expired code. */
+  referralPreview?: {
+    campaignName: string;
+    posterImageUrl?: string | null;
+    ambassadorFirstName: string;
+  } | null;
 }
 
 /**

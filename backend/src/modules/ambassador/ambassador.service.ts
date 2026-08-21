@@ -3,9 +3,9 @@ import jwt from "jsonwebtoken";
 import { Ambassador, AmbassadorCampaignStatus, AmbassadorStatus, Prisma } from "@prisma/client";
 import { AmbassadorRepository } from "./ambassador.repository";
 import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
-import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
+import { bucketDailyRegistrations, computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, DailyActivityPoint, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
 import { campaignStatsPaiseToRupees, leaderboardEntryPaiseToRupees, rewardConfigPaiseToRupees } from "../ambassador-campaign/reward-config-currency";
-import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, CampaignPhase, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
+import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, CampaignStatsSummary, CampaignPhase, DraftRewardConfig, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
 import { FileStorageProvider } from "../../providers/storage.provider";
@@ -324,6 +324,15 @@ export class AmbassadorService {
             ambassadorTypesAllowed: c.ambassadorTypesAllowed,
             organizationName: c.organization.name,
             organizationSlug: c.organization.slug,
+            status: c.status,
+            // Public-safe preview slice for the details-before-apply drawer — reward tiers and
+            // timeline only, converted to rupees the same way every other ambassador-facing
+            // money field is (see reward-config-currency.ts). No description field exists on
+            // AmbassadorCampaign yet, so there's nothing to add here until that's introduced.
+            rewardConfig: rewardConfigPaiseToRupees(c.rewardConfig as unknown as DraftRewardConfig),
+            startDate: c.startDate,
+            endDate: c.endDate,
+            phases: (c.phases ?? []) as unknown as CampaignPhase[],
         }));
 
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
@@ -512,6 +521,35 @@ export class AmbassadorService {
         });
 
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    /** Social proof for one campaign — recently-joined ambassadors + tier distribution,
+     *  same numbers the org-admin dashboard already computes (getCampaignStatsSummary),
+     *  gated the same way getCampaignStats is: only an ambassador APPROVED on this
+     *  campaign can see it, not the public. */
+    async getCampaignSocialProof(ambassadorId: string, campaignId: string): Promise<CampaignStatsSummary> {
+        const enrollment = await this.campaignRepo.findEnrollment(campaignId, ambassadorId);
+        if (!enrollment || enrollment.status !== AmbassadorStatus.APPROVED) {
+            throw new NotFoundError("You have not been approved for this campaign.");
+        }
+
+        const campaign = await this.campaignRepo.findByIdGlobal(campaignId);
+        if (!campaign) throw new NotFoundError("Campaign not found.");
+
+        const milestoneTiers = (campaign.rewardConfig as unknown as DraftRewardConfig).milestoneTiers ?? [];
+        return computeCampaignStatsSummary(this.campaignRepo, campaignId, milestoneTiers);
+    }
+
+    /** Cross-campaign registration trend for the dashboard sparkline — daily counts across
+     *  every campaign this ambassador is APPROVED on, last `days` days, zero-filled. */
+    async getMyActivity(ambassadorId: string, days: number): Promise<{ dailyRegistrations: DailyActivityPoint[] }> {
+        const enrollmentIds = await this.campaignRepo.listApprovedEnrollmentIdsForAmbassador(ambassadorId);
+        const since = new Date();
+        since.setHours(0, 0, 0, 0);
+        since.setDate(since.getDate() - (days - 1));
+
+        const timestamps = await this.campaignRepo.listReferralCreatedAtSince(enrollmentIds, since);
+        return { dailyRegistrations: bucketDailyRegistrations(timestamps, days) };
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────

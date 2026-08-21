@@ -22,8 +22,10 @@ const SHARE_TEMPLATE_PLACEHOLDERS: { token: string; description: string }[] = [
   { token: '{contestName}', description: 'the quiz being promoted' },
 ];
 
+// WhatsApp's own (limited) markdown — *bold*, _italic_ — is the only formatting a WhatsApp
+// message can actually render, so that's what "beautified" means here rather than HTML/MD.
 const DEFAULT_TEMPLATE_TEXT =
-  "Hey! I'm an ambassador for {contestName} — join using my link and I'll see you on the leaderboard!\n\n{referralLink}\n\n— {ambassadorName}";
+  "🎉 *{contestName}* is live!\n\nI'm an ambassador for it — join using my link and I'll see you on the leaderboard! 🏆\n\n_Registration link:_\n{referralLink}\n\n— {ambassadorName}";
 
 const SAMPLE_VALUES = {
   referralLink: 'https://quizbuzz.app/contests/sample-quiz/register?ref=ABC123',

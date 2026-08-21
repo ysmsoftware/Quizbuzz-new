@@ -37,3 +37,5 @@ ambassadorRouter.get("/campaigns/mine",                         (req, res, next)
 ambassadorRouter.post("/campaigns/:campaignId/apply",            (req, res, next) => ctrl().applyToCampaign(req, res, next));
 ambassadorRouter.get("/campaigns/:campaignId/stats",             (req, res, next) => ctrl().getCampaignStats(req, res, next));
 ambassadorRouter.get("/campaigns/:campaignId/leaderboard",       (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));
+ambassadorRouter.get("/campaigns/:campaignId/social-proof",      (req, res, next) => ctrl().getCampaignSocialProof(req, res, next));
+ambassadorRouter.get("/activity",                                (req, res, next) => ctrl().getMyActivity(req, res, next));

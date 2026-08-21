@@ -77,6 +77,12 @@ export const ListCampaignsQuerySchema = z.object({
 // stay in sync with LeaderboardScope's shape (see ambassador-campaign.validator.ts).
 export const LeaderboardQuerySchema = CampaignLeaderboardQuerySchema;
 
+// 14 days (not 7) is the default so callers can compute a this-week-vs-last-week trend
+// client-side from one response, then slice the most recent 7 for the sparkline itself.
+export const ActivityQuerySchema = z.object({
+    days: z.coerce.number().int().min(1).max(30).default(14),
+});
+
 export type GetOrgTypesQueryInput = z.infer<typeof GetOrgTypesQuerySchema>;
 export type SignupStartInput = z.infer<typeof SignupStartSchema>;
 export type SignupVerifyOtpInput = z.infer<typeof SignupVerifyOtpSchema>;

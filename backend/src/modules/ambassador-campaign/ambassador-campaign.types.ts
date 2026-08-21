@@ -309,6 +309,13 @@ export interface EnrollmentResult {
     createdAt: Date;
 }
 
+/**
+ * A campaign an ambassador hasn't applied to yet — a public-safe slice, not the full
+ * CampaignResult an org-admin gets. Deliberately includes rewardConfig/dates/phases (added
+ * alongside the details-before-apply drawer) so the frontend can show what a campaign pays
+ * and how long it runs before someone commits to applying; still excludes anything
+ * admin-only (wizardStep, createdById, sourceCampaignId, etc).
+ */
 export interface AvailableCampaignItem {
     id: string;
     name: string;
@@ -318,6 +325,11 @@ export interface AvailableCampaignItem {
     ambassadorTypesAllowed: string[];
     organizationName: string;
     organizationSlug: string;
+    status: AmbassadorCampaignStatus;
+    rewardConfig: DraftRewardConfig;
+    startDate: Date | null;
+    endDate: Date | null;
+    phases: CampaignPhase[];
 }
 
 export interface MyCampaignItem {

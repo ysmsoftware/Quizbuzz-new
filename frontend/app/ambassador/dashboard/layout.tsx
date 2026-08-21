@@ -18,8 +18,8 @@ export default function AmbassadorDashboardLayout({ children }: { children: Reac
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="h-14 border-b border-border/40 px-4 sm:px-6 lg:px-8 flex items-center">
-          <Skeleton className="h-6 w-32" />
+        <div className="h-16 border-b border-border/40 px-4 sm:px-6 lg:px-8 flex items-center">
+          <Skeleton className="h-8 w-28" />
         </div>
         <div className="px-4 py-6 max-w-2xl mx-auto space-y-4">
           <Skeleton className="h-8 w-48" />

@@ -1,5 +1,6 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { CampaignPhase } from '@/lib/types/ambassador';
@@ -33,6 +34,27 @@ export function CampaignTimelineStrip({ status, endDate, phases }: { status: str
             )}
           />
         ))}
+      </div>
+      {/* One label per segment (not just the active phase's, above) — so a passed or
+          upcoming phase is still identifiable instead of reading as a blank colored bar. */}
+      <div className="flex gap-1 mt-1.5">
+        {phases.map((p, i) => {
+          const isPast = i < activeIndex;
+          const isActive = i === activeIndex;
+          return (
+            <div key={p.key} className="flex-1 min-w-0 flex items-center gap-1" title={p.label}>
+              {isPast && <Check className="h-2.5 w-2.5 text-primary shrink-0" />}
+              <span
+                className={cn(
+                  'text-[10px] truncate leading-tight',
+                  isActive ? 'font-semibold text-foreground' : isPast ? 'text-muted-foreground' : 'text-muted-foreground/50'
+                )}
+              >
+                {p.label}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

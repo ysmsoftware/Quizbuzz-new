@@ -180,6 +180,11 @@ export interface PaginatedResult<T> {
 
 // ── Ambassador-authenticated (/api/v1/ambassador) ──────────────────────────
 
+/**
+ * A campaign an ambassador hasn't applied to yet. Carries a public-safe preview slice —
+ * reward tiers + timeline — so a details view can show what the campaign pays and how long
+ * it runs before Apply is clicked, instead of Apply being a blind single click.
+ */
 export interface AvailableCampaignItem {
   id: string;
   name: string;
@@ -189,6 +194,11 @@ export interface AvailableCampaignItem {
   ambassadorTypesAllowed: string[];
   organizationName: string;
   organizationSlug: string;
+  status: AmbassadorCampaignStatus;
+  rewardConfig: DraftRewardConfig;
+  startDate: string | null; // ISO
+  endDate: string | null; // ISO
+  phases: CampaignPhase[];
 }
 
 export interface CampaignStatsProgress {
@@ -426,11 +436,24 @@ export interface RecentlyJoinedAmbassador {
 }
 
 /** Dashboard aggregate — computed over every approved enrollment, not a paginated page of
- *  them, so it stays correct past the report endpoint's page-size cap. */
+ *  them, so it stays correct past the report endpoint's page-size cap. Also exposed
+ *  ambassador-side (GET /ambassador/campaigns/:id/social-proof) for the same numbers,
+ *  gated to ambassadors approved on that campaign instead of org-admins. */
 export interface CampaignStatsSummary {
   ambassadorCount: number;
   totalRegistrations: number;
   totalAccruedAmount: number; // rupees
   tierCounts: TierCount[];
   recentlyJoined: RecentlyJoinedAmbassador[];
+}
+
+// ── Ambassador activity (GET /ambassador/activity) ─────────────────────────────────────
+
+export interface DailyActivityPoint {
+  date: string; // YYYY-MM-DD, oldest first
+  count: number;
+}
+
+export interface AmbassadorActivity {
+  dailyRegistrations: DailyActivityPoint[];
 }

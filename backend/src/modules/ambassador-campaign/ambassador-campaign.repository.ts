@@ -243,6 +243,38 @@ export class AmbassadorCampaignRepository {
         return enrollment;
     }
 
+    /**
+     * Public-safe preview data for a referral link's WhatsApp/social link-preview card —
+     * just enough to render an Open Graph image + title (the campaign's poster + name, and
+     * the referring ambassador's first name). Gated by the exact same validity checks as
+     * findEnrollmentByReferralCodeForContest above (APPROVED, right contest, campaign LIVE) —
+     * an invalid/unattributable code returns null rather than leaking campaign data for a
+     * code that wouldn't actually count toward attribution either. Never exposes reward
+     * config, applicationData, or anything else that isn't already public on the share kit.
+     */
+    async findReferralPreviewForContest(
+        referralCode: string,
+        contestId: string,
+    ): Promise<{ campaignName: string; posterImageUrl?: string | undefined; ambassadorFirstName: string } | null> {
+        const enrollment = await prisma.ambassadorCampaignEnrollment.findUnique({
+            where: { referralCode },
+            include: {
+                campaign: { select: { contestId: true, status: true, name: true, shareTemplates: true } },
+                ambassador: { select: { firstName: true } },
+            },
+        });
+        if (!enrollment) return null;
+        if (enrollment.status !== AmbassadorStatus.APPROVED) return null;
+        if (enrollment.campaign.contestId !== contestId) return null;
+        if (enrollment.campaign.status !== AmbassadorCampaignStatus.LIVE) return null;
+        const shareTemplates = enrollment.campaign.shareTemplates as { posterImageUrl?: string } | null;
+        return {
+            campaignName: enrollment.campaign.name,
+            posterImageUrl: shareTemplates?.posterImageUrl,
+            ambassadorFirstName: enrollment.ambassador.firstName,
+        };
+    }
+
     // ─── Applications review (org-admin) — operates on enrollments, the per-campaign
     // approval unit, not on Ambassador (which is now a global identity with no status) ──
 
@@ -342,6 +374,28 @@ export class AmbassadorCampaignRepository {
             select: { createdAt: true },
         });
         return rows[0]?.createdAt ?? null;
+    }
+
+    /** Every enrollment id this ambassador has APPROVED, across every campaign/org — the
+     *  denominator for a cross-campaign activity trend (dashboard sparkline). */
+    async listApprovedEnrollmentIdsForAmbassador(ambassadorId: string): Promise<string[]> {
+        const rows = await prisma.ambassadorCampaignEnrollment.findMany({
+            where: { ambassadorId, status: AmbassadorStatus.APPROVED },
+            select: { id: true },
+        });
+        return rows.map((r) => r.id);
+    }
+
+    /** Raw referral timestamps since a cutoff — bucketed into days by the caller (same
+     *  "load raw, compute in service" approach as the rest of this file's live-stats
+     *  queries, see campaign-stats.ts). */
+    async listReferralCreatedAtSince(enrollmentIds: string[], since: Date): Promise<Date[]> {
+        if (enrollmentIds.length === 0) return [];
+        const rows = await prisma.participant.findMany({
+            where: { referredByEnrollmentId: { in: enrollmentIds }, createdAt: { gte: since } },
+            select: { createdAt: true },
+        });
+        return rows.map((r) => r.createdAt);
     }
 
     /** All enrollments for a campaign with ambassador info — report + leaderboard source. Pilot scale: cheap to load whole. */

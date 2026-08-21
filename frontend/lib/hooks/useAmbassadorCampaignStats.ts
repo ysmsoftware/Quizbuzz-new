@@ -19,6 +19,23 @@ export function useAmbassadorCampaignStats(campaignId: string) {
   };
 }
 
+/** Social proof for one campaign — "N ambassadors joined this week" + tier mix. Only
+ *  meaningful for a campaign the ambassador is APPROVED on (same gate as stats). */
+export function useAmbassadorCampaignSocialProof(campaignId: string) {
+  const query = useQuery({
+    queryKey: ['ambassador-campaign-social-proof', campaignId],
+    queryFn: () => ambassadorService.getCampaignSocialProof(campaignId),
+    enabled: !!campaignId,
+    staleTime: 1000 * 60,
+  });
+
+  return {
+    summary: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
 export function useAmbassadorCampaignLeaderboard(
   campaignId: string,
   scope: LeaderboardScope,

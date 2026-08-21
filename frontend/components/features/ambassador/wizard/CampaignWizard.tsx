@@ -328,45 +328,75 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
   const isReview = currentStep.key === 'review';
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <Button variant="ghost" size="sm" className="-ml-2" onClick={() => router.push('/org/campaigns')}>
-        <ArrowLeft className="h-4 w-4 mr-2" />
+    <div className="max-w-6xl mx-auto space-y-6 py-2">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="w-fit text-muted-foreground hover:text-foreground -ml-2.5 transition-colors"
+        onClick={() => router.push('/org/campaigns')}
+      >
+        <ArrowLeft className="h-4 w-4 mr-1.5" />
         Back to Campaigns
       </Button>
 
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{campaign ? campaign.name || 'Edit Campaign' : 'New Ambassador Campaign'}</h1>
-        <p className="text-sm text-muted-foreground">Build the campaign step by step — you can save and come back anytime before publishing.</p>
+      <div className="space-y-1">
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground bg-gradient-to-r from-foreground via-foreground/90 to-foreground/85 bg-clip-text">
+          {campaign ? campaign.name || 'Edit Campaign' : 'New Ambassador Campaign'}
+        </h1>
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
+          Build and customize your campaign. Setup progress is auto-saved as you transition between steps.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_260px] gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_280px] gap-8 items-start pt-2">
         <StepperNav current={currentStep.key} furthestVisited={WIZARD_STEPS[furthestIndex]!.key} onSelect={goToStep} />
 
-        <div className="space-y-4">
-          {stepBody}
+        <div className="space-y-6">
+          <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm min-h-[300px]">
+            {stepBody}
+          </div>
 
           {!isReview && (
             <div className="flex items-center justify-between pt-2">
-              <Button variant="outline" disabled={stepIndex === 0 || saving} onClick={() => persistAndGo(stepIndex - 1)}>
+              <Button 
+                variant="outline" 
+                className="border-border/50 hover:bg-muted/50 transition-colors"
+                disabled={stepIndex === 0 || saving} 
+                onClick={() => persistAndGo(stepIndex - 1)}
+              >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <Button disabled={saving} onClick={() => persistAndGo(stepIndex + 1)}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save &amp; Continue
-                <ArrowRight className="h-4 w-4 ml-2" />
+              <Button 
+                className="shadow-sm hover:shadow transition-all"
+                disabled={saving} 
+                onClick={() => persistAndGo(stepIndex + 1)}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <>
+                    Save &amp; Continue
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           )}
           {isReview && (
-            <Button variant="outline" disabled={saving} onClick={() => persistAndGo(stepIndex - 1)}>
+            <Button 
+              variant="outline" 
+              className="border-border/50 hover:bg-muted/50 transition-colors"
+              disabled={saving} 
+              onClick={() => persistAndGo(stepIndex - 1)}
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
           )}
         </div>
 
-        <CampaignSummarySidebar draft={draft} groups={groups} contestTitle={contestTitle} />
+        <CampaignSummarySidebar draft={draft} groups={groups} contestTitle={contestTitle} currentStepKey={currentStep.key} />
       </div>
     </div>
   );

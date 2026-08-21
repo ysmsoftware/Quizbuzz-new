@@ -17,6 +17,8 @@ import type {
   AvailableCampaignItem,
   MyCampaignItem,
   CampaignStatsDetail,
+  CampaignStatsSummary,
+  AmbassadorActivity,
   EnrollmentResult,
   LeaderboardScope,
   LeaderboardEntryResult,
@@ -173,6 +175,19 @@ class AmbassadorService {
       ...leaderboardScopeQueryParams(scope),
       ...params,
     });
+  }
+
+  /** Recently-joined ambassadors + tier distribution for one campaign — same numbers the
+   *  org-admin dashboard shows, gated to ambassadors approved on that campaign. */
+  getCampaignSocialProof(campaignId: string) {
+    return request<CampaignStatsSummary>(`/ambassador/campaigns/${campaignId}/social-proof`, { method: 'GET' });
+  }
+
+  /** Daily registration counts across every approved campaign — the dashboard's earnings
+   *  sparkline. Defaults to 14 days so the caller can diff this-week vs last-week for a
+   *  trend badge, then slice the most recent 7 for the bars themselves. */
+  getMyActivity(days = 14) {
+    return publicGet<AmbassadorActivity>('/ambassador/activity', { days });
   }
 }
 

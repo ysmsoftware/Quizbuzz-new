@@ -10,6 +10,7 @@ import {
     VerifyOtpSchema,
     ListCampaignsQuerySchema,
     LeaderboardQuerySchema,
+    ActivityQuerySchema,
     GetOrgTypesQuerySchema,
     UpdateProfileSchema,
     UpdateProofSchema,
@@ -244,6 +245,27 @@ export class AmbassadorController {
                 page,
                 limit,
             );
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getCampaignSocialProof = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const result = await this.service.getCampaignSocialProof(id, req.params.campaignId as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getMyActivity = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const { days } = ActivityQuerySchema.parse(req.query);
+            const result = await this.service.getMyActivity(id, days);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);

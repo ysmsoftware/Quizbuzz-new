@@ -1,39 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Copy, Check, Share2, MessageCircle, Download } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Copy, MessageCircle, Radio } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
 
 interface ShareCampaignCardProps {
   campaignName: string;
+  organizationName?: string;
+  contestTitle?: string;
+  isLive?: boolean;
   referralLink: string; // {frontendUrl}/contests/{slug}/register?ref={code}
   whatsappText: string; // from campaign.shareTemplates, {referralLink} already interpolated
+  /** Shown as the card's header image when set — the actual campaign poster, not a generic
+   *  icon, so "quick share" previews what you're actually about to send. */
   posterImageUrl?: string;
 }
 
-function buildWhatsAppUrl(text: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
-}
-
-export function ShareCampaignCard({ campaignName, referralLink, whatsappText, posterImageUrl }: ShareCampaignCardProps) {
-  const [linkCopied, setLinkCopied] = useState(false);
+/** Sidebar "quick share" card — a small preview of what gets sent (image header, campaign
+ *  name, the actual message text) plus one-tap WhatsApp/copy, for fast access without
+ *  scrolling down to the full Ambassador Kit section. */
+export function ShareCampaignCard({
+  campaignName,
+  organizationName,
+  contestTitle,
+  isLive,
+  referralLink,
+  whatsappText,
+  posterImageUrl,
+}: ShareCampaignCardProps) {
   const [textCopied, setTextCopied] = useState(false);
-  const [canNativeShare, setCanNativeShare] = useState(false);
-
-  useEffect(() => {
-    setCanNativeShare(typeof navigator.share === 'function');
-  }, []);
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    setLinkCopied(true);
-    toast.success('Link copied to clipboard');
-    setTimeout(() => setLinkCopied(false), 2000);
-  };
+  const [sending, setSending] = useState(false);
 
   const copyText = () => {
     navigator.clipboard.writeText(whatsappText);
@@ -42,70 +42,74 @@ export function ShareCampaignCard({ campaignName, referralLink, whatsappText, po
     setTimeout(() => setTextCopied(false), 2000);
   };
 
+  const shareWhatsApp = async () => {
+    setSending(true);
+    try {
+      const result = await shareToWhatsApp({ text: whatsappText, posterImageUrl, title: campaignName });
+      if (result === 'shared') {
+        toast.success('Shared — message and poster sent together');
+      } else if (result === 'clipboard') {
+        toast.success('Poster copied — paste it (⌘V / Ctrl+V) into the chat before sending', { duration: 5000 });
+      } else if (result === 'text-only' && posterImageUrl) {
+        toast.info('WhatsApp opened with the message — attach the poster manually, it couldn\'t be added automatically', {
+          duration: 5000,
+        });
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
-    <Card className="overflow-hidden border-border/50">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-bold">Share &amp; Earn</CardTitle>
-        <CardDescription>Share your referral link to earn rewards</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Your Referral Link</label>
-          <div className="flex gap-2">
-            <Input value={referralLink} readOnly className="bg-muted/50 font-mono text-xs focus-visible:ring-0" />
-            <Button size="icon" variant="outline" onClick={copyLink} aria-label="Copy link">
-              {linkCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-            </Button>
-          </div>
-        </div>
+    <Card className="overflow-hidden border-border/50 py-0 gap-0">
+      <div className="relative h-[104px] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary/25 to-accent/40">
+        {posterImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- remote S3 poster, not a static app asset
+          <img src={posterImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <MessageCircle className="h-8 w-8 text-card/90" strokeWidth={1.6} aria-hidden="true" />
+        )}
+        {isLive && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 text-[10px] font-bold text-success-foreground bg-success/90 rounded-full px-2 py-1">
+            <Radio className="h-2.5 w-2.5" />
+            Live
+          </span>
+        )}
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <Button
-            className="bg-success text-success-foreground hover:bg-success/90 w-full"
-            onClick={() => window.open(buildWhatsAppUrl(whatsappText), '_blank')}
-          >
-            <MessageCircle className="h-4 w-4 mr-2" />
-            Share via WhatsApp
-          </Button>
-          <Button variant="outline" className="w-full" onClick={copyText}>
-            {textCopied ? <Check className="h-4 w-4 mr-2 text-success" /> : <Copy className="h-4 w-4 mr-2" />}
-            Copy Message
-          </Button>
-        </div>
-
-        {canNativeShare && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigator.share({ title: campaignName, text: whatsappText, url: referralLink })}
-          >
-            <Share2 className="h-4 w-4 mr-2" />
-            Share…
-          </Button>
+      <CardContent className="pt-3.5 pb-4">
+        <p className="text-sm font-bold text-foreground truncate">{campaignName}</p>
+        {(organizationName || contestTitle) && (
+          <p className="text-[11px] text-muted-foreground truncate mb-3">
+            {[organizationName, contestTitle].filter(Boolean).join(' · ')}
+          </p>
         )}
 
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="flex items-center gap-3">
-            {/* White plate behind the code so it stays scannable in dark mode too. */}
-            <div className="rounded-md bg-white p-1.5 shrink-0">
-              <QRCodeSVG value={referralLink} size={44} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-foreground">Scan to share</p>
-              <p className="text-xs text-muted-foreground">Same link, as a QR code</p>
-            </div>
-          </div>
+        <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">Quick share message</p>
+        <p className="text-xs leading-relaxed bg-muted rounded-lg px-3 py-2.5 text-foreground line-clamp-4">{whatsappText}</p>
 
-          {posterImageUrl && (
-            <a
-              href={posterImageUrl}
-              download
-              className="flex items-center gap-1.5 text-sm text-primary hover:underline font-medium shrink-0"
-            >
-              <Download className="h-4 w-4" />
-              Poster
-            </a>
-          )}
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            className="flex-1 bg-success text-success-foreground hover:bg-success/90"
+            disabled={sending}
+            onClick={shareWhatsApp}
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            {sending ? 'Preparing…' : 'WhatsApp'}
+          </Button>
+          <Button size="sm" variant="outline" className="flex-1" onClick={copyText}>
+            {textCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+            Copy
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2.5 mt-3.5 pt-3.5 border-t border-border/60">
+          {/* White plate behind the code so it stays scannable in dark mode too. */}
+          <div className="rounded-md bg-white p-1 shrink-0">
+            <QRCodeSVG value={referralLink} size={34} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Scan to open the same link</p>
         </div>
       </CardContent>
     </Card>

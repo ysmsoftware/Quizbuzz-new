@@ -1,7 +1,11 @@
 import { Ambassador, AmbassadorStatus } from "@prisma/client";
 import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
-import { computeFullReward } from "./reward-calculator";
-import { LeaderboardCut, LeaderboardScope, RewardConfig, SpeedBonusResult } from "./ambassador-campaign.types";
+import { computeFullReward, computeMilestoneReward } from "./reward-calculator";
+import { paisaToRupees } from "../../utils/currency";
+import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult } from "./ambassador-campaign.types";
+
+// Same row count as "Top 5 Ambassadors" — a dashboard widget, not a paginated list.
+const RECENTLY_JOINED_LIMIT = 5;
 
 /**
  * Shared live-stats computation — the "one implementation" behind both the
@@ -141,4 +145,87 @@ export function findPrizeForRank(cut: LeaderboardCut, rank: number): Leaderboard
     if (ranged) return ranged;
     if (cut.consolation) return { label: cut.consolation.label, cashAmount: cut.consolation.cashAmount };
     return null;
+}
+
+/**
+ * Dashboard aggregate for one campaign — totals, tier distribution, and a small
+ * recently-joined list, computed over EVERY approved enrollment (not a paginated report
+ * page, which is capped and would silently go wrong past its page size). Shared by the
+ * org-admin summary (ambassador-campaign.service.ts) and the ambassador-facing "social
+ * proof" endpoint (ambassador.service.ts) — same numbers, two authorization paths.
+ */
+export async function computeCampaignStatsSummary(
+    campaignRepo: AmbassadorCampaignRepository,
+    campaignId: string,
+    milestoneTiers: MilestoneTier[],
+): Promise<CampaignStatsSummary> {
+    const enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
+        (e) => e.status === AmbassadorStatus.APPROVED,
+    );
+    const counts = await campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
+
+    const tierCounts = milestoneTiers.map((tier) => ({
+        label: tier.label ?? tier.goodie?.label ?? `${tier.minRegistrations}+`,
+        count: 0,
+    }));
+    let noTierCount = 0;
+    let totalRegistrations = 0;
+    let totalAccruedAmount = 0;
+
+    for (const enrollment of enrollments) {
+        const registrationCount = counts.get(enrollment.id) ?? 0;
+        totalRegistrations += registrationCount;
+
+        const { currentTier, accruedAmount } = computeMilestoneReward(milestoneTiers, registrationCount);
+        totalAccruedAmount += accruedAmount;
+
+        const tierIndex = currentTier ? milestoneTiers.indexOf(currentTier) : -1;
+        if (tierIndex >= 0) tierCounts[tierIndex]!.count++;
+        else noTierCount++;
+    }
+    tierCounts.push({ label: "No Tier", count: noTierCount });
+
+    const recentlyJoined = [...enrollments]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, RECENTLY_JOINED_LIMIT)
+        .map((e) => ({
+            ambassadorId: e.ambassadorId,
+            firstName: e.ambassador.firstName,
+            lastName: e.ambassador.lastName,
+            createdAt: e.createdAt,
+        }));
+
+    return {
+        ambassadorCount: enrollments.length,
+        totalRegistrations,
+        totalAccruedAmount: paisaToRupees(totalAccruedAmount),
+        tierCounts,
+        recentlyJoined,
+    };
+}
+
+export interface DailyActivityPoint {
+    date: string; // YYYY-MM-DD, oldest first
+    count: number;
+}
+
+/** Buckets raw referral timestamps into daily counts for the last `days` days (today
+ *  included) — zero-filled so a quiet day still renders as a bar, not a gap. */
+export function bucketDailyRegistrations(timestamps: Date[], days: number): DailyActivityPoint[] {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const buckets = new Map<string, number>();
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        buckets.set(d.toISOString().slice(0, 10), 0);
+    }
+
+    for (const ts of timestamps) {
+        const key = ts.toISOString().slice(0, 10);
+        if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+
+    return Array.from(buckets, ([date, count]) => ({ date, count }));
 }

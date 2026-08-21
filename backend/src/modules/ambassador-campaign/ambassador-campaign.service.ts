@@ -13,8 +13,7 @@ import { MessageTemplate } from "../../types/message-template.enum";
 import { config } from "../../config";
 import logger from "../../config/logger";
 import { BadRequestError, ConflictError, NotFoundError } from "../../error/http-errors";
-import { computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
-import { computeMilestoneReward } from "./reward-calculator";
+import { computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
 import { calculateCampaignCapacity } from "./campaign-capacity";
 import { generateCampaignPhases } from "./campaign-timeline";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
@@ -59,9 +58,6 @@ import {
     TemplateResult,
     UpdateCampaignDTO,
 } from "./ambassador-campaign.types";
-
-// Same row count as "Top 5 Ambassadors" — a dashboard widget, not a paginated list.
-const RECENTLY_JOINED_LIMIT = 5;
 
 export class AmbassadorCampaignService {
     constructor(
@@ -732,50 +728,7 @@ export class AmbassadorCampaignService {
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
         const milestoneTiers = (campaign.rewardConfig as unknown as DraftRewardConfig).milestoneTiers ?? [];
-
-        const enrollments = (await this.campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
-            (e) => e.status === AmbassadorStatus.APPROVED,
-        );
-        const counts = await this.campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
-
-        const tierCounts = milestoneTiers.map((tier) => ({
-            label: tier.label ?? tier.goodie?.label ?? `${tier.minRegistrations}+`,
-            count: 0,
-        }));
-        let noTierCount = 0;
-        let totalRegistrations = 0;
-        let totalAccruedAmount = 0;
-
-        for (const enrollment of enrollments) {
-            const registrationCount = counts.get(enrollment.id) ?? 0;
-            totalRegistrations += registrationCount;
-
-            const { currentTier, accruedAmount } = computeMilestoneReward(milestoneTiers, registrationCount);
-            totalAccruedAmount += accruedAmount;
-
-            const tierIndex = currentTier ? milestoneTiers.indexOf(currentTier) : -1;
-            if (tierIndex >= 0) tierCounts[tierIndex]!.count++;
-            else noTierCount++;
-        }
-        tierCounts.push({ label: "No Tier", count: noTierCount });
-
-        const recentlyJoined = [...enrollments]
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-            .slice(0, RECENTLY_JOINED_LIMIT)
-            .map((e) => ({
-                ambassadorId: e.ambassadorId,
-                firstName: e.ambassador.firstName,
-                lastName: e.ambassador.lastName,
-                createdAt: e.createdAt,
-            }));
-
-        return {
-            ambassadorCount: enrollments.length,
-            totalRegistrations,
-            totalAccruedAmount: paisaToRupees(totalAccruedAmount),
-            tierCounts,
-            recentlyJoined,
-        };
+        return computeCampaignStatsSummary(this.campaignRepo, campaignId, milestoneTiers);
     }
 
     async getCampaignReport(organizationId: string, campaignId: string, query: ListReportQueryDTO): Promise<PaginatedResult<ApplicationReportRow>> {

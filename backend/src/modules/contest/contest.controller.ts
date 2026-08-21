@@ -280,7 +280,11 @@ export class ContestController {
     getPublicContestBySlug = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const slug = req.params.slug as string;
-            const contest = await this.contestService.getPublicContestBySlug(slug);
+            // Ambassador referral links append ?ref=<code> — resolved server-side into a
+            // campaign-specific WhatsApp/social link-preview (poster image + campaign name)
+            // when it's a valid, approved, live enrollment; see getPublicContestBySlug.
+            const ref = typeof req.query.ref === "string" ? req.query.ref : undefined;
+            const contest = await this.contestService.getPublicContestBySlug(slug, ref);
             res.json({ success: true, data: contest });
         } catch (err) {
             next(err);

@@ -2,6 +2,15 @@ import { z } from "zod";
 import dotenv from "dotenv";
 import path from "path";
 
+const envBooleanSchema = z.preprocess((val) => {
+    if (typeof val === "string") {
+        if (val.toLowerCase() === "true" || val === "1") return true;
+        if (val.toLowerCase() === "false" || val === "0" || val === "") return false;
+    }
+    return val;
+}, z.boolean());
+
+
 // In test runs (Jest sets NODE_ENV=test by default, and CI passes it
 // explicitly), load the committed .env.test file instead of the local,
 // git-ignored .env. This keeps unit tests config-driven without requiring
@@ -66,7 +75,7 @@ const envSchema = z.object({
     REDIS_CONNECT_TIMEOUT: z.coerce.number().default(10000),
     REDIS_COMMAND_TIMEOUT: z.coerce.number().default(5000),
 
-    REDIS_CLUSTER_ENABLED: z.coerce.boolean().default(false),
+    REDIS_CLUSTER_ENABLED: envBooleanSchema.default(false),
     REDIS_CLUSTER_NODES: z.string().optional(),
 
     // REDIS TTLs
@@ -96,7 +105,7 @@ const envSchema = z.object({
     JWT_CONTACT_TTL: z.coerce.number(),
 
     COOKIE_DOMAIN: z.string(),
-    COOKIE_SECURE: z.coerce.boolean(),
+    COOKIE_SECURE: envBooleanSchema,
     COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]),
 
     // OTP
@@ -130,7 +139,7 @@ const envSchema = z.object({
     RAZORPAY_WEBHOOK_SECRET: z.string(),
     PAYMENT_CURRENCY: z.string().default("INR"),
     PAYMENT_ORDER_REUSE_WINDOW_MS: z.coerce.number().min(0).default(10 * 60 * 1000),
-    RAZORPAY_ROUTE_ENABLED: z.coerce.boolean().default(false),
+    RAZORPAY_ROUTE_ENABLED: envBooleanSchema.default(false),
     RAZORPAY_ROUTE_ONBOARDING_MODE: z.enum(["MANUAL", "API"]).default("MANUAL"),
     PLATFORM_COMMISSION_PERCENT: z.coerce.number().min(0).max(100).default(2),
     RAZORPAY_GATEWAY_FEE_PERCENT: z.coerce.number().min(0).max(100).default(2),
@@ -152,10 +161,10 @@ const envSchema = z.object({
     AISENSY_API_KEY: z.string(),
 
     // FEATURE FLAGS
-    ENABLE_PROCTORING: z.coerce.boolean().default(false),
-    ENABLE_ANALYTICS: z.coerce.boolean().default(true),
-    ENABLE_CERTIFICATES: z.coerce.boolean().default(true),
-    ENABLE_NOTIFICATIONS: z.coerce.boolean().default(true),
+    ENABLE_PROCTORING: envBooleanSchema.default(false),
+    ENABLE_ANALYTICS: envBooleanSchema.default(true),
+    ENABLE_CERTIFICATES: envBooleanSchema.default(true),
+    ENABLE_NOTIFICATIONS: envBooleanSchema.default(true),
 
     // ANALYTICS
     ANALYTICS_SNAPSHOT_INTERVAL: z.coerce.number(),
@@ -183,7 +192,7 @@ const envSchema = z.object({
     DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(10),
 
     // PUB/SUB
-    REDIS_PUBSUB_ENABLED: z.coerce.boolean(),
+    REDIS_PUBSUB_ENABLED: envBooleanSchema,
     REDIS_PUBSUB_PREFIX: z.string(),
 
     // LIMITS
@@ -195,10 +204,10 @@ const envSchema = z.object({
     BCRYPT_SALT_ROUNDS: z.coerce.number(),
     CORS_ALLOWED_ORIGINS: z.string(),
     CORS_ALLOWED_METHODS: z.string(),
-    CORS_ALLOW_CREDENTIALS: z.coerce.boolean(),
+    CORS_ALLOW_CREDENTIALS: envBooleanSchema,
 
     // IDEMPOTENCY
-    IDEMPOTENCY_ENABLED: z.coerce.boolean(),
+    IDEMPOTENCY_ENABLED: envBooleanSchema,
 
     // STORAGE
     STORAGE_PROVIDER: z.enum(["s3", "local"]),
@@ -209,19 +218,19 @@ const envSchema = z.object({
 
     // PROCTORING
     PROCTORING_EVENT_THRESHOLD: z.coerce.number(),
-    PROCTORING_STRICT_MODE: z.coerce.boolean(),
+    PROCTORING_STRICT_MODE: envBooleanSchema,
 
     // HEALTH
-    HEALTHCHECK_ENABLED: z.coerce.boolean(),
-    METRICS_ENABLED: z.coerce.boolean(),
+    HEALTHCHECK_ENABLED: envBooleanSchema,
+    METRICS_ENABLED: envBooleanSchema,
 
     // LOGGING
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]),
     LOG_FORMAT: z.enum(["json", "pretty"]),
 
     // DEBUG
-    ENABLE_DEBUG_LOGS: z.coerce.boolean(),
-    MOCK_PAYMENT: z.coerce.boolean(),
+    ENABLE_DEBUG_LOGS: envBooleanSchema,
+    MOCK_PAYMENT: envBooleanSchema,
 
     // TIMEOUTS
     API_TIMEOUT: z.coerce.number(),
@@ -229,7 +238,7 @@ const envSchema = z.object({
     REDIS_TIMEOUT: z.coerce.number(),
 
     // QUIZ CONTROL
-    QUIZ_AUTO_SUBMIT: z.coerce.boolean(),
+    QUIZ_AUTO_SUBMIT: envBooleanSchema,
     QUIZ_TIME_WARNING_1: z.coerce.number(),
     QUIZ_TIME_WARNING_2: z.coerce.number(),
     QUIZ_TIME_WARNING_3: z.coerce.number(),

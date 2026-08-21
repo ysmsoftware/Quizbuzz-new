@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { LayoutDashboard, Megaphone, User, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useAmbassadorLogout } from '@/lib/hooks/useAmbassadorLogout';
 
 const NAV_ITEMS = [
@@ -29,9 +31,12 @@ export function AmbassadorNav({ firstName, pathname }: { firstName: string | nul
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-xl">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
-        <Link href="/ambassador/dashboard" className="font-bold text-foreground shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-          QuizBuzz
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        <Link
+          href="/ambassador/dashboard"
+          className="flex items-center shrink-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <Image src="/quizBuzz-logo.png" alt="QuizBuzz" width={140} height={40} priority className="h-8 w-auto" />
         </Link>
 
         <nav className="flex items-center gap-1 overflow-x-auto">
@@ -62,25 +67,33 @@ export function AmbassadorNav({ firstName, pathname }: { firstName: string | nul
           })}
         </nav>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label="Account menu"
-            className="flex items-center gap-2 shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            {firstName === null ? (
-              <Skeleton className="h-4 w-16" />
-            ) : (
-              <span className="hidden sm:inline text-sm text-muted-foreground">{firstName}</span>
-            )}
-            <User className="h-5 w-5 text-muted-foreground sm:hidden" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={isLoggingOut} onClick={() => logout()}>
-              <LogOut className="h-4 w-4" />
-              {isLoggingOut ? 'Logging out…' : 'Log out'}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1 shrink-0">
+          <ThemeToggle />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Account menu"
+              className="flex items-center gap-2 rounded-full pl-1 pr-2.5 py-1 hover:bg-secondary/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[11px] font-bold text-primary-foreground"
+              >
+                {firstName ? firstName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
+              </span>
+              {firstName === null ? (
+                <Skeleton className="h-4 w-16" />
+              ) : (
+                <span className="hidden sm:inline text-sm text-muted-foreground">{firstName}</span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={isLoggingOut} onClick={() => logout()}>
+                <LogOut className="h-4 w-4" />
+                {isLoggingOut ? 'Logging out…' : 'Log out'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   );

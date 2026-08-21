@@ -243,7 +243,7 @@ export class ContestService {
         };
     }
 
-    async getPublicContestBySlug(slug: string) {
+    async getPublicContestBySlug(slug: string, referralCode?: string) {
         const contest = await this.contestRepo.findBySlugPublic(slug);
         if (!contest) {
             throw new NotFoundError("Contest not found or not publicly available");
@@ -254,6 +254,15 @@ export class ContestService {
         const totalMarks = Array.isArray(questions)
             ? questions.reduce((sum: number, q: { marks: number }) => sum + (q.marks ?? 0), 0)
             : 0;
+
+        // Same "missing/unrecognized code -> proceed silently" rule as the attribution
+        // lookup in registerParticipant below: an invalid/expired ?ref= never breaks the
+        // page, it just means no ambassador-specific WhatsApp/social preview card.
+        let referralPreview: Awaited<ReturnType<AmbassadorCampaignRepository["findReferralPreviewForContest"]>> = null;
+        if (referralCode && this.ambassadorCampaignRepo) {
+            referralPreview = await this.ambassadorCampaignRepo.findReferralPreviewForContest(referralCode, contest.id);
+        }
+
         return {
             ...safeContest,
             joinCodeRequired: !!joinCode,
@@ -264,6 +273,7 @@ export class ContestService {
             // actually starts on the SERVER's schedule, so a client whose clock drifts
             // would otherwise still show "1 min to go" while being pushed into the quiz.
             serverTime: new Date().toISOString(),
+            referralPreview,
         };
     }
 

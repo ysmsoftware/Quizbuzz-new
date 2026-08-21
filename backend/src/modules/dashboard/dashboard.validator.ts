@@ -82,7 +82,16 @@ export const RegistrationTrendQuerySchema = z.object({
 // GET /:orgId/dashboard/contests-by-status
 
 export const ContestsByStatusQuerySchema = z.object({
-    includeArchived: z.coerce.boolean().default(false),
+    includeArchived: z.preprocess(
+        (val) => {
+            if (typeof val === "string") {
+                if (val.toLowerCase() === "true" || val === "1") return true;
+                if (val.toLowerCase() === "false" || val === "0" || val === "") return false;
+            }
+            return val;
+        },
+        z.boolean()
+    ).default(false),
 });
 
 export type OverviewQueryInput = z.infer<typeof OverviewQuerySchema>;

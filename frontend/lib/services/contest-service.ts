@@ -61,10 +61,15 @@ class ContestService {
   /**
    * @param opts.fresh — bypass the ISR cache. Pass `true` from the waiting room
    * and any other place that needs live contest status or an accurate serverTime.
+   * @param opts.ref — an ambassador referral code (the registration link's ?ref= param).
+   * When it resolves to a valid, approved, live enrollment, the response's
+   * `referralPreview` carries that campaign's poster/name for a WhatsApp/social link
+   * preview card — see the register page's generateMetadata.
    */
-  async getContestBySlug(slug: string, opts?: { fresh?: boolean }) {
+  async getContestBySlug(slug: string, opts?: { fresh?: boolean; ref?: string }) {
     try {
-      const res = await publicGet<PublicContestDetail>(`/contests/public/${slug}`, opts);
+      const qs = opts?.ref ? `?ref=${encodeURIComponent(opts.ref)}` : '';
+      const res = await publicGet<PublicContestDetail>(`/contests/public/${slug}${qs}`, { fresh: opts?.fresh });
       return { success: true as const, data: res.data };
     } catch {
       return { success: false as const, data: undefined, error: 'Contest not found' };
