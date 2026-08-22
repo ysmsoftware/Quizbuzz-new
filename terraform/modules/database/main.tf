@@ -162,11 +162,19 @@ resource "aws_db_instance" "postgres" {
   performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
-  # STEP 1 (this apply): leave this false. Only flip to true in a later,
-  # separate apply once the subnet group change above has been applied and
-  # confirmed clean on its own — see the MIGRATION STEPS comment above
-  # aws_db_subnet_group.main.
-  multi_az = false
+  # STEP 2 (this apply): flip to true. This provisions a standby in a
+  # different AZ from the primary. Because the subnet group above only
+  # offers ONE subnet in that other AZ (a public one — see the group's
+  # comment for why), the standby is forced into a public subnet. AFTER
+  # this apply completes, verify that in the AWS Console (RDS → your
+  # instance → "Connectivity & security" tab shows the standby's AZ; or
+  # "Maintenance & backups"/"Configuration" tab may show it too) BEFORE
+  # proceeding to the manual failover step (step 3, AWS CLI, not
+  # Terraform): `aws rds reboot-db-instance --db-instance-identifier
+  # quizbuzz-postgres --force-failover`. Do not trigger that failover
+  # until you've confirmed the standby's subnet/AZ matches the public
+  # subnet's AZ.
+  multi_az = true
 
   deletion_protection = true
 
