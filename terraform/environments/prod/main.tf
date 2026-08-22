@@ -82,12 +82,20 @@ module "networking" {
 
 ##############################################################################
 # MODULE: DATABASE
-# Creates: RDS PostgreSQL t3.micro, in the PUBLIC subnets with
-# publicly_accessible = true. Originally lived in the private subnets;
-# relocated via a temporary Multi-AZ failover (see the migration history
-# comment in modules/database/main.tf above aws_db_subnet_group.main) —
-# that migration is now complete.
-# Depends on networking for: public_subnet_ids, rds_sg_id
+# Creates: RDS PostgreSQL t3.micro. Primary already lives in a PUBLIC
+# subnet with publicly_accessible = true (the Multi-AZ failover relocation
+# is done and confirmed). What's left is cleanup, split into two applies
+# (see the step 4a/4b comment above aws_db_subnet_group.main in
+# modules/database/main.tf for the full reasoning):
+#   4a (CURRENT): disable multi_az only. active_private_subnet_id is wired
+#      back in below, TEMPORARILY, because the standby AWS rebuilt after
+#      the failover landed back in this same original private subnet, and
+#      it must stay in the subnet group until multi_az is off and that
+#      standby is torn down.
+#   4b (NEXT, separate apply): once 4a succeeds and no standby/secondary
+#      AZ remains (confirm via Console/CLI), delete the
+#      active_private_subnet_id line below and its variable in the module.
+# Depends on networking for: public_subnet_ids, private_subnet_ids, rds_sg_id
 #
 # WHY PUBLIC SUBNETS (changed from private): the Ops dashboard VPS needs
 # direct Postgres access from outside the VPC. RDS in a private subnet has
@@ -101,10 +109,11 @@ module "networking" {
 # Then manually build DATABASE_URL and store it in SSM.
 ##############################################################################
 module "database" {
-  source         = "../../modules/database"
-  public_subnets = module.networking.public_subnet_ids
-  rds_sg_id      = module.networking.rds_sg_id
-  db_password    = local.db_password
+  source                   = "../../modules/database"
+  public_subnets           = module.networking.public_subnet_ids
+  active_private_subnet_id = module.networking.private_subnet_ids[1]
+  rds_sg_id                = module.networking.rds_sg_id
+  db_password              = local.db_password
 }
 
 ##############################################################################
