@@ -355,6 +355,11 @@ export class CertificateRepository {
                         id: true,
                         status: true,
                         fileUrl: true,
+                        // fileKey is what lets the service layer mint a fresh
+                        // presigned GET URL at read time instead of handing
+                        // back the bucket's permanently-public S3 URL (the
+                        // bucket is private — see the S3 sync audit doc).
+                        fileKey: true,
                         generatedAt: true,
                         deliveredAt: true,
                     },
@@ -377,6 +382,7 @@ export class CertificateRepository {
                 id: p.certificate.id,
                 status: p.certificate.status,
                 fileUrl: p.certificate.fileUrl,
+                fileKey: p.certificate.fileKey,
                 generatedAt: p.certificate.generatedAt,
                 deliveredAt: p.certificate.deliveredAt,
             } : null,

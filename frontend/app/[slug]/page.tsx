@@ -68,6 +68,13 @@ export default function PublicRegistrationPage() {
     }, [contest]);
 
     const isRegistrationOpen = phase === 'PUBLISHED';
+    // Registration has closed but the contest hasn't finished — either the
+    // deadline passed while still waiting to start (REGISTRATION_CLOSED) or
+    // it's actively running (LIVE). Someone who already registered can still
+    // get into the quiz from here via the join/check-in flow. Once the
+    // contest reaches ENDED/RESULTS_PUBLISHED/CANCELLED/DRAFT, joining no
+    // longer makes sense and the button falls back to the disabled state.
+    const canJoinQuiz = phase === 'REGISTRATION_CLOSED' || phase === 'LIVE';
 
     // Handle Step Transitions
     const nextStep = () => {
@@ -301,6 +308,20 @@ export default function PublicRegistrationPage() {
                                     {isRegistrationOpen ? (
                                         <Button size="lg" className="h-14 px-8 text-lg rounded-2xl shadow-lg shadow-primary/20 group" onClick={nextStep}>
                                             Register Now
+                                            <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                                        </Button>
+                                    ) : canJoinQuiz ? (
+                                        // Registration has closed (deadline passed, or the contest has gone
+                                        // LIVE) — someone who already registered previously had no way back
+                                        // into the quiz from this page; it just showed a permanently-disabled
+                                        // "Registration Closed" button. Route them to the join/check-in flow
+                                        // instead, which itself gates on being a real registrant.
+                                        <Button
+                                            size="lg"
+                                            className="h-14 px-8 text-lg rounded-2xl shadow-lg shadow-primary/20 group"
+                                            onClick={() => router.push(`/quiz/${slug}/join`)}
+                                        >
+                                            {phase === 'LIVE' ? 'Join Quiz Now' : 'Join Quiz'}
                                             <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                                         </Button>
                                     ) : (

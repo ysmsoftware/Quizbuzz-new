@@ -175,6 +175,9 @@ const envSchema = z.object({
     DURABILITY_SNAPSHOT_BATCH_SIZE: z.coerce.number().default(300),
     DURABILITY_SNAPSHOT_BATCH_CONCURRENCY: z.coerce.number().default(4),
 
+    // LEADERBOARD — debounce window for rebuild-after-evaluation (see evaluation.worker.ts)
+    LEADERBOARD_REBUILD_DEBOUNCE_MS: z.coerce.number().min(0).default(5000),
+
     // ORG DASHBOARD
     // All limits below are ceilings + defaults for the /org/:orgId/dashboard/* endpoints.
     // Callers can request anything from 1 up to the *_MAX value via query params —
@@ -467,6 +470,14 @@ export const config = {
         snapshotIntervalMinutes: env.DURABILITY_SNAPSHOT_INTERVAL_MINUTES,
         snapshotBatchSize: env.DURABILITY_SNAPSHOT_BATCH_SIZE,
         snapshotBatchConcurrency: env.DURABILITY_SNAPSHOT_BATCH_CONCURRENCY,
+    },
+
+    leaderboard: {
+        // How long to wait after an evaluation completes before actually building
+        // the leaderboard, so a burst of near-simultaneous submissions (common
+        // right at contest end) collapses into one rebuild instead of one per
+        // submission. See evaluation.worker.ts's scheduleLeaderboardRebuild().
+        rebuildDebounceMs: env.LEADERBOARD_REBUILD_DEBOUNCE_MS,
     },
 
     dashboard: {

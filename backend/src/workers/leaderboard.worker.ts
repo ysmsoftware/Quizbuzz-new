@@ -5,7 +5,11 @@
  * scored submissions, sort in memory (O(N log N), pure JS), and bulk-insert
  * ranked LeaderboardEntry rows in a single transaction.
  *
- * Triggered by: evaluation.worker (when its Redis counter reaches totalSubmitted)
+ * Triggered by: evaluation.worker, debounced after every completed evaluation
+ *               (see evaluation.worker.ts's scheduleLeaderboardRebuild — it no
+ *               longer tries to detect "the last one", it just fires this,
+ *               debounced, after each evaluation and lets this always-fresh
+ *               recompute be the source of truth)
  * Triggered also by: admin manual re-rank if needed
  * Cost regardless of N: 1 DB read + 1 JS sort + 1 bulk insert.
  */
@@ -86,9 +90,6 @@ async function buildLeaderboard(job: Job<LeaderboardBuildPayload>): Promise<void
 
     // ── Step 3: Bulk insert in one transaction ────────────────────────────────
     await leaderboardRepository.buildLeaderboard(contestId, organizationId, ranked);
-
-    // ── Step 4: Clean up the Redis eval counter ───────────────────────────────
-    await redis.del(`leaderboard:eval-counter:${contestId}`);
 
     logger.info(
         `[leaderboard-worker] Leaderboard built for contest ${contestId}: ${ranked.length} entries`

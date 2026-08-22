@@ -119,6 +119,7 @@ export interface ContestSummary {
   registrationCount: number;
   paymentEnabled: boolean;
   paymentConfig?: { amount: number; currency: string; description?: string | null } | null;
+  bannerImage: string | null;
 }
 
 export interface ContestDetail {

@@ -15,7 +15,7 @@
  */
 
 import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
-import { Prisma, SubmissionStatus } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
 import { redis } from "../config/redis";
@@ -152,18 +152,88 @@ export function scoreSubmission(
     };
 }
 
-async function incrementEvalCounter(
+/**
+ * Schedule a leaderboard rebuild for this contest.
+ *
+ * BUG FIX (leaderboard frozen on the first submitter): the previous approach
+ * tried to detect "was this the last evaluation to finish" by comparing a
+ * live INCR counter against submissionService.countByContest()'s live count
+ * of SUBMITTED/EVALUATED rows — but both numbers move independently as more
+ * participants submit over time. The very first participant to be evaluated
+ * could trivially satisfy `evaluated(1) >= totalSubmitted(1)` while everyone
+ * else was still mid-quiz, firing the build once for a "contest of one" and
+ * then resetting the counter (leaderboard.worker.ts deletes it on success).
+ * Every later evaluation restarted the counter from 1 against an
+ * already-higher live total, so `evaluated >= totalSubmitted` almost never
+ * became true again — the leaderboard stayed frozen on that first submitter
+ * for the rest of the contest.
+ *
+ * Fix: stop trying to detect "the last one" at all. leaderboard.worker.ts's
+ * buildLeaderboard() already does a full, cheap (O(N log N), one query) recompute
+ * from every currently-EVALUATED submission on each run — it is naturally
+ * idempotent and safe to run after every single evaluation. So just schedule a
+ * rebuild after each one. To avoid firing a full rebuild job per submission
+ * during a burst (e.g. everyone hitting submit near contest end), this uses a
+ * short delay plus BullMQ's jobId dedup as a debounce: if a rebuild for this
+ * contest is already waiting/delayed, later calls collapse into it instead of
+ * adding a duplicate, since that pending job will run fresh and pick up
+ * everything evaluated by the time it fires.
+ *
+ * Edge case this also has to cover: a build job that is already ACTIVE (its
+ * DB read is running right now) can still miss an evaluation whose DB write
+ * lands a few milliseconds after that read — collapsing into an active job
+ * the same way as a delayed one would silently drop that evaluation from the
+ * leaderboard until some later, unrelated evaluation happens to trigger
+ * another build. So an active build gets exactly one bounded follow-up job
+ * queued right behind it (`${jobId}-followup`) instead of being treated as
+ * "already covered" — guaranteed via the same jobId-dedup mechanism, so a
+ * burst of evaluations finishing while the build is active still only queues
+ * one follow-up, not one per evaluation.
+ */
+async function scheduleLeaderboardRebuild(
     contestId: string,
-    totalCount: number,
-): Promise<{ evaluated: number; total: number }> {
-    const key = `leaderboard:eval-counter:${contestId}`;
-    // INCR is atomic — safe under concurrent workers across multiple instances
-    const evaluated = await redis.incr(key);
-    // Set TTL only on first increment to avoid resetting it on every job
-    if (evaluated === 1) {
-        await redis.expire(key, 48 * 60 * 60); // 48 hours
+    organizationId: string,
+    jobId: string = `leaderboard-${contestId}`,
+): Promise<void> {
+    const existing = await leaderboardQueue.getJob(jobId);
+    if (existing) {
+        const state = await existing.getState();
+
+        if (state === "waiting" || state === "delayed" || state === "waiting-children") {
+            // Already queued to run — it'll read fresh from the DB when it
+            // fires, so this evaluation's result is covered.
+            return;
+        }
+
+        if (state === "active") {
+            // Currently running and may not see this evaluation's write —
+            // ensure one guaranteed follow-up is queued right behind it,
+            // unless this call IS already the follow-up (avoid recursing
+            // into a follow-up-of-a-follow-up chain).
+            if (!jobId.endsWith("-followup")) {
+                await scheduleLeaderboardRebuild(contestId, organizationId, `${jobId}-followup`);
+            }
+            return;
+        }
+
+        // Terminal state (completed slipped past removeOnComplete, or failed
+        // and kept around by removeOnFail) still holds the jobId slot — clear
+        // it so a fresh rebuild can actually be scheduled.
+        await existing.remove().catch((err) => {
+            logger.warn(`[evaluation-worker] Failed to clear stale leaderboard job ${jobId}: ${(err as Error).message}`);
+        });
     }
-    return { evaluated, total: totalCount };
+
+    await leaderboardQueue.add(
+        "build-leaderboard",
+        { contestId, organizationId },
+        {
+            jobId,
+            delay: config.leaderboard.rebuildDebounceMs,
+            removeOnComplete: true,
+            removeOnFail: { count: 100 },
+        },
+    );
 }
 
 // ─── Worker processor ─────────────────────────────────────────────────────────
@@ -305,51 +375,15 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     );
     await job.updateProgress(90);
 
-    // ── Step 7: Track evaluation progress, trigger leaderboard build when done ──
-    const totalSubmitted = await submissionService.countByContest(
-        contestId,
-        organizationId,
-        ["SUBMITTED", "EVALUATED"] as SubmissionStatus[]
-    );
-
-    const countedKey = `leaderboard:counted:${contestId}:${submissionId}`;
-    const alreadyCounted = await redis.set(countedKey, "1", "EX", 48 * 60 * 60, "NX");
-    let evaluated: number;
-
-    if (alreadyCounted) {
-        ({ evaluated } = await incrementEvalCounter(contestId, totalSubmitted));
-    } else {
-        const current = await redis.get(`leaderboard:eval-counter:${contestId}`);
-        evaluated = current ? Number(current) : 0;
-        logger.warn(
-            `[evaluation-worker] Submission ${submissionId} already counted — skipping counter increment`
-        );
-    }
+    // ── Step 7: Schedule a leaderboard rebuild ────────────────────────────────
+    // See scheduleLeaderboardRebuild() above for why this fires after every
+    // evaluation (debounced) instead of trying to detect "the last one".
+    await scheduleLeaderboardRebuild(contestId, organizationId);
 
     logger.info(
-        `[evaluation-worker] Contest ${contestId}: ${evaluated}/${totalSubmitted} evaluated`
+        `[evaluation-worker] Leaderboard rebuild scheduled for contest ${contestId} ` +
+        `(debounce ${config.leaderboard.rebuildDebounceMs}ms) after evaluating submission ${submissionId}`
     );
-
-    // The last job to finish fires the leaderboard build.
-    // Using Redis INCR guarantees exactly one worker sees the final evaluated count.
-    if (evaluated >= totalSubmitted) {
-        // removeOnComplete clears the jobId on success, but removeOnFail retains it —
-        // if a prior leaderboard build for this contest failed, add() would silently
-        // no-op on this trigger instead of re-running it. Evict any stale job first.
-        await leaderboardQueue.remove(`leaderboard-${contestId}`);
-        await leaderboardQueue.add(
-            "build-leaderboard",
-            { contestId, organizationId },
-            {
-                jobId: `leaderboard-${contestId}`, // deduplicated
-                removeOnComplete: true,
-                removeOnFail: { count: 100 },
-            },
-        );
-        logger.info(
-            `[evaluation-worker] All ${totalSubmitted} submissions evaluated — leaderboard build queued for contest ${contestId}`
-        );
-    }
 
     await job.updateProgress(100);
 }

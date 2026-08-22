@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "docker compose -f /app/docker-compose.yml ps 2>&1",
+    "echo '=== BACKEND LOGS ==='",
+    "docker logs quizbuzz_backend --tail 60 2>&1",
+    "echo '=== USERDATA TAIL ==='",
+    "tail -50 /var/log/user-data.log 2>/dev/null | cat"
+  ]
+}

@@ -262,16 +262,49 @@ export class QuizSession {
         await p.exec();
     }
 
+    /**
+     * BUG FIX (waiting-room → live-quiz skip): this used to move ANY
+     * non-submitted participant into the `disconnected` set on disconnect,
+     * regardless of whether they were WAITING or IN_QUIZ. joinWaitingRoom()'s
+     * reconnect check (quiz.service.ts) treats membership in `disconnected`
+     * as proof the participant was already taking the quiz, and rebuilds an
+     * IN_QUIZ Redis session for them with no start-time check at all — so a
+     * participant who was only ever sitting in the waiting room, disconnected
+     * (closed the tab, phone slept, reopened the emailed link), and
+     * reconnected would get pushed straight into the live quiz before the
+     * contest had actually started.
+     *
+     * `disconnected` also feeds handleTimeExpiry()'s force-submit sweep at
+     * contest end — it must only ever contain participants who were genuinely
+     * IN_QUIZ, or someone who registered but never joined the quiz at all
+     * would get a phantom zero-answer Submission row created for them.
+     *
+     * Fix: only move into `disconnected` if the participant was actually in
+     * the `active` set (the one and only source of truth for "currently
+     * IN_QUIZ", set by startQuiz()/markReconnected("IN_QUIZ")) at the moment
+     * they disconnected. A WAITING disconnect just drops them from `waiting`
+     * — reconnecting re-enters the normal join flow (including the
+     * START_IMMEDIATELY fast-path if the contest went LIVE while they were
+     * away), with no memory of ever having been "in quiz".
+     */
     async markDisconnected(cid: string, pid: string): Promise<void> {
         const s = this.setKeys(cid);
-        // Only move to disconnected if they haven't submitted
-        const isSubmitted = await redis.sismember(s.submitted, pid);
-        if (!isSubmitted) {
+        const [isSubmitted, wasActive] = await Promise.all([
+            redis.sismember(s.submitted, pid),
+            redis.sismember(s.active, pid),
+        ]);
+        if (isSubmitted) return;
+
+        if (wasActive) {
             const p = redis.pipeline();
             p.sadd(s.disconnected, pid);
             p.srem(s.active, pid);
             p.srem(s.waiting, pid);
             await p.exec();
+        } else {
+            // Was WAITING (or had no tracked state) — never treat this as an
+            // in-quiz disconnect. Just drop out of the waiting set.
+            await redis.srem(s.waiting, pid);
         }
     }
 

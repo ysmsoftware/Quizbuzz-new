@@ -190,6 +190,7 @@ export class ContestRepository implements IContestRepository {
                     registrationDeadline: true,
                     paymentEnabled: true,
                     paymentConfig: true,
+                    bannerImage: true,
                     _count: { select: { participants: true } },
                 },
             }),
@@ -206,6 +207,7 @@ export class ContestRepository implements IContestRepository {
             registrationCount: contest._count.participants,
             paymentEnabled: contest.paymentEnabled,
             paymentConfig: contest.paymentConfig,
+            bannerImage: contest.bannerImage ?? null,
         }))
 
         return { data: formattedContests, total };
@@ -340,6 +342,7 @@ export class ContestRepository implements IContestRepository {
                 prizes: true,
                 cutoffScore: true,
                 showResultsAfter: true,
+                bannerImage: true,
                 _count: { select: { participants: true, questions: true } },
             },
         });

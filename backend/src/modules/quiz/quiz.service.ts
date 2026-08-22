@@ -88,15 +88,34 @@ export class QuizService {
                 `[QuizService] Reconnecting IN_QUIZ participant ${participantId} ` +
                 `(inActive=${!!inActive}, inDisconnected=${!!inDisconnected})`
             );
+            let rebuiltOk = true;
             if (!existingSession) {
-                // Session hash expired — rebuild from DB so handleRejoin can serve questions
-                await this.rebuildExpiredSession(contestId, participantId, contactId ?? "", participantName ?? "Participant");
+                // Session hash expired — rebuild from DB so handleRejoin can serve questions.
+                // rebuildExpiredSession() refuses (returns false) if the contest isn't
+                // actually LIVE — defense in depth against stale/incorrect SET membership
+                // ever fabricating a live quiz session before start time.
+                rebuiltOk = await this.rebuildExpiredSession(contestId, participantId, contactId ?? "", participantName ?? "Participant");
             }
-            await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
-            return {
-                participantCount: await this.session.getWaitingCount(contestId),
-                status: "IN_QUIZ",
-            };
+            if (rebuiltOk) {
+                await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
+                return {
+                    participantCount: await this.session.getWaitingCount(contestId),
+                    status: "IN_QUIZ",
+                };
+            }
+            // Rebuild was refused — the active/disconnected membership was stale
+            // or pointed at a contest that isn't LIVE. Clear it so this participant
+            // doesn't hit the same dead-end on every future join attempt, and fall
+            // through to the normal join flow below (which re-derives the correct
+            // status, including START_IMMEDIATELY if the contest is genuinely LIVE).
+            logger.warn(
+                `[QuizService] IN_QUIZ reconnect refused for ${participantId} in contest ${contestId} — ` +
+                `clearing stale active/disconnected membership and falling back to normal join`
+            );
+            await Promise.all([
+                redis.srem(`quiz:${contestId}:active`, participantId),
+                redis.srem(`quiz:${contestId}:disconnected`, participantId),
+            ]);
         }
 
         // ── Check 3: DB fallback (Redis TTL fully expired AND sets cleared) ────────────
@@ -110,16 +129,25 @@ export class QuizService {
                 logger.info(
                     `[QuizService] DB fallback: participant ${participantId} status=IN_QUIZ — rebuilding session`
                 );
-                await this.rebuildExpiredSession(
+                const rebuiltOk = await this.rebuildExpiredSession(
                     contestId, participantId,
                     dbParticipant.contactId || contactId || "",
                     participantName ?? "Participant",
                 );
-                await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
-                return {
-                    participantCount: await this.session.getWaitingCount(contestId),
-                    status: "IN_QUIZ",
-                };
+                if (rebuiltOk) {
+                    await this.session.markReconnected(contestId, participantId, "IN_QUIZ");
+                    return {
+                        participantCount: await this.session.getWaitingCount(contestId),
+                        status: "IN_QUIZ",
+                    };
+                }
+                // DB says IN_QUIZ but the contest itself isn't LIVE (stale/incorrect
+                // Participant.status row) — don't trust it. Fall through to the
+                // normal join flow below instead of handing out a live session.
+                logger.warn(
+                    `[QuizService] DB fallback refused IN_QUIZ rebuild for ${participantId} — ` +
+                    `contest ${contestId} is not LIVE; falling back to normal join`
+                );
             }
         } catch (err) {
             logger.warn(`[QuizService] DB fallback check failed for ${participantId}: ${(err as Error).message}`);
@@ -179,13 +207,18 @@ export class QuizService {
      * Rebuild a minimal Redis session for a participant whose session TTL expired
      * while they were in-quiz. Fetches organizationId + contactId from DB (one read).
      * The full question shuffle is deterministic from the seed, so no answers are lost.
+     *
+     * Returns false (and creates nothing) if the participant can't be found, or if
+     * the contest isn't actually LIVE — this is the last line of defense against
+     * ever fabricating an IN_QUIZ session before a contest has started, regardless
+     * of what the caller's Redis SET membership / DB status snapshot claimed.
      */
     private async rebuildExpiredSession(
         contestId: string,
         participantId: string,
         contactId: string,
         name: string,
-    ): Promise<void> {
+    ): Promise<boolean> {
         // Fetch the minimal DB context needed to reconstruct the session
         const participant = await prisma.participant.findUnique({
             where: { id: participantId },
@@ -194,6 +227,7 @@ export class QuizService {
                 contactId: true,
                 contest: {
                     select: {
+                        status: true,
                         endTime: true,
                         duration: true,
                     },
@@ -203,7 +237,15 @@ export class QuizService {
 
         if (!participant) {
             logger.warn(`[QuizService] Cannot rebuild session: participant ${participantId} not found in DB`);
-            return;
+            return false;
+        }
+
+        if (participant.contest?.status !== "LIVE") {
+            logger.warn(
+                `[QuizService] Refused to rebuild IN_QUIZ session for ${participantId} — ` +
+                `contest ${contestId} status is "${participant.contest?.status}", not LIVE`
+            );
+            return false;
         }
 
         const sessionSeed = buildSessionSeed(participantId, contestId);
@@ -232,6 +274,7 @@ export class QuizService {
         ]);
 
         logger.info(`[QuizService] Rebuilt expired session for participant ${participantId}`);
+        return true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

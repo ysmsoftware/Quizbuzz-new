@@ -40,10 +40,15 @@ coverage/
 **/coverage/
 
 # Terraform
-.terraform/
-*.tfstate
-*.tfstate.*
-terraform/
+# NOTE: this used to ignore the whole terraform/ directory, which meant
+# every .tf file (security groups, S3 policy, DNS module, go-live/go-idle
+# scripts) had zero commit history and existed only on one laptop — see
+# the sync audit doc for why that made a real production incident much
+# harder to diagnose than it needed to be. Only the generated/sensitive
+# artifacts are ignored now; the actual Terraform source is committed.
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
 terraform/scripts/setup-ssm.sh
 .env
 

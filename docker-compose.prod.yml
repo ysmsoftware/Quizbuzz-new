@@ -5,25 +5,13 @@ x-backend-env: &backend-env
 
 services:
 
-  # ── Postgres ──
-  postgres:
-    image: postgres:16-alpine
-    container_name: quizbuzz_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    networks:
-      - internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+  # NOTE: this file used to also run a local `postgres:16-alpine` container
+  # here, with `backend`/`worker` gated on its healthcheck via depends_on.
+  # It was dead weight — the actual DATABASE_URL both services use points
+  # at the AWS RDS instance (see terraform/modules/database), not this
+  # container. Removed: it was a leftover from before the RDS migration
+  # (the dev docker-compose.yml still runs Postgres locally on 5433, which
+  # is correct there for local development — just not in production).
 
   # ── Redis ──
   redis:
@@ -57,8 +45,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
     networks:
       - internal
       - external
@@ -85,8 +71,6 @@ services:
       redis:
         condition: service_healthy
       backend:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
     networks:
       - internal
@@ -193,7 +177,6 @@ services:
 volumes:
   redis-data:
   uploads:
-  pg-data:
   prometheus_data:
   grafana_data:
 # ─── Networks ──

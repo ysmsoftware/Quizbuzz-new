@@ -14,6 +14,16 @@ import {
     UpdateCertificateStatusInput,
 } from "./certificate.types";
 import logger from "../../config/logger";
+import { getStorageProvider } from "../../providers/storage.provider";
+
+/**
+ * How long a presigned certificate download link stays valid once
+ * generated. Certificates are legitimately re-downloaded over days/weeks
+ * (a participant sharing the link, an admin re-checking a listing), so
+ * this errs generous compared to the 1h/24h windows used for proctoring
+ * snapshots, which are only ever reviewed in one active admin session.
+ */
+const CERTIFICATE_DOWNLOAD_URL_TTL_SECONDS = 3600 * 24; // 24h
 
 export class CertificateService {
     constructor(
@@ -24,12 +34,40 @@ export class CertificateService {
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Certificates are private documents — the bucket they live in has no
+     * public-read grant (see the S3 storage module / sync audit doc), so
+     * the `fileUrl` stored on the row at generation time is NOT a usable
+     * download link by itself; it's the bucket's plain S3 URL, which will
+     * 403 for anyone who isn't the bucket owner. Every read path that
+     * hands a certificate back to a caller must swap that stale `fileUrl`
+     * for a freshly-minted, time-limited presigned GET URL derived from
+     * `fileKey` — the certificate-generation worker has always stored both
+     * fields, so no backfill is needed, only this read-time substitution.
+     */
+    private async withDownloadUrl<T extends { fileUrl: string | null; fileKey?: string | null }>(
+        cert: T
+    ): Promise<T> {
+        if (!cert.fileKey) return cert; // nothing to presign against — leave as-is
+        try {
+            const provider = getStorageProvider();
+            const { url } = await provider.getPresignedGetUrl({
+                storageKey: cert.fileKey,
+                expiresInSeconds: CERTIFICATE_DOWNLOAD_URL_TTL_SECONDS,
+            });
+            return { ...cert, fileUrl: url };
+        } catch (err) {
+            logger.error(`[CertificateService] Failed to presign download URL for key ${cert.fileKey}: ${err}`);
+            return cert; // fail open to the stored value rather than breaking the whole response
+        }
+    }
+
     async getCertificateByIdPublic(
         id: string
     ): Promise<CertificateResult> {
         const cert = await this.certificateRepo.findByIdPublic(id);
         if (!cert) throw new NotFoundError("Certificate not found");
-        return cert;
+        return this.withDownloadUrl(cert);
     }
 
     async getCertificateById(
@@ -38,7 +76,7 @@ export class CertificateService {
     ): Promise<CertificateResult> {
         const cert = await this.certificateRepo.findById(id, organizationId);
         if (!cert) throw new NotFoundError("Certificate not found");
-        return cert;
+        return this.withDownloadUrl(cert);
     }
 
     /**
@@ -68,7 +106,8 @@ export class CertificateService {
             this.certificateRepo.countByParticipantIds(participantIds, organizationId),
         ]);
 
-        return { data: rows, total, page, limit, totalPages: Math.ceil(total / limit) };
+        const data = await Promise.all(rows.map((row) => this.withDownloadUrl(row)));
+        return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     }
 
     /** All certificates for a contest — admin contest-level view */
@@ -88,8 +127,18 @@ export class CertificateService {
             this.certificateRepo.getStatusSummary(contestId, organizationId),
         ]);
 
+        // Certificate is nested one level down here (participant + merged
+        // certificate row), unlike the other read paths — same withDownloadUrl
+        // substitution, just applied to the nested object.
+        const data = await Promise.all(
+            rows.map(async (row: any) => ({
+                ...row,
+                certificate: row.certificate ? await this.withDownloadUrl(row.certificate) : null,
+            }))
+        );
+
         return {
-            data: rows,
+            data,
             pagination: {
                 total,
                 page,
@@ -113,7 +162,7 @@ export class CertificateService {
             organizationId
         );
         if (!cert) throw new NotFoundError("Certificate not found for this contact in this contest");
-        return cert;
+        return this.withDownloadUrl(cert);
     }
 
     // ── Issue — single ────────────────────────────────────────────────────────

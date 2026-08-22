@@ -267,6 +267,28 @@ export class QuizGateway {
             const rejoinData = await this.quizService.handleRejoin(contestId, participantId);
             if (rejoinData) {
                 socket.emit("quiz:v1:start", rejoinData);
+            } else {
+                // Edge case: joinWaitingRoom() decided this participant was IN_QUIZ,
+                // but by the time handleRejoin() re-read Redis the session was gone
+                // (e.g. it expired in the gap between the two calls). Previously this
+                // just returned silently — the client would sit on a blank/loading
+                // screen forever with no event at all. Recover by routing them back
+                // through a fresh join instead of leaving the socket hanging.
+                logger.warn(
+                    `[QuizGateway] IN_QUIZ rejoin returned no data for participant ${participantId} ` +
+                    `in contest ${contestId} — session vanished between join and rejoin; re-joining`
+                );
+                const retryResult = await this.quizService.joinWaitingRoom(
+                    contestId,
+                    participantId,
+                    participantName,
+                    socket.data.contactId,
+                );
+                if (retryResult.status === "START_IMMEDIATELY") {
+                    await this.startQuizForParticipant(participantId, contestId, organizationId, socket.data.contactId ?? "");
+                } else {
+                    socket.emit("quiz:v1:waiting_room_status", retryResult);
+                }
             }
             await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
             return;
