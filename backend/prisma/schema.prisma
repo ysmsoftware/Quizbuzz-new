@@ -1,5 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -9,20 +9,20 @@ datasource db {
 // ENUMS
 
 enum OrgMemberRole {
-  OWNER        
-  ADMIN        
-  VIEWER        
+  OWNER
+  ADMIN
+  VIEWER
 }
 
 enum ContestStatus {
-  DRAFT         
-  PUBLISHED     
-  REGISTRATION_CLOSED 
-  LIVE          
-  EVALUATION    
-  RESULTS_OUT   
-  COMPLETED     
-  CANCELLED    
+  DRAFT
+  PUBLISHED
+  REGISTRATION_CLOSED
+  LIVE
+  EVALUATION
+  RESULTS_OUT
+  COMPLETED
+  CANCELLED
 }
 
 enum QuestionDifficulty {
@@ -32,29 +32,29 @@ enum QuestionDifficulty {
 }
 
 enum ParticipantStatus {
-  PENDING_PAYMENT 
-  REGISTERED    
-  CHECKED_IN    
-  IN_WAITING    
-  IN_QUIZ       
-  SUBMITTED     
-  DISQUALIFIED  
-  ABSENT 
+  PENDING_PAYMENT
+  REGISTERED
+  CHECKED_IN
+  IN_WAITING
+  IN_QUIZ
+  SUBMITTED
+  DISQUALIFIED
+  ABSENT
 }
 
 enum PaymentStatus {
   CREATED
-  PENDING       
+  PENDING
   SUCCESS
-  FAILED       
+  FAILED
   CANCELLED
-  REFUNDED      
+  REFUNDED
 }
 
 enum PaymentProvider {
   RAZORPAY
-  MANUAL       
-  FREE        
+  MANUAL
+  FREE
 }
 
 enum PayoutAccountStatus {
@@ -77,19 +77,19 @@ enum RouteTransferStatus {
 }
 
 enum SubmissionStatus {
-  PENDING     
-  SUBMITTED     
-  EVALUATED     
-  INVALIDATED   
+  PENDING
+  SUBMITTED
+  EVALUATED
+  INVALIDATED
 }
 
 enum CertificateStatus {
-  PENDING    
+  PENDING
   QUEUED
-  GENERATING  
-  GENERATED     
-  FAILED        
-  DELIVERED     
+  GENERATING
+  GENERATED
+  FAILED
+  DELIVERED
 }
 
 enum MessageChannel {
@@ -106,7 +106,6 @@ enum MessageStatus {
 }
 
 enum MessageTemplate {
-  
   OTP_VERIFICATION_CODE
   BIRTHDAY_WISHES_YSM
   FEEDBACK_COLLECTION_MESSAGE
@@ -114,11 +113,11 @@ enum MessageTemplate {
   REGISTRATION_SUCCESSFUL
   WORKSHOP_REMINDER_MESSAGE
   PAYMENT_CONFIRMATION_MESSAGE
-  
+
   EMAIL_VERIFICATION
   PASSWORD_RESET
   ORG_INVITE
-  
+
   DISQUALIFICATION_NOTICE
   RESULTS_PUBLISHED
   CUSTOM
@@ -149,13 +148,13 @@ enum JobStatus {
 }
 
 enum OnboardingStep {
-  NOT_STARTED  
-  IDENTITY      
-  USE_CASE      
-  ATTRIBUTION   
-  CONTACT_LOCALE 
-  PLAN_SELECTION 
-  COMPLETED     
+  NOT_STARTED
+  IDENTITY
+  USE_CASE
+  ATTRIBUTION
+  CONTACT_LOCALE
+  PLAN_SELECTION
+  COMPLETED
 }
 
 enum OrgPrimaryUseCase {
@@ -221,55 +220,55 @@ enum HeardAboutSource {
 // ORGANIZATION & MEMBERS  (multi-tenant root)
 
 model Organization {
-  id                   String         @id @default(ulid())
-  name                 String
-  slug                 String         @unique
-  logoUrl              String?
-  website              String?
-  isActive             Boolean        @default(true)
-  isDeleted            Boolean        @default(false)
-  onboardingStep       OnboardingStep @default(NOT_STARTED)
-  onboardingCompleted  Boolean        @default(false)
+  id                    String         @id @default(ulid())
+  name                  String
+  slug                  String         @unique
+  logoUrl               String?
+  website               String?
+  isActive              Boolean        @default(true)
+  isDeleted             Boolean        @default(false)
+  onboardingStep        OnboardingStep @default(NOT_STARTED)
+  onboardingCompleted   Boolean        @default(false)
   onboardingCompletedAt DateTime?
   planSlug              String?
-  planStatus             String?
-  planLimitsCache     Json?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  planStatus            String?
+  planLimitsCache       Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   // Relations
-  profile              OrganizationProfile?
-  members              OrgMember[]
-  contests             Contest[]
-  contacts             Contact[]
-  prizes               Prize[]
-  questionOptions      QuestionOption[]
-  contestQuestions     ContestQuestion[]
-  participants         Participant[]
-  payments             Payment[]
-  payoutAccount        OrganizationPayoutAccount?
-  routeTransfers       PaymentRouteTransfer[]
-  quizSessions         QuizSession[]
-  progressSnapshots    ParticipantProgressSnapshot[]
-  submissions          Submission[]
-  answers              Answer[]
-  leaderboard          LeaderboardEntry[]
-  certificates         Certificate[]
-  certificateTemplates CertificateTemplate[]
-  proctoringEvents     ProctoringEvent[]
-  proctoringScores     ProctoringScore[]
-  messageLogs          MessageLog[]
-  scheduledJobs        ScheduledJob[]
-  analyticsSnapshots   ContestAnalyticsSnapshot[]
-  exportLogs           ExportLog[]
-  planUsageCheckLogs   PlanUsageCheckLog[]
-  ambassadorCampaigns  AmbassadorCampaign[]
+  profile                     OrganizationProfile?
+  members                     OrgMember[]
+  contests                    Contest[]
+  contacts                    Contact[]
+  prizes                      Prize[]
+  questionOptions             QuestionOption[]
+  contestQuestions            ContestQuestion[]
+  participants                Participant[]
+  payments                    Payment[]
+  payoutAccount               OrganizationPayoutAccount?
+  routeTransfers              PaymentRouteTransfer[]
+  quizSessions                QuizSession[]
+  progressSnapshots           ParticipantProgressSnapshot[]
+  submissions                 Submission[]
+  answers                     Answer[]
+  leaderboard                 LeaderboardEntry[]
+  certificates                Certificate[]
+  certificateTemplates        CertificateTemplate[]
+  proctoringEvents            ProctoringEvent[]
+  proctoringScores            ProctoringScore[]
+  messageLogs                 MessageLog[]
+  scheduledJobs               ScheduledJob[]
+  analyticsSnapshots          ContestAnalyticsSnapshot[]
+  exportLogs                  ExportLog[]
+  planUsageCheckLogs          PlanUsageCheckLog[]
+  ambassadorCampaigns         AmbassadorCampaign[]
   ambassadorCampaignTemplates AmbassadorCampaignTemplate[]
-  ambassadorTypeAccess OrganizationAmbassadorTypeAccess[]
+  ambassadorTypeAccess        OrganizationAmbassadorTypeAccess[]
 
   @@index([slug])
   @@index([isActive, isDeleted])
-  @@index([onboardingCompleted])   // ops-dashboard funnel queries
+  @@index([onboardingCompleted]) // ops-dashboard funnel queries
   @@map("organizations")
 }
 
@@ -285,14 +284,14 @@ model Organization {
 model PlanUsageCheckLog {
   id             String   @id @default(ulid())
   organizationId String
-  limitType      String   // "contestsPerCycle" | "participantsPerContest" | "questionsPerContest" | "orgMembers"
-  outcome        String   // "ALLOWED" | "BLOCKED"
-  limitValue     Int?     // null = unlimited at the moment of this check
+  limitType      String // "contestsPerCycle" | "participantsPerContest" | "questionsPerContest" | "orgMembers"
+  outcome        String // "ALLOWED" | "BLOCKED"
+  limitValue     Int? // null = unlimited at the moment of this check
   currentValue   Int
   requestId      String?
   createdAt      DateTime @default(now())
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, limitType, createdAt])
   @@index([outcome, createdAt])
@@ -311,10 +310,10 @@ model OrgMember {
   updatedAt      DateTime      @updatedAt
 
   // Relations
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  admin          Admin         @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  admin        Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, adminId])             // one membership per admin per org
+  @@unique([organizationId, adminId]) // one membership per admin per org
   @@index([organizationId])
   @@index([adminId])
   @@map("org_members")
@@ -323,25 +322,25 @@ model OrgMember {
 // ADMIN  (platform users who create/manage contests)
 
 model Admin {
-  id                String      @id @default(ulid())
-  email             String      @unique
-  passwordHash      String
-  firstName         String
-  lastName          String
-  avatarUrl         String?
-  isActive          Boolean     @default(true)
-  isDeleted         Boolean     @default(false)
-  emailVerified     Boolean     @default(false)
-  emailVerifiedAt   DateTime?
-  lastLoginAt       DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id              String    @id @default(ulid())
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  avatarUrl       String?
+  isActive        Boolean   @default(true)
+  isDeleted       Boolean   @default(false)
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Relations
-  memberships       OrgMember[]
-  refreshTokens     AdminRefreshToken[]
-  contestsCreated   Contest[]   @relation("ContestCreatedBy")
-  exportLogs        ExportLog[]
+  memberships     OrgMember[]
+  refreshTokens   AdminRefreshToken[]
+  contestsCreated Contest[]           @relation("ContestCreatedBy")
+  exportLogs      ExportLog[]
 
   @@index([email])
   @@index([isActive, isDeleted])
@@ -349,17 +348,17 @@ model Admin {
 }
 
 model AdminRefreshToken {
-  id          String    @id @default(ulid())
-  adminId     String
-  tokenHash   String    @unique           // store hash of the token, not plaintext
-  deviceInfo  String?
-  ipAddress   String?
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(ulid())
+  adminId    String
+  tokenHash  String    @unique // store hash of the token, not plaintext
+  deviceInfo String?
+  ipAddress  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
 
   // Relations
-  admin       Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId])
   @@index([tokenHash])
@@ -370,55 +369,55 @@ model AdminRefreshToken {
 // CONTEST
 
 model Contest {
-  id                    String          @id @default(ulid())
-  organizationId        String
-  createdById           String
-  title                 String
-  slug                  String          // unique per org — see @@unique below
-  description           String?
-  details               String?         // rich text / markdown
-  topics                String[]        // e.g. ["DSA", "System Design"]
-  rules                 String[]        // array of rule strings
-  paymentEnabled        Boolean         @default(false)
-  paymentConfig         PaymentConfig?
-  duration              Int             // quiz duration in minutes
-  cutoffScore           Int?            // minimum score to pass (percentage)
-  maxParticipants       Int?            // null = unlimited
-  registrationDeadline  DateTime        // when registration closes
-  startTime             DateTime        // when the quiz goes LIVE
-  endTime               DateTime        // startTime + duration (computed, stored for queries)
-  status                ContestStatus   @default(DRAFT)
-  joinCode              String?         // OTP/ID users enter to verify at join
-  allowResuming         Boolean         @default(true)
-  shuffleQuestions      Boolean         @default(true)
-  shuffleOptions        Boolean         @default(false)
-  proctoringEnabled     Boolean         @default(true)
-  showResultsAfter      Int             @default(24)  // hours after end before results published
-  defaultQuestionMarks   Int             @default(1)
-  defaultQuestionNegativeMark Decimal         @default(1.00) @db.Decimal(4, 2)
-  bannerImage           String?
-  isDeleted             Boolean         @default(false)
-  isArchived            Boolean         @default(false)
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  id                          String         @id @default(ulid())
+  organizationId              String
+  createdById                 String
+  title                       String
+  slug                        String // unique per org — see @@unique below
+  description                 String?
+  details                     String? // rich text / markdown
+  topics                      String[] // e.g. ["DSA", "System Design"]
+  rules                       String[] // array of rule strings
+  paymentEnabled              Boolean        @default(false)
+  paymentConfig               PaymentConfig?
+  duration                    Int // quiz duration in minutes
+  cutoffScore                 Int? // minimum score to pass (percentage)
+  maxParticipants             Int? // null = unlimited
+  registrationDeadline        DateTime // when registration closes
+  startTime                   DateTime // when the quiz goes LIVE
+  endTime                     DateTime // startTime + duration (computed, stored for queries)
+  status                      ContestStatus  @default(DRAFT)
+  joinCode                    String? // OTP/ID users enter to verify at join
+  allowResuming               Boolean        @default(true)
+  shuffleQuestions            Boolean        @default(true)
+  shuffleOptions              Boolean        @default(false)
+  proctoringEnabled           Boolean        @default(true)
+  showResultsAfter            Int            @default(24) // hours after end before results published
+  defaultQuestionMarks        Int            @default(1)
+  defaultQuestionNegativeMark Decimal        @default(1.00) @db.Decimal(4, 2)
+  bannerImage                 String?
+  isDeleted                   Boolean        @default(false)
+  isArchived                  Boolean        @default(false)
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
 
   // Relations
-  organization          Organization    @relation(fields: [organizationId], references: [id])
-  createdBy             Admin           @relation("ContestCreatedBy", fields: [createdById], references: [id])
-  prizes                Prize[]
-  questions             ContestQuestion[]
-  participants          Participant[]
-  submissions           Submission[]
-  leaderboard           LeaderboardEntry[]
-  certificates          Certificate[]
-  messageLog            MessageLog[]
-  scheduledJobs         ScheduledJob[]
-  payments              Payment[]
-  proctoringScores      ProctoringScore[]
-  exportLogs            ExportLog[]
-  ambassadorCampaign    AmbassadorCampaign?
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  createdBy          Admin               @relation("ContestCreatedBy", fields: [createdById], references: [id])
+  prizes             Prize[]
+  questions          ContestQuestion[]
+  participants       Participant[]
+  submissions        Submission[]
+  leaderboard        LeaderboardEntry[]
+  certificates       Certificate[]
+  messageLog         MessageLog[]
+  scheduledJobs      ScheduledJob[]
+  payments           Payment[]
+  proctoringScores   ProctoringScore[]
+  exportLogs         ExportLog[]
+  ambassadorCampaign AmbassadorCampaign?
 
-  @@unique([organizationId, slug])        // slug is unique within an org, not globally
+  @@unique([organizationId, slug]) // slug is unique within an org, not globally
   @@index([organizationId, status])
   @@index([startTime, status])
   @@index([registrationDeadline])
@@ -427,34 +426,31 @@ model Contest {
   @@map("contests")
 }
 
-
 model PaymentConfig {
-  id            String      @id @default(uuid())
-  contestId     String      @unique
-  amount        Int         // Store in smallest currency unit (paise for INR)
-  currency      String      @default("INR")
-  description   String?     @db.Text
+  id          String  @id @default(uuid())
+  contestId   String  @unique
+  amount      Int // Store in smallest currency unit (paise for INR)
+  currency    String  @default("INR")
+  description String? @db.Text
 
-    contest     Contest     @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
 }
 
 model Prize {
-  id              String    @id @default(ulid())
-  organizationId  String
-  contestId       String
-  rankFrom        Int       // e.g. 1
-  rankTo          Int       // e.g. 3  (rankFrom=1, rankTo=3 = "1st to 3rd place")
-  amount          Decimal   @db.Decimal(10, 2)
-  currency        String    @default("INR")
-  label           String?   // e.g. "Gold", "Silver", "Participation"
-  benefits        String[]  // e.g. ["Certificate", "Internship opportunity"]
-  createdAt       DateTime  @default(now())
+  id             String   @id @default(ulid())
+  organizationId String
+  contestId      String
+  rankFrom       Int // e.g. 1
+  rankTo         Int // e.g. 3  (rankFrom=1, rankTo=3 = "1st to 3rd place")
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("INR")
+  label          String? // e.g. "Gold", "Silver", "Participation"
+  benefits       String[] // e.g. ["Certificate", "Internship opportunity"]
+  createdAt      DateTime @default(now())
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([contestId])
@@ -463,23 +459,22 @@ model Prize {
 
 // QUESTION BANK
 
-
 model Question {
-  id                  String              @id @default(ulid())
-  organizationId      String              // questions belong to an org's bank
-  questionText        String
-  difficulty          QuestionDifficulty
-  hint                String?
-  explanation         String?             // shown after contest ends
-  tags                String[]            // topics / concepts
-  isDeleted           Boolean             @default(false)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id             String             @id @default(ulid())
+  organizationId String // questions belong to an org's bank
+  questionText   String
+  difficulty     QuestionDifficulty
+  hint           String?
+  explanation    String? // shown after contest ends
+  tags           String[] // topics / concepts
+  isDeleted      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   // Relations
-  options             QuestionOption[]
-  contestQuestions    ContestQuestion[]
-  answers             Answer[]
+  options          QuestionOption[]
+  contestQuestions ContestQuestion[]
+  answers          Answer[]
 
   @@index([organizationId, difficulty])
   @@index([organizationId, isDeleted])
@@ -487,16 +482,16 @@ model Question {
 }
 
 model QuestionOption {
-  id              String    @id @default(ulid())
-  organizationId  String
-  questionId      String
-  text            String
-  position        Int       // 0, 1, 2, 3 (or 4) — display order
-  isCorrect       Boolean   @default(false)
+  id             String  @id @default(ulid())
+  organizationId String
+  questionId     String
+  text           String
+  position       Int // 0, 1, 2, 3 (or 4) — display order
+  isCorrect      Boolean @default(false)
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  question        Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  question     Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([questionId])
@@ -506,18 +501,18 @@ model QuestionOption {
 // Join table: Contest ↔ Question (many-to-many)
 // Stores the order and which questions are assigned to each contest
 model ContestQuestion {
-  id              String    @id @default(ulid())
-  organizationId  String
-  contestId       String
-  questionId      String
-  position        Int       // display order within this contest
-  marks           Int       @default(1)   // marks for correct answer
-  negativeMark    Decimal   @default(0) @db.Decimal(4, 2) // negative marks for wrong
+  id             String  @id @default(ulid())
+  organizationId String
+  contestId      String
+  questionId     String
+  position       Int // display order within this contest
+  marks          Int     @default(1) // marks for correct answer
+  negativeMark   Decimal @default(0) @db.Decimal(4, 2) // negative marks for wrong
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  question        Question     @relation(fields: [questionId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  question     Question     @relation(fields: [questionId], references: [id])
 
   @@unique([contestId, questionId])
   @@unique([contestId, position])
@@ -531,26 +526,26 @@ model ContestQuestion {
 // One Contact can participate in many contests — no duplicate rows per contest
 
 model Contact {
-  id                String        @id @default(ulid())
-  organizationId    String
-  email             String
-  phone             String?       // E.164 format: +919876543210
-  firstName         String
-  lastName          String?
-  college           String?
-  department        String?
-  city              String?
-  state             String?
-  isDeleted         Boolean       @default(false)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id             String   @id @default(ulid())
+  organizationId String
+  email          String
+  phone          String? // E.164 format: +919876543210
+  firstName      String
+  lastName       String?
+  college        String?
+  department     String?
+  city           String?
+  state          String?
+  isDeleted      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  participants  Participant[] // one contact → many contest participations
-  payments      Payment[]
+  participants Participant[] // one contact → many contest participations
+  payments     Payment[]
 
-  organization  Organization    @relation(fields: [organizationId], references: [id])
-  
+  organization Organization @relation(fields: [organizationId], references: [id])
+
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@index([email])
@@ -565,30 +560,30 @@ model Participant {
   organizationId  String
   contactId       String
   contestId       String
-  registrationRef String            @unique   // human-readable: QB-2024-00001
+  registrationRef String            @unique // human-readable: QB-2024-00001
   status          ParticipantStatus @default(REGISTERED)
-  joinedAt        DateTime?         // when they entered the quiz room
-  checkedInAt     DateTime?         // when they verified with joinCode
+  joinedAt        DateTime? // when they entered the quiz room
+  checkedInAt     DateTime? // when they verified with joinCode
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   // Relations
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact         Contact           @relation(fields: [contactId], references: [id])
-  contest         Contest           @relation(fields: [contestId], references: [id])
-  payment         Payment?          // one-to-one (one payment per registration)
-  submission      Submission?       // one-to-one
-  leaderboard     LeaderboardEntry?
-  certificate     Certificate?
-  sessions        QuizSession[]
-  proctoring      ProctoringEvent[]
-  messages        MessageLog[]
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact          Contact           @relation(fields: [contactId], references: [id])
+  contest          Contest           @relation(fields: [contestId], references: [id])
+  payment          Payment? // one-to-one (one payment per registration)
+  submission       Submission? // one-to-one
+  leaderboard      LeaderboardEntry?
+  certificate      Certificate?
+  sessions         QuizSession[]
+  proctoring       ProctoringEvent[]
+  messages         MessageLog[]
   proctoringScores ProctoringScore[]
 
   referredByEnrollmentId String?
   referredByEnrollment   AmbassadorCampaignEnrollment? @relation("ReferredBy", fields: [referredByEnrollmentId], references: [id])
 
-  @@unique([contactId, contestId])        // one registration per contact per contest
+  @@unique([contactId, contestId]) // one registration per contact per contest
   @@index([organizationId])
   @@index([contestId, status])
   @@index([contactId])
@@ -602,31 +597,31 @@ model Participant {
 model Payment {
   id                String          @id @default(ulid())
   organizationId    String
-  contestId         String          // denormalized for fast queries
-  participantId     String          @unique   // one payment per participant
+  contestId         String // denormalized for fast queries
+  participantId     String          @unique // one payment per participant
   contactId         String
-  amount            Int             // in paise 
+  amount            Int // in paise 
   currency          String          @default("INR")
   status            PaymentStatus   @default(PENDING)
   provider          PaymentProvider @default(RAZORPAY)
-  razorpayOrderId   String?       @unique
-  razorpayPaymentId String?       @unique
+  razorpayOrderId   String?         @unique
+  razorpayPaymentId String?         @unique
   razorpayStatus    String?
   paidAt            DateTime?
-  metadata          Json?           // store raw provider response for audit/debug
+  metadata          Json? // store raw provider response for audit/debug
   attempts          Int             @default(1)
   failureReason     String?
-  webhookConfirmed  Boolean       @default(false)
+  webhookConfirmed  Boolean         @default(false)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   isDeleted         Boolean         @default(false)
 
   // Relations
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest          @relation(fields: [contestId], references: [id])
-  participant     Participant     @relation(fields: [participantId], references: [id])
-  contact         Contact         @relation(fields: [contactId], references: [id])
-  routeTransfer   PaymentRouteTransfer?
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest       Contest               @relation(fields: [contestId], references: [id])
+  participant   Participant           @relation(fields: [participantId], references: [id])
+  contact       Contact               @relation(fields: [contactId], references: [id])
+  routeTransfer PaymentRouteTransfer?
 
   @@index([organizationId])
   @@index([contactId])
@@ -641,19 +636,19 @@ model Payment {
 }
 
 model OrganizationPayoutAccount {
-  id                      String                @id @default(ulid())
-  organizationId          String                @unique
-  razorpayLinkedAccountId String?               @unique
+  id                      String               @id @default(ulid())
+  organizationId          String               @unique
+  razorpayLinkedAccountId String?              @unique
   accountName             String
   accountEmail            String
   contactNumber           String?
-  status                  PayoutAccountStatus   @default(PENDING)
-  onboardingMode          PayoutOnboardingMode  @default(MANUAL)
+  status                  PayoutAccountStatus  @default(PENDING)
+  onboardingMode          PayoutOnboardingMode @default(MANUAL)
   activatedAt             DateTime?
   statusReason            String?
   metadata                Json?
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -662,24 +657,24 @@ model OrganizationPayoutAccount {
 }
 
 model PaymentRouteTransfer {
-  id                      String               @id @default(ulid())
+  id                      String              @id @default(ulid())
   organizationId          String
-  paymentId               String               @unique
+  paymentId               String              @unique
   razorpayPaymentId       String
-  razorpayTransferId      String?              @unique
+  razorpayTransferId      String?             @unique
   razorpayLinkedAccountId String?
   grossAmount             Int
-  platformFeeAmount       Int                  // platform commission only (config.payout.commissionPercent)
-  gatewayFeeAmount        Int                  @default(0) // Razorpay TDR (config.payout.gatewayFeePercent)
-  gstAmount               Int                  @default(0) // GST on the gateway fee (config.payout.gstPercent)
-  transferAmount          Int                  // grossAmount - platformFeeAmount - gatewayFeeAmount - gstAmount
-  currency                String               @default("INR")
-  status                  RouteTransferStatus  @default(PENDING)
+  platformFeeAmount       Int // platform commission only (config.payout.commissionPercent)
+  gatewayFeeAmount        Int                 @default(0) // Razorpay TDR (config.payout.gatewayFeePercent)
+  gstAmount               Int                 @default(0) // GST on the gateway fee (config.payout.gstPercent)
+  transferAmount          Int // grossAmount - platformFeeAmount - gatewayFeeAmount - gstAmount
+  currency                String              @default("INR")
+  status                  RouteTransferStatus @default(PENDING)
   failureReason           String?
   processedAt             DateTime?
   metadata                Json?
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   payment      Payment      @relation(fields: [paymentId], references: [id])
@@ -695,20 +690,20 @@ model QuizSession {
   id                String    @id @default(ulid())
   organizationId    String
   participantId     String
-  socketId          String?                     // current socket connection
-  deviceFingerprint String?                   // browser fingerprint
+  socketId          String? // current socket connection
+  deviceFingerprint String? // browser fingerprint
   ipAddress         String?
   userAgent         String?
   isActive          Boolean   @default(true)
   startedAt         DateTime  @default(now())
   lastHeartbeatAt   DateTime  @default(now())
   endedAt           DateTime?
-  currentQuestion   Int       @default(0)       // last known question index (0-based)
+  currentQuestion   Int       @default(0) // last known question index (0-based)
   createdAt         DateTime  @default(now())
 
   // Relations
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  participant       Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([participantId, isActive])
@@ -724,19 +719,19 @@ model ParticipantProgressSnapshot {
   id              String    @id @default(ulid())
   organizationId  String
   contestId       String
-  participantId   String    @unique   // one row per participant — repeatedly upserted, not appended
-  phase           String              // QuizPhase at snapshot time (WAITING / IN_QUIZ / SUBMITTED)
-  answers         Json                // Record<questionId, SavedAnswer> — same shape as QuizSession.getAllAnswers()
-  questionOrder   Json?               // string[] — shuffled question order, needed to rebuild the answers array on rehydrate
+  participantId   String    @unique // one row per participant — repeatedly upserted, not appended
+  phase           String // QuizPhase at snapshot time (WAITING / IN_QUIZ / SUBMITTED)
+  answers         Json // Record<questionId, SavedAnswer> — same shape as QuizSession.getAllAnswers()
+  questionOrder   Json? // string[] — shuffled question order, needed to rebuild the answers array on rehydrate
   currentQuestion Int       @default(0)
   totalQuestions  Int       @default(0)
   violationCount  Int       @default(0)
-  startedAt       DateTime?           // participant's quiz start (Redis session's startedAt) — needed to recompute timeTakenSecs
+  startedAt       DateTime? // participant's quiz start (Redis session's startedAt) — needed to recompute timeTakenSecs
   contestEndTime  DateTime?
   lastSnapshotAt  DateTime  @updatedAt
   createdAt       DateTime  @default(now())
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([contestId])
   @@index([organizationId])
@@ -746,60 +741,60 @@ model ParticipantProgressSnapshot {
 // SUBMISSION  (final answer record — persisted from Redis at submit time)
 
 model Submission {
-  id              String            @id @default(ulid())
-  organizationId  String
-  participantId   String            @unique   // one submission per participant
-  contestId       String            // denormalized
-  status          SubmissionStatus  @default(PENDING)
-  source          String            @default("MANUAL")
-  submittedAt     DateTime?
-  evaluatedAt     DateTime?
+  id             String           @id @default(ulid())
+  organizationId String
+  participantId  String           @unique // one submission per participant
+  contestId      String // denormalized
+  status         SubmissionStatus @default(PENDING)
+  source         String           @default("MANUAL")
+  submittedAt    DateTime?
+  evaluatedAt    DateTime?
 
   // Scoring (filled by evaluation worker)
-  totalQuestions  Int?
-  attempted       Int?
-  correct         Int?
-  wrong           Int?
-  skipped         Int?
-  score           Decimal?          @db.Decimal(8, 2)
-  percentage      Decimal?          @db.Decimal(5, 2)
-  isPassed        Boolean?
-  timeTakenSecs   Int?              // seconds from first question to submit
-  timeTakenMs     Int?
+  totalQuestions Int?
+  attempted      Int?
+  correct        Int?
+  wrong          Int?
+  skipped        Int?
+  score          Decimal? @db.Decimal(8, 2)
+  percentage     Decimal? @db.Decimal(5, 2)
+  isPassed       Boolean?
+  timeTakenSecs  Int? // seconds from first question to submit
+  timeTakenMs    Int?
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  participant     Participant       @relation(fields: [participantId], references: [id])
-  contest         Contest           @relation(fields: [contestId], references: [id])
-  answers         Answer[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id])
+  contest      Contest      @relation(fields: [contestId], references: [id])
+  answers      Answer[]
 
   @@index([organizationId])
   @@index([contestId, status])
-  @@index([contestId, score])             // for leaderboard queries
+  @@index([contestId, score]) // for leaderboard queries
   @@index([participantId])
   @@map("submissions")
 }
 
 // Individual answer record — one row per question per submission
 model Answer {
-  id                  String    @id @default(ulid())
-  organizationId      String
-  submissionId        String
-  questionId          String
-  selectedOptionId    String?   // null = skipped
-  isCorrect           Boolean?  // null until evaluated
-  marksAwarded        Decimal?  @db.Decimal(4, 2)
-  answeredAt          DateTime?
+  id               String    @id @default(ulid())
+  organizationId   String
+  submissionId     String
+  questionId       String
+  selectedOptionId String? // null = skipped
+  isCorrect        Boolean? // null until evaluated
+  marksAwarded     Decimal?  @db.Decimal(4, 2)
+  answeredAt       DateTime?
 
   // Relations
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  submission          Submission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  question            Question     @relation(fields: [questionId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  submission   Submission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question     Question     @relation(fields: [questionId], references: [id])
 
-  @@unique([submissionId, questionId])    // one answer per question per submission
+  @@unique([submissionId, questionId]) // one answer per question per submission
   @@index([organizationId])
   @@index([submissionId])
   @@index([questionId])
@@ -809,25 +804,25 @@ model Answer {
 // LEADERBOARD
 
 model LeaderboardEntry {
-  id              String    @id @default(ulid())
-  organizationId  String
-  contestId       String
-  participantId   String    @unique   // one entry per participant
-  rank            Int
-  score           Decimal   @db.Decimal(8, 2)
-  percentage      Decimal   @db.Decimal(5, 2)
-  timeTakenSecs   Int
-  timeTakenMs     Int?
-  isPassed        Boolean   @default(false)
-  prizeId         String?             // resolved prize bracket (nullable — not everyone wins)
-  isPublished     Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(ulid())
+  organizationId String
+  contestId      String
+  participantId  String   @unique // one entry per participant
+  rank           Int
+  score          Decimal  @db.Decimal(8, 2)
+  percentage     Decimal  @db.Decimal(5, 2)
+  timeTakenSecs  Int
+  timeTakenMs    Int?
+  isPassed       Boolean  @default(false)
+  prizeId        String? // resolved prize bracket (nullable — not everyone wins)
+  isPublished    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest      @relation(fields: [contestId], references: [id])
-  participant     Participant  @relation(fields: [participantId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id])
+  participant  Participant  @relation(fields: [participantId], references: [id])
 
   @@unique([contestId, rank])
   @@index([organizationId])
@@ -840,23 +835,23 @@ model LeaderboardEntry {
 // CERTIFICATE
 
 model Certificate {
-  id              String            @id @default(ulid())
-  organizationId  String
-  contestId       String
-  participantId   String            @unique
-  status          CertificateStatus @default(PENDING)
-  fileUrl         String?           // S3/R2 URL after generation
-  fileKey         String?           // S3 key for deletion/re-generation
-  generatedAt     DateTime?
-  deliveredAt     DateTime?
-  metadata        Json?             // template parameters, rank, score, etc.
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String            @id @default(ulid())
+  organizationId String
+  contestId      String
+  participantId  String            @unique
+  status         CertificateStatus @default(PENDING)
+  fileUrl        String? // S3/R2 URL after generation
+  fileKey        String? // S3 key for deletion/re-generation
+  generatedAt    DateTime?
+  deliveredAt    DateTime?
+  metadata       Json? // template parameters, rank, score, etc.
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   // Relations
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest           @relation(fields: [contestId], references: [id])
-  participant     Participant       @relation(fields: [participantId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id])
+  participant  Participant  @relation(fields: [participantId], references: [id])
 
   @@index([organizationId])
   @@index([contestId, status])
@@ -868,12 +863,12 @@ model CertificateTemplate {
   organizationId String
   name           String
   description    String?
-  htmlContent    String   // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
-  variables      Json     // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
+  htmlContent    String // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
+  variables      Json // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -883,21 +878,21 @@ model CertificateTemplate {
 // PROCTORING
 
 model ProctoringEvent {
-  id              String        @id @default(ulid())
-  organizationId  String
-  participantId   String
-  contestId       String        // denormalized for fast queries
-  type            ViolationType
-  severity        Int           @default(1)   // 1=low, 2=medium, 3=high
-  metadata        Json?         // e.g. { confidence: 0.92, faceCount: 2 }
-  occurredAt      DateTime      @default(now())
-  reviewedAt      DateTime?
-  reviewedBy      String?       // adminId who reviewed
-  dismissed       Boolean       @default(false)
+  id             String        @id @default(ulid())
+  organizationId String
+  participantId  String
+  contestId      String // denormalized for fast queries
+  type           ViolationType
+  severity       Int           @default(1) // 1=low, 2=medium, 3=high
+  metadata       Json? // e.g. { confidence: 0.92, faceCount: 2 }
+  occurredAt     DateTime      @default(now())
+  reviewedAt     DateTime?
+  reviewedBy     String? // adminId who reviewed
+  dismissed      Boolean       @default(false)
 
   // Relations
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  participant     Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([participantId])
@@ -908,23 +903,23 @@ model ProctoringEvent {
 
 // Aggregated proctoring score per participant (updated in real-time by worker)
 model ProctoringScore {
-  id                  String    @id @default(ulid())
-  organizationId      String
-  participantId       String
-  contestId           String
-  totalViolations     Int       @default(0)
-  highSeverityCount   Int       @default(0)
-  violationScore      Decimal   @default(0) @db.Decimal(6, 2)
-  trustScore          Decimal   @default(100) @db.Decimal(5, 2)
-  isFlagged           Boolean   @default(false)
-  flaggedAt           DateTime?
-  adminNotes          String?
-  updatedAt           DateTime  @updatedAt
+  id                String    @id @default(ulid())
+  organizationId    String
+  participantId     String
+  contestId         String
+  totalViolations   Int       @default(0)
+  highSeverityCount Int       @default(0)
+  violationScore    Decimal   @default(0) @db.Decimal(6, 2)
+  trustScore        Decimal   @default(100) @db.Decimal(5, 2)
+  isFlagged         Boolean   @default(false)
+  flaggedAt         DateTime?
+  adminNotes        String?
+  updatedAt         DateTime  @updatedAt
 
   // Relations
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  participant         Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  contest             Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant  Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
   @@unique([participantId, contestId])
   @@index([organizationId])
@@ -935,31 +930,31 @@ model ProctoringScore {
 // MESSAGING
 
 model MessageLog {
-  id              String          @id @default(ulid())
-  organizationId  String
-  participantId   String?         // null for bulk/broadcast
-  contestId       String?
-  channel         MessageChannel
-  template        String
-  params          Json?
-  status          MessageStatus   @default(QUEUED)
-  recipient       String          // phone number or email address
-  subject         String?         // email subject
-  body            String?         // rendered message body (for audit)
-  metadata        Json?           // template parameters, etc.
-  providerMsgId   String?         // Aisensy/SMTP message ID
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  failureReason   String?
-  retryCount      Int             @default(0)
-  attemptCount   Int                @default(1)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String         @id @default(ulid())
+  organizationId String
+  participantId  String? // null for bulk/broadcast
+  contestId      String?
+  channel        MessageChannel
+  template       String
+  params         Json?
+  status         MessageStatus  @default(QUEUED)
+  recipient      String // phone number or email address
+  subject        String? // email subject
+  body           String? // rendered message body (for audit)
+  metadata       Json? // template parameters, etc.
+  providerMsgId  String? // Aisensy/SMTP message ID
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failureReason  String?
+  retryCount     Int            @default(0)
+  attemptCount   Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   // Relations
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  participant     Participant?    @relation(fields: [participantId], references: [id])
-  contest         Contest?        @relation(fields: [contestId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participant  Participant? @relation(fields: [participantId], references: [id])
+  contest      Contest?     @relation(fields: [contestId], references: [id])
 
   @@index([organizationId])
   @@index([participantId])
@@ -973,26 +968,26 @@ model MessageLog {
 // gives us a queryable audit trail and state for the admin UI.
 
 model ScheduledJob {
-  id              String    @id @default(ulid())
-  organizationId  String
-  contestId       String?
-  bullJobId       String?   @unique   // BullMQ job ID
-  queue           String    // e.g. "contest-evaluation", "certificate-generation"
-  name            String    // e.g. "quiz:start", "reminder:24h"
-  payload         Json
-  status          JobStatus @default(WAITING)
-  scheduledFor    DateTime?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  failedAt        DateTime?
-  error           String?
-  retryCount      Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(ulid())
+  organizationId String
+  contestId      String?
+  bullJobId      String?   @unique // BullMQ job ID
+  queue          String // e.g. "contest-evaluation", "certificate-generation"
+  name           String // e.g. "quiz:start", "reminder:24h"
+  payload        Json
+  status         JobStatus @default(WAITING)
+  scheduledFor   DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  error          String?
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest?     @relation(fields: [contestId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest?     @relation(fields: [contestId], references: [id])
 
   @@index([organizationId])
   @@index([contestId])
@@ -1004,28 +999,28 @@ model ScheduledJob {
 // ANALYTICS SNAPSHOTS  (pre-aggregated, refreshed by worker every 15 min)
 
 model ContestAnalyticsSnapshot {
-  id                    String    @id @default(ulid())
-  organizationId        String
-  contestId             String    @unique
-  totalRegistrations    Int       @default(0)
-  totalRevenue          Decimal   @default(0) @db.Decimal(12, 2)
-  totalParticipated     Int       @default(0)    // actually joined quiz
-  totalSubmitted        Int       @default(0)
-  avgScore              Decimal?  @db.Decimal(5, 2)
-  highestScore          Decimal?  @db.Decimal(5, 2)
-  lowestScore           Decimal?  @db.Decimal(5, 2)
-  medianScore           Decimal?  @db.Decimal(5, 2)
-  avgTimeTakenSecs      Int?
-  fastestTimeSecs       Int?      // MIN(timeTakenSecs) across EVALUATED submissions
-  slowestTimeSecs       Int?      // MAX(timeTakenSecs) across EVALUATED submissions
-  passingCount          Int?      // EVALUATED submissions with percentage >= Contest.cutoffScore
-  failingCount          Int?      // EVALUATED submissions with percentage < Contest.cutoffScore
-  activeNow             Int       @default(0)    // updated from Redis heartbeat
-  snapshotAt            DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                 String   @id @default(ulid())
+  organizationId     String
+  contestId          String   @unique
+  totalRegistrations Int      @default(0)
+  totalRevenue       Decimal  @default(0) @db.Decimal(12, 2)
+  totalParticipated  Int      @default(0) // actually joined quiz
+  totalSubmitted     Int      @default(0)
+  avgScore           Decimal? @db.Decimal(5, 2)
+  highestScore       Decimal? @db.Decimal(5, 2)
+  lowestScore        Decimal? @db.Decimal(5, 2)
+  medianScore        Decimal? @db.Decimal(5, 2)
+  avgTimeTakenSecs   Int?
+  fastestTimeSecs    Int? // MIN(timeTakenSecs) across EVALUATED submissions
+  slowestTimeSecs    Int? // MAX(timeTakenSecs) across EVALUATED submissions
+  passingCount       Int? // EVALUATED submissions with percentage >= Contest.cutoffScore
+  failingCount       Int? // EVALUATED submissions with percentage < Contest.cutoffScore
+  activeNow          Int      @default(0) // updated from Redis heartbeat
+  snapshotAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   // Relations
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([contestId])
@@ -1042,23 +1037,23 @@ enum ExportStatus {
 }
 
 model ExportLog {
-  id              String       @id @default(ulid())
-  organizationId  String
-  contestId       String
-  adminId         String
-  format          String       // "csv" or "pdf"
-  status          ExportStatus @default(PENDING)
-  progress        Int          @default(0) // 0 to 100
-  fileUrl         String?
-  fileKey         String?
-  filters         Json?
-  error           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id             String       @id @default(ulid())
+  organizationId String
+  contestId      String
+  adminId        String
+  format         String // "csv" or "pdf"
+  status         ExportStatus @default(PENDING)
+  progress       Int          @default(0) // 0 to 100
+  fileUrl        String?
+  fileKey        String?
+  filters        Json?
+  error          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest         Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  admin           Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest      @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  admin        Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([contestId])
@@ -1074,12 +1069,12 @@ model OrganizationProfile {
   id                       String                    @id @default(ulid())
   organizationId           String                    @unique
   primaryUseCase           OrgPrimaryUseCase?
-  useCaseOther             String?                   // filled when primaryUseCase = OTHER
+  useCaseOther             String? // filled when primaryUseCase = OTHER
   sizeBucket               OrgSizeBucket?
   expectedContestsPerMonth ExpectedContestVolume     @default(UNSURE)
   expectedParticipants     ExpectedParticipantVolume @default(UNSURE)
   heardAboutSource         HeardAboutSource?
-  heardAboutOther          String?                   // filled when heardAboutSource = OTHER
+  heardAboutOther          String? // filled when heardAboutSource = OTHER
   primaryContactName       String?
   primaryContactPhone      String?
   primaryContactEmail      String?
@@ -1094,7 +1089,7 @@ model OrganizationProfile {
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([primaryUseCase])
   @@index([sizeBucket])
@@ -1196,49 +1191,51 @@ model AuditLog {
 // not here — an ambassador can be APPROVED on one org's campaign and PENDING/REJECTED
 // on another's, simultaneously.
 model Ambassador {
-  id                String            @id @default(ulid())
-  email             String            @unique
-  phone             String?
-  firstName         String
-  lastName          String?
-  ambassadorType    String            // PlatformAmbassadorType.key — validated at signup time, not a DB FK
-  applicationData   Json              @default("{}")   // type-specific answers, keyed by that type's applicationFields[].key
-  proofStorageKey   String
-  proofUrl          String
-  isActive          Boolean           @default(true)   // platform-level moderation flag (not per-campaign)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id                     String   @id @default(ulid())
+  email                  String   @unique
+  phone                  String?
+  firstName              String
+  lastName               String?
+  ambassadorType         String // PlatformAmbassadorType.key — validated at signup time, not a DB FK
+  applicationData        Json     @default("{}") // type-specific answers, keyed by that type's applicationFields[].key
+  proofStorageKey        String
+  proofUrl               String
+  profileImageStorageKey String? // set together with profileImageUrl, never independently — profile page only, never collected at signup
+  profileImageUrl        String?
+  isActive               Boolean  @default(true) // platform-level moderation flag (not per-campaign)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  enrollments       AmbassadorCampaignEnrollment[]
+  enrollments AmbassadorCampaignEnrollment[]
 
   @@map("ambassadors")
 }
 
 model AmbassadorCampaign {
-  id                      String                    @id @default(ulid())
-  organizationId          String
-  contestId               String?                    // optional while DRAFT — required by PublishCampaignSchema at publish time
-  name                    String
-  ambassadorTypesAllowed  String[]                   @default([])
-  rewardConfig            Json      @default("{}")   // see ambassador-campaign.types.ts RewardConfig — incomplete while DRAFT
-  shareTemplates          Json      @default("{}")   // { whatsappText, instagramText, posterImageUrl }
-  sourceCampaignId        String?
-  sourceTemplateId        String?                    // set when instantiated from an AmbassadorCampaignTemplate — not a FK, same lineage-only treatment as sourceCampaignId
-  status                  AmbassadorCampaignStatus  @default(DRAFT)
-  wizardStep              Int                       @default(1)  // last completed creation-wizard step, for resume
-  startDate               DateTime?                  // Timeline step — required by PublishCampaignSchema at publish time
-  endDate                 DateTime?
-  phases                  Json?     @default("[]")   // generated CampaignPhase[] snapshot — see campaign-timeline.ts
-  phaseTemplate           Json?                       // CampaignPhaseTemplateEntry[] override; null = use the built-in default
-  publishedAt             DateTime?
-  createdById             String
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  id                     String                   @id @default(ulid())
+  organizationId         String
+  contestId              String? // optional while DRAFT — required by PublishCampaignSchema at publish time
+  name                   String
+  ambassadorTypesAllowed String[]                 @default([])
+  rewardConfig           Json                     @default("{}") // see ambassador-campaign.types.ts RewardConfig — incomplete while DRAFT
+  shareTemplates         Json                     @default("{}") // { whatsappText, instagramText, posterImageUrl }
+  sourceCampaignId       String?
+  sourceTemplateId       String? // set when instantiated from an AmbassadorCampaignTemplate — not a FK, same lineage-only treatment as sourceCampaignId
+  status                 AmbassadorCampaignStatus @default(DRAFT)
+  wizardStep             Int                      @default(1) // last completed creation-wizard step, for resume
+  startDate              DateTime? // Timeline step — required by PublishCampaignSchema at publish time
+  endDate                DateTime?
+  phases                 Json?                    @default("[]") // generated CampaignPhase[] snapshot — see campaign-timeline.ts
+  phaseTemplate          Json? // CampaignPhaseTemplateEntry[] override; null = use the built-in default
+  publishedAt            DateTime?
+  createdById            String
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
 
-  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contest                 Contest?                  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  enrollments             AmbassadorCampaignEnrollment[]
-  groups                  AmbassadorGroup[]
+  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contest      Contest?                       @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  enrollments  AmbassadorCampaignEnrollment[]
+  groups       AmbassadorGroup[]
 
   @@unique([contestId])
   @@index([organizationId, status])
@@ -1258,13 +1255,13 @@ model AmbassadorCampaign {
 model AmbassadorGroup {
   id                 String   @id @default(ulid())
   campaignId         String
-  groupType          String   // "DEPARTMENT" | "COLLEGE" | "CUSTOM" — validated at the API boundary, not a DB enum (config-driven, matches how PlatformAmbassadorType.key works)
+  groupType          String // "DEPARTMENT" | "COLLEGE" | "CUSTOM" — validated at the API boundary, not a DB enum (config-driven, matches how PlatformAmbassadorType.key works)
   name               String
-  ambassadorTarget   Int?     // e.g. 1 ambassador for this group
-  registrationTarget Int?     // e.g. 100 registrations per ambassador in this group
+  ambassadorTarget   Int? // e.g. 1 ambassador for this group
+  registrationTarget Int? // e.g. 100 registrations per ambassador in this group
   createdAt          DateTime @default(now())
 
-  campaign           AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
   @@map("ambassador_groups")
@@ -1288,11 +1285,11 @@ model AmbassadorCampaignTemplate {
   rewardConfig           Json     @default("{}")
   shareTemplates         Json     @default("{}")
   groups                 Json     @default("[]")
-  sourceCampaignId       String?  // the campaign this was saved from, if any — lineage only, not a FK (that campaign may later be archived/deleted without invalidating the template)
+  sourceCampaignId       String? // the campaign this was saved from, if any — lineage only, not a FK (that campaign may later be archived/deleted without invalidating the template)
   createdById            String
   createdAt              DateTime @default(now())
 
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("ambassador_campaign_templates")
@@ -1305,20 +1302,20 @@ model AmbassadorCampaignTemplate {
 // campaign this ambassador has applied to. referralCode is assigned at apply time but
 // only treated as live/usable once status is APPROVED (see findEnrollmentByReferralCodeForContest).
 model AmbassadorCampaignEnrollment {
-  id              String            @id @default(ulid())
+  id              String           @id @default(ulid())
   campaignId      String
   ambassadorId    String
-  referralCode    String            @unique
-  status          AmbassadorStatus  @default(PENDING)
+  referralCode    String           @unique
+  status          AmbassadorStatus @default(PENDING)
   reviewedAt      DateTime?
   reviewedById    String?
   rejectionReason String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  campaign        AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  ambassador      Ambassador         @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
-  referrals       Participant[]      @relation("ReferredBy")
+  campaign   AmbassadorCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ambassador Ambassador         @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  referrals  Participant[]      @relation("ReferredBy")
 
   @@unique([campaignId, ambassadorId])
   @@index([referralCode])
@@ -1333,9 +1330,10 @@ model PlatformAmbassadorType {
   key               String   @id
   label             String
   proofFieldLabel   String
-  applicationFields Json     // array of { key, label, type, required, options? }
+  applicationFields Json // array of { key, label, type, required, options? }
   isActive          Boolean  @default(true)
   updatedAt         DateTime @updatedAt
+
   @@map("platform_ambassador_types")
 }
 
@@ -1345,7 +1343,7 @@ model OrganizationAmbassadorTypeAccess {
   isEnabled      Boolean  @default(false)
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@id([organizationId, typeKey])
   @@map("organization_ambassador_type_access")

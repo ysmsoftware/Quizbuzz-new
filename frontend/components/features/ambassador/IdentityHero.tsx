@@ -2,6 +2,7 @@
 
 import { GraduationCap } from 'lucide-react';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
+import { AmbassadorAvatar } from './AmbassadorAvatar';
 import type { Ambassador } from '@/lib/types/ambassador';
 
 interface IdentityHeroProps {
@@ -31,10 +32,13 @@ export function IdentityHero({ ambassador, activeCampaigns, totalRegistrations, 
         }}
       />
       <div className="relative flex flex-wrap items-center gap-5">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-chart-2 text-primary-foreground text-xl font-bold shadow-lg shadow-primary/20">
-          {ambassador.firstName.charAt(0).toUpperCase()}
-          {ambassador.lastName?.charAt(0).toUpperCase() ?? ''}
-        </div>
+        <AmbassadorAvatar
+          firstName={ambassador.firstName}
+          lastName={ambassador.lastName}
+          profileImageUrl={ambassador.profileImageUrl}
+          size={64}
+          className="shadow-lg shadow-primary/20"
+        />
 
         <div className="min-w-[200px] flex-1">
           <div className="flex items-center gap-2.5 flex-wrap mb-1">

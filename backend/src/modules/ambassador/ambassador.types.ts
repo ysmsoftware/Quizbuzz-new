@@ -44,6 +44,7 @@ export interface AmbassadorResult {
     ambassadorType: string;
     applicationData: Record<string, unknown>;
     proofUrl: string;
+    profileImageUrl: string | null;
     createdAt: Date;
 }
 

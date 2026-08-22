@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useAmbassadorLogout } from '@/lib/hooks/useAmbassadorLogout';
+import { AmbassadorAvatar } from './AmbassadorAvatar';
 
 const NAV_ITEMS = [
   { label: 'Overview', href: '/ambassador/dashboard', icon: LayoutDashboard },
@@ -26,7 +27,14 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
-export function AmbassadorNav({ firstName, pathname }: { firstName: string | null; pathname: string }) {
+interface AmbassadorNavProps {
+  firstName: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+  pathname: string;
+}
+
+export function AmbassadorNav({ firstName, lastName, profileImageUrl, pathname }: AmbassadorNavProps) {
   const { logout, isLoggingOut } = useAmbassadorLogout();
 
   return (
@@ -74,12 +82,16 @@ export function AmbassadorNav({ firstName, pathname }: { firstName: string | nul
               aria-label="Account menu"
               className="flex items-center gap-2 rounded-full pl-1 pr-2.5 py-1 hover:bg-secondary/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
-              <span
-                aria-hidden="true"
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-[11px] font-bold text-primary-foreground"
-              >
-                {firstName ? firstName.charAt(0).toUpperCase() : <User className="h-3.5 w-3.5" />}
-              </span>
+              {firstName ? (
+                <AmbassadorAvatar firstName={firstName} lastName={lastName} profileImageUrl={profileImageUrl} size={24} />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-primary-foreground"
+                >
+                  <User className="h-3.5 w-3.5" />
+                </span>
+              )}
               {firstName === null ? (
                 <Skeleton className="h-4 w-16" />
               ) : (

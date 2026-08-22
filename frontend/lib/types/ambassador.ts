@@ -35,6 +35,8 @@ export interface Ambassador {
   ambassadorType: string;
   applicationData: Record<string, string>;
   proofUrl: string;
+  /** Optional — never collected at signup, only settable from the profile page afterward. */
+  profileImageUrl: string | null;
   createdAt: string;
 }
 

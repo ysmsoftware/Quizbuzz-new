@@ -14,6 +14,7 @@ import {
     GetOrgTypesQuerySchema,
     UpdateProfileSchema,
     UpdateProofSchema,
+    UpdateProfileImageSchema,
 } from "./ambassador.validator";
 
 export class AmbassadorController {
@@ -189,6 +190,28 @@ export class AmbassadorController {
             const data = UpdateProofSchema.parse(req.body);
             const result = await this.service.updateProof(id, data);
             res.status(200).json({ success: true, message: "Proof document updated", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getProfileImageUploadUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const data = UploadProofRequestSchema.parse(req.body);
+            const result = await this.service.getProfileImageUploadUrl(id, data);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    updateProfileImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const data = UpdateProfileImageSchema.parse(req.body);
+            const result = await this.service.updateProfileImage(id, data);
+            res.status(200).json({ success: true, message: "Profile photo updated", data: result, requestId: req.id });
         } catch (err) {
             next(err);
         }

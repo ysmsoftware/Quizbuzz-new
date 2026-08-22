@@ -134,8 +134,16 @@ class AmbassadorService {
     return request<Ambassador>('/ambassador/me', { method: 'GET' });
   }
 
-  updateProfile(body: { firstName?: string; lastName?: string | null; phone?: string }) {
+  updateProfile(body: { firstName?: string; lastName?: string | null; phone?: string; applicationData?: Record<string, string> }) {
     return request<Ambassador>('/ambassador/me', { method: 'PATCH', body: JSON.stringify(body) });
+  }
+
+  requestProfileImageUploadUrl(body: { filename: string; mimeType: string }) {
+    return publicPost<{ storageKey: string; url: string }>('/ambassador/upload-profile-image', body);
+  }
+
+  updateProfileImage(body: { profileImageStorageKey: string; profileImageUrl: string } | { profileImageStorageKey: null; profileImageUrl: null }) {
+    return request<Ambassador>('/ambassador/me/profile-image', { method: 'PATCH', body: JSON.stringify(body) });
   }
 
   logout() {

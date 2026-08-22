@@ -34,7 +34,12 @@ export default function AmbassadorDashboardLayout({ children }: { children: Reac
 
   return (
     <div className="min-h-screen bg-background">
-      <AmbassadorNav firstName={ambassador.firstName} pathname={pathname} />
+      <AmbassadorNav
+        firstName={ambassador.firstName}
+        lastName={ambassador.lastName}
+        profileImageUrl={ambassador.profileImageUrl}
+        pathname={pathname}
+      />
       {children}
     </div>
   );

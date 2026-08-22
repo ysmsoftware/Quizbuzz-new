@@ -48,12 +48,22 @@ export const UpdateProfileSchema = z.object({
     firstName: z.string().min(1, "First name is required").max(100).trim().optional(),
     lastName: z.string().max(100).trim().nullable().optional(),
     phone: phoneField,
+    // Keyed by whatever fields the ambassador's *current* type definition asks for (see
+    // ambassador-types.ts) — validated against that definition in the service, not here,
+    // since this schema has no way to know which type this ambassador is.
+    applicationData: z.record(z.string(), z.string()).optional(),
 }).refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided" });
 
 export const UpdateProofSchema = z.object({
     proofStorageKey: z.string().min(1),
     proofUrl: z.string().min(1),
 });
+
+// Profile photo is always set as a pair, or cleared as a pair — no independent-field update.
+export const UpdateProfileImageSchema = z.union([
+    z.object({ profileImageStorageKey: z.string().min(1), profileImageUrl: z.string().min(1) }),
+    z.object({ profileImageStorageKey: z.null(), profileImageUrl: z.null() }),
+]);
 
 // ─── Login (returning ambassador) ───────────────────────────────────────────
 
@@ -90,6 +100,7 @@ export type SignupCompleteInput = z.infer<typeof SignupCompleteSchema>;
 export type UploadProofRequestInput = z.infer<typeof UploadProofRequestSchema>;
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
 export type UpdateProofInput = z.infer<typeof UpdateProofSchema>;
+export type UpdateProfileImageInput = z.infer<typeof UpdateProfileImageSchema>;
 export type RequestOtpInput = z.infer<typeof RequestOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof VerifyOtpSchema>;
 export type ListCampaignsQueryInput = z.infer<typeof ListCampaignsQuerySchema>;

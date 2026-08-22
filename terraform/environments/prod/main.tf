@@ -82,33 +82,38 @@ module "networking" {
 
 ##############################################################################
 # MODULE: DATABASE
-# Creates: RDS PostgreSQL t3.micro, migrating from private subnets to PUBLIC
-# subnets + publicly_accessible = true.
+# Creates: RDS PostgreSQL t3.micro, mid-migration from private subnets to
+# PUBLIC subnets + publicly_accessible = true, via a temporary Multi-AZ
+# failover (see the MIGRATION STEPS comment in modules/database/main.tf
+# above aws_db_subnet_group.main for the full step-by-step plan).
 # Depends on networking for: public_subnet_ids, private_subnet_ids, rds_sg_id
 #
-# WHY PUBLIC SUBNETS (changed from private — see database/main.tf for the
-# full writeup): the Ops dashboard VPS needs direct Postgres access from
-# outside the VPC. RDS in a private subnet has no route reachable from the
-# internet at all, so no security-group rule could ever make that work.
-# Security now rests entirely on aws_security_group.rds being a narrow
-# allowlist (EC2 SG + the Ops VPS's one /32, no 0.0.0.0/0) plus PostgreSQL's
-# own username/password auth — not on the database being unreachable.
+# WHY PUBLIC SUBNETS (changed from private): the Ops dashboard VPS needs
+# direct Postgres access from outside the VPC. RDS in a private subnet has
+# no route reachable from the internet at all, so no security-group rule
+# could ever make that work. Security now rests entirely on
+# aws_security_group.rds being a narrow allowlist (EC2 SG + the Ops VPS's
+# one /32, no 0.0.0.0/0) plus PostgreSQL's own username/password auth —
+# not on the database being unreachable.
 #
-# TEMPORARY: private_subnets is still wired through during the migration —
-# see the MIGRATION STEPS note in modules/database/main.tf above
-# aws_db_subnet_group.main. Once step 1 (this apply) is confirmed healthy,
-# remove private_subnets here and the now-unused aws_db_subnet_group.main
-# in the module.
+# TEMPORARY: active_private_subnet_id passes through ONLY the one private
+# subnet the instance is currently, physically attached to (index [1] —
+# confirmed directly by an AWS API error naming that exact subnet ID when
+# we tried to remove it). Deliberately not the whole private_subnet_ids
+# list — see the module comment for why that's what makes the Multi-AZ
+# standby placement land in a public subnet deterministically instead of
+# a guess. Remove this variable entirely once the migration's step 4
+# (narrowing back to public-only) is applied.
 #
 # AFTER APPLY: Get the endpoint with `terraform output db_endpoint`
 # Then manually build DATABASE_URL and store it in SSM.
 ##############################################################################
 module "database" {
-  source          = "../../modules/database"
-  public_subnets  = module.networking.public_subnet_ids
-  private_subnets = module.networking.private_subnet_ids
-  rds_sg_id       = module.networking.rds_sg_id
-  db_password     = local.db_password
+  source                   = "../../modules/database"
+  public_subnets           = module.networking.public_subnet_ids
+  active_private_subnet_id = module.networking.private_subnet_ids[1]
+  rds_sg_id                = module.networking.rds_sg_id
+  db_password              = local.db_password
 }
 
 ##############################################################################

@@ -16,14 +16,18 @@ variable "public_subnets" {
   type        = list(string)
 }
 
-# TEMPORARY — only needed during the private→public migration below.
-# Remove this variable, the old aws_db_subnet_group.main resource, and this
-# comment once the migration apply (see note above aws_db_subnet_group.main)
-# has completed successfully and you've confirmed the instance is healthy
-# on the new public subnet group.
-variable "private_subnets" {
-  description = "OLD subnet group's subnets, kept only so the pre-migration aws_db_subnet_group.main resource has zero diff during the migration apply. Safe to delete after migration."
-  type        = list(string)
+# TEMPORARY — only needed during the Multi-AZ relocation migration below.
+# The instance's ENI is currently, physically attached to exactly ONE of
+# your two original private subnets (confirmed directly by AWS's own error
+# message when we tried to remove it: "subnet ... currently in use"). This
+# is that ONE subnet — deliberately singular, not the whole private_subnets
+# list, because keeping the OTHER (unused) private subnet out of the group
+# entirely is what makes the Multi-AZ standby placement deterministic
+# instead of a guess. See the MIGRATION PLAN comment above
+# aws_db_subnet_group.main for the full reasoning.
+variable "active_private_subnet_id" {
+  description = "The single private subnet the RDS instance is currently, physically attached to. Remove this variable and this migration's extra subnet once the Multi-AZ relocation is complete and the group has been narrowed to public-only."
+  type        = string
 }
 
 variable "rds_sg_id" {
@@ -38,7 +42,7 @@ variable "db_password" {
 }
 
 
-# DB SUBNET GROUP(S)
+# DB SUBNET GROUP
 # RDS requires you to tell it WHICH subnets it's allowed to use.
 #
 # CHANGED FROM PRIVATE TO PUBLIC SUBNETS — deliberate decision, not drift:
@@ -47,51 +51,65 @@ variable "db_password" {
 # from outside the VPC — not a firewall block, an absence of a route at all.
 # That made the Ops dashboard VPS's direct Postgres access (see
 # aws_security_group.rds's second ingress block in networking/main.tf)
-# permanently non-functional no matter what the security group allowed,
-# since traffic from the VPS never had anywhere to arrive in the first
-# place. Moving to the public subnets (which do have an IGW route) combined
-# with publicly_accessible = true below gives RDS a real, internet-routable
+# permanently non-functional no matter what the security group allowed.
+# Moving to the public subnets (which do have an IGW route) combined with
+# publicly_accessible = true below gives RDS a real, internet-routable
 # endpoint — and now the security group is the ACTUAL gatekeeper: it allows
 # exactly two sources (the EC2 security group for the main app, and the Ops
 # VPS's single /32) and nothing else — no 0.0.0.0/0 rule exists on that
 # security group. Do not add one.
 #
-# WHY TWO SEPARATE aws_db_subnet_group RESOURCES INSTEAD OF EDITING ONE:
-# AWS's ModifyDBSubnetGroup API refuses to remove any subnet that a running
-# instance is currently, physically attached to ("subnet ... currently in
-# use") — subnet-group membership and the instance's actual attached subnet
-# are two different things, and you can't shrink a group out from under a
-# live instance in one step. The supported way to relocate an instance is
-# to point it at a DIFFERENT subnet group entirely (aws_db_instance.postgres
-# below now references .public, not .main) — RDS handles the ENI move as
-# part of that operation instead of rejecting it up front.
+# WHY THIS IS A MULTI-AZ-FAILOVER MIGRATION, NOT A SIMPLE SUBNET SWAP:
+# AWS blocks both naive approaches. (1) Editing this group's subnet_ids to
+# remove the private subnets outright fails with "subnet ... currently in
+# use" — you can't shrink a group out from under a live instance's actual
+# ENI. (2) Pointing the instance at a completely different, separate
+# subnet group fails with "InvalidVPCNetworkStateFault" — AWS reserves
+# that ModifyDBInstance path for moving an instance to a DIFFERENT VPC,
+# not for same-VPC relocation. The supported same-VPC mechanism is a
+# temporary Multi-AZ standby + forced failover: AWS creates a second copy
+# of the instance in a different AZ, and failing over to it physically
+# relocates "the instance" without ever violating either restriction above.
 #
-# MIGRATION STEPS (do these as two separate applies, not one):
-#   1. Apply now: creates aws_db_subnet_group.public and moves the instance
-#      onto it (db_subnet_group_name + publicly_accessible both change).
-#      aws_db_subnet_group.main (private, original) is left completely
-#      untouched in this apply so Terraform has no reason to touch it yet.
-#   2. AFTER confirming step 1 succeeded and the instance is healthy: delete
-#      the aws_db_subnet_group.main resource block below, the private_subnets
-#      variable above, and the private_subnets wiring in
-#      environments/prod/main.tf's module "database" block. By then nothing
-#      references the old group, so Terraform can cleanly destroy it.
+# WHY subnet_ids BELOW IS EXACTLY [public[0], public[1], active_private] —
+# NOT public + BOTH original private subnets:
+# The instance's ENI is only physically attached to ONE specific private
+# subnet right now (var.active_private_subnet_id — confirmed directly by
+# AWS's own "currently in use" error, which named this exact subnet). The
+# OTHER original private subnet is unused and deliberately excluded here.
+# That makes this group span its 2 AZs asymmetrically: the active
+# subnet's AZ has TWO options (active_private + the public subnet sharing
+# that AZ), while the OTHER AZ has exactly ONE option (its public subnet).
+# When Multi-AZ is enabled below, AWS must place the standby in the AZ
+# DIFFERENT from wherever the current primary sits — and since that other
+# AZ has only one subnet in this group, AWS has no choice but to put the
+# standby in a public subnet. No guessing, no risk of landing back in a
+# private subnet, unlike an even 2-and-2 subnet split would risk.
+#
+# MIGRATION STEPS — separate applies, do not combine:
+#   1. Apply now: only this subnet group's membership changes (drops the
+#      unused private subnet, adds both public ones; keeps the active
+#      private subnet so the currently-running instance has zero diff).
+#      multi_az is still false in this apply — confirm this step alone
+#      succeeds before touching multi_az at all.
+#   2. Separate apply: flip multi_az to true (below). AWS provisions the
+#      standby. Afterwards, verify (via AWS Console → RDS → your instance
+#      → Connectivity & security, or `aws rds describe-db-instances`)
+#      that the standby is in the public subnet before proceeding.
+#   3. Manual AWS CLI step (not Terraform): trigger the actual relocation —
+#      `aws rds reboot-db-instance --db-instance-identifier quizbuzz-postgres --force-failover`
+#      This promotes the standby (in the public subnet) to primary. Expect
+#      a brief (60-120s) connection interruption, same as a normal failover.
+#   4. Separate apply: flip multi_az back to false, and narrow subnet_ids
+#      to just var.public_subnets (drop active_private_subnet_id and this
+#      variable/comment entirely) — by then nothing needs the old private
+#      subnet anymore.
 resource "aws_db_subnet_group" "main" {
   name        = "quizbuzz-rds-subnet-group"
-  subnet_ids  = var.private_subnets
-  description = "Subnet group for QuizBuzz RDS - private subnets in 2 AZs"
+  subnet_ids  = concat(var.public_subnets, [var.active_private_subnet_id])
+  description = "Subnet group for QuizBuzz RDS - Multi-AZ relocation in progress: 2 public subnets + the one private subnet the instance is still physically attached to"
 
   tags = { Name = "quizbuzz-rds-subnet-group" }
-}
-
-# NEW — the public-subnet group the instance is migrating to. Separate
-# resource/name from aws_db_subnet_group.main; see the migration note above.
-resource "aws_db_subnet_group" "public" {
-  name        = "quizbuzz-rds-subnet-group-public"
-  subnet_ids  = var.public_subnets
-  description = "Subnet group for QuizBuzz RDS - public subnets in 2 AZs (publicly_accessible, gated by security group allowlist only)"
-
-  tags = { Name = "quizbuzz-rds-subnet-group-public" }
 }
 
 
@@ -130,7 +148,7 @@ resource "aws_db_instance" "postgres" {
   # single Ops VPS IP, and never add a catch-all rule to "temporarily debug"
   # something; that single security group is now the only thing standing
   # between the internet and this database's login prompt.
-  db_subnet_group_name   = aws_db_subnet_group.public.name
+  db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [var.rds_sg_id]
   publicly_accessible    = true
 
@@ -142,8 +160,12 @@ resource "aws_db_instance" "postgres" {
   # Performance Insights — free tier of query monitoring
   # Shows you which queries are slow. Keep this enabled.
   performance_insights_enabled          = true
-  performance_insights_retention_period = 7  
+  performance_insights_retention_period = 7
 
+  # STEP 1 (this apply): leave this false. Only flip to true in a later,
+  # separate apply once the subnet group change above has been applied and
+  # confirmed clean on its own — see the MIGRATION STEPS comment above
+  # aws_db_subnet_group.main.
   multi_az = false
 
   deletion_protection = true

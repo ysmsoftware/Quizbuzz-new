@@ -29,7 +29,7 @@ import {
     RequestUploadUrlDTO,
     UploadUrlResult,
 } from "./ambassador.types";
-import { UpdateProfileInput, UpdateProofInput } from "./ambassador.validator";
+import { UpdateProfileInput, UpdateProofInput, UpdateProfileImageInput } from "./ambassador.validator";
 
 /** Pending-signup state, kept in Redis between signupStart and signupComplete — there is
  *  deliberately no half-created Ambassador row while someone is mid-signup (a person who
@@ -271,7 +271,28 @@ export class AmbassadorService {
     async updateProfile(ambassadorId: string, dto: UpdateProfileInput): Promise<AmbassadorResult> {
         const ambassador = await this.ambassadorRepo.findById(ambassadorId);
         if (!ambassador) throw new NotFoundError("Ambassador not found.");
-        const updated = await this.ambassadorRepo.update(ambassadorId, dto as any);
+
+        const { applicationData, ...rest } = dto;
+        let mergedApplicationData: Record<string, unknown> | undefined;
+
+        // applicationData's fields are defined per ambassadorType (see ambassador-types.ts) and
+        // can change over time on the ops side — always re-validate against the *current*
+        // definition rather than whatever shape was captured at signup. Merged with the
+        // existing data first so a partial edit (e.g. just "department") still validates
+        // required-field checks against the full picture, not just the patch.
+        if (applicationData) {
+            const type = await getActiveAmbassadorTypeByKey(ambassador.ambassadorType);
+            mergedApplicationData = { ...(ambassador.applicationData as Record<string, unknown>), ...applicationData };
+            if (type) {
+                const violations = this._validateApplicationData(type.applicationFields, mergedApplicationData);
+                if (violations.length > 0) throw new InvalidApplicationDataError(violations);
+            }
+        }
+
+        const updated = await this.ambassadorRepo.update(ambassadorId, {
+            ...rest,
+            ...(mergedApplicationData ? { applicationData: mergedApplicationData } : {}),
+        } as any);
         return this._toResult(updated);
     }
 
@@ -283,6 +304,34 @@ export class AmbassadorService {
             mimeType: dto.mimeType,
             expiresInSeconds: 300,
         });
+    }
+
+    /** Profile photo — separate folder/endpoint from the proof document (different purpose,
+     *  different lifecycle: optional, editable anytime, never collected at signup). The
+     *  client compresses/resizes before requesting this, so the only server-side guard
+     *  needed here is rejecting non-image mime types. */
+    async getProfileImageUploadUrl(ambassadorId: string, dto: RequestUploadUrlDTO): Promise<UploadUrlResult> {
+        if (!dto.mimeType.startsWith("image/")) {
+            throw new BadRequestError("Profile photo must be an image file.");
+        }
+        const folder = `ambassador-profile/${ambassadorId}/${crypto.randomUUID()}`;
+        return this.storageProvider.getPresignedPutUrl({
+            filename: dto.filename,
+            folder,
+            mimeType: dto.mimeType,
+            expiresInSeconds: 300,
+        });
+    }
+
+    async updateProfileImage(ambassadorId: string, dto: UpdateProfileImageInput): Promise<AmbassadorResult> {
+        const ambassador = await this.ambassadorRepo.findById(ambassadorId);
+        if (!ambassador) throw new NotFoundError("Ambassador not found.");
+
+        const updated = await this.ambassadorRepo.update(ambassadorId, {
+            profileImageUrl: dto.profileImageUrl,
+            profileImageStorageKey: dto.profileImageStorageKey,
+        } as any);
+        return this._toResult(updated);
     }
 
     async updateProof(ambassadorId: string, dto: UpdateProofInput): Promise<AmbassadorResult> {
@@ -564,6 +613,7 @@ export class AmbassadorService {
             ambassadorType: a.ambassadorType,
             applicationData: a.applicationData as Record<string, unknown>,
             proofUrl: a.proofUrl,
+            profileImageUrl: a.profileImageUrl,
             createdAt: a.createdAt,
         };
     }

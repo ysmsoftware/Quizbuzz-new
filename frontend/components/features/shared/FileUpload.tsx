@@ -3,7 +3,7 @@ import { Upload, X, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AspectRatio = 'square' | 'video' | 'banner' | 'auto';
+type AspectRatio = 'square' | 'video' | 'banner' | 'card' | 'auto';
 
 interface FileUploadProps {
   label?: string;
@@ -21,6 +21,7 @@ const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
   square: 'aspect-square',
   video: 'aspect-video',
   banner: 'aspect-[3/1]',
+  card: 'aspect-[1.586/1]', // ID-1 card ratio (85.6mm x 53.98mm) — driver's license / student ID shape
   auto: '',
 };
 
