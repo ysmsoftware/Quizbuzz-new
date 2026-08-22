@@ -16,6 +16,16 @@ variable "public_subnets" {
   type        = list(string)
 }
 
+# TEMPORARY — only needed during the private→public migration below.
+# Remove this variable, the old aws_db_subnet_group.main resource, and this
+# comment once the migration apply (see note above aws_db_subnet_group.main)
+# has completed successfully and you've confirmed the instance is healthy
+# on the new public subnet group.
+variable "private_subnets" {
+  description = "OLD subnet group's subnets, kept only so the pre-migration aws_db_subnet_group.main resource has zero diff during the migration apply. Safe to delete after migration."
+  type        = list(string)
+}
+
 variable "rds_sg_id" {
   description = "Security group ID that allows PostgreSQL access from EC2"
   type        = string
@@ -28,7 +38,7 @@ variable "db_password" {
 }
 
 
-# DB SUBNET GROUP
+# DB SUBNET GROUP(S)
 # RDS requires you to tell it WHICH subnets it's allowed to use.
 #
 # CHANGED FROM PRIVATE TO PUBLIC SUBNETS — deliberate decision, not drift:
@@ -39,22 +49,49 @@ variable "db_password" {
 # aws_security_group.rds's second ingress block in networking/main.tf)
 # permanently non-functional no matter what the security group allowed,
 # since traffic from the VPS never had anywhere to arrive in the first
-# place. Moving the DB subnet group onto the public subnets (which do have
-# an IGW route) combined with publicly_accessible = true below gives RDS a
-# real, internet-routable endpoint — and now the security group is the
-# ACTUAL gatekeeper: it allows exactly two sources (the EC2 security group
-# for the main app, and the Ops VPS's single /32) and nothing else — no
-# 0.0.0.0/0 rule exists on that security group. Do not add one.
-# We give it both public subnets (in 2 AZs), which is required even for
-# single-AZ deployments. If you enable multi_az later, RDS will automatically
-# use the second subnet for the standby instance.
-
+# place. Moving to the public subnets (which do have an IGW route) combined
+# with publicly_accessible = true below gives RDS a real, internet-routable
+# endpoint — and now the security group is the ACTUAL gatekeeper: it allows
+# exactly two sources (the EC2 security group for the main app, and the Ops
+# VPS's single /32) and nothing else — no 0.0.0.0/0 rule exists on that
+# security group. Do not add one.
+#
+# WHY TWO SEPARATE aws_db_subnet_group RESOURCES INSTEAD OF EDITING ONE:
+# AWS's ModifyDBSubnetGroup API refuses to remove any subnet that a running
+# instance is currently, physically attached to ("subnet ... currently in
+# use") — subnet-group membership and the instance's actual attached subnet
+# are two different things, and you can't shrink a group out from under a
+# live instance in one step. The supported way to relocate an instance is
+# to point it at a DIFFERENT subnet group entirely (aws_db_instance.postgres
+# below now references .public, not .main) — RDS handles the ENI move as
+# part of that operation instead of rejecting it up front.
+#
+# MIGRATION STEPS (do these as two separate applies, not one):
+#   1. Apply now: creates aws_db_subnet_group.public and moves the instance
+#      onto it (db_subnet_group_name + publicly_accessible both change).
+#      aws_db_subnet_group.main (private, original) is left completely
+#      untouched in this apply so Terraform has no reason to touch it yet.
+#   2. AFTER confirming step 1 succeeded and the instance is healthy: delete
+#      the aws_db_subnet_group.main resource block below, the private_subnets
+#      variable above, and the private_subnets wiring in
+#      environments/prod/main.tf's module "database" block. By then nothing
+#      references the old group, so Terraform can cleanly destroy it.
 resource "aws_db_subnet_group" "main" {
   name        = "quizbuzz-rds-subnet-group"
+  subnet_ids  = var.private_subnets
+  description = "Subnet group for QuizBuzz RDS - private subnets in 2 AZs"
+
+  tags = { Name = "quizbuzz-rds-subnet-group" }
+}
+
+# NEW — the public-subnet group the instance is migrating to. Separate
+# resource/name from aws_db_subnet_group.main; see the migration note above.
+resource "aws_db_subnet_group" "public" {
+  name        = "quizbuzz-rds-subnet-group-public"
   subnet_ids  = var.public_subnets
   description = "Subnet group for QuizBuzz RDS - public subnets in 2 AZs (publicly_accessible, gated by security group allowlist only)"
 
-  tags = { Name = "quizbuzz-rds-subnet-group" }
+  tags = { Name = "quizbuzz-rds-subnet-group-public" }
 }
 
 
@@ -93,7 +130,7 @@ resource "aws_db_instance" "postgres" {
   # single Ops VPS IP, and never add a catch-all rule to "temporarily debug"
   # something; that single security group is now the only thing standing
   # between the internet and this database's login prompt.
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  db_subnet_group_name   = aws_db_subnet_group.public.name
   vpc_security_group_ids = [var.rds_sg_id]
   publicly_accessible    = true
 

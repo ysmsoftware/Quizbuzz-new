@@ -82,8 +82,9 @@ module "networking" {
 
 ##############################################################################
 # MODULE: DATABASE
-# Creates: RDS PostgreSQL t3.micro in PUBLIC subnets, publicly_accessible.
-# Depends on networking for: public_subnet_ids, rds_sg_id
+# Creates: RDS PostgreSQL t3.micro, migrating from private subnets to PUBLIC
+# subnets + publicly_accessible = true.
+# Depends on networking for: public_subnet_ids, private_subnet_ids, rds_sg_id
 #
 # WHY PUBLIC SUBNETS (changed from private — see database/main.tf for the
 # full writeup): the Ops dashboard VPS needs direct Postgres access from
@@ -93,14 +94,21 @@ module "networking" {
 # allowlist (EC2 SG + the Ops VPS's one /32, no 0.0.0.0/0) plus PostgreSQL's
 # own username/password auth — not on the database being unreachable.
 #
+# TEMPORARY: private_subnets is still wired through during the migration —
+# see the MIGRATION STEPS note in modules/database/main.tf above
+# aws_db_subnet_group.main. Once step 1 (this apply) is confirmed healthy,
+# remove private_subnets here and the now-unused aws_db_subnet_group.main
+# in the module.
+#
 # AFTER APPLY: Get the endpoint with `terraform output db_endpoint`
 # Then manually build DATABASE_URL and store it in SSM.
 ##############################################################################
 module "database" {
-  source         = "../../modules/database"
-  public_subnets = module.networking.public_subnet_ids
-  rds_sg_id      = module.networking.rds_sg_id
-  db_password    = local.db_password
+  source          = "../../modules/database"
+  public_subnets  = module.networking.public_subnet_ids
+  private_subnets = module.networking.private_subnet_ids
+  rds_sg_id       = module.networking.rds_sg_id
+  db_password     = local.db_password
 }
 
 ##############################################################################
