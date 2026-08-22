@@ -16,24 +16,6 @@ variable "public_subnets" {
   type        = list(string)
 }
 
-# TEMPORARY, ROUND 2 — needed again for one intermediate apply only.
-# When multi_az was flipped back to false in the same apply as narrowing
-# subnet_ids to public-only, AWS rejected the subnet-group shrink with
-# "subnet ... currently in use" — because Terraform applies the subnet
-# group change before the instance change (the instance depends on the
-# subnet group's name), so at that moment multi_az was still true and the
-# STANDBY (which AWS had placed back in this original private subnet when
-# it rebuilt itself after the failover) was still physically occupying it.
-# Fix: disable multi_az FIRST, by itself, with this subnet still present
-# in the group so nothing needs removing yet. Once that apply succeeds
-# (standby is torn down, confirm via Console/CLI), drop this variable and
-# narrow subnet_ids to var.public_subnets in a second, separate apply —
-# the same step 4b described in aws_db_subnet_group.main's comment below.
-variable "active_private_subnet_id" {
-  description = "The private subnet the standby is currently, physically occupying (same subnet as the original migration). Remove this variable once multi_az=false has been applied and the group can be narrowed safely."
-  type        = string
-}
-
 variable "rds_sg_id" {
   description = "Security group ID that allows PostgreSQL access from EC2"
   type        = string
@@ -63,30 +45,30 @@ variable "db_password" {
 # VPS's single /32) and nothing else — no 0.0.0.0/0 rule exists on that
 # security group. Do not add one.
 #
-# MIGRATION STATUS: the primary already failed over onto a public subnet
-# and that part is done and confirmed. What's left is pure cleanup —
-# getting multi_az back to false and this group narrowed to public-only.
-# That cleanup itself turned out to need TWO separate applies, not one:
-#
-#   4a (THIS APPLY): disable multi_az only. Keep active_private_subnet_id
-#      in subnet_ids for now. Reason: Terraform updates this subnet group
-#      before the instance (the instance depends on this group's name),
-#      so if subnet_ids were narrowed in the SAME apply as multi_az being
-#      flipped, AWS would still see multi_az=true and reject the shrink
-#      because the standby (which AWS re-created in this same private
-#      subnet after the failover) is still physically sitting there —
-#      this is exactly the error that happened when both changes were
-#      attempted together. Disabling multi_az first tears the standby
-#      down and frees the subnet.
-#   4b (NEXT APPLY, separate): once 4a succeeds and you've confirmed via
-#      Console/CLI that there's no secondary AZ / no standby left, remove
-#      variable "active_private_subnet_id" from this file and from the
-#      root module's module "database" block, and change subnet_ids back
-#      to just var.public_subnets.
+# MIGRATION COMPLETE: the primary failed over onto a public subnet,
+# multi_az was disabled again once the standby was torn down (confirmed
+# via `aws rds describe-db-instances`: MultiAZ=false, SecondaryAZ=null),
+# and the group below is now narrowed to public subnets only — nothing
+# is left occupying the old private subnet. Historical note on how this
+# happened: AWS blocks both naive same-VPC relocation approaches
+# (shrinking a subnet group out from under a live instance's attached ENI
+# fails with "subnet ... currently in use"; re-pointing an instance at a
+# different subnet group in the same VPC via ModifyDBInstance fails with
+# "InvalidVPCNetworkStateFault", which AWS reserves for cross-VPC moves
+# only). The supported path was a temporary Multi-AZ standby + forced
+# failover: add the public subnets alongside the one private subnet the
+# instance was attached to, enable multi_az (AWS provisions the standby
+# in a public subnet since that was the only option in the other AZ),
+# `aws rds reboot-db-instance --force-failover` to promote it, then
+# disable multi_az and narrow subnet_ids to public-only — in two separate
+# applies, since disabling multi_az and narrowing subnet_ids in the same
+# apply hit the same "currently in use" error (the rebuilt standby had
+# landed back in the original private subnet, and Terraform updates the
+# subnet group before the instance).
 resource "aws_db_subnet_group" "main" {
   name        = "quizbuzz-rds-subnet-group"
-  subnet_ids  = concat(var.public_subnets, [var.active_private_subnet_id])
-  description = "Subnet group for QuizBuzz RDS - public subnets + standby's private subnet (cleanup step 4a, multi_az disable in progress)"
+  subnet_ids  = var.public_subnets
+  description = "Subnet group for QuizBuzz RDS - public subnets only"
 
   tags = { Name = "quizbuzz-rds-subnet-group" }
 }
@@ -141,10 +123,11 @@ resource "aws_db_instance" "postgres" {
   performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
-  # Cleanup step 4a (see aws_db_subnet_group.main's comment above): disable
-  # multi_az now, by itself, to tear down the standby before the subnet
-  # group is narrowed in a follow-up apply (step 4b). Re-enable this in
-  # the future only as a deliberate HA decision, not as part of a migration.
+  # Multi-AZ was enabled temporarily during the private-to-public subnet
+  # relocation (see aws_db_subnet_group.main's comment above) and has been
+  # disabled again now that the migration is fully complete. Re-enable
+  # this in the future only as a deliberate HA decision, not as part of
+  # a migration.
   multi_az = false
 
   deletion_protection = true
