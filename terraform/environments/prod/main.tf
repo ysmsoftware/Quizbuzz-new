@@ -21,7 +21,7 @@
 #   networking + storage → admin_instance (needs subnet, SG, S3 bucket)
 #
 #   Terraform figures out this dependency order automatically because
-#   database uses module.networking.private_subnet_ids — Terraform knows
+#   database uses module.networking.public_subnet_ids — Terraform knows
 #   it must create networking first.
 #
 # WHAT HAPPENS WHEN YOU RUN `terraform apply`:
@@ -82,17 +82,25 @@ module "networking" {
 
 ##############################################################################
 # MODULE: DATABASE
-# Creates: RDS PostgreSQL t3.micro in private subnets
-# Depends on networking for: private_subnet_ids, rds_sg_id
+# Creates: RDS PostgreSQL t3.micro in PUBLIC subnets, publicly_accessible.
+# Depends on networking for: public_subnet_ids, rds_sg_id
+#
+# WHY PUBLIC SUBNETS (changed from private — see database/main.tf for the
+# full writeup): the Ops dashboard VPS needs direct Postgres access from
+# outside the VPC. RDS in a private subnet has no route reachable from the
+# internet at all, so no security-group rule could ever make that work.
+# Security now rests entirely on aws_security_group.rds being a narrow
+# allowlist (EC2 SG + the Ops VPS's one /32, no 0.0.0.0/0) plus PostgreSQL's
+# own username/password auth — not on the database being unreachable.
 #
 # AFTER APPLY: Get the endpoint with `terraform output db_endpoint`
 # Then manually build DATABASE_URL and store it in SSM.
 ##############################################################################
 module "database" {
-  source          = "../../modules/database"
-  private_subnets = module.networking.private_subnet_ids
-  rds_sg_id       = module.networking.rds_sg_id
-  db_password     = local.db_password
+  source         = "../../modules/database"
+  public_subnets = module.networking.public_subnet_ids
+  rds_sg_id      = module.networking.rds_sg_id
+  db_password    = local.db_password
 }
 
 ##############################################################################

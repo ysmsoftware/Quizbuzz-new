@@ -11,8 +11,8 @@
 #   - Add read replica: add a second aws_db_instance with replicate_source_db
 #   - Add PgBouncer: add a Docker container on the admin EC2 instance
 
-variable "private_subnets" {
-  description = "List of private subnet IDs for the RDS subnet group"
+variable "public_subnets" {
+  description = "List of public subnet IDs for the RDS subnet group"
   type        = list(string)
 }
 
@@ -30,14 +30,29 @@ variable "db_password" {
 
 # DB SUBNET GROUP
 # RDS requires you to tell it WHICH subnets it's allowed to use.
-# We give it both private subnets (in 2 AZs), which is required even for
+#
+# CHANGED FROM PRIVATE TO PUBLIC SUBNETS — deliberate decision, not drift:
+# RDS previously lived in the isolated private-tier subnets (no route to an
+# Internet Gateway), which meant it had literally no network path reachable
+# from outside the VPC — not a firewall block, an absence of a route at all.
+# That made the Ops dashboard VPS's direct Postgres access (see
+# aws_security_group.rds's second ingress block in networking/main.tf)
+# permanently non-functional no matter what the security group allowed,
+# since traffic from the VPS never had anywhere to arrive in the first
+# place. Moving the DB subnet group onto the public subnets (which do have
+# an IGW route) combined with publicly_accessible = true below gives RDS a
+# real, internet-routable endpoint — and now the security group is the
+# ACTUAL gatekeeper: it allows exactly two sources (the EC2 security group
+# for the main app, and the Ops VPS's single /32) and nothing else — no
+# 0.0.0.0/0 rule exists on that security group. Do not add one.
+# We give it both public subnets (in 2 AZs), which is required even for
 # single-AZ deployments. If you enable multi_az later, RDS will automatically
 # use the second subnet for the standby instance.
 
 resource "aws_db_subnet_group" "main" {
   name        = "quizbuzz-rds-subnet-group"
-  subnet_ids  = var.private_subnets
-  description = "Subnet group for QuizBuzz RDS - private subnets in 2 AZs"
+  subnet_ids  = var.public_subnets
+  description = "Subnet group for QuizBuzz RDS - public subnets in 2 AZs (publicly_accessible, gated by security group allowlist only)"
 
   tags = { Name = "quizbuzz-rds-subnet-group" }
 }
@@ -66,10 +81,21 @@ resource "aws_db_instance" "postgres" {
   username = "quizbuzz_admin"
   password = var.db_password
 
-  # Network placement — in private subnets, behind the RDS security group
+  # Network placement — public subnets, security-group-gated
+  #
+  # publicly_accessible = true is intentional: RDS now has a real internet-
+  # routable endpoint, but the security group (var.rds_sg_id) is a strict
+  # allowlist of exactly two sources — the EC2 SG (main app) and the Ops
+  # VPS's /32 — with no 0.0.0.0/0 rule anywhere on it. Reaching the network
+  # layer does not bypass authentication: PostgreSQL still requires a valid
+  # username/password for every connection regardless of where it comes
+  # from. Keep the security group narrow — do not widen its CIDR beyond the
+  # single Ops VPS IP, and never add a catch-all rule to "temporarily debug"
+  # something; that single security group is now the only thing standing
+  # between the internet and this database's login prompt.
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [var.rds_sg_id]
-  publicly_accessible    = false 
+  publicly_accessible    = true
 
   # Automated backups
   backup_retention_period = 7

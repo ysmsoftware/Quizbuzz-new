@@ -68,18 +68,24 @@ resource "aws_subnet" "public" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PRIVATE SUBNETS (2 AZs) — DATABASE / ISOLATED TIER
-# For resources that must NEVER be directly reachable from the internet AND
-# must never have outbound internet access either: RDS PostgreSQL.
-# RDS subnet groups require at least 2 AZs even for single-AZ deployments.
+# PRIVATE SUBNETS (2 AZs) — ISOLATED TIER (no internet route, in or out)
 #
-# ISOLATION GUARANTEE: these subnets are associated ONLY with
-# aws_route_table.private below, which has NO internet route — not now,
-# not during live mode, not ever. The live_contest module's NAT Gateway
-# route is deliberately added to a SEPARATE set of subnets (quiz_private,
-# below) so that RDS never gains outbound internet capability even
-# temporarily during a live contest. See live_contest/nat.tf for the
-# full reasoning.
+# UPDATED: RDS used to live here and no longer does. It was moved to the
+# PUBLIC subnets (above) + made publicly_accessible so the Ops dashboard
+# VPS can reach it directly — see terraform/modules/database/main.tf for
+# the full reasoning (a subnet with no internet route has no path reachable
+# from outside the VPC at all, so no security-group rule could ever have
+# made that work). Security for the now-public RDS endpoint rests on
+# aws_security_group.rds being a strict allowlist (EC2 SG + the Ops VPS's
+# one /32, never 0.0.0.0/0).
+#
+# This tier is kept for any future resource that genuinely needs zero
+# internet exposure in either direction. These subnets are associated ONLY
+# with aws_route_table.private below, which has NO internet route — not
+# now, not during live mode, not ever. The live_contest module's NAT
+# Gateway route is deliberately added to a SEPARATE set of subnets
+# (quiz_private, below) so nothing placed here ever gains outbound
+# internet capability even temporarily during a live contest.
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_subnet" "private" {
   count             = 2
@@ -248,8 +254,15 @@ resource "aws_security_group" "ec2" {
 
 # RDS SG — for PostgreSQL
 # Reachable from the EC2 security group (main app) and the Ops dashboard
-# VPS (cross-DB reads/writes for the ops backend). Nobody else on the
-# internet can reach the database directly — ever.
+# VPS (cross-DB reads/writes for the ops backend).
+#
+# RDS is now in the PUBLIC subnets and publicly_accessible = true (see
+# modules/database/main.tf), so — unlike before — this security group is
+# the ONLY thing standing between the internet and the database's login
+# prompt. It allows exactly these two sources and must never gain a
+# 0.0.0.0/0 (or otherwise broad) rule, even "temporarily." PostgreSQL's own
+# username/password auth is a second, independent layer behind this one,
+# but don't rely on that alone — keep this allowlist narrow.
 resource "aws_security_group" "rds" {
   name = "quizbuzz-rds-sg"
   # NOTE: do not edit this description. AWS treats an aws_security_group's
