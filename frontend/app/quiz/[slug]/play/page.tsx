@@ -49,6 +49,7 @@ export default function QuizPlayPage() {
     const authContestId = useAuthStore((s) => s.contestId) || "";
 
     const videoRef = useRef<HTMLVideoElement>(null);
+    const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
     const isFirstRender = useRef(true);
     const quizInitialisedRef = useRef(false);
 
@@ -409,6 +410,7 @@ export default function QuizPlayPage() {
             <ProctoringManager
                 emitProctoringWarning={emitProctoringWarning}
                 videoRef={videoRef}
+                overlayCanvasRef={overlayCanvasRef}
                 socket={socket}
                 contestId={contest?.id || slug}
                 participantId={participantId}
@@ -426,17 +428,17 @@ export default function QuizPlayPage() {
             <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
-            <header className="flex-none h-16 flex items-center justify-between px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
+            <header className="flex-none h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
                 {/* Contest title */}
-                <div className="min-w-0 flex-1 mr-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+                <div className="min-w-0 flex-1 mr-2 sm:mr-4 flex items-center gap-2 sm:gap-3">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
                         <Shield className="w-4 h-4 text-primary-foreground" />
                     </div>
                     <div>
-                        <p className="text-[10px] text-primary uppercase tracking-widest font-black leading-none mb-1">
+                        <p className="hidden sm:block text-[10px] text-primary uppercase tracking-widest font-black leading-none mb-1">
                             Secure Portal
                         </p>
-                        <p className="text-sm text-foreground font-bold truncate max-w-[150px] sm:max-w-xs leading-none">
+                        <p className="text-sm text-foreground font-bold truncate max-w-[120px] sm:max-w-[150px] md:max-w-xs leading-none">
                             {contest?.title || "Quiz"}
                         </p>
                     </div>
@@ -444,7 +446,7 @@ export default function QuizPlayPage() {
 
                 {/* Timer */}
                 <div className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 sm:px-4 rounded-xl border font-mono tabular-nums transition-all duration-300 flex-none shadow-sm",
+                    "flex items-center gap-2 px-2.5 py-1.5 sm:px-4 rounded-xl border font-mono tabular-nums transition-all duration-300 flex-none shadow-sm",
                     timeRemaining < 300
                         ? "bg-destructive/10 border-destructive/30 text-destructive"
                         : "bg-primary/5 border-primary/20 text-primary",
@@ -456,18 +458,19 @@ export default function QuizPlayPage() {
                     <span className="text-sm sm:text-base font-black tracking-tight">{formatTime(timeRemaining)}</span>
                 </div>
 
-                {/* Submit */}
+                {/* Submit — icon-only on the smallest screens so it never fights the timer for room */}
                 <Button
-                    className="ml-3 rounded-xl font-bold px-4 h-9 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary/20 shadow-lg shadow-primary/20 flex-none text-xs sm:text-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-primary/30"
+                    className="ml-2 sm:ml-3 rounded-xl font-bold w-9 h-9 px-0 sm:w-auto sm:px-4 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary/20 shadow-lg shadow-primary/20 flex-none text-xs sm:text-sm cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-primary/30"
                     onClick={() => setShowSubmitModal(true)}
+                    title="Submit"
                 >
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    <span>Submit</span>
+                    <Send className="h-3.5 w-3.5 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Submit</span>
                 </Button>
             </header>
 
             {/* ── Progress bar + question counter ─────────────────────────────── */}
-            <div className="flex-none px-6 md:px-8 pt-4 pb-2 bg-transparent z-10">
+            <div className="flex-none px-4 sm:px-6 md:px-8 pt-3 pb-2 bg-transparent z-10">
                 <div className="max-w-2xl mx-auto">
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground font-extrabold uppercase tracking-widest mb-1.5">
                         <span>Question {currentIndex + 1} of {questions.length}</span>
@@ -485,85 +488,118 @@ export default function QuizPlayPage() {
             </div>
 
             {/* ── Main container ─────────────────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-transparent z-10">
+            {/* Below `lg`, only the option list scrolls — header, progress, camera
+                and question stay pinned so the camera can never be scrolled out of
+                view and the question never fights the page for space. At `lg`+ this
+                reverts to one normal scrolling page (unchanged desktop behaviour). */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-transparent z-10">
                 <WidgetErrorBoundary name="Question Player">
-                    <main className="flex-1 overflow-y-auto px-4 md:px-8 py-4">
-                        <div className="max-w-2xl mx-auto flex flex-col gap-6 relative">
-                            
-                            {/* Widescreen Proctoring Camera Feed — only shown when proctoring is enabled */}
-                            {proctoringEnabled && (
-                                <div className="lg:fixed lg:top-24 lg:right-8 lg:w-56 lg:h-36 lg:z-30 w-full relative aspect-[21/9] sm:aspect-[24/9] lg:aspect-video rounded-2xl overflow-hidden bg-muted/60 border border-border shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-primary/40 shrink-0">
-                                    <video
-                                        ref={videoRef}
-                                        autoPlay playsInline muted
-                                        className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
-                                    />
+                    {/* `min-h-0` overrides the flex default of `min-height: auto`, which
+                        would otherwise let this column grow to fit the options list
+                        instead of clipping it — the classic reason a nested
+                        `flex-1 overflow-y-auto` silently refuses to scroll. */}
+                    <main className="flex-1 min-h-0 flex flex-col overflow-hidden lg:overflow-y-auto px-4 md:px-8 pt-3 pb-2 lg:py-4">
 
-                                    {/* Pulsing Scanline overlay using Framer Motion */}
+                        {/* Question zone — fixed on mobile, normal flow on desktop */}
+                        <div className="flex-none max-w-2xl mx-auto w-full relative">
+                            <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-4 sm:p-5 md:p-6 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+
+                                {/* Proctoring Camera Feed — floats beside the question on mobile
+                                    (question text wraps around it, then reclaims full width once
+                                    it clears the camera's height), fixed to the viewport corner on
+                                    desktop. Rendered outside the AnimatePresence below so it never
+                                    remounts — and never loses its stream — between questions. */}
+                                {proctoringEnabled && (
+                                    <div className="float-right lg:float-none ml-3 mb-2 lg:ml-0 lg:mb-0 w-[84px] h-[60px] lg:w-56 lg:h-36 relative lg:fixed lg:top-24 lg:right-8 lg:z-30 rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-primary/40 shrink-0 z-20">
+                                        <video
+                                            ref={videoRef}
+                                            autoPlay playsInline muted
+                                            className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
+                                        />
+
+                                        {/* Live face-tracking box — drawn onto this canvas by the
+                                            existing detection loop every ~2s (see useFaceDetection). */}
+                                        <canvas
+                                            ref={overlayCanvasRef}
+                                            className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                                        />
+
+                                        {/* Pulsing Scanline overlay using Framer Motion */}
+                                        <motion.div
+                                            className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
+                                            animate={{ top: ["0%", "100%", "0%"] }}
+                                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                        />
+
+                                        {/* HUD corner markings — desktop only, too small to read at PIP size */}
+                                        <div className="hidden lg:flex absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg items-center justify-center">
+                                            <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
+                                            <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
+                                            <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
+                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
+                                        </div>
+
+                                        {/* Top overlays */}
+                                        <div className="absolute top-1 left-1 lg:top-2 lg:left-2 flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[7px] lg:text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                                            <span>REC</span>
+                                        </div>
+
+                                        <div className="hidden lg:flex absolute top-2 right-2 items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
+                                            <span>SECURE LINK</span>
+                                        </div>
+
+                                        {/* Ambient HUD decorative text */}
+                                        <div className="hidden lg:block absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
+                                            CAM_01 // ACTIVE_FEED
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Question — opacity-only transition (no transform) so it never
+                                    creates a containing block that would trap the camera's `lg:fixed`
+                                    positioning inside this card. */}
+                                <AnimatePresence mode="wait">
                                     <motion.div
-                                        className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
-                                        animate={{ top: ["0%", "100%", "0%"] }}
-                                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                                    />
-
-                                    {/* HUD corner markings */}
-                                    <div className="absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg flex items-center justify-center">
-                                        {/* Corner highlights */}
-                                        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
-                                        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
-                                        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
-                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
-                                    </div>
-
-                                    {/* Top overlays */}
-                                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
-                                        <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                                        <span>REC</span>
-                                    </div>
-
-                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
-                                        <span>SECURE LINK</span>
-                                    </div>
-
-                                    {/* Ambient HUD decorative text */}
-                                    <div className="absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
-                                        CAM_01 // ACTIVE_FEED
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Animated Question & Option Cards */}
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={currentIndex}
-                                    initial={{ opacity: 0, y: 15 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -15 }}
-                                    transition={{ duration: 0.22, ease: "easeOut" }}
-                                    className="flex flex-col gap-6"
-                                >
-                                    <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-5 md:p-6 relative overflow-hidden">
-                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+                                        key={currentIndex}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.2, ease: "easeOut" }}
+                                    >
                                         <QuestionCard
                                             question={currentQuestion}
                                             questionNumber={currentIndex + 1}
                                             isFlagged={flagged.includes(currentIndex)}
                                             onToggleFlag={() => toggleFlag(currentIndex)}
                                         />
-                                    </div>
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
+                        </div>
 
-                                    <div className="grid gap-3">
-                                        {currentQuestion.options.map((option, i) => (
-                                            <OptionButton
-                                                key={option.index}
-                                                option={option}
-                                                optionLabel={OPTION_LABELS[i] ?? String(i)}
-                                                isSelected={answers[currentIndex] === option.index}
-                                                onClick={() => handleAnswer(currentIndex, option.index)}
-                                            />
-                                        ))}
-                                    </div>
+                        {/* Options — the only region that scrolls on mobile */}
+                        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:min-h-fit lg:flex-none max-w-2xl mx-auto w-full mt-4 lg:mt-6">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={currentIndex}
+                                    initial={{ opacity: 0, y: 15 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -15 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="grid gap-3 pb-2"
+                                >
+                                    {currentQuestion.options.map((option, i) => (
+                                        <OptionButton
+                                            key={option.index}
+                                            option={option}
+                                            optionLabel={OPTION_LABELS[i] ?? String(i)}
+                                            isSelected={answers[currentIndex] === option.index}
+                                            onClick={() => handleAnswer(currentIndex, option.index)}
+                                        />
+                                    ))}
                                 </motion.div>
                             </AnimatePresence>
                         </div>

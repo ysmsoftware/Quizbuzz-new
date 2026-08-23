@@ -11,21 +11,21 @@ import { generateQRCode, downloadQRCode, getShareableLinks } from '@/lib/utils/c
 
 interface PublicLinkCardProps {
   contestId: string;
-  orgSlug: string;
   contestSlug: string;
   contestTitle: string;
 }
 
 export function PublicLinkCard({
   contestId,
-  orgSlug,
   contestSlug,
   contestTitle
 }: PublicLinkCardProps) {
   const qrRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
 
-  const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL}/${orgSlug}/${contestSlug}`;
+  // The public contest details + registration page is /contests/:slug
+  // (see components/contests/contest-details.tsx) — not org-scoped.
+  const publicUrl = `${process.env.NEXT_PUBLIC_APP_URL}/contests/${contestSlug}`;
 
   const handleCopyUrl = useCallback(async () => {
     try {

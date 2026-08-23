@@ -101,6 +101,7 @@ export function adaptServerContest(server: ServerContest): Contest {
     orgId: '',
     orgSlug: '',
     description: server.description || '',
+    details: server.details || '',
     shortDescription: server.description?.slice(0, 120) || '',
     topic: server.topics?.[0] || 'General',
     tags: server.topics || [],
@@ -127,6 +128,8 @@ export function adaptServerContest(server: ServerContest): Contest {
     totalQuestions: _count.questions || 0,
     totalMarks: (_count.questions || 0) * 2, // arbitrary default
     passingMarks: server.cutoffScore ? Math.round((server.cutoffScore / 100) * ((_count.questions || 0) * 2)) : 0,
+    cutoffScore: server.cutoffScore,
+    showResultsAfter: server.showResultsAfter,
     negativeMarking: false,
     negativeMarkValue: 0,
     shuffleQuestions: server.shuffleQuestions,
@@ -140,10 +143,17 @@ export function adaptServerContest(server: ServerContest): Contest {
     webcamRequired: false,
     tabSwitchLimit: 3,
 
-    // paymentConfig.amount is stored in paise (smallest unit) — divide by 100 for rupees
-    fee: server.paymentConfig?.amount ? server.paymentConfig.amount / 100 : 0,
+    paymentEnabled: server.paymentEnabled,
+    paymentConfig: server.paymentConfig,
+    // Contest.paymentConfig.amount is stored in rupees, not paise — unlike the
+    // separate Payment.amount transaction record, which genuinely is paise for
+    // Razorpay. The backend's own order creation confirms this (payment.service.ts
+    // does `paymentConfig.amount * 100` right before calling Razorpay), as does the
+    // admin create form, which is labelled "Fee Amount (₹)" and sends the raw value.
+    // No conversion here — dividing by 100 was turning a ₹1 fee into ₹0.01.
+    fee: server.paymentConfig?.amount ?? 0,
     currency: server.paymentConfig?.currency || 'INR',
-    registrationFee: server.paymentConfig?.amount ? server.paymentConfig.amount / 100 : 0,
+    registrationFee: server.paymentConfig?.amount ?? 0,
     maxParticipants: server.maxParticipants || 0,
     currentParticipants: _count.participants || 0,
 

@@ -23,7 +23,7 @@ export function CopyIconButton({ text, label = 'Copied', className }: { text: st
       onClick={copy}
       aria-label="Copy"
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:bg-muted transition-colors shrink-0',
+        'flex h-10 w-10 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:bg-muted transition-colors shrink-0',
         className
       )}
     >

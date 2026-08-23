@@ -22,6 +22,7 @@ export interface Contest {
     orgId: string;
     orgSlug: string;
     description: string;
+    details?: string;
     shortDescription: string;
     topic: string;
     tags: string[];
@@ -62,6 +63,14 @@ export interface Contest {
     cutoffScore?: number;
     showResultsAfter?: number;
     paymentEnabled?: boolean;
+    /** Raw config, in rupees (see ServerContest.paymentConfig) — `fee`/`registrationFee`
+     *  below are convenience copies of `paymentConfig.amount` for callers that don't
+     *  need currency/description. */
+    paymentConfig?: {
+        amount: number;
+        currency: string;
+        description?: string;
+    };
 
     // Registration & Fees
     fee: number;

@@ -64,7 +64,7 @@ export function ApplicationDetailsCard({ applicationFields, applicationData, onS
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline p-2 -m-2"
             >
               <Pencil className="h-3 w-3" />
               Edit

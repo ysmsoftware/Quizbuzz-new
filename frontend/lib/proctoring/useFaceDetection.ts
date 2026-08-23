@@ -9,9 +9,13 @@ interface UseFaceDetectionProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   active: boolean;
   wsEmit?: (event: string, data: Record<string, unknown>) => void;
+  // Optional canvas to draw live face-tracking boxes onto, sized to the
+  // video's intrinsic resolution so it overlays 1:1 regardless of the CSS
+  // box the video is displayed at (see drawBoundingBoxes callers below).
+  overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
-export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionProps) {
+export function useFaceDetection({ videoRef, active, wsEmit, overlayCanvasRef }: UseFaceDetectionProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const engineRef = useRef<FaceDetectionEngine | null>(null);
   const timeoutRef = useRef<number | null>(null);
@@ -113,13 +117,21 @@ export function useFaceDetection({ videoRef, active, wsEmit }: UseFaceDetectionP
     try {
       const result = await engineRef.current.detect(videoRef.current);
       handleResult(result);
+
+      const canvas = overlayCanvasRef?.current;
+      const video = videoRef.current;
+      if (canvas && video.videoWidth && video.videoHeight) {
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+        engineRef.current.drawBoundingBoxes(canvas, result, video.videoWidth, video.videoHeight);
+      }
     } catch (error) {
       console.error('[QuizPro] Detection error:', error);
     }
 
     // Schedule next detection (every 2 seconds)
     timeoutRef.current = window.setTimeout(runDetection, 2000);
-  }, [videoRef, handleResult]);
+  }, [videoRef, handleResult, overlayCanvasRef]);
 
   // Start/stop detection based on active + initialized
   useEffect(() => {

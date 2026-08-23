@@ -38,8 +38,38 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
   }
 
   return (
-    <Card className="border-border/50 overflow-x-auto">
-      <CardContent className="px-0">
+    <Card className="border-border/50">
+      {/* Below `lg`: stacked rows — a 4-column table has no room to breathe on a phone.
+          At `lg`+: the original rate table. */}
+      <CardContent className="px-5 py-1 lg:hidden divide-y divide-border">
+        {milestoneTiers.map((tier, i) => {
+          const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
+          return (
+            <div key={i} className="flex items-center justify-between gap-3 py-3">
+              <div>
+                <p className="flex items-center gap-2 text-[12.5px] font-semibold text-foreground">
+                  {tier.label ?? `Tier ${i + 1}`}
+                  {isCurrent && (
+                    <span className="text-[9px] font-bold uppercase tracking-wide bg-primary text-primary-foreground rounded-full px-2 py-0.5">
+                      current
+                    </span>
+                  )}
+                </p>
+                <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{tierRange(tier)} registrations</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[12.5px] font-semibold text-foreground tabular-nums">
+                  <Rupees amount={tier.amountPerRegistration} />
+                  /reg
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{tier.goodie ? tier.goodie.label : '—'}</p>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+
+      <CardContent className="hidden lg:block px-0 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

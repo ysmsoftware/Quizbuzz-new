@@ -176,6 +176,12 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
   const spotsLeft = maxParticipants ? maxParticipants - participantCount : null;
   const spotsPercentage = maxParticipants ? (participantCount / maxParticipants) * 100 : 0;
   const isRegistrationOpen = phase === 'registration_open';
+  // Registration has closed but the contest hasn't finished — either the deadline
+  // passed while still waiting to start ('registration_closed') or it's actively
+  // running ('live'). Someone who already registered can still get into the quiz
+  // from here via the join/check-in flow, instead of hitting a dead-end disabled
+  // button. Once the contest reaches 'ended', joining no longer makes sense.
+  const canJoinQuiz = phase === 'registration_closed' || phase === 'live';
   const fee = contest.paymentConfig?.amount ?? 0;
   const topic = contest.topics?.[0] ?? '';
   const banner = publicPhaseBanner[phase];
@@ -460,13 +466,20 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     </Link>
+                  ) : canJoinQuiz ? (
+                    // Already-registered participants had no way back into the quiz from
+                    // this page once registration closed — just a permanently-disabled
+                    // button. Route them to the join/check-in flow instead, which itself
+                    // gates on being a real registrant.
+                    <Link href={`/quiz/${contest.slug}/join`} className="block">
+                      <Button size="lg" className="w-full gap-2">
+                        {phase === 'live' ? 'Join Quiz Now' : 'Join Quiz'}
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
                   ) : (
                     <Button size="lg" className="w-full" disabled>
-                      {phase === 'ended'
-                        ? 'Contest Ended'
-                        : phase === 'live'
-                          ? 'Contest In Progress'
-                          : 'Registration Closed'}
+                      Contest Ended
                     </Button>
                   )}
 

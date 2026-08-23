@@ -82,7 +82,7 @@ export function EditContestDetailsModal({
       setFormData({
         title: contest.title || '',
         description: contest.description || '',
-        details: (contest as any).details || '',
+        details: contest.details || '',
         topics: contest.tags || [],
         rules: contest.rules || [],
         registrationDeadline: formatToLocalDatetime(contest.registrationDeadline),

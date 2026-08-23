@@ -401,7 +401,7 @@ export default function ContestOverviewPage() {
                                 </div>
 
                                 {/* Payment info — only shown when contest is paid */}
-                                {(contest as any).paymentEnabled && (
+                                {contest.paymentEnabled && (
                                     <>
                                         <Separator />
                                         <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
@@ -410,7 +410,7 @@ export default function ContestOverviewPage() {
                                                     Registration Fee
                                                 </label>
                                                 <p className="text-2xl font-black text-foreground">
-                                                    ₹{(contest as any).paymentConfig?.amount ?? contest.fee}
+                                                    ₹{contest.paymentConfig?.amount ?? contest.fee}
                                                 </p>
                                             </div>
                                             <div className="space-y-1">
@@ -422,13 +422,13 @@ export default function ContestOverviewPage() {
                                                     <span>Razorpay</span>
                                                 </div>
                                             </div>
-                                            {(contest as any).paymentConfig?.description && (
+                                            {contest.paymentConfig?.description && (
                                                 <div className="space-y-1">
                                                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
                                                         Fee Description
                                                     </label>
                                                     <p className="text-sm text-muted-foreground">
-                                                        {(contest as any).paymentConfig.description}
+                                                        {contest.paymentConfig.description}
                                                     </p>
                                                 </div>
                                             )}

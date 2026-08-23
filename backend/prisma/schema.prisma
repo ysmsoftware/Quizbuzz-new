@@ -429,7 +429,7 @@ model Contest {
 model PaymentConfig {
   id          String  @id @default(uuid())
   contestId   String  @unique
-  amount      Int // Store in smallest currency unit (paise for INR)
+  amount      Int // Rupees (NOT paise) — payment.service.ts converts to paise when creating the Razorpay order. Unlike Payment.amount below, which genuinely is paise.
   currency    String  @default("INR")
   description String? @db.Text
 

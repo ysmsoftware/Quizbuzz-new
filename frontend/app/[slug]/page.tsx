@@ -1,5 +1,21 @@
 'use client';
 
+// ⚠️ DEAD CODE — this route is not reachable from anywhere in the product.
+//
+// This is a root-level catch-all (`app/[slug]/page.tsx` matches bare
+// `quizbuzz.com/<anything>` URLs). Audited 2026-08-23: zero `<Link>`,
+// `router.push`, `next.config` redirect, middleware (there isn't one), or
+// backend-generated email/WhatsApp/SMS link anywhere in the codebase points
+// here. The real, live public contest details + registration page is
+// `frontend/app/contests/[slug]/page.tsx` (renders `components/contests/
+// contest-details.tsx`), which is what every link in the app actually uses.
+//
+// Do not extend or "fix" this file — it will not be reached by a real user.
+// If you're looking for where to add a contest-details-page feature, it goes
+// in contest-details.tsx instead. This file is left in place only so it can
+// be reviewed and deleted manually; do not delete it as a side effect of an
+// unrelated change.
+
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {

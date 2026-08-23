@@ -22,9 +22,15 @@ export function QuestionCard({
   onToggleFlag
 }: QuestionCardProps) {
   return (
-    <div className="space-y-4">
-      {/* Header Row */}
-      <div className="flex items-center justify-between border-b border-border/60 pb-4">
+    <div className="space-y-3 lg:space-y-4">
+      {/* Compact mobile label — plain block, not flex, so a floated camera
+          preview can still wrap the question text below it. */}
+      <div className="lg:hidden text-xs font-black tracking-widest text-primary font-mono">
+        Q{questionNumber}
+      </div>
+
+      {/* Header Row — full detail, desktop only */}
+      <div className="hidden lg:flex items-center justify-between border-b border-border/60 pb-4">
         <div className="flex items-center gap-3">
           <span className="text-xs uppercase tracking-widest font-black text-primary">
             Question {questionNumber}
@@ -53,7 +59,7 @@ export function QuestionCard({
 
       {/* Question Text */}
       <div
-        className="text-foreground text-lg sm:text-xl font-medium leading-relaxed font-sans"
+        className="text-foreground text-[19px] leading-snug font-bold lg:text-xl lg:font-medium lg:leading-relaxed font-sans"
         dangerouslySetInnerHTML={{ __html: question.text }}
       />
 

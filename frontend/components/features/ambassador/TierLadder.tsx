@@ -1,7 +1,8 @@
 'use client';
 
-import { Check, Lock } from 'lucide-react';
+import { Check, Lock, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { Rupees } from './Rupees';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
 
@@ -38,7 +39,62 @@ export function TierLadder({ milestoneTiers, currentTier, nextTier, registration
           </p>
         </div>
 
-        <div className="relative pt-1">
+        {/* Below `lg`: a horizontal scroll-snap row of full-size nodes — a tier count past
+            ~4 has no room to compress into on a phone without the circles overlapping, so
+            this scrolls instead of shrinking. The current node shows an icon + "You're
+            here" rather than the raw registration count (already shown above), which can
+            run to 3-4 digits and doesn't fit a 44px circle. */}
+        <div className="lg:hidden -mx-1 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
+          <div className="flex gap-5 px-1 pt-1">
+            {milestoneTiers.map((tier, i) => {
+              const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
+              const isReached = registrationCount >= tier.minRegistrations;
+              const isFirst = i === 0;
+              const isLast = i === milestoneTiers.length - 1;
+              return (
+                <div
+                  key={i}
+                  className="relative flex w-16 shrink-0 flex-col items-center gap-2 text-center"
+                  style={{ scrollSnapAlign: 'center' }}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute top-[21px] -z-10 h-[3px] rounded-full',
+                      isReached || isCurrent ? 'bg-gradient-to-r from-chart-1 to-chart-2' : 'bg-secondary'
+                    )}
+                    style={{
+                      left: isFirst ? '50%' : '-10px',
+                      width: isFirst || isLast ? 'calc(50% + 10px)' : 'calc(100% + 20px)',
+                    }}
+                  />
+                  <div
+                    className={cn(
+                      'flex h-11 w-11 items-center justify-center rounded-full border-[3px] bg-card font-bold text-sm transition-all',
+                      isCurrent
+                        ? 'border-primary text-primary ring-[5px] ring-primary/15'
+                        : isReached
+                          ? 'border-chart-1 bg-chart-1 text-white'
+                          : 'border-border text-muted-foreground'
+                    )}
+                  >
+                    {isCurrent ? <Star className="h-4 w-4 fill-current" /> : isReached ? <Check className="h-4 w-4" /> : <Lock className="h-3.5 w-3.5" />}
+                  </div>
+                  <div>
+                    <p className={`text-xs font-bold ${isCurrent ? 'text-primary' : 'text-foreground'}`}>{tier.label ?? `Level ${i + 1}`}</p>
+                    <p className="text-[10.5px] text-muted-foreground tabular-nums">
+                      {tier.maxRegistrations ? `${tier.minRegistrations}–${tier.maxRegistrations}` : `${tier.minRegistrations}+`}
+                    </p>
+                    <p className="text-[10.5px] text-muted-foreground tabular-nums">₹{tier.amountPerRegistration}/reg</p>
+                    {isCurrent && <p className="text-[9px] font-bold uppercase tracking-wide text-primary mt-0.5">You&apos;re here</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="hidden lg:block relative pt-1">
           <div className="absolute top-[22px] left-[22px] right-[22px] h-[3px] rounded-full bg-secondary" />
           <div
             className="absolute top-[22px] left-[22px] h-[3px] rounded-full bg-gradient-to-r from-chart-1 to-chart-2 transition-all duration-700"

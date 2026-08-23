@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, Users, AlertCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -157,13 +157,39 @@ function DialogOverlay({ children, open }: { children: React.ReactNode; open: bo
   );
 }
 
+// Overlays the top of the screen for a few seconds instead of sticking in
+// document flow — a permanent flow row here would push the header, camera
+// and question down every time it appears (the mobile layout is fixed and
+// has no slack to absorb that).
+const FLAGGED_BANNER_VISIBLE_MS = 5000;
+
 export function FlaggedBanner() {
   const isFlagged = useProctoringStore((s) => s.isFlagged);
-  if (!isFlagged) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!isFlagged) return;
+    setDismissed(false);
+    const timer = setTimeout(() => setDismissed(true), FLAGGED_BANNER_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [isFlagged]);
 
   return (
-    <div className="bg-destructive text-destructive-foreground py-2 px-4 text-center text-xs font-bold uppercase tracking-wider sticky top-0 z-50">
-      ⚠ Your session has been flagged for review. An administrator will review your quiz session after submission.
-    </div>
+    <AnimatePresence>
+      {isFlagged && !dismissed && (
+        <motion.div
+          initial={{ y: -60, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -60, opacity: 0 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="fixed top-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[70] bg-destructive text-destructive-foreground rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3"
+        >
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <p className="text-xs font-bold uppercase tracking-wider leading-snug">
+            Your session has been flagged for review. An administrator will review your quiz session after submission.
+          </p>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

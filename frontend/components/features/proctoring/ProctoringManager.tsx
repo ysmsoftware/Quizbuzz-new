@@ -12,6 +12,7 @@ import { useFaceDetection } from '@/lib/proctoring/useFaceDetection';
 interface ProctoringManagerProps {
     emitProctoringWarning: (type: string) => void;
     videoRef: React.RefObject<HTMLVideoElement | null>;
+    overlayCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
     socket?: any;
     contestId?: string;
     participantId?: string;
@@ -28,6 +29,7 @@ interface ProctoringManagerProps {
 export function ProctoringManager({
     emitProctoringWarning,
     videoRef,
+    overlayCanvasRef,
     socket,
     contestId,
     participantId,
@@ -337,7 +339,8 @@ export function ProctoringManager({
     useFaceDetection({
         videoRef,
         active: proctoringEnabled,
-        wsEmit: wrappedEmit
+        wsEmit: wrappedEmit,
+        overlayCanvasRef,
     });
 
     // 9. WEB AUDIO API - ENVIRONMENTAL VOLUME CHECKS (FFT size 256, 500ms loop, threshold 80, 2s anomalous state)
