@@ -62,6 +62,7 @@ const CreateContestBase = z.object({
     defaultQuestionMarks: z.number().int().min(1).default(4),
     defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),
     prizes: z.array(PrizeSchema).optional(),
+    certificateTemplateId: z.string().optional().nullable(),
 });
 
 export const CreateContestSchema = CreateContestBase.refine(
@@ -224,6 +225,12 @@ export const SendContestMessageSchema = z.object({
     template: z.string().min(1),
     channel: z.enum(["WHATSAPP", "EMAIL"]),
 });
+
+export const UpdateContestCertificateTemplateSchema = z.object({
+    certificateTemplateId: z.string().min(1)
+}).strict();
+
+export type UpdateContestCertificateTemplateInput = z.infer<typeof UpdateContestCertificateTemplateSchema>;
 
 export type CreateContestInput = z.infer<typeof CreateContestSchema>;
 export type UpdateContestInput = z.infer<typeof UpdateContestSchema>;

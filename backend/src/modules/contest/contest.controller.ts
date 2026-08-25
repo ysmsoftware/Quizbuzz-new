@@ -3,6 +3,7 @@ import { ContestService } from "./contest.service";
 import {
     CreateContestSchema,
     UpdateContestSchema,
+    UpdateContestCertificateTemplateSchema,
     ListContestsQuerySchema,
     RegisterParticipantSchema,
     RegisterStatusSchema,
@@ -110,6 +111,26 @@ export class ContestController {
                 req.params.contestId as string,
                 user.organizationId,
                 data
+            );
+
+            res.status(200).json({ success: true, data: contest, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    updateContestCertificateTemplate = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            };
+            const { certificateTemplateId } = UpdateContestCertificateTemplateSchema.parse(req.body);
+
+            const contest = await this.contestService.updateContestCertificateTemplate(
+                req.params.contestId as string,
+                user.organizationId,
+                certificateTemplateId
             );
 
             res.status(200).json({ success: true, data: contest, requestId: req.id });

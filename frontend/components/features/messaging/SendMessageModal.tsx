@@ -11,7 +11,8 @@ import {
   Loader2, 
   AlertCircle,
   FileText,
-  Sparkles
+  Sparkles,
+  Trophy
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -22,11 +23,22 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { messageService } from '@/lib/services/message-service';
 import { useMessageTemplates } from '@/lib/hooks/useMessageTemplates';
 import { useMessageSending } from '@/lib/hooks/useMessageSending';
 import { useContact } from '@/lib/hooks/useContact';
+import { getContest } from '@/lib/api/contests.api';
 import { ChannelSelector } from './ChannelSelector';
 import { MessagePreview } from './MessagePreview';
 import { TemplateCard } from './TemplateCard';
@@ -51,6 +63,8 @@ export function SendMessageModal({
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<MessageChannel>('email');
   const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>('all');
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const [selectedContestId, setSelectedContestId] = useState<string>('');
 
   // Reset state when opening
   useEffect(() => {
@@ -58,6 +72,8 @@ export function SendMessageModal({
       setSelectedTemplate(null);
       setSelectedChannel('email');
       setRecipientFilter('all');
+      setParamValues({});
+      setSelectedContestId('');
     }
   }, [open]);
 
@@ -104,16 +120,92 @@ export function SendMessageModal({
             : paidCountQuery.data) ?? 0;
 
   // If direct mode, load contact details from the centralized contact hook
-  const { contact } = useContact(contactId ?? '', {
+  const { contact, history: contactHistory } = useContact(contactId ?? '', {
     enabled: open && isDirectMode && !!contactId,
-    loadHistory: false,
+    loadHistory: true, // We load history!
     loadMessages: false,
     loadCertificates: false,
   });
 
+  // Query details of selected contest for auto-filling variables
+  const { data: selectedContestDetails } = useQuery({
+    queryKey: ['contest-details-direct', selectedContestId],
+    queryFn: () => getContest(selectedContestId).then(res => res.data),
+    enabled: isDirectMode && !!selectedContestId,
+  });
+
+  // Auto-fill template parameters when a contest is selected for direct message
+  useEffect(() => {
+    if (selectedContestDetails) {
+      const startDate = new Date(selectedContestDetails.startTime);
+      const dateStr = startDate.toLocaleDateString();
+      const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const linkStr = typeof window !== 'undefined' ? `${window.location.origin}/quiz/${selectedContestDetails.slug}/join` : '';
+
+      setParamValues(prev => ({
+        ...prev,
+        eventName: selectedContestDetails.title || '',
+        contestTitle: selectedContestDetails.title || '',
+        date: dateStr,
+        contestDate: dateStr,
+        time: timeStr,
+        contestStartTime: timeStr,
+        link: linkStr,
+        contestLink: linkStr,
+        joinCode: selectedContestDetails.joinCode || '',
+      }));
+    }
+  }, [selectedContestDetails]);
+
+  const missingVariables = selectedTemplate
+    ? selectedTemplate.variables.filter((v) => {
+        if (v === 'name' || v === 'fullName') return false;
+        // In bulk/contest send mode, standard variables are resolved on the client / backend.
+        // We only require them to be filled by the user in direct mode.
+        if (!isDirectMode && ['eventName', 'contestTitle', 'contestDate', 'contestStartTime', 'date', 'time', 'link', 'contestLink'].includes(v)) return false;
+        return !paramValues[v] || paramValues[v].trim() === '';
+      })
+    : [];
+
+  const getVariableLabel = (variable: string): string => {
+    switch (variable) {
+      case 'eventName':
+      case 'contestTitle':
+        return 'Event Name / Contest Title';
+      case 'contestDate':
+      case 'date':
+        return 'Date';
+      case 'contestStartTime':
+      case 'time':
+        return 'Time';
+      case 'contestLink':
+      case 'link':
+        return 'Link / URL';
+      case 'amount':
+        return 'Amount';
+      case 'reason':
+        return 'Reason';
+      case 'subject':
+        return 'Subject';
+      case 'body':
+        return 'Message Body';
+      case 'joinCode':
+        return 'Join Code';
+      default:
+        return variable
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, (str) => str.toUpperCase());
+    }
+  };
+
   const handleSend = async () => {
     if (!selectedTemplate) {
       toast.error('Please select a message template');
+      return;
+    }
+
+    if (missingVariables.length > 0) {
+      toast.error(`Please fill in all required template variables: ${missingVariables.map(getVariableLabel).join(', ')}`);
       return;
     }
 
@@ -125,15 +217,20 @@ export function SendMessageModal({
         }
 
         const fullName = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.email || contact.phone || 'Recipient';
-        // Basic interpolation for well-known placeholders
-        let interpolatedBody = selectedTemplate.body
-          .replace(/\{\{name\}\}/g, contact.firstName || fullName)
-          .replace(/\{\{fullName\}\}/g, fullName)
-          .replace(/\{\{eventName\}\}/g, '')
-          .replace(/\{\{contestTitle\}\}/g, '')
-          .replace(/\{\{contestDate\}\}/g, '')
-          .replace(/\{\{contestStartTime\}\}/g, '')
-          .replace(/\{\{contestLink\}\}/g, '');
+        
+        const parameters: Record<string, string> = {
+          name: contact.firstName || fullName,
+          fullName,
+          subject: selectedTemplate.name,
+          ...paramValues,
+        };
+
+        // Dynamically interpolate template body
+        let interpolatedBody = selectedTemplate.body;
+        Object.entries(parameters).forEach(([key, val]) => {
+          const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+          interpolatedBody = interpolatedBody.replace(regex, val || '');
+        });
 
         const recipient = selectedChannel === 'email' ? contact.email : contact.phone;
         if (!recipient) {
@@ -143,19 +240,17 @@ export function SendMessageModal({
 
         await sendDirect({
           contactId: contact.id,
-          contestId: contestId && contestId !== 'all' ? contestId : undefined,
+          contestId: selectedContestId || undefined,
           channel: selectedChannel,
           templateId: selectedTemplate.id,
           recipient,
           subject: selectedTemplate.name,
           body: interpolatedBody,
           parameters: {
-            name: fullName,
-            subject: selectedTemplate.name,
+            ...parameters,
             body: interpolatedBody,
           },
         });
-
 
         toast.success(`Message successfully sent to ${fullName}`);
         onOpenChange(false);
@@ -169,6 +264,7 @@ export function SendMessageModal({
         recipientFilter: isBulkMode ? 'all' : recipientFilter,
         channel: selectedChannel,
         selectedParticipantIds: isBulkMode ? selectedParticipantIds : undefined,
+        customParameters: paramValues,
       });
       // Refresh messages list
       queryClient.invalidateQueries({ queryKey: ['messages'] });
@@ -284,29 +380,104 @@ export function SendMessageModal({
             </div>
 
             {/* Right Column: Preview Panel */}
-            <div className="sticky top-0 space-y-4 lg:border-l lg:pl-6 border-border/30">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-foreground">Live Message Preview</h4>
-                {selectedTemplate && (
-                  <span className="text-xs text-muted-foreground italic font-medium">
-                    {selectedTemplate.name}
-                  </span>
+            <div className="sticky top-0 space-y-6 lg:border-l lg:pl-6 border-border/30">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">Live Message Preview</h4>
+                  {selectedTemplate && (
+                    <span className="text-xs text-muted-foreground italic font-medium">
+                      {selectedTemplate.name}
+                    </span>
+                  )}
+                </div>
+
+                {selectedTemplate ? (
+                  <MessagePreview
+                    body={selectedTemplate.body}
+                    channel={selectedChannel}
+                    variables={selectedTemplate.variables}
+                    values={{
+                      name: isDirectMode && contact ? `${contact.firstName} ${contact.lastName ?? ''}`.trim() : 'John Doe',
+                      fullName: isDirectMode && contact ? `${contact.firstName} ${contact.lastName ?? ''}`.trim() : 'John Doe',
+                      ...paramValues
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center min-h-64 border rounded-2xl border-dashed border-border/60 bg-muted/5 text-center p-6">
+                    <AlertCircle className="h-10 w-10 text-muted-foreground/60 mb-3" />
+                    <p className="text-sm font-semibold text-muted-foreground">No template selected</p>
+                    <p className="text-xs text-muted-foreground/80 mt-1 max-w-xs">
+                      Please select a template from the left side to preview the formatted notification text.
+                    </p>
+                  </div>
                 )}
               </div>
 
-              {selectedTemplate ? (
-                <MessagePreview
-                  body={selectedTemplate.body}
-                  channel={selectedChannel}
-                  variables={selectedTemplate.variables}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center min-h-64 border rounded-2xl border-dashed border-border/60 bg-muted/5 text-center p-6">
-                  <AlertCircle className="h-10 w-10 text-muted-foreground/60 mb-3" />
-                  <p className="text-sm font-semibold text-muted-foreground">No template selected</p>
-                  <p className="text-xs text-muted-foreground/80 mt-1 max-w-xs">
-                    Please select a template from the left side to preview the formatted notification text.
+              {/* Dynamic Variables Input Fields */}
+              {selectedTemplate && selectedTemplate.variables.filter(v => v !== 'name' && v !== 'fullName').length > 0 && (
+                <div className="space-y-3 p-4 rounded-xl border border-border/50 bg-secondary/5">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4" />
+                    Template Parameters
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Provide values for custom parameters required by this template.
                   </p>
+                  <div className="space-y-3 pt-1">
+                    {selectedTemplate.variables
+                      .filter((v) => v !== 'name' && v !== 'fullName')
+                      .map((variable) => {
+                        const isRequired = !(!isDirectMode && ['eventName', 'contestTitle', 'contestDate', 'contestStartTime', 'date', 'time', 'link', 'contestLink'].includes(variable));
+                        return (
+                          <div key={variable} className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-muted-foreground flex justify-between">
+                              <span>{getVariableLabel(variable)}</span>
+                              {isRequired && <span className="text-[10px] text-destructive">Required</span>}
+                            </label>
+                            {variable === 'body' ? (
+                              <Textarea
+                                placeholder={`Enter ${getVariableLabel(variable)}...`}
+                                value={paramValues[variable] || ''}
+                                onChange={(e) => setParamValues(prev => ({ ...prev, [variable]: e.target.value }))}
+                                className={cn("h-24 rounded-lg", isRequired && !paramValues[variable] && "border-destructive focus-visible:ring-destructive")}
+                              />
+                            ) : (variable === 'eventName' || variable === 'contestTitle') && isDirectMode && contactHistory && contactHistory.length > 0 ? (
+                              <Select
+                                value={selectedContestId}
+                                onValueChange={(val) => {
+                                  setSelectedContestId(val);
+                                  const selected = contactHistory.find(h => h.contestId === val);
+                                  if (selected) {
+                                    setParamValues(prev => ({
+                                      ...prev,
+                                      [variable]: selected.contestTitle || '',
+                                    }));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className={cn("w-full h-10 rounded-lg bg-background border-border/50", isRequired && !paramValues[variable] && "border-destructive focus-visible:ring-destructive")}>
+                                  <SelectValue placeholder="Select a registered contest..." />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-border/50 bg-background text-foreground">
+                                  {contactHistory.map((item) => (
+                                    <SelectItem key={item.contestId} value={item.contestId}>
+                                      {item.contestTitle} ({item.registrationRef})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                placeholder={`Enter ${getVariableLabel(variable)}...`}
+                                value={paramValues[variable] || ''}
+                                onChange={(e) => setParamValues(prev => ({ ...prev, [variable]: e.target.value }))}
+                                className={cn("h-10 rounded-lg", isRequired && !paramValues[variable] && "border-destructive focus-visible:ring-destructive")}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               )}
             </div>
@@ -322,7 +493,7 @@ export function SendMessageModal({
               Cancel
             </Button>
             <Button
-              disabled={sendingLoading || !selectedTemplate || (recipientCount === 0)}
+              disabled={sendingLoading || !selectedTemplate || (recipientCount === 0) || missingVariables.length > 0}
               onClick={handleSend}
               className="bg-primary text-primary-foreground font-semibold px-6 shadow-lg shadow-primary/20 rounded-xl"
             >

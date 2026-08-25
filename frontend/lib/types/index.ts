@@ -93,6 +93,7 @@ export interface Contest {
     updatedAt: string;
     organizerId: string;
     joinCode?: string | null;
+    certificateTemplateId?: string | null;
 
     // Scoring defaults
     defaultQuestionMarks?: number;
@@ -500,6 +501,7 @@ export interface ServerContest {
     }>;
     createdAt: string;
     updatedAt: string;
+    certificateTemplateId?: string | null;
 }
 
 /**

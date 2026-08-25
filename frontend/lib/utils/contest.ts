@@ -42,6 +42,7 @@ const PERSISTABLE_CONTEST_FIELDS = new Set([
   'defaultQuestionMarks',
   'defaultQuestionNegativeMark',
   'prizes',
+  'certificateTemplateId',
 ]);
 
 /**
@@ -174,6 +175,9 @@ export function adaptServerContest(server: ServerContest): Contest {
     // Scoring defaults
     defaultQuestionMarks: server.defaultQuestionMarks ?? 1,
     defaultQuestionNegativeMark: Number(server.defaultQuestionNegativeMark ?? 0.5),
+
+    // Certificate template
+    certificateTemplateId: server.certificateTemplateId || null,
 
     _count: {
       questions: _count.questions || 0,

@@ -1,4 +1,5 @@
 import { CertificateRepository } from "./certificate.repository";
+import { prisma } from "../../config/db";
 import { ParticipantRepository } from "../participant/participant.repository";
 import { CertificateTemplateRepository } from "../certificate-template/certificate-template.repository";
 import { certificateQueue } from "../../queues";
@@ -249,8 +250,13 @@ export class CertificateService {
         };
 
         // 5b. If a custom template was requested, validate it belongs to this org and attach it
-        if (dto.templateId) {
-            const template = await this.certificateTemplateRepo.findById(dto.templateId, organizationId);
+        let finalTemplateId = dto.templateId;
+        if (!finalTemplateId && (participant.contest as any)?.certificateTemplateId) {
+            finalTemplateId = (participant.contest as any).certificateTemplateId;
+        }
+
+        if (finalTemplateId) {
+            const template = await this.certificateTemplateRepo.findById(finalTemplateId, organizationId);
             if (!template) throw new NotFoundError("Certificate template not found");
             metadata.templateId = template.id;
         }
@@ -299,8 +305,19 @@ export class CertificateService {
         organizationId: string,
         templateId?: string,
     ): Promise<{ queued: number; skipped: number }> {
-        if (templateId) {
-            const template = await this.certificateTemplateRepo.findById(templateId, organizationId);
+        let finalTemplateId = templateId;
+        if (!finalTemplateId) {
+            const contestObj = await prisma.contest.findFirst({
+                where: { id: contestId, organizationId },
+                select: { certificateTemplateId: true }
+            });
+            if (contestObj?.certificateTemplateId) {
+                finalTemplateId = contestObj.certificateTemplateId;
+            }
+        }
+
+        if (finalTemplateId) {
+            const template = await this.certificateTemplateRepo.findById(finalTemplateId, organizationId);
             if (!template) throw new NotFoundError("Certificate template not found");
         }
 
@@ -331,7 +348,7 @@ export class CertificateService {
                 rank: p.leaderboard?.rank ?? undefined,
                 timeTakenSecs: p.submission?.timeTakenSecs ?? undefined,
                 issuedAt: new Date().toISOString(),
-                ...(templateId && { templateId }),
+                ...(finalTemplateId && { templateId: finalTemplateId }),
             } as any,
         }));
 

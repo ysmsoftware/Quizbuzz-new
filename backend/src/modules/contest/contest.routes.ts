@@ -28,6 +28,7 @@ contestRouter.get("/:contestId", authenticatedOrgMiddleware, (req, res, next) =>
 contestRouter.patch("/:contestId", authenticatedOrgMiddleware, enforceContestUpdateParticipantCap, (req, res, next) => ctrl().updateContest(req, res, next));
 contestRouter.delete("/:contestId", authenticatedOrgMiddleware, (req, res, next) => ctrl().deleteContest(req, res, next));
 contestRouter.patch("/:contestId/archive", authenticatedOrgMiddleware, (req, res, next) => ctrl().archiveContest(req, res, next));
+contestRouter.patch("/:contestId/certificate-template", authenticatedOrgMiddleware, (req, res, next) => ctrl().updateContestCertificateTemplate(req, res, next));
 
 // Publish
 contestRouter.post("/:contestId/publish", authenticatedOrgMiddleware, (req, res, next) => ctrl().publishContest(req, res, next));

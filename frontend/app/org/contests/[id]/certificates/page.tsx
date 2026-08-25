@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
@@ -41,6 +41,14 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Select, 
   SelectContent, 
@@ -65,11 +73,33 @@ export default function CertificatesManagementPage() {
 
   // Single Issuing form state
   const [issueParticipantId, setIssueParticipantId] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+  
+  // Modal configurations
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [tempTemplateId, setTempTemplateId] = useState<string | undefined>(undefined);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isLocking, setIsLocking] = useState(false);
 
   const { data: templates = [] } = useCertificateTemplates();
 
-  const { contest } = useContest(contestId);
+  const { contest, updateContestCertificateTemplateMutation } = useContest(contestId);
+
+  // Locked template reads directly from database
+  const selectedTemplateId = contest?.certificateTemplateId || undefined;
+
+  const handleLockTemplate = async (templateIdToLock: string | undefined) => {
+    if (!templateIdToLock) return;
+    try {
+      setIsLocking(true);
+      await updateContestCertificateTemplateMutation.mutateAsync(templateIdToLock);
+      toast.success('Certificate design successfully locked for this contest');
+      setIsModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to lock certificate template');
+    } finally {
+      setIsLocking(false);
+    }
+  };
 
   // Custom hook for participant & certificate queries/mutations
   const {
@@ -157,22 +187,22 @@ export default function CertificatesManagementPage() {
         
         <div className="flex items-center gap-3">
 
-          <Select
-            value={selectedTemplateId ?? "default"}
-            onValueChange={(val) => setSelectedTemplateId(val === "default" ? undefined : val)}
+          <Button
+            variant="outline"
+            className="rounded-xl border-border bg-background hover:bg-accent/40 font-bold flex items-center gap-2 h-10 px-4 cursor-pointer"
+            onClick={() => {
+              setTempTemplateId(contest?.certificateTemplateId || undefined);
+              setShowConfirm(false);
+              setIsModalOpen(true);
+            }}
           >
-            <SelectTrigger className="w-56 h-10 rounded-xl bg-background border-border text-xs">
-              <SelectValue placeholder="Default (built-in design)" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground">
-              <SelectItem value="default" className="cursor-pointer">Default (built-in design)</SelectItem>
-              {templates.map((tpl) => (
-                <SelectItem key={tpl.id} value={tpl.id} className="cursor-pointer">
-                  {tpl.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Settings2 className="h-4 w-4 text-amber-500 animate-pulse" />
+            <span>
+              Locked Design: {
+                templates.find(t => t.id === contest?.certificateTemplateId)?.name || 'Default (Built-in)'
+              }
+            </span>
+          </Button>
 
           <Button variant="outline" className="rounded-xl" onClick={() => refetch()}>
             <RefreshCcw className="h-4 w-4 mr-2" />
@@ -481,9 +511,124 @@ export default function CertificatesManagementPage() {
                 </div>
               )}
 
+      {/* Certificate Template Selection Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-xl border border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden p-0">
+          {!showConfirm ? (
+            <div className="flex flex-col">
+              <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20">
+                <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                  <Award className="h-5 w-5 text-amber-500" />
+                  Certificate Design Configuration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-1">
+                  Choose and lock a template design to issue certificates for this contest.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-6 max-h-[50vh] overflow-y-auto space-y-4">
+                {/* Active template display */}
+                <div className="p-3 bg-secondary/10 rounded-xl border border-border/40 text-xs">
+                  <span className="font-bold text-muted-foreground block mb-0.5">Currently Locked Design:</span>
+                  <span className="font-black text-foreground">
+                    {templates.find(t => t.id === contest?.certificateTemplateId)?.name || 'Default (Built-in design)'}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground block">Available Designs</span>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {/* Custom uploaded template cards */}
+                    {templates.map((tpl) => (
+                      <div
+                        key={tpl.id}
+                        onClick={() => setTempTemplateId(tpl.id)}
+                        className={cn(
+                          "p-4 border rounded-xl cursor-pointer transition-all flex flex-col justify-center",
+                          tempTemplateId === tpl.id
+                            ? "border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/5"
+                            : "border-border/50 bg-card hover:bg-accent/20"
+                        )}
+                      >
+                        <span className="text-sm font-bold text-foreground">{tpl.name}</span>
+                        {tpl.description && (
+                          <span className="text-xs text-muted-foreground mt-1">{tpl.description}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter className="p-6 border-t border-border/40 bg-muted/20 gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                  className="rounded-xl border-border/60"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => setShowConfirm(true)}
+                  disabled={!tempTemplateId || tempTemplateId === (contest?.certificateTemplateId || undefined)}
+                  className="bg-primary text-primary-foreground font-semibold px-6 shadow-lg shadow-primary/20 rounded-xl cursor-pointer"
+                >
+                  Save & Lock Design
+                </Button>
+              </DialogFooter>
             </div>
+          ) : (
+            <div className="flex flex-col">
+              <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20">
+                <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                  Confirm Certificate Design Lock
+                </DialogTitle>
+              </DialogHeader>
 
+              <div className="p-6 space-y-4">
+                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl text-xs text-foreground leading-relaxed">
+                  <p className="font-bold text-amber-600 dark:text-amber-400 mb-1">Important Notice:</p>
+                  Are you sure you want to change the locked certificate template for this contest? 
+                  Existing issued certificates will not be affected, but all future issuances (including retries) will use the new design.
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Selected template: <span className="font-bold text-foreground">
+                    {templates.find(t => t.id === tempTemplateId)?.name || 'Default (built-in design)'}
+                  </span>
+                </div>
+              </div>
 
+              <DialogFooter className="p-6 border-t border-border/40 bg-muted/20 gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConfirm(false)}
+                  className="rounded-xl border-border/60"
+                  disabled={isLocking}
+                >
+                  Go Back
+                </Button>
+                <Button
+                  onClick={() => handleLockTemplate(tempTemplateId)}
+                  disabled={isLocking}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 shadow-lg shadow-emerald-500/20 rounded-xl cursor-pointer"
+                >
+                  {isLocking ? (
+                    <>
+                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                      Locking...
+                    </>
+                  ) : (
+                    "Yes, Confirm Lock"
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      </div>
     </div>
   );
 }

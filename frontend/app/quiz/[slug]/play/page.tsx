@@ -66,6 +66,7 @@ export default function QuizPlayPage() {
     const toggleFlag = useQuizStore((s) => s.toggleFlag);
 
     const { isFullscreen, setFullscreen, enterFullscreen } = useProctoringStore();
+    const faceDetected = useProctoringStore((s) => s.faceDetected);
 
     const [contest, setContest] = useState<any>(null);
     const [contestId, setContestId] = useState<string>(authContestId);
@@ -499,109 +500,129 @@ export default function QuizPlayPage() {
                         instead of clipping it — the classic reason a nested
                         `flex-1 overflow-y-auto` silently refuses to scroll. */}
                     <main className="flex-1 min-h-0 flex flex-col overflow-hidden lg:overflow-y-auto px-4 md:px-8 pt-3 pb-2 lg:py-4">
+                        <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:items-start lg:gap-8 lg:max-w-5xl lg:mx-auto lg:w-full">
 
-                        {/* Question zone — fixed on mobile, normal flow on desktop */}
-                        <div className="flex-none max-w-2xl mx-auto w-full relative">
-                            <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-4 sm:p-5 md:p-6 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+                            {/* Proctoring Camera — a single video/canvas pair (never duplicated,
+                                or the stream would only ever attach to whichever copy wins the
+                                ref race). Below `lg` it's a compact strip that stacks above the
+                                question, in normal document order. At `lg`+ `lg:order-last` moves
+                                it to the visual right without moving it in the DOM, and it becomes
+                                a sticky sidebar column — a real layout track, not a viewport-fixed
+                                overlay, so it can never land on top of the question column no
+                                matter how narrow the window gets. Rendered outside the question's
+                                AnimatePresence so it never remounts — and never loses its stream —
+                                between questions. */}
+                            {proctoringEnabled && (
+                                <div className="flex-none lg:order-last max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full lg:w-64 lg:shrink-0 lg:sticky lg:top-6 mb-3 lg:mb-0">
+                                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
+                                        <div className="relative w-14 h-10 lg:w-full lg:h-auto lg:aspect-video rounded-lg lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
+                                            <video
+                                                ref={videoRef}
+                                                autoPlay playsInline muted
+                                                className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
+                                            />
 
-                                {/* Proctoring Camera Feed — floats beside the question on mobile
-                                    (question text wraps around it, then reclaims full width once
-                                    it clears the camera's height), fixed to the viewport corner on
-                                    desktop. Rendered outside the AnimatePresence below so it never
-                                    remounts — and never loses its stream — between questions. */}
-                                {proctoringEnabled && (
-                                    <div className="float-right lg:float-none ml-3 mb-2 lg:ml-0 lg:mb-0 w-[84px] h-[60px] lg:w-56 lg:h-36 relative lg:fixed lg:top-24 lg:right-8 lg:z-30 rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shadow-2xl backdrop-blur-md group transition-all duration-300 hover:border-primary/40 shrink-0 z-20">
-                                        <video
-                                            ref={videoRef}
-                                            autoPlay playsInline muted
-                                            className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
-                                        />
+                                            {/* Live face-tracking box — drawn onto this canvas by the
+                                                existing detection loop every ~2s (see useFaceDetection). */}
+                                            <canvas
+                                                ref={overlayCanvasRef}
+                                                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                                            />
 
-                                        {/* Live face-tracking box — drawn onto this canvas by the
-                                            existing detection loop every ~2s (see useFaceDetection). */}
-                                        <canvas
-                                            ref={overlayCanvasRef}
-                                            className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
-                                        />
+                                            {/* Pulsing Scanline overlay — desktop only, too small to read on the mobile thumbnail */}
+                                            <motion.div
+                                                className="hidden lg:block absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
+                                                animate={{ top: ["0%", "100%", "0%"] }}
+                                                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                            />
 
-                                        {/* Pulsing Scanline overlay using Framer Motion */}
-                                        <motion.div
-                                            className="absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
-                                            animate={{ top: ["0%", "100%", "0%"] }}
-                                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                                        />
+                                            {/* HUD corner markings — desktop only */}
+                                            <div className="hidden lg:flex absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg items-center justify-center">
+                                                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
+                                                <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
+                                                <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
+                                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
+                                            </div>
 
-                                        {/* HUD corner markings — desktop only, too small to read at PIP size */}
-                                        <div className="hidden lg:flex absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg items-center justify-center">
-                                            <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
-                                            <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
-                                            <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
-                                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
+                                            <div className="absolute top-1 left-1 lg:top-2 lg:left-2 flex items-center gap-1.5 px-1.5 py-0.5 lg:px-2 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                                                <span className="hidden lg:inline">REC</span>
+                                            </div>
+
+                                            <div className="hidden lg:flex absolute top-2 right-2 items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
+                                                <span>SECURE LINK</span>
+                                            </div>
+
+                                            <div className="hidden lg:block absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
+                                                CAM_01 // ACTIVE_FEED
+                                            </div>
                                         </div>
 
-                                        {/* Top overlays */}
-                                        <div className="absolute top-1 left-1 lg:top-2 lg:left-2 flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[7px] lg:text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
-                                            <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                                            <span>REC</span>
+                                        {/* Mobile-only status row */}
+                                        <div className="min-w-0 lg:hidden">
+                                            <p className="text-xs font-bold text-foreground leading-tight">Proctoring active</p>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">{faceDetected ? "Face detected" : "No face detected"}</p>
                                         </div>
-
-                                        <div className="hidden lg:flex absolute top-2 right-2 items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
-                                            <span>SECURE LINK</span>
-                                        </div>
-
-                                        {/* Ambient HUD decorative text */}
-                                        <div className="hidden lg:block absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
-                                            CAM_01 // ACTIVE_FEED
-                                        </div>
+                                        <span className="ml-auto lg:hidden text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-1 shrink-0">● Live</span>
                                     </div>
-                                )}
+                                    <p className="hidden lg:block text-center text-[10px] font-semibold text-muted-foreground mt-2">
+                                        Stays visible while you scroll
+                                    </p>
+                                </div>
+                            )}
 
-                                {/* Question — opacity-only transition (no transform) so it never
-                                    creates a containing block that would trap the camera's `lg:fixed`
-                                    positioning inside this card. */}
-                                <AnimatePresence mode="wait">
-                                    <motion.div
-                                        key={currentIndex}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.2, ease: "easeOut" }}
-                                    >
-                                        <QuestionCard
-                                            question={currentQuestion}
-                                            questionNumber={currentIndex + 1}
-                                            isFlagged={flagged.includes(currentIndex)}
-                                            onToggleFlag={() => toggleFlag(currentIndex)}
-                                        />
-                                    </motion.div>
-                                </AnimatePresence>
+                            {/* Question + options column */}
+                            <div className="flex-1 min-h-0 flex flex-col">
+
+                                {/* Question zone — fixed on mobile, normal flow on desktop */}
+                                <div className="flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full relative">
+                                    <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-4 sm:p-5 md:p-6 relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+
+                                        <AnimatePresence mode="wait">
+                                            <motion.div
+                                                key={currentIndex}
+                                                initial={{ opacity: 0, y: 15 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -15 }}
+                                                transition={{ duration: 0.22, ease: "easeOut" }}
+                                            >
+                                                <QuestionCard
+                                                    question={currentQuestion}
+                                                    questionNumber={currentIndex + 1}
+                                                    isFlagged={flagged.includes(currentIndex)}
+                                                    onToggleFlag={() => toggleFlag(currentIndex)}
+                                                />
+                                            </motion.div>
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+
+                                {/* Options — the only region that scrolls on mobile */}
+                                <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:min-h-fit lg:flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full mt-4 lg:mt-6">
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={currentIndex}
+                                            initial={{ opacity: 0, y: 15 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -15 }}
+                                            transition={{ duration: 0.22, ease: "easeOut" }}
+                                            className="grid gap-3 pb-2"
+                                        >
+                                            {currentQuestion.options.map((option, i) => (
+                                                <OptionButton
+                                                    key={option.index}
+                                                    option={option}
+                                                    optionLabel={OPTION_LABELS[i] ?? String(i)}
+                                                    isSelected={answers[currentIndex] === option.index}
+                                                    onClick={() => handleAnswer(currentIndex, option.index)}
+                                                />
+                                            ))}
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </div>
                             </div>
-                        </div>
-
-                        {/* Options — the only region that scrolls on mobile */}
-                        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:min-h-fit lg:flex-none max-w-2xl mx-auto w-full mt-4 lg:mt-6">
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={currentIndex}
-                                    initial={{ opacity: 0, y: 15 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -15 }}
-                                    transition={{ duration: 0.2, ease: "easeOut" }}
-                                    className="grid gap-3 pb-2"
-                                >
-                                    {currentQuestion.options.map((option, i) => (
-                                        <OptionButton
-                                            key={option.index}
-                                            option={option}
-                                            optionLabel={OPTION_LABELS[i] ?? String(i)}
-                                            isSelected={answers[currentIndex] === option.index}
-                                            onClick={() => handleAnswer(currentIndex, option.index)}
-                                        />
-                                    ))}
-                                </motion.div>
-                            </AnimatePresence>
                         </div>
                     </main>
 

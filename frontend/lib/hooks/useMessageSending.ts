@@ -10,13 +10,15 @@ export function useMessageSending() {
       recipientFilter: RecipientFilter;
       channel: MessageChannel;
       selectedParticipantIds?: string[];
+      customParameters?: Record<string, string>;
     }) => {
       return messageService.sendMessage(
         payload.contestId,
         payload.templateId,
         payload.recipientFilter,
         payload.channel,
-        payload.selectedParticipantIds
+        payload.selectedParticipantIds,
+        payload.customParameters
       );
     },
   });

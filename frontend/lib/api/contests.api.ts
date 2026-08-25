@@ -50,6 +50,13 @@ export async function updateContest(contestId: string, body: any): Promise<ApiRe
 }
 
 /**
+ * PATCH /contests/:contestId/certificate-template
+ */
+export async function updateContestCertificateTemplate(contestId: string, certificateTemplateId: string): Promise<ApiResponse> {
+  return patch(`/contests/${contestId}/certificate-template`, { certificateTemplateId });
+}
+
+/**
  * DELETE /contests/:contestId
  */
 export async function deleteContest(contestId: string): Promise<ApiResponse> {

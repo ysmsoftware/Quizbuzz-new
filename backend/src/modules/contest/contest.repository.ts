@@ -351,4 +351,13 @@ export class ContestRepository implements IContestRepository {
     async countPublic(where: Prisma.ContestWhereInput): Promise<number> {
         return await prisma.contest.count({ where });
     }
+
+    async updateCertificateTemplate(contestId: string, organizationId: string, certificateTemplateId: string) {
+        return await prisma.contest.update({
+            where: { id: contestId, organizationId },
+            data: {
+                certificateTemplateId
+            }
+        });
+    }
 }

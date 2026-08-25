@@ -1,6 +1,7 @@
 import { MessageTemplate, MessageDraft, SentMessage, RecipientFilter, MessageChannel } from '@/lib/types';
 import { crmApi } from '@/lib/api/crm.api';
 import { getContest, listParticipants } from '@/lib/api/contests.api';
+import { normalizeRegistration } from '@/lib/hooks/useRegistrations';
 
 class MessageService {
   async getTemplates(): Promise<MessageTemplate[]> {
@@ -38,9 +39,20 @@ class MessageService {
     try {
       const res = await listParticipants(contestId, {
         limit: 1000,
-        status: filter === 'all' ? undefined : filter
       });
-      return res?.data?.participants?.length || 0;
+      if (res.success && res.data?.participants) {
+        const normalized = res.data.participants.map(normalizeRegistration);
+        if (filter === 'all') {
+          return normalized.length;
+        }
+        if (filter === 'confirmed') {
+          return normalized.filter(p => p.status === 'confirmed').length;
+        }
+        if (filter === 'paid') {
+          return normalized.filter(p => p.paymentStatus === 'completed').length;
+        }
+      }
+      return 0;
     } catch {
       return 0;
     }
@@ -51,7 +63,8 @@ class MessageService {
     templateId: string,
     recipientFilter: RecipientFilter,
     channel: MessageChannel,
-    selectedParticipantIds?: string[]
+    selectedParticipantIds?: string[],
+    customParameters?: Record<string, string>
   ): Promise<SentMessage> {
     // 1. Fetch template & contest info
     const template = await this.getTemplateById(templateId);
@@ -86,10 +99,16 @@ class MessageService {
       try {
         const pRes = await listParticipants(contestId, {
           limit: 1000,
-          status: recipientFilter === 'all' ? undefined : recipientFilter
         });
         if (pRes.success && pRes.data?.participants) {
-          participants = pRes.data.participants;
+          const normalized = pRes.data.participants.map(normalizeRegistration);
+          if (recipientFilter === 'all') {
+            participants = normalized;
+          } else if (recipientFilter === 'confirmed') {
+            participants = normalized.filter(p => p.status === 'confirmed');
+          } else if (recipientFilter === 'paid') {
+            participants = normalized.filter(p => p.paymentStatus === 'completed');
+          }
         }
       } catch (e) {
         console.error('Failed to list participants for sending message', e);
@@ -113,10 +132,10 @@ class MessageService {
     // 3. Dispatch calls concurrently
     await Promise.all(
       participants.map(async (p) => {
-        const details = p.participantDetails || {};
-        const fullName = details.fullName || 'Participant';
-        const email = details.email;
-        const phone = details.phone;
+        const details = p.participantDetails || p.contact || {};
+        const fullName = details.fullName || [p.contact?.firstName, p.contact?.lastName].filter(Boolean).join(' ') || 'Participant';
+        const email = details.email || p.contact?.email;
+        const phone = details.phone || p.contact?.phone;
         const recipient = channel === 'email' ? email : phone;
 
         if (!recipient) {
@@ -124,28 +143,32 @@ class MessageService {
           return;
         }
 
-        // Interpolate templates for custom message bodies
-        let interpolatedBody = template.body
-          .replace(/\{\{name\}\}/g, fullName)
-          .replace(/\{\{fullName\}\}/g, fullName)
-          .replace(/\{\{eventName\}\}/g, contestTitle)
-          .replace(/\{\{contestTitle\}\}/g, contestTitle)
-          .replace(/\{\{contestDate\}\}/g, contestDate)
-          .replace(/\{\{contestStartTime\}\}/g, contestStartTime)
-          .replace(/\{\{contestLink\}\}/g, contestLink)
-          .replace(/\{\{reason\}\}/g, 'Evaluation policy violation')
-          .replace(/\{\{resultsLink\}\}/g, `${contestLink}/results`)
-          .replace(/\{\{certificateLink\}\}/g, `${contestLink}/certificate`);
-
         const parameters: Record<string, string> = {
           name: fullName,
+          fullName,
           eventName: contestTitle,
+          contestTitle,
+          contestDate,
+          contestStartTime,
           date: contestDate,
           time: contestStartTime,
           link: contestLink,
+          contestLink,
+          reason: 'Evaluation policy violation',
+          resultsLink: `${contestLink}/results`,
+          certificateLink: `${contestLink}/certificate`,
           subject: template.name,
-          body: interpolatedBody,
+          ...customParameters,
         };
+
+        // Interpolate templates for custom message bodies
+        let interpolatedBody = template.body;
+        Object.entries(parameters).forEach(([key, val]) => {
+          const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+          interpolatedBody = interpolatedBody.replace(regex, val || '');
+        });
+
+        parameters.body = interpolatedBody;
 
         try {
           await crmApi.sendMessage({

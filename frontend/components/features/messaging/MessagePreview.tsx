@@ -6,6 +6,7 @@ interface MessagePreviewProps {
   body: string;
   channel: MessageChannel;
   variables?: string[];
+  values?: Record<string, string>;
 }
 
 const sampleValues: Record<string, string> = {
@@ -22,19 +23,19 @@ const sampleValues: Record<string, string> = {
   certificateUrl: 'https://quiz.example.com/cert/abc123',
 };
 
-function interpolateVariables(text: string): string {
+function interpolateVariables(text: string, values?: Record<string, string>): string {
   let result = text;
   const variableRegex = /\{\{(\w+)\}\}/g;
   
   result = result.replace(variableRegex, (match, variable) => {
-    return sampleValues[variable] || match;
+    return values?.[variable] || sampleValues[variable] || match;
   });
   
   return result;
 }
 
-export function MessagePreview({ body, channel, variables }: MessagePreviewProps) {
-  const previewText = interpolateVariables(body);
+export function MessagePreview({ body, channel, variables, values }: MessagePreviewProps) {
+  const previewText = interpolateVariables(body, values);
 
   if (channel === 'email' || channel === 'both') {
     return (

@@ -45,6 +45,7 @@ export interface CreateContestDTO {
   showResultsAfter?: number | undefined; // hours
   prizes?: PrizeDTO[] | undefined;
   bannerImage?: string | null | undefined;
+  certificateTemplateId?: string | null | undefined;
 }
 
 
@@ -146,6 +147,7 @@ export interface ContestDetail {
   joinCode: string | null;
   prizes: PrizeDetail[];
   bannerImage: string | null;
+  certificateTemplateId: string | null;
   _count: { questions: number; participants: number };
 }
 

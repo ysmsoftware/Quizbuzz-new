@@ -38,6 +38,14 @@ export function useContest(contestId: string) {
     },
   });
 
+  const updateContestCertificateTemplateMutation = useMutation({
+    mutationFn: (certificateTemplateId: string) => contestsApi.updateContestCertificateTemplate(contestId, certificateTemplateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.list({}) });
+    },
+  });
+
   /**
    * Delete contest mutation
    */
@@ -147,6 +155,7 @@ export function useContest(contestId: string) {
 
     // Mutations
     updateContestMutation,
+    updateContestCertificateTemplateMutation,
     deleteContestMutation,
     publishContestMutation,
     evaluateMutation,

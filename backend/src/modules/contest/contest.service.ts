@@ -375,6 +375,22 @@ export class ContestService {
         });
     }
 
+    async updateContestCertificateTemplate(contestId: string, organizationId: string, certificateTemplateId: string) {
+        if (!certificateTemplateId) {
+            throw new BadRequestError("Certificate template ID is required");
+        }
+
+        const contest = await this.contestRepo.findById(contestId, organizationId);
+        if (!contest) throw new NotFoundError("Contest not found");
+
+        const template = await prisma.certificateTemplate.findFirst({
+            where: { id: certificateTemplateId, organizationId }
+        });
+        if (!template) throw new NotFoundError("Certificate template not found");
+
+        return await this.contestRepo.updateCertificateTemplate(contestId, organizationId, certificateTemplateId);
+    }
+
     async publishContest(contestId: string, organizationId: string) {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) throw new NotFoundError("Contest not found");

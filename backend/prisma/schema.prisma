@@ -400,8 +400,10 @@ model Contest {
   isArchived                  Boolean        @default(false)
   createdAt                   DateTime       @default(now())
   updatedAt                   DateTime       @updatedAt
+  certificateTemplateId       String?
 
   // Relations
+  certificateTemplate CertificateTemplate? @relation(fields: [certificateTemplateId], references: [id], onDelete: SetNull)
   organization       Organization        @relation(fields: [organizationId], references: [id])
   createdBy          Admin               @relation("ContestCreatedBy", fields: [createdById], references: [id])
   prizes             Prize[]
@@ -869,6 +871,7 @@ model CertificateTemplate {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contests     Contest[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
