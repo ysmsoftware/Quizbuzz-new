@@ -29,6 +29,7 @@ import { CertificateQueueJobData } from "../queues";
 import { renderCertificateHtml, renderCustomTemplateHtml } from "../modules/certificate/certificate.template";
 import { auditContextStorage } from "../common/audit-context";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -182,32 +183,51 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
         );
     }
 
+    // Checkpoint identity for this job — shared by every withCheckpoint/
+    // recordJobBoundary call below. See common/job-checkpoint.ts. Only
+    // recorded to Redis, batched into Postgres by checkpoint-drain.worker.ts —
+    // never a synchronous write on this hot path.
+    const checkpointMeta: CheckpointMeta = {
+        jobId: job.id ?? certificateId,
+        queue: "certificate-queue",
+        organizationId,
+        contestId,
+        entityType: "CERTIFICATE",
+        entityId: certificateId,
+    };
+    // Only the first attempt marks the job "started" — a retry re-entering
+    // this function shouldn't push the ScheduledJob summary's startedAt
+    // forward and quietly erase the original queue-wait time.
+    if (job.attemptsMade === 0) {
+        recordJobBoundary(checkpointMeta, "STARTED");
+    }
+
     // ── Step 2: Mark as GENERATING ────────────────────────────────────────────
 
-    await certificateService.markGenerating(certificateId, organizationId);
+    await withCheckpoint(checkpointMeta, "mark_generating", () =>
+        certificateService.markGenerating(certificateId, organizationId)
+    );
 
     // ── Step 3: Render HTML ───────────────────────────────────────────────────
     // Dates on the certificate (contest date, issued date) are formatted in the
     // organization's own configured timezone — see utils/timezone.ts — rather than
     // implicitly using this worker process's local time.
-    const timezone = await organizationRepository.findTimezone(organizationId);
-
-    let html: string;
     let usesCustomTemplate = false;
-
-    if (metadata.templateId) {
-        const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
-        html = renderCustomTemplateHtml(template.htmlContent, metadata, certificateId, timezone);
-        usesCustomTemplate = true;
-    } else {
-        html = renderCertificateHtml(metadata, certificateId, timezone);
-    }
+    const html = await withCheckpoint(checkpointMeta, "render_html", async () => {
+        const timezone = await organizationRepository.findTimezone(organizationId);
+        if (metadata.templateId) {
+            const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
+            usesCustomTemplate = true;
+            return renderCustomTemplateHtml(template.htmlContent, metadata, certificateId, timezone);
+        }
+        return renderCertificateHtml(metadata, certificateId, timezone);
+    });
 
     // ── Step 4: Generate PDF via Puppeteer ────────────────────────────────────
 
     let pdfBuffer: Buffer;
     try {
-        pdfBuffer = await generatePdf(html, usesCustomTemplate);
+        pdfBuffer = await withCheckpoint(checkpointMeta, "generate_pdf", () => generatePdf(html, usesCustomTemplate));
     } catch (err: any) {
         // Puppeteer errors (browser crash, render timeout) are retryable
         throw new Error(`[certificate-worker] PDF generation failed for cert ${certificateId}: ${err.message}`);
@@ -223,7 +243,9 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
 
     let uploadResult: { url: string; key: string };
     try {
-        uploadResult = await storageService.upload(storageKey, pdfBuffer, "application/pdf");
+        uploadResult = await withCheckpoint(checkpointMeta, "upload_storage", () =>
+            storageService.upload(storageKey, pdfBuffer, "application/pdf")
+        );
     } catch (err: any) {
         // Storage errors are retryable — S3 may be briefly unavailable
         throw new Error(`[certificate-worker] Upload failed for cert ${certificateId}: ${err.message}`);
@@ -235,12 +257,16 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
 
     // ── Step 6: Mark as GENERATED ─────────────────────────────────────────────
 
-    await certificateService.markGenerated(
-        certificateId,
-        organizationId,
-        uploadResult.url,
-        uploadResult.key
+    await withCheckpoint(checkpointMeta, "mark_generated", () =>
+        certificateService.markGenerated(
+            certificateId,
+            organizationId,
+            uploadResult.url,
+            uploadResult.key
+        )
     );
+
+    recordJobBoundary(checkpointMeta, "COMPLETED");
 
     logger.info(
         `[certificate-worker] Job ${job.id} complete — cert ${certificateId} GENERATED`
@@ -299,6 +325,24 @@ export class CertificateWorker implements Worker {
                         `[certificate-worker] Could not mark cert ${job.data.certificateId} as FAILED: ${markErr.message}`
                     );
                 }
+
+                // Same recorded-on-every-failed-attempt behavior as markFailed above
+                // (not just the final exhausted attempt) — a subsequent successful
+                // retry re-records STARTED/COMPLETED and moves the ScheduledJob
+                // summary row's status forward again, consistent with
+                // CERTIFICATE_STATUS_ORDER's "FAILED — terminal, but retryable".
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? job.data.certificateId,
+                        queue: "certificate-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: "CERTIFICATE",
+                        entityId: job.data.certificateId,
+                    },
+                    "FAILED",
+                    err.message
+                );
             }
 
             const certificateId = job?.data && "certificateId" in job.data ? job.data.certificateId : undefined;

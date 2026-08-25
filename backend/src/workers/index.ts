@@ -15,6 +15,7 @@ import "./payment-cleanup.worker";
 import "./contest-reconciliation.worker";
 import "./audit-retention-sweep.worker";
 import "./progress-snapshot.worker";
+import "./checkpoint-drain.worker";
 
 export function startWorkers() {
     logger.info("Starting background workers...");

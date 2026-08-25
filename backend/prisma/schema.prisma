@@ -1182,6 +1182,38 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// JOB CHECKPOINTS  (per-stage timing for BullMQ jobs — render/upload/etc.)
+// Written only by the checkpoint-drain worker, batched from a Redis Stream —
+// never a per-stage synchronous insert. See common/job-checkpoint.ts and
+// common/checkpoint-drain.ts. Deliberately separate from AuditLog: this is
+// high-volume, eventually-consistent operational timing data, not the
+// business audit trail — different retention, different write path.
+
+enum CheckpointStatus {
+  OK
+  ERROR
+}
+
+model JobCheckpoint {
+  id         String            @id // ULID generated at Redis write time — idempotency key for the drain worker's createMany(skipDuplicates)
+  jobId      String // BullMQ job id
+  queue      String // e.g. "certificate-queue"
+  requestId  String?
+  entityType String? // e.g. "CERTIFICATE" — plain string, not FK'd to AuditTargetType
+  entityId   String?
+  stage      String // e.g. "render_html", "generate_pdf", "upload_storage"
+  status     CheckpointStatus  @default(OK)
+  startedAt  DateTime
+  endedAt    DateTime
+  durationMs Int
+  createdAt  DateTime          @default(now()) // when this row was flushed, not when the stage ran
+
+  @@index([jobId])
+  @@index([requestId])
+  @@index([queue, stage, createdAt])
+  @@map("job_checkpoints")
+}
+
 // AMBASSADOR PROGRAM
 
 // Platform-level identity — one Ambassador account per person, not per organization.

@@ -4,10 +4,7 @@ import { config } from "../config";
 import { SubmissionJobPayload, EvaluationJobPayload } from "../modules/submission/submission.types";
 import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 
-/**
- * Shared default job options derived from config.
- * All queues use the same retry / backoff policy.
- */
+/** Shared default job options for BullMQ queues (retry/backoff policy). */
 const defaultJobOptions = {
     attempts: config.queue.retryAttempts,
     backoff: {
@@ -60,11 +57,7 @@ export const certificateQueue = new Queue<CertificateQueueJobData>("certificate-
     defaultJobOptions,
 });
 
-/**
- * QueueEvents companion for certificateQueue — required by BullMQ's Job.waitUntilFinished(),
- * used only by CertificateTemplateService.testGenerate() to synchronously await a single
- * one-off test job's completion (a few seconds) instead of the frontend having to poll.
- */
+/** QueueEvents to await certificate generation synchronously for test certificates. */
 export const certificateQueueEvents = new QueueEvents("certificate-queue", {
     connection: redis,
     prefix: config.queue.prefix,
@@ -159,30 +152,11 @@ export interface RouteTransferJobPayload {
     amount: number;
     razorpayPaymentId: string;
     currency: string;
-    /**
-     * Set only by an explicit, human-triggered retry (e.g. an ops admin retrying a
-     * FAILED transfer from the dashboard after fixing whatever caused it). Normal
-     * webhook-driven and reconciliation-driven jobs never set this — it exists to
-     * bypass the "don't auto-retry a FAILED transfer in a hot loop" guard in
-     * PayoutService.createRouteTransferForPayment for the one case where a human has
-     * actually looked at why it failed and decided it's safe to try again.
-     */
+    /** Bypasses auto-retry loops on manual admin retries for failed transfers. */
     forceRetry?: boolean;
 }
 
-/**
- * Route transfer queue.
- * Producers : PaymentService.handleWebhook (payment.captured branch)
- * Consumers : route-transfer.worker.ts
- * JobId     : `route-transfer-{paymentId}` ← dedupes concurrent webhook redeliveries
- *
- * Deliberately queued rather than fired inline from the webhook: the webhook is
- * the single source of truth for payment state and must stay fast/reliable under
- * registration-traffic bursts. Queuing gets durability (survives process restarts),
- * automatic retries via config.queue.retryAttempts/backoff, and a scheduling delay
- * (config.payout.transferDelayMs) as a safety window before funds leave the
- * primary account — all without blocking the webhook response.
- */
+/** Queue for route payouts to transfer payment funds after a safety delay. */
 export const routeTransferQueue = new Queue<RouteTransferJobPayload>("route-transfer-queue", {
     connection: redis,
     prefix: config.queue.prefix,
@@ -191,18 +165,7 @@ export const routeTransferQueue = new Queue<RouteTransferJobPayload>("route-tran
 
 // ─── Payment Cleanup ──────────────────────────────────────────────────────────
 
-/**
- * Payment cleanup queue.
- * Producers : PaymentService.ensurePaymentCleanupRecurringJob (repeatable, no per-payment payload)
- * Consumers : payment-cleanup.worker.ts
- *
- * Periodic sweep that closes out abandoned Payment rows — still PENDING/CREATED
- * with no activity in the last config.payment.abandonedCloseAfterMs (default 24h) —
- * to FAILED, so a contest's registration list never shows an indefinitely-ambiguous
- * "pending" entry for someone who registered, abandoned checkout, and never came
- * back. Does not touch anyone actively retrying — the resume-or-fresh flow
- * (PaymentService.createOrder) already handles those via config.payment.orderReuseWindowMs.
- */
+/** Periodic sweep that closes out abandoned pending payment records to FAILED. */
 export const paymentCleanupQueue = new Queue("payment-cleanup-queue", {
     connection: redis,
     prefix: config.queue.prefix,
@@ -211,17 +174,7 @@ export const paymentCleanupQueue = new Queue("payment-cleanup-queue", {
 
 // ─── Contest Start Reconciliation ─────────────────────────────────────────────
 
-/**
- * Contest reconciliation queue.
- * Producers : ContestService.ensureContestStartReconciliationJob (repeatable, no per-contest payload)
- * Consumers : contest-reconciliation.worker.ts
- *
- * Periodic sweep that catches a CONTEST_START job that went missing entirely — e.g.
- * the "Two-Redis Trap" incident (job stranded in idle-mode Redis after a go-live
- * switch) — which quiz-timer.worker.ts's own staleness self-heal cannot catch, because
- * that only re-schedules a job that fires at the WRONG time, not one that never fires
- * at all. See docs/contest-start-reliability-spec.md.
- */
+/** Periodic sweep that ensures missing or stranded CONTEST_START jobs are rescheduled. */
 export const contestReconciliationQueue = new Queue("contest-reconciliation-queue", {
     connection: redis,
     prefix: config.queue.prefix,
@@ -230,15 +183,7 @@ export const contestReconciliationQueue = new Queue("contest-reconciliation-queu
 
 // ─── Audit Log Retention ───────────────────────────────────────────────────────
 
-/**
- * Audit retention queue.
- * Producers : ensureAuditRetentionSweepJob (repeatable, no payload) — see common/audit-retention.ts
- * Consumers : audit-retention-sweep.worker.ts
- *
- * Daily sweep that hard-deletes audit_logs rows older than
- * auditLogConfig.retention.maxAgeDays, in small batches so it never holds a
- * long lock on a table the app writes to constantly.
- */
+/** Daily sweep that deletes audit log rows older than the retention threshold. */
 export const auditRetentionQueue = new Queue("audit-retention-queue", {
     connection: redis,
     prefix: config.queue.prefix,
@@ -247,17 +192,17 @@ export const auditRetentionQueue = new Queue("audit-retention-queue", {
 
 // ─── Progress Snapshot (Redis durability) ─────────────────────────────────────
 
-/**
- * Progress snapshot queue.
- * Producers : DurabilityService.ensureRecurringJob (repeatable, no per-contest payload)
- * Consumers : progress-snapshot.worker.ts
- *
- * Periodic sweep that upserts every live-contest participant's in-progress Redis
- * state (answers, phase, question order) into participant_progress_snapshots, so
- * submitQuiz() can rehydrate from the last snapshot instead of a zero-answer
- * fallback when a participant's Redis session is unexpectedly gone.
- */
+/** Periodic sweep that backs up live-contest participant state from Redis to Postgres. */
 export const progressSnapshotQueue = new Queue("progress-snapshot-queue", {
+    connection: redis,
+    prefix: config.queue.prefix,
+    defaultJobOptions,
+});
+
+// ─── Job Checkpoint Drain ──────────────────────────────────────────────────────
+
+/** Queue that batches and flushes job timing data from a Redis Stream into Postgres. */
+export const checkpointDrainQueue = new Queue("checkpoint-drain-queue", {
     connection: redis,
     prefix: config.queue.prefix,
     defaultJobOptions,

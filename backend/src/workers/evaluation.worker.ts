@@ -28,6 +28,7 @@ import { EvaluationJobPayload } from "../modules/submission/submission.types";
 import { ApplyEvaluationInput } from "../modules/submission/submission.types";
 import { auditContextStorage } from "../common/audit-context";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -259,11 +260,25 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     }
     await job.updateProgress(10);
 
+    // Checkpoint identity for this job — see common/job-checkpoint.ts. Only
+    // recorded to Redis, batched into Postgres by checkpoint-drain.worker.ts —
+    // never a synchronous write on this hot path.
+    const checkpointMeta: CheckpointMeta = {
+        jobId: job.id ?? submissionId,
+        queue: "evaluation-queue",
+        organizationId,
+        contestId,
+        entityType: "SUBMISSION",
+        entityId: submissionId,
+    };
+    if (job.attemptsMade === 0) {
+        recordJobBoundary(checkpointMeta, "STARTED");
+    }
+
     // ── Step 2: Load submission (with all answer rows) ────────────────────────
 
-    const submission = await submissionService.getSubmissionById(
-        organizationId,
-        submissionId
+    const submission = await withCheckpoint(checkpointMeta, "load_submission", () =>
+        submissionService.getSubmissionById(organizationId, submissionId)
     );
 
     // Already evaluated — idempotency: mark job done without re-scoring
@@ -271,6 +286,7 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
         logger.warn(
             `[evaluation-worker] Submission ${submissionId} already EVALUATED — skipping`
         );
+        recordJobBoundary(checkpointMeta, "COMPLETED");
         await job.updateProgress(100);
         return;
     }
@@ -297,9 +313,8 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     // of this data and it is read-only. No SubmissionService method wraps this
     // because scoring config is owned by the Question domain, not Submission.
 
-    const scoringRows = await questionRepository.getContestQuestionsWithScoringData(
-        contestId,
-        organizationId
+    const scoringRows = await withCheckpoint(checkpointMeta, "load_scoring_config", () =>
+        questionRepository.getContestQuestionsWithScoringData(contestId, organizationId)
     );
 
     if (scoringRows.length === 0) {
@@ -331,7 +346,9 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
 
     // ── Step 5: Score every answer (pure function — no I/O) ──────────────────
 
-    const result = scoreSubmission(rawAnswers, scoringMap, maxPossibleScore);
+    const result = await withCheckpoint(checkpointMeta, "score_answers", async () =>
+        scoreSubmission(rawAnswers, scoringMap, maxPossibleScore)
+    );
 
     logger.info(
         `[evaluation-worker] Job ${job.id} — scored: correct=${result.correct} wrong=${result.wrong} skipped=${result.skipped} score=${result.score} percentage=${result.percentage}`
@@ -341,7 +358,9 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     // ── Step 6: Persist results via SubmissionService ─────────────────────────
     // Converts Decimal → Prisma.Decimal for DB write.
 
-    const contest = await contestRepository.findById(contestId, organizationId);
+    const contest = await withCheckpoint(checkpointMeta, "load_contest", () =>
+        contestRepository.findById(contestId, organizationId)
+    );
     if (!contest) {
         throw new UnrecoverableError(`[evaluation-worker] Contest not found: ${contestId}`);
     }
@@ -364,10 +383,8 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
         })),
     };
 
-    await submissionService.applyEvaluationResult(
-        organizationId,
-        submissionId,
-        applyInput
+    await withCheckpoint(checkpointMeta, "persist_evaluation", () =>
+        submissionService.applyEvaluationResult(organizationId, submissionId, applyInput)
     );
 
     logger.info(
@@ -378,7 +395,11 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     // ── Step 7: Schedule a leaderboard rebuild ────────────────────────────────
     // See scheduleLeaderboardRebuild() above for why this fires after every
     // evaluation (debounced) instead of trying to detect "the last one".
-    await scheduleLeaderboardRebuild(contestId, organizationId);
+    await withCheckpoint(checkpointMeta, "schedule_leaderboard_rebuild", () =>
+        scheduleLeaderboardRebuild(contestId, organizationId)
+    );
+
+    recordJobBoundary(checkpointMeta, "COMPLETED");
 
     logger.info(
         `[evaluation-worker] Leaderboard rebuild scheduled for contest ${contestId} ` +
@@ -426,6 +447,21 @@ export class EvaluationWorker implements Worker {
                 targetLabel: job?.data.submissionId ?? "unknown",
                 organizationId: job?.data.organizationId,
             });
+
+            if (job?.data) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? job.data.submissionId,
+                        queue: "evaluation-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: "SUBMISSION",
+                        entityId: job.data.submissionId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         this.worker.on("error", (err) => {

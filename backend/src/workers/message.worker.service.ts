@@ -7,13 +7,14 @@ import { prisma } from "../config/db";
 import { config } from "../config";
 import { formatDateHuman, formatTimeHuman } from "../utils/timezone";
 import { logAudit } from "../common/audit-log";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 
 export class MessageWorkerService {
 
     constructor(private messageService: MessagingService) { }
 
-    async process(messageLogId: string) {
+    async process(messageLogId: string, jobId: string, attemptsMade: number) {
         const log = await this.messageService.getMessageById(messageLogId)
 
         if (!log) {
@@ -35,8 +36,26 @@ export class MessageWorkerService {
             throw new Error("Destination is missing");
         }
 
+        // Checkpoint identity for this job — see common/job-checkpoint.ts.
+        // Only recorded to Redis, batched into Postgres by
+        // checkpoint-drain.worker.ts — never a synchronous write here.
+        const checkpointMeta: CheckpointMeta = {
+            jobId,
+            queue: "message-queue",
+            organizationId: log.organizationId,
+            entityType: "MESSAGE",
+            entityId: log.id,
+        };
+        // Only the first attempt marks the job "started" — a retry
+        // shouldn't push the ScheduledJob summary's startedAt forward.
+        if (attemptsMade === 0) {
+            recordJobBoundary(checkpointMeta, "STARTED");
+        }
+
         try {
-            await this.messageService.updateMessageStatus(log.id, "PROCESSING");
+            await withCheckpoint(checkpointMeta, "mark_processing", () =>
+                this.messageService.updateMessageStatus(log.id, "PROCESSING")
+            );
 
             logger.info("Sending message", {
                 messageLogId: log.id,
@@ -46,17 +65,23 @@ export class MessageWorkerService {
                 params: log.params,
             });
 
-            const response = await provider.send(
-                log.template as MessageTemplate,
-                destination,
-                log.params as unknown as TemplateParamsMap[MessageTemplate],
+            const response = await withCheckpoint(checkpointMeta, "send_provider", () =>
+                provider.send(
+                    log.template as MessageTemplate,
+                    destination,
+                    log.params as unknown as TemplateParamsMap[MessageTemplate],
+                )
             );
 
-            await this.messageService.updateMessageStatus(log.id, "SENT", {
-                providerMsgId: (response as any)?.messageId ?? null,
-                sentAt: new Date(),
-                metadata: response ?? null,
-            });
+            await withCheckpoint(checkpointMeta, "mark_sent", () =>
+                this.messageService.updateMessageStatus(log.id, "SENT", {
+                    providerMsgId: (response as any)?.messageId ?? null,
+                    sentAt: new Date(),
+                    metadata: response ?? null,
+                })
+            );
+
+            recordJobBoundary(checkpointMeta, "COMPLETED");
 
             logAudit({
                 action: "message.sent",
@@ -91,6 +116,12 @@ export class MessageWorkerService {
                     metadata: { channel: log.channel, template: log.template, reason: errMessage },
                 });
             }
+
+            // Recorded on every failed attempt, same as the existing
+            // incrementAttempt/logAudit calls above — not just the final
+            // exhausted attempt. A subsequent successful retry re-records
+            // STARTED/COMPLETED and moves the ScheduledJob summary forward.
+            recordJobBoundary(checkpointMeta, "FAILED", errMessage);
 
             // Rethrow so BullMQ knows the job failed and its failed event fires.
             // Without this, BullMQ treats a silently-caught error as a successful completion.

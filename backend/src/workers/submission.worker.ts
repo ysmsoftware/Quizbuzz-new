@@ -19,6 +19,7 @@ import { submissionService } from "../container";
 import { SubmissionJobPayload } from "../modules/submission/submission.types";
 import { messageQueue } from "../queues";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -82,22 +83,42 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     validatePayload(payload);
     await job.updateProgress(10);
 
+    // Checkpoint identity for this job — see common/job-checkpoint.ts. Only
+    // recorded to Redis, batched into Postgres by checkpoint-drain.worker.ts —
+    // never a synchronous write on this hot path. entityId starts as
+    // participantId (the only stable id known before persisting) and is
+    // updated in place once submissionId exists, below.
+    const checkpointMeta: CheckpointMeta = {
+        jobId: job.id ?? payload.participantId,
+        queue: "submission-queue",
+        organizationId: payload.organizationId,
+        contestId: payload.contestId,
+        entityType: "SUBMISSION",
+        entityId: payload.participantId,
+    };
+    if (job.attemptsMade === 0) {
+        recordJobBoundary(checkpointMeta, "STARTED");
+    }
+
     // ── Step 2: Persist to DB via SubmissionService ───────────────────────────
     // Service handles idempotency: if submission already exists, it returns
     // the existing ID without a duplicate insert.
-    const { submissionId, organizationId } = await submissionService.persistSubmission({
-        organizationId: payload.organizationId,
-        participantId:  payload.participantId,
-        contestId:      payload.contestId,
-        submittedAt:    new Date(payload.submittedAt),
-        timeTakenSecs:  payload.timeTakenSecs,
-        timeTakenMs:    payload.timeTakenMs ?? (payload.timeTakenSecs * 1000),
-        source:         payload.source,
-        totalQuestions: payload.totalQuestions,
-        attempted:      payload.attempted,
-        joinedAt:       payload.joinedAt ? new Date(payload.joinedAt) : null,
-        answers:        payload.answers,
-    });
+    const { submissionId, organizationId } = await withCheckpoint(checkpointMeta, "persist_submission", () =>
+        submissionService.persistSubmission({
+            organizationId: payload.organizationId,
+            participantId:  payload.participantId,
+            contestId:      payload.contestId,
+            submittedAt:    new Date(payload.submittedAt),
+            timeTakenSecs:  payload.timeTakenSecs,
+            timeTakenMs:    payload.timeTakenMs ?? (payload.timeTakenSecs * 1000),
+            source:         payload.source,
+            totalQuestions: payload.totalQuestions,
+            attempted:      payload.attempted,
+            joinedAt:       payload.joinedAt ? new Date(payload.joinedAt) : null,
+            answers:        payload.answers,
+        })
+    );
+    checkpointMeta.entityId = submissionId;
 
     logger.info(
         `[submission-worker] Job ${job.id} — persisted submission ${submissionId}`
@@ -107,12 +128,16 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     // ── Step 3: Enqueue evaluation job ────────────────────────────────────────
     // jobId = submissionId → BullMQ deduplicates if evaluation was already
     // queued (e.g. admin triggered bulk evaluation first).
-    await submissionService.enqueueEvaluation({
-        organizationId: organizationId,
-        submissionId,
-        participantId:  payload.participantId,
-        contestId:      payload.contestId,
-    });
+    await withCheckpoint(checkpointMeta, "enqueue_evaluation", () =>
+        submissionService.enqueueEvaluation({
+            organizationId: organizationId,
+            submissionId,
+            participantId:  payload.participantId,
+            contestId:      payload.contestId,
+        })
+    );
+
+    recordJobBoundary(checkpointMeta, "COMPLETED");
 
     logger.info(
         `[submission-worker] Job ${job.id} complete — evaluation enqueued for submission ${submissionId}`
@@ -177,6 +202,21 @@ export class SubmissionWorker implements Worker {
                 targetLabel: job?.data.participantId ?? "unknown",
                 organizationId: job?.data.organizationId,
             });
+
+            if (job?.data) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? job.data.participantId,
+                        queue: "submission-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: "SUBMISSION",
+                        entityId: job.data.participantId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         this.worker.on("error", (err) => {
