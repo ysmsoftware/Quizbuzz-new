@@ -79,6 +79,14 @@ export type TemplateParamsMap = {
 
     // ── Contest lifecycle ──────────────────────────────────────────────────────
 
+    [MessageTemplate.SUBMISSION_CONFIRMATION]: {
+        name: string,
+        eventName: string,
+        submissionRef: string,
+        submittedAt: string,
+        totalQuestions: string,
+        attempted: string,
+    },
     [MessageTemplate.DISQUALIFICATION_NOTICE]: {
         name: string,
         eventName: string,

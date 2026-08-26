@@ -61,9 +61,16 @@ export function useFaceDetection({ videoRef, active, wsEmit, overlayCanvasRef }:
         if (!noFaceStartRef.current) {
           noFaceStartRef.current = Date.now();
         } else if (Date.now() - noFaceStartRef.current > 5000) {
-          store.addWarning({ type: 'NO_FACE', timestamp: Date.now() });
+          // 'FACE_NOT_DETECTED' — must match the backend's ViolationType enum
+          // exactly. This used to say 'NO_FACE', which isn't a real enum
+          // value: every one of these was silently failing to persist
+          // server-side (Prisma rejects the invalid value; the error is
+          // caught and swallowed in proctoring.service.ts's recordViolation),
+          // so it never reached the DB or the admin dashboard. Same bug class
+          // as the backend's MID_POINT/RANDOM snapshot captureType mismatch.
+          store.addWarning({ type: 'FACE_NOT_DETECTED', timestamp: Date.now() });
           wsEmit?.('PROCTOR_WARNING', {
-            warningType: 'NO_FACE',
+            warningType: 'FACE_NOT_DETECTED',
             timestamp: Date.now(),
           });
           noFaceStartRef.current = null; // Reset to avoid spam

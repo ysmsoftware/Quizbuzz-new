@@ -37,7 +37,7 @@ import { contestService } from "@/lib/services/contest-service";
 import { submissionService } from "@/lib/services/submission-service";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
-const CAMERA_DEPENDENT_WARNING_TYPES = new Set(["MULTIPLE_FACES", "NO_FACE", "AUDIO_ANOMALY"]);
+const CAMERA_DEPENDENT_WARNING_TYPES = new Set(["MULTIPLE_FACES", "NO_FACE", "FACE_NOT_DETECTED", "AUDIO_ANOMALY"]);
 
 export default function QuizPlayPage() {
     const params = useParams();
@@ -244,6 +244,7 @@ export default function QuizPlayPage() {
             FULLSCREEN_EXIT: "Fullscreen exited!",
             MULTIPLE_FACES: "Multiple faces detected!",
             NO_FACE: "No face detected — please stay in frame.",
+            FACE_NOT_DETECTED: "No face detected — please stay in frame.",
             AUDIO_ANOMALY: "High background noise detected.",
         };
         toast.warning(msgs[type] ?? "Unusual activity detected.", {

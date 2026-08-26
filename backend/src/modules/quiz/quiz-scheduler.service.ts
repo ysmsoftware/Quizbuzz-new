@@ -207,8 +207,21 @@ export class QuizSchedulerService {
      * Schedule identity audit snapshots for a specific participant.
      * Called when a participant enters the quiz phase.
      *
-     * - MID_POINT: exactly at totalDuration / 2
-     * - RANDOM:    random time between 25% and 75% of duration
+     * - SNAPSHOT_MID_POINT: exactly at totalDuration / 2
+     * - SNAPSHOT_RANDOM:    random time between 25% and 75% of duration
+     *
+     * captureType must match a real `ViolationType` value (schema.prisma) —
+     * it's forwarded verbatim, with no schema translation, all the way through
+     * quiz-timer.worker.ts -> QuizGateway.emitCaptureRequest -> the
+     * `quiz:v1:capture_request` socket event -> ProctoringManager.tsx's
+     * handleCaptureAndUpload -> POST /quiz-proctoring/confirm's `type` field,
+     * which Zod-validates against `z.nativeEnum(ViolationType)`. The bare
+     * "MID_POINT"/"RANDOM" this used to send belonged to a different, unused
+     * enum (quiz.validator.ts's CaptureTypeEnum, for a legacy base64-over-socket
+     * snapshot flow) and always 400'd at the confirm step — silently dropping
+     * every scheduled mid-point/random identity-audit capture for every
+     * participant, with nothing surfacing it beyond a console.error in the
+     * browser and a logged Zod error server-side.
      */
     async scheduleSnapshotCaptures(
         contestId: string,
@@ -225,7 +238,7 @@ export class QuizSchedulerService {
             organizationId,
             type: "CAPTURE_REQUEST",
             participantId,
-            captureType: "MID_POINT",
+            captureType: "SNAPSHOT_MID_POINT",
         }, `capture-mid-${participantId}`, midDelay);
 
         // Random capture (between 25% and 75% of duration)
@@ -237,7 +250,7 @@ export class QuizSchedulerService {
             organizationId,
             type: "CAPTURE_REQUEST",
             participantId,
-            captureType: "RANDOM",
+            captureType: "SNAPSHOT_RANDOM",
         }, `capture-random-${participantId}`, randomDelay);
 
         logger.info(

@@ -10,6 +10,7 @@ export type WarningType =
   | 'FULLSCREEN_EXIT'
   | 'MULTIPLE_FACES'
   | 'NO_FACE'
+  | 'FACE_NOT_DETECTED'
   | 'CAMERA_OFF'
   | 'GAZE_AWAY'
   | 'HIGH_VOLUME';

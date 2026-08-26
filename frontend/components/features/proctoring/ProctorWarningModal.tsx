@@ -10,7 +10,7 @@ import { useProctoringStore } from '@/lib/stores/proctoring-store';
 // ProctorWarningModal — High-stakes violation modal
 // ═══════════════════════════════════════════════════════
 
-export type WarningType = 'TAB_SWITCH' | 'FULLSCREEN_EXIT' | 'MULTIPLE_FACES' | 'NO_FACE';
+export type WarningType = 'TAB_SWITCH' | 'FULLSCREEN_EXIT' | 'MULTIPLE_FACES' | 'NO_FACE' | 'FACE_NOT_DETECTED';
 
 interface ProctorWarningModalProps {
   open: boolean;
@@ -32,7 +32,7 @@ export function ProctorWarningModal({
   
   const isFlagged = (warningCount || 0) >= maxWarnings;
 
-  if (type === 'NO_FACE') {
+  if (type === 'NO_FACE' || type === 'FACE_NOT_DETECTED') {
     return <NoFaceBanner onDismiss={onDismiss} />;
   }
 

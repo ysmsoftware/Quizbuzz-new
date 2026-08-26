@@ -152,9 +152,9 @@ export const EmailTemplates: {
                     <p style="${P}">Dear ${params.name},</p>
                     <p style="${P}">Your payment has been successfully processed. Thank you for your registration.</p>
                     ${infoTable([
-                        { label: "Event / Contest", value: params.eventName },
-                        { label: "Amount Paid", value: params.amount, strong: true, valueColor: COLORS.primaryDark },
-                    ])}
+                    { label: "Event / Contest", value: params.eventName },
+                    { label: "Amount Paid", value: params.amount, strong: true, valueColor: COLORS.primaryDark },
+                ])}
                     <p style="${P}">Your registration details will be sent to you shortly.</p>
                     ${signOff("YSM Info Solution")}
                 `,
@@ -253,6 +253,29 @@ export const EmailTemplates: {
     },
 
     // ── Contest lifecycle templates ────────────────────────────────────────────
+
+    [MessageTemplate.SUBMISSION_CONFIRMATION]: {
+        build: (params) => ({
+            subject: `Submission Confirmed — ${params.eventName}`,
+            html: renderEmailLayout({
+                brandName: "YSM Info Solution",
+                preheader: `Your submission for ${params.eventName} was received`,
+                heading: "Quiz Submitted!",
+                bodyHtml: `
+                    <p style="${P}">Dear ${params.name},</p>
+                    <p style="${P}">Your responses for <strong>${params.eventName}</strong> have been successfully submitted on QuizBuzz.</p>
+                    ${infoTable([
+                    { label: "Submission Ref", value: params.submissionRef, strong: true, valueColor: COLORS.primaryDark },
+                    { label: "Submitted At", value: params.submittedAt },
+                    { label: "Total Questions", value: params.totalQuestions },
+                    { label: "Attempted", value: params.attempted },
+                ])}
+                    <p style="${P}">Results will be published by the contest organiser once evaluation is complete.</p>
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
 
     [MessageTemplate.DISQUALIFICATION_NOTICE]: {
         build: (params) => ({

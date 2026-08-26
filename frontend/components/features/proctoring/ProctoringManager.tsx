@@ -156,18 +156,30 @@ export function ProctoringManager({
     }, [sessionToken, videoRef, proctoringEnabled]);
 
     // ─────────────────────────────────────────────────────────────────────
-    // Shared helper: fire a silent admin-only evidence capture + socket event.
-    // Does NOT show any toast, modal, or warning to the participant.
+    // notifyViolation: tells the admin dashboard about a violation, every
+    // single time it happens — not just once some repeat-count threshold is
+    // crossed. Handled server-side by quiz.gateway.ts's handleViolation(),
+    // which persists it and pushes admin:v1:violation_alert to the live
+    // Violation Feed. Kept separate from evidence capture (below) so every
+    // occurrence is visible to admins without uploading an S3 snapshot for
+    // every single momentary tab switch.
+    //
+    // captureEvidence: uploads a snapshot as supporting evidence. Still
+    // reserved for the repeated/serious case (past each type's own
+    // threshold) — bandwidth/cost reasons, not visibility ones.
     // ─────────────────────────────────────────────────────────────────────
-    const fireSilentCapture = useCallback((type: string, count: number) => {
-        handleCaptureAndUpload(type);
+    const notifyViolation = useCallback((type: string, metadata: Record<string, unknown> = {}) => {
         socket?.emit('quiz:v1:violation', {
             type,
             severity: 'LOW',
-            metadata: { silent: true, thresholdExceeded: true, count },
+            metadata,
             timestamp: new Date().toISOString()
         });
-    }, [handleCaptureAndUpload, socket]);
+    }, [socket]);
+
+    const captureEvidence = useCallback((type: string) => {
+        handleCaptureAndUpload(type);
+    }, [handleCaptureAndUpload]);
 
     // 1. REQUEST + ENFORCE FULLSCREEN
     //
@@ -206,38 +218,38 @@ export function ProctoringManager({
             const isCurrentlyFullscreen = !!document.fullscreenElement;
             if (!isCurrentlyFullscreen && store.isFullscreen) {
                 fullscreenExitsCountRef.current += 1;
-                if (fullscreenExitsCountRef.current > 5) {
-                    // > 5 exits: silent evidence capture — admin only, no user notification
-                    fireSilentCapture('FULLSCREEN_EXIT', fullscreenExitsCountRef.current);
-                } else {
-                    store.addWarning({ type: 'FULLSCREEN_EXIT', timestamp: Date.now() });
-                    emitProctoringWarning('FULLSCREEN_EXIT');
-                }
+                const count = fullscreenExitsCountRef.current;
+                store.addWarning({ type: 'FULLSCREEN_EXIT', timestamp: Date.now() });
+                emitProctoringWarning('FULLSCREEN_EXIT');
+                // Admin sees every exit from the first one; evidence capture
+                // is still reserved for the repeated case (> 5).
+                notifyViolation('FULLSCREEN_EXIT', { count });
+                if (count > 5) captureEvidence('FULLSCREEN_EXIT');
             }
             store.setFullscreen(isCurrentlyFullscreen);
         };
 
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }, [emitProctoringWarning, store, fireSilentCapture]);
+    }, [emitProctoringWarning, store, notifyViolation, captureEvidence]);
 
     // 2. TAB SWITCH DETECTION
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'hidden') {
                 tabSwitchesCountRef.current += 1;
-                if (tabSwitchesCountRef.current > 5) {
-                    // > 5 switches: silent evidence capture — admin only, no user notification
-                    fireSilentCapture('TAB_SWITCH', tabSwitchesCountRef.current);
-                } else {
-                    store.addWarning({ type: 'TAB_SWITCH', timestamp: Date.now() });
-                    emitProctoringWarning('TAB_SWITCH');
-                }
+                const count = tabSwitchesCountRef.current;
+                store.addWarning({ type: 'TAB_SWITCH', timestamp: Date.now() });
+                emitProctoringWarning('TAB_SWITCH');
+                // Admin sees every switch from the first one; evidence capture
+                // is still reserved for the repeated case (> 5).
+                notifyViolation('TAB_SWITCH', { count });
+                if (count > 5) captureEvidence('TAB_SWITCH');
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [emitProctoringWarning, store, fireSilentCapture]);
+    }, [emitProctoringWarning, store, notifyViolation, captureEvidence]);
 
     // 3. COPY / PASTE PREVENTION
     useEffect(() => {
@@ -320,21 +332,30 @@ export function ProctoringManager({
     }, [videoRef]);
 
     // 7. FACE DETECTION
-    // Wrap emit so MULTIPLE_FACES events apply the >3 threshold before notifying.
+    // Every face-detection warning (FACE_NOT_DETECTED, GAZE_AWAY,
+    // MULTIPLE_FACES) is already gated by useFaceDetection's own
+    // continuous-duration threshold (5s/6s/3s), so each one reaching here is
+    // meaningful enough to notify admin immediately. MULTIPLE_FACES keeps its
+    // extra >3-occurrences tier on top of that: past it, evidence is captured
+    // and the participant-facing warning is deliberately suppressed (stays
+    // silent to them once it's clearly not accidental) — admin still gets it.
     const wrappedEmit = useCallback((event: string, data: Record<string, unknown>) => {
         if (event === 'PROCTOR_WARNING' && typeof data.warningType === 'string') {
             const type = data.warningType;
             if (type === 'MULTIPLE_FACES') {
                 multipleFacesCountRef.current += 1;
-                if (multipleFacesCountRef.current > 3) {
-                    // > 3 occurrences: silent evidence capture — admin only, no user notification
-                    fireSilentCapture('MULTIPLE_FACES', multipleFacesCountRef.current);
+                const count = multipleFacesCountRef.current;
+                notifyViolation('MULTIPLE_FACES', { count });
+                if (count > 3) {
+                    captureEvidence('MULTIPLE_FACES');
                     return; // Skip standard user warning
                 }
+            } else {
+                notifyViolation(type);
             }
             emitProctoringWarning(type);
         }
-    }, [emitProctoringWarning, fireSilentCapture]);
+    }, [emitProctoringWarning, notifyViolation, captureEvidence]);
 
     useFaceDetection({
         videoRef,
@@ -398,6 +419,9 @@ export function ProctoringManager({
                         if (continuousSpikeCount >= 4) {
                             store.addWarning({ type: 'HIGH_VOLUME', timestamp: Date.now() });
                             emitProctoringWarning('AUDIO_ANOMALY');
+                            // Previously never reached the server at all — admin had zero
+                            // visibility into audio anomalies regardless of how often they fired.
+                            notifyViolation('AUDIO_ANOMALY');
                             continuousSpikeCount = 0; // Reset after warning to prevent spamming warnings
                         }
                     } else {
@@ -425,7 +449,7 @@ export function ProctoringManager({
                 audioContext.close();
             }
         };
-    }, [emitProctoringWarning, store, proctoringEnabled]);
+    }, [emitProctoringWarning, store, proctoringEnabled, notifyViolation]);
 
     // 10. ENTRY AUTO CAPTURE TRIGGER (Runs exactly once when the camera is active)
     useEffect(() => {

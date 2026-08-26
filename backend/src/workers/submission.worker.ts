@@ -15,9 +15,10 @@
 import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { submissionService } from "../container";
+import { submissionService, messagingService } from "../container";
+import { prisma } from "../config/db";
+import { MessageTemplate } from "../types/message-template.enum";
 import { SubmissionJobPayload } from "../modules/submission/submission.types";
-import { messageQueue } from "../queues";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 import logger from "../config/logger";
@@ -106,16 +107,16 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     const { submissionId, organizationId } = await withCheckpoint(checkpointMeta, "persist_submission", () =>
         submissionService.persistSubmission({
             organizationId: payload.organizationId,
-            participantId:  payload.participantId,
-            contestId:      payload.contestId,
-            submittedAt:    new Date(payload.submittedAt),
-            timeTakenSecs:  payload.timeTakenSecs,
-            timeTakenMs:    payload.timeTakenMs ?? (payload.timeTakenSecs * 1000),
-            source:         payload.source,
+            participantId: payload.participantId,
+            contestId: payload.contestId,
+            submittedAt: new Date(payload.submittedAt),
+            timeTakenSecs: payload.timeTakenSecs,
+            timeTakenMs: payload.timeTakenMs ?? (payload.timeTakenSecs * 1000),
+            source: payload.source,
             totalQuestions: payload.totalQuestions,
-            attempted:      payload.attempted,
-            joinedAt:       payload.joinedAt ? new Date(payload.joinedAt) : null,
-            answers:        payload.answers,
+            attempted: payload.attempted,
+            joinedAt: payload.joinedAt ? new Date(payload.joinedAt) : null,
+            answers: payload.answers,
         })
     );
     checkpointMeta.entityId = submissionId;
@@ -132,8 +133,8 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
         submissionService.enqueueEvaluation({
             organizationId: organizationId,
             submissionId,
-            participantId:  payload.participantId,
-            contestId:      payload.contestId,
+            participantId: payload.participantId,
+            contestId: payload.contestId,
         })
     );
 
@@ -147,18 +148,37 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
     // ── Step 4: Enqueue submission confirmation notification ──────────────────
     // Fire-and-forget: if this fails it won't affect the submission.
     try {
-        await messageQueue.add(
-            "send-message",
-            {
+        const p = await prisma.participant.findUnique({
+            where: { id: payload.participantId },
+            select: {
+                organizationId: true,
+                contact: { select: { firstName: true, email: true } },
+                contest: { select: { title: true } },
+            },
+        });
+
+        const orgId = payload.organizationId || p?.organizationId;
+        if (p?.contact?.email && orgId) {
+            await messagingService.enqueueMessage(orgId, {
                 participantId: payload.participantId,
                 contestId: payload.contestId,
-                organizationId: payload.organizationId,
-                template: "REGISTRATION_SUCCESSFUL",
-                channel: "WHATSAPP",
-                params: { submissionRef: submissionId },
-            },
-            { jobId: `submission-confirm-${payload.participantId}` }
-        );
+                channel: "EMAIL",
+                template: MessageTemplate.SUBMISSION_CONFIRMATION,
+                recipient: p.contact.email,
+                subject: `Submission Confirmed — ${p.contest?.title ?? "Quiz"}`,
+                params: {
+                    name: p.contact.firstName || "Participant",
+                    eventName: p.contest?.title ?? "Quiz",
+                    submissionRef: submissionId,
+                    submittedAt: new Date(payload.submittedAt).toLocaleString(),
+                    totalQuestions: String(payload.totalQuestions ?? 0),
+                    attempted: String(payload.attempted ?? 0),
+                },
+            });
+            logger.info(`[submission-worker] Enqueued submission confirmation email for participant ${payload.participantId} (${p.contact.email})`);
+        } else {
+            logger.warn(`[submission-worker] Could not send confirmation email: missing recipient email or orgId for participant ${payload.participantId}`);
+        }
     } catch (err) {
         logger.warn(`[submission-worker] Could not enqueue submission notification: ${err}`);
     }
@@ -175,8 +195,8 @@ export class SubmissionWorker implements Worker {
             "submission-queue",
             processSubmission,
             {
-                connection:  redis,
-                prefix:      config.queue.prefix,
+                connection: redis,
+                prefix: config.queue.prefix,
                 concurrency: config.queue.concurrency,
             }
         );
@@ -241,7 +261,7 @@ export class SubmissionWorker implements Worker {
         };
 
         process.on("SIGTERM", () => shutdown("SIGTERM"));
-        process.on("SIGINT",  () => shutdown("SIGINT"));
+        process.on("SIGINT", () => shutdown("SIGINT"));
     }
 }
 
