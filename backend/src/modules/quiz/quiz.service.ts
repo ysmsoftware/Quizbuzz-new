@@ -195,6 +195,10 @@ export class QuizService {
         return { participantCount: count, status: "WAITING" };
     }
 
+    async getWaitingCount(contestId: string): Promise<number> {
+        return this.session.getWaitingCount(contestId);
+    }
+
     private async getContestProctoringEnabled(contestId: string): Promise<boolean> {
         const contest = await prisma.contest.findUnique({
             where: { id: contestId },

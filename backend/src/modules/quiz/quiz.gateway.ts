@@ -230,6 +230,11 @@ export class QuizGateway {
             await this.quizService.handleDisconnect(contestId, participantId);
             // Push updated counts to admin
             await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+            // Push updated waiting room count to participants
+            const waitingCount = await this.quizService.getWaitingCount(contestId).catch(() => 0);
+            this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", {
+                participantCount: waitingCount,
+            });
         }
     }
 
@@ -296,6 +301,11 @@ export class QuizGateway {
 
         // Normal waiting-room status
         socket.emit("quiz:v1:waiting_room_status", result);
+
+        // Broadcast updated participant count to all waiting participants
+        this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", {
+            participantCount: result.participantCount,
+        });
 
         this.server.of("/quiz-admin").to(`admin:${contestId}`).emit("admin:v1:participant_joined", {
             participantId,
