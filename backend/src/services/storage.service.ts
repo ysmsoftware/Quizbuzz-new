@@ -26,11 +26,27 @@ async function getS3(): Promise<import("@aws-sdk/client-s3").S3Client> {
     const { S3Client } = await import("@aws-sdk/client-s3");
 
     s3Client = new S3Client({
-        region:      config.storage.s3.region ?? "ap-south-1",
-        credentials: {
-            accessKeyId:     config.storage.s3.accessKeyId!,
-            secretAccessKey: config.storage.s3.secretKey!,
-        },
+        region: config.storage.s3.region ?? "ap-south-1",
+        // Only pass explicit credentials when an access key is configured.
+        // Omitting `credentials` lets the AWS SDK's default provider chain
+        // fall back to the EC2 instance role — passing empty strings here
+        // instead forces static (invalid) credentials and breaks auth with
+        // "AuthorizationHeaderMalformed: ... non-empty Access Key (AKID)
+        // must be provided". S3_ACCESS_KEY/S3_SECRET_KEY are deliberately
+        // blank in prod (see userdata.sh.tpl's comment on that env block) —
+        // this mirrors the same guard s3.provider.ts already has for the
+        // presigned-URL path; this file's own upload/delete path was
+        // missing it, which is what broke contest.controller.ts's
+        // uploadBanner (the only caller of StorageService.upload with
+        // provider = "s3").
+        ...(config.storage.s3.accessKeyId
+            ? {
+                credentials: {
+                    accessKeyId:     config.storage.s3.accessKeyId!,
+                    secretAccessKey: config.storage.s3.secretKey!,
+                },
+            }
+            : {}),
     });
 
     return s3Client;
