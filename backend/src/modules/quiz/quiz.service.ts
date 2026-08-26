@@ -810,6 +810,33 @@ export class QuizService {
         const totalViolations = participants.reduce((sum, p) => sum + p.violationCount, 0);
         const totalFlagged = participants.filter(p => p.isFlagged).length;
 
+        // Fetch recent 50 violations (excluding audit snapshots)
+        const recentEvents = await prisma.proctoringEvent.findMany({
+            where: {
+                contestId,
+                type: {
+                    notIn: [
+                        "SNAPSHOT_START",
+                        "SNAPSHOT_MID_POINT",
+                        "SNAPSHOT_RANDOM",
+                        "SNAPSHOT_PRE_SUBMIT",
+                    ] as any[],
+                },
+            },
+            take: 50,
+            orderBy: { occurredAt: "desc" },
+            include: {
+                participant: {
+                    select: {
+                        id: true,
+                        contact: {
+                            select: { firstName: true, lastName: true },
+                        },
+                    },
+                },
+            },
+        });
+
         return {
             contestId,
             timestamp: new Date().toISOString(),
@@ -835,6 +862,16 @@ export class QuizService {
                 isFlagged: p.isFlagged,
                 lastActivityAt: p.lastActivityAt,
                 isAlive: p.isAlive,
+            })),
+            violations: recentEvents.map(e => ({
+                id: e.id,
+                participantId: e.participantId,
+                name: e.participant
+                    ? [e.participant.contact.firstName, e.participant.contact.lastName].filter(Boolean).join(" ").trim()
+                    : "Participant",
+                type: e.type,
+                severity: e.severity,
+                timestamp: e.occurredAt.toISOString(),
             })),
         };
     }

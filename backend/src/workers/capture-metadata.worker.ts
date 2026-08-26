@@ -7,7 +7,7 @@ import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { prisma } from "../config/db";
 import { ViolationType } from "@prisma/client";
-import { quizSession } from "../container";
+import { quizSession, quizService } from "../container";
 import { CaptureMetadataJobPayload } from "../queues";
 
 export class CaptureMetadataWorker implements Worker {
@@ -123,7 +123,54 @@ export class CaptureMetadataWorker implements Worker {
                         },
                     });
 
-                    // 4. Publish disqualification / flag notification if threshold is reached
+                    // 4. Publish proctoring alert and stats to the admin live feed
+                    try {
+                        const dbParticipant = await prisma.participant.findUnique({
+                            where: { id: participantId },
+                            select: {
+                                contact: { select: { firstName: true, lastName: true } },
+                            },
+                        });
+                        const name = dbParticipant?.contact
+                            ? [dbParticipant.contact.firstName, dbParticipant.contact.lastName].filter(Boolean).join(" ").trim()
+                            : "Participant";
+
+                        // Emit violation alert to admins
+                        await redis.publish(
+                            "quizbuzz:socket-emit",
+                            JSON.stringify({
+                                namespace: "/quiz-admin",
+                                room: `admin:${contestId}`,
+                                event: "admin:v1:violation_alert",
+                                data: {
+                                    participantId,
+                                    name,
+                                    type,
+                                    severity,
+                                    violationCount: activeViolationsCount,
+                                    trustScore,
+                                    isFlagged,
+                                    occurredAt: occurredAt || new Date().toISOString(),
+                                },
+                            })
+                        );
+
+                        // Emit live stats update to admins
+                        const snapshot = await quizService.getAdminLiveSnapshot(contestId, organizationId);
+                        await redis.publish(
+                            "quizbuzz:socket-emit",
+                            JSON.stringify({
+                                namespace: "/quiz-admin",
+                                room: `admin:${contestId}`,
+                                event: "admin:v1:live-stats",
+                                data: snapshot,
+                            })
+                        );
+                    } catch (err: any) {
+                        logger.error(`[capture-metadata-worker] Failed to publish live proctoring alerts to admins: ${err.message}`);
+                    }
+
+                    // 5. Publish disqualification / flag notification if threshold is reached
                     if (isFlagged) {
                         logger.warn(`[capture-metadata-worker] Participant ${participantId} has been flagged for contest ${contestId}`);
                         await redis.publish(

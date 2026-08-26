@@ -171,6 +171,19 @@ export function useAdminContestSocket(
         // Set state immediately on first snapshot load
         setParticipants(Array.from(participantsRef.current.values()));
         setStats(nextStats);
+
+        if (data.violations) {
+          violationsRef.current = data.violations.map((v: any) => ({
+            id: v.id,
+            participantId: v.participantId,
+            name: v.name || 'Participant',
+            type: v.type,
+            severity: typeof v.severity === 'number' ? v.severity : 2,
+            timestamp: v.timestamp || v.occurredAt || new Date().toISOString(),
+          }));
+          setViolations(violationsRef.current);
+        }
+
         hasChangesRef.current = false;
       });
 

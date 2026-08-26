@@ -395,7 +395,7 @@ export class QuizGateway {
         socket.emit("quiz:v1:violation_update", { count: result.totalViolations });
 
         const name = await this.getParticipantName(participantId);
-        this.server.of("/quiz-admin").to(`admin:${contestId}`).emit("admin:v1:violation_alert", {
+        this.broadcastAdminEvent(contestId, "admin:v1:violation_alert", {
             participantId,
             name,
             type: payload.type,
