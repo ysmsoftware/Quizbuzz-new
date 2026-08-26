@@ -12,6 +12,16 @@ import {
 import { renderCustomTemplateHtml } from "../certificate/certificate.template";
 import { CertificateMetadata, CertificateTestJobPayload } from "../certificate/certificate.types";
 import { certificateQueue, certificateQueueEvents } from "../../queues";
+import { getStorageProvider } from "../../providers/storage.provider";
+import logger from "../../config/logger";
+
+/**
+ * Same window as CERTIFICATE_DOWNLOAD_URL_TTL_SECONDS in certificate.service.ts —
+ * a test PDF only needs to survive one admin session reviewing it, but there's no
+ * harm matching the real-certificate window so this doesn't silently expire sooner
+ * than an admin expects while still looking at the template editor.
+ */
+const TEST_CERTIFICATE_DOWNLOAD_URL_TTL_SECONDS = 3600 * 24; // 24h
 
 /**
  * The only fields a custom template's {{placeholders}} can resolve to.
@@ -245,8 +255,26 @@ export class CertificateTemplateService {
         );
 
         try {
-            const result = await job.waitUntilFinished(certificateQueueEvents, 30_000);
-            return result as TestGenerateResult;
+            const result = await job.waitUntilFinished(certificateQueueEvents, 30_000) as TestGenerateResult;
+
+            // The worker's upload (storageService._uploadToS3) hands back a bare,
+            // permanent S3 URL — fine for the two genuinely-public prefixes
+            // (banners/, ambassador-campaign-poster/), but "certificate-template-tests/"
+            // is NOT in the bucket's public-read policy (same as certificates/ and
+            // ambassador-proof/), so that bare URL 403s the moment an admin tries to
+            // open it. Re-sign it here, mirroring certificate.service.ts's
+            // withDownloadUrl() for real certificates.
+            try {
+                const provider = getStorageProvider();
+                const { url } = await provider.getPresignedGetUrl({
+                    storageKey: result.key,
+                    expiresInSeconds: TEST_CERTIFICATE_DOWNLOAD_URL_TTL_SECONDS,
+                });
+                return { ...result, url };
+            } catch (presignErr) {
+                logger.error(`[CertificateTemplateService] Failed to presign test-generate URL for key ${result.key}: ${presignErr}`);
+                return result; // fail open to the bare URL rather than breaking the whole response
+            }
         } catch (err: any) {
             if (typeof err.message === "string" && err.message.toLowerCase().includes("timed out")) {
                 throw new Error(
