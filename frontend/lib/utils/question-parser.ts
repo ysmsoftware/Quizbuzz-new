@@ -108,15 +108,23 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
       getIndex(['iscorrect6']),
     ];
 
+    // Check if headers were found
+    const hasHeaderMatch =
+      qTextIdx !== -1 ||
+      diffIdx !== -1 ||
+      catIdx !== -1 ||
+      optIdxs.some((idx) => idx !== -1) ||
+      correctIdx !== -1;
+
     // Fallbacks to standard column offsets if headers are omitted or don't match
     const finalQTextIdx = qTextIdx !== -1 ? qTextIdx : 0;
     const finalDiffIdx = diffIdx !== -1 ? diffIdx : 1;
     const finalCatIdx = catIdx !== -1 ? catIdx : 2;
     const finalHintIdx = hintIdx !== -1 ? hintIdx : 3;
     const finalExpIdx = expIdx !== -1 ? expIdx : 4;
-    const finalOptIdxs = optIdxs.map((idx, i) => (idx !== -1 ? idx : 5 + i));
-    const finalCorrectIdx = correctIdx !== -1 ? correctIdx : 11;
-    const finalIsCorrectIdxs = isCorrectIdxs.map((idx, i) => (idx !== -1 ? idx : 12 + i));
+    const finalOptIdxs = optIdxs.map((idx, i) => (idx !== -1 ? idx : (hasHeaderMatch ? -1 : 5 + i)));
+    const finalCorrectIdx = correctIdx !== -1 ? correctIdx : (hasHeaderMatch ? -1 : 11);
+    const finalIsCorrectIdxs = isCorrectIdxs.map((idx, i) => (idx !== -1 ? idx : (hasHeaderMatch ? -1 : 12 + i)));
 
     // Limit enforcement check
     const totalQuestions = rows.length - 1;
@@ -129,25 +137,32 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
       rowsToParse = rowsToParse.slice(0, BULK_UPLOAD_MAX_TOTAL);
     }
 
+    const getCellValue = (row: any[], idx: number): string => {
+      if (idx === -1 || !row || idx >= row.length) return '';
+      const val = row[idx];
+      if (val === undefined || val === null) return '';
+      return String(val).trim();
+    };
+
     for (let i = 0; i < rowsToParse.length; i++) {
       const row = rowsToParse[i];
       if (!row || row.length === 0) continue;
 
       const rowNum = i + 2; // 1-based index (including skipped header)
-      const questionText = String(row[finalQTextIdx] || '').trim();
-      const rawDifficulty = String(row[finalDiffIdx] || 'MEDIUM').trim();
-      const category = String(row[finalCatIdx] || 'General').trim();
-      const hint = String(row[finalHintIdx] || '').trim();
-      const explanation = String(row[finalExpIdx] || '').trim();
+      const questionText = getCellValue(row, finalQTextIdx);
+      const rawDifficulty = getCellValue(row, finalDiffIdx) || 'MEDIUM';
+      const category = getCellValue(row, finalCatIdx) || 'General';
+      const hint = getCellValue(row, finalHintIdx);
+      const explanation = getCellValue(row, finalExpIdx);
 
       let marks = 4;
-      if (marksIdx !== -1 && row[marksIdx] !== undefined) {
+      if (marksIdx !== -1 && row[marksIdx] !== undefined && row[marksIdx] !== null) {
         const val = parseFloat(String(row[marksIdx]).trim());
         if (!isNaN(val)) marks = val;
       }
 
       let negativeMark = 1;
-      if (negMarksIdx !== -1 && row[negMarksIdx] !== undefined) {
+      if (negMarksIdx !== -1 && row[negMarksIdx] !== undefined && row[negMarksIdx] !== null) {
         const val = parseFloat(String(row[negMarksIdx]).trim());
         if (!isNaN(val)) negativeMark = val;
       }
@@ -171,15 +186,21 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
       const parsedOptions: ParsedOption[] = [];
       let correctIdxValue = -1;
 
-      if (finalCorrectIdx !== -1 && row[finalCorrectIdx] !== undefined) {
-        const val = parseInt(String(row[finalCorrectIdx]).trim());
-        if (!isNaN(val)) {
-          correctIdxValue = val - 1; // 0-based
+      if (finalCorrectIdx !== -1) {
+        const valStr = getCellValue(row, finalCorrectIdx);
+        if (valStr) {
+          const val = parseInt(valStr, 10);
+          if (!isNaN(val)) {
+            correctIdxValue = val - 1; // 0-based
+          }
         }
       }
 
       for (let j = 0; j < 6; j++) {
-        const optVal = String(row[finalOptIdxs[j]] || '').trim();
+        const optColIdx = finalOptIdxs[j];
+        if (optColIdx === -1) continue;
+
+        const optVal = getCellValue(row, optColIdx);
         if (!optVal) continue;
 
         let isCorrect = false;
@@ -187,8 +208,8 @@ export function parseQuestionFile(buffer: ArrayBuffer, fileName: string): ParseR
           isCorrect = j === correctIdxValue;
         } else {
           const isCorrCol = finalIsCorrectIdxs[j];
-          if (isCorrCol !== -1 && row[isCorrCol] !== undefined) {
-            const valStr = String(row[isCorrCol]).trim().toUpperCase();
+          if (isCorrCol !== -1) {
+            const valStr = getCellValue(row, isCorrCol).toUpperCase();
             isCorrect = valStr === 'TRUE' || valStr === '1' || valStr === 'YES' || valStr === 'CORRECT';
           }
         }
