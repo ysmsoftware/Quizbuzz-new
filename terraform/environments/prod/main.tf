@@ -115,7 +115,8 @@ module "database" {
 # No dependencies on other modules.
 ##############################################################################
 module "storage" {
-  source = "../../modules/storage"
+  source          = "../../modules/storage"
+  frontend_origin = "https://${local.fqdn}"
 }
 
 ##############################################################################
@@ -135,6 +136,7 @@ module "admin_instance" {
   key_pair_name  = var.key_pair_name
   github_org     = var.github_org
   domain         = local.fqdn
+  alert_email    = var.alert_email
 }
 
 ##############################################################################

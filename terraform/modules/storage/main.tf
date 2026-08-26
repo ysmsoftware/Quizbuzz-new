@@ -1,5 +1,21 @@
 # STORAGE MODULE
 
+variable "frontend_origin" {
+  type        = string
+  description = <<-EOT
+    Frontend origin allowed to talk to this bucket directly from the browser
+    (e.g. "https://ysmquizbuzz.com"). Needed because the ambassador-proof,
+    ambassador-profile, ambassador-campaign-poster, and proctoring-snapshot
+    upload flows all PUT straight from the browser to a presigned S3 URL
+    (see backend/src/providers/s3.provider.ts) — with no CORS rule on the
+    bucket, every one of those browser-direct PUTs fails with a generic
+    "Failed to fetch" (a blocked CORS preflight), which is indistinguishable
+    from a permissions error in the browser's network tab. Should match
+    CORS_ALLOWED_ORIGINS in the backend's own env (see admin_instance's and
+    live_contest's userdata.sh.tpl — both set it to "https://$${var.domain_name}").
+  EOT
+}
+
 resource "aws_s3_bucket" "main" {
   bucket = "quizbuzz-assets-prod"
   force_destroy = false
@@ -92,6 +108,25 @@ resource "aws_s3_bucket_policy" "public_marketing_assets" {
   # rejects a public-granting bucket policy while block_public_policy is
   # still true, so this ordering has to be explicit rather than inferred.
   depends_on = [aws_s3_bucket_public_access_block.main]
+}
+
+# CORS — required for every browser-direct presigned PUT this app does
+# (ambassador ID/proof, ambassador profile photo, campaign poster, proctoring
+# snapshots — see s3.provider.ts's getPresignedPutUrl, called from
+# ambassador.service.ts, ambassador-campaign.service.ts, and
+# quiz-proctoring.controller.ts). Without this resource the bucket has never
+# had a CORS rule, so every one of those browser fetch()/PUT calls fails
+# with "Failed to fetch" before it ever reaches an IAM/policy check.
+resource "aws_s3_bucket_cors_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  cors_rule {
+    allowed_methods = ["PUT", "GET"]
+    allowed_origins = [var.frontend_origin]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
 }
 
 # Lifecycle

@@ -603,7 +603,24 @@ export class AmbassadorService {
 
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
-    private _toResult(a: Ambassador): AmbassadorResult {
+    /**
+     * `Ambassador.proofUrl`/`profileImageUrl` are permanent, bare S3 object URLs
+     * (stored that way at signup / upload time — see SignupCompleteDTO/UpdateProofInput).
+     * That's fine for the two prefixes the bucket policy actually makes public
+     * (banners/, ambassador-campaign-poster/), but ambassador-proof/ and
+     * ambassador-profile/ are deliberately NOT public (see the bucket-policy
+     * comment in terraform/modules/storage/main.tf) — every viewer hitting the
+     * stored bare URL gets S3 AccessDenied. Resolve each into a short-lived
+     * presigned GET at read time instead, the same pattern certificate.service.ts's
+     * withDownloadUrl() and proctoring.service.ts's attachSnapshotUrls() already
+     * use for their own private prefixes.
+     */
+    private async _toResult(a: Ambassador): Promise<AmbassadorResult> {
+        const [proofUrl, profileImageUrl] = await Promise.all([
+            this._resolveViewUrl(a.proofStorageKey, a.proofUrl),
+            this._resolveViewUrl(a.profileImageStorageKey, a.profileImageUrl),
+        ]);
+
         return {
             id: a.id,
             email: a.email,
@@ -612,10 +629,27 @@ export class AmbassadorService {
             lastName: a.lastName,
             ambassadorType: a.ambassadorType,
             applicationData: a.applicationData as Record<string, unknown>,
-            proofUrl: a.proofUrl,
-            profileImageUrl: a.profileImageUrl,
+            proofUrl,
+            profileImageUrl,
             createdAt: a.createdAt,
         };
+    }
+
+    /** Presigned GET for a private object, falling back to the stored (bare) URL
+     *  if there's no storage key on record (shouldn't happen post-migration, but
+     *  keeps old/malformed rows from throwing) or if presigning itself fails. */
+    private async _resolveViewUrl(storageKey: string | null, fallbackUrl: string | null): Promise<any> {
+        if (!storageKey) return fallbackUrl;
+        try {
+            const { url } = await this.storageProvider.getPresignedGetUrl({
+                storageKey,
+                expiresInSeconds: 3600 * 24,
+            });
+            return url;
+        } catch (err) {
+            logger.error(`[AmbassadorService] Failed to presign view URL for key ${storageKey}: ${err}`);
+            return fallbackUrl;
+        }
     }
 
     private _toEnrollmentResult(e: { id: string; campaignId: string; ambassadorId: string; referralCode: string; status: AmbassadorStatus; createdAt: Date }): EnrollmentResult {

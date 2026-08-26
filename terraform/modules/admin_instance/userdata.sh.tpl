@@ -492,21 +492,41 @@ docker compose -f /app/docker-compose.yml ps
 # Nginx must listen on port 443 HTTPS immediately on boot, so that the ALB
 # target health checks succeed without causing a 502 Bad Gateway.
 # To achieve this:
-# 1. We check if a Let's Encrypt certificate exists in /etc/letsencrypt.
-# 2. If not, we generate a self-signed fallback certificate for the domain.
+# 1. We check whether a REAL certbot-managed certificate already exists for
+#    this domain (a renewal config in /etc/letsencrypt/renewal/ is the
+#    signal certbot itself uses — its presence means a previous certbot run
+#    on THIS EBS volume issued and is tracking a real cert).
+# 2. If not, we generate a temporary self-signed fallback certificate so
+#    nginx has something to bind :443 to immediately.
 # 3. We configure Nginx with both port 80 (HTTP) and port 443 (HTTPS) enabled.
-# 4. Certbot will later replace the self-signed cert with a real Let's Encrypt
-#    cert without any bootstrap issues.
+# 4. Further down (after nginx is serving the ACME HTTP-01 challenge path),
+#    certbot runs AUTOMATICALLY — no manual step. See CERTBOT_MANAGED below:
+#    this is what makes step 4 safe to run unconditionally on every boot,
+#    including on a fresh instance replacement (e.g. an AMI refresh forcing
+#    aws_instance.admin to be recreated with an empty /etc/letsencrypt) — the
+#    self-signed file this script just wrote into the live/ path would
+#    otherwise make certbot refuse with "live directory exists for <domain>"
+#    and require a manual `--force-renewal` run every single time (this bit
+#    us for real on 2026-08-26 — see
+#    claude/ambassador-upload-cors-and-folder-fix.md in the project).
 # ─────────────────────────────────────────────────────────────────────────────
 echo "--- Ensuring Nginx SSL Certificates exist (Self-Signed Fallback) ---"
 CERT_DIR="/etc/letsencrypt/live/${domain}"
-mkdir -p "$CERT_DIR"
-if [ ! -f "$CERT_DIR/fullchain.pem" ] || [ ! -f "$CERT_DIR/privkey.pem" ]; then
-  echo "Generating self-signed certificate for ${domain}..."
-  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout "$CERT_DIR/privkey.pem" \
-    -out "$CERT_DIR/fullchain.pem" \
-    -subj "/CN=${domain}/O=QuizBuzz/C=IN"
+RENEWAL_CONF="/etc/letsencrypt/renewal/${domain}.conf"
+
+if [ -f "$RENEWAL_CONF" ]; then
+  echo "Existing certbot-managed certificate found for ${domain} -- leaving it in place."
+  CERTBOT_MANAGED=true
+else
+  CERTBOT_MANAGED=false
+  mkdir -p "$CERT_DIR"
+  if [ ! -f "$CERT_DIR/fullchain.pem" ] || [ ! -f "$CERT_DIR/privkey.pem" ]; then
+    echo "No certbot-managed certificate found -- generating a temporary self-signed fallback for ${domain}..."
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+      -keyout "$CERT_DIR/privkey.pem" \
+      -out "$CERT_DIR/fullchain.pem" \
+      -subj "/CN=${domain}/O=QuizBuzz/C=IN"
+  fi
 fi
 
 echo "--- Writing Nginx Configuration ---"
@@ -658,8 +678,42 @@ fi
 systemctl enable nginx
 systemctl restart nginx
 
-echo "--- Nginx started on HTTP. Run certbot once to enable HTTPS: ---"
-echo "    sudo certbot --nginx -d ${domain}"
+echo "--- Nginx started. Requesting/renewing Let's Encrypt certificate for ${domain} ---"
+
+CERTBOT_ARGS="--nginx -d ${domain} --non-interactive --agree-tos -m ${alert_email} --redirect"
+if [ "$CERTBOT_MANAGED" = false ]; then
+  # No prior certbot lineage on this EBS volume -- whatever's sitting in
+  # live/${domain} right now is our own self-signed placeholder from above,
+  # not a real cert certbot recognizes as its own. --force-renewal makes it
+  # overwrite that unconditionally instead of refusing with
+  # "live directory exists for ${domain}" (previously required someone to
+  # SSH in and re-run certbot by hand after every fresh instance boot).
+  CERTBOT_ARGS="$CERTBOT_ARGS --force-renewal"
+fi
+
+# A handful of retries: the Elastic IP association (aws_eip_association) and
+# this instance's userdata run concurrently in the same apply, so on rare
+# timing there's a brief window where the domain doesn't yet resolve to THIS
+# instance when the HTTP-01 challenge fires. By this point in the script
+# (after all the yum/docker/compose setup above), the association has all
+# but certainly already completed -- this is a safety margin, not the
+# expected path.
+CERTBOT_OK=false
+for attempt in 1 2 3 4 5; do
+  if certbot $CERTBOT_ARGS; then
+    CERTBOT_OK=true
+    break
+  fi
+  echo "certbot attempt $attempt/5 failed -- retrying in 15s..."
+  sleep 15
+done
+
+if [ "$CERTBOT_OK" = true ]; then
+  echo "--- Real Let's Encrypt certificate installed for ${domain} ---"
+else
+  echo "WARNING: certbot failed after 5 attempts -- ${domain} is still serving the self-signed fallback."
+  echo "Run manually once reachable: sudo certbot --nginx -d ${domain} --non-interactive --agree-tos -m ${alert_email} --redirect --force-renewal"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. SYSTEMD SERVICE — auto-restart containers on EC2 reboot

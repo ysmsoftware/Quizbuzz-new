@@ -19,6 +19,15 @@ variable "key_pair_name" {
 variable "github_org" {
   description = "GitHub username/org for GHCR image URLs"
 }
+variable "alert_email" {
+  description = <<-EOT
+    Email passed to certbot's -m flag for Let's Encrypt expiry notices and
+    the ACME account registration. Also used as the --non-interactive
+    --agree-tos identity for the automatic certbot run in userdata.sh.tpl
+    (see the SSL STRATEGY comment there) -- without this, certbot has no
+    email to register the account against for non-interactive runs.
+  EOT
+}
 
 
 # IAM ROLE FOR EC2
@@ -175,10 +184,11 @@ data "cloudinit_config" "admin_config" {
   part {
     content_type = "text/x-shellscript"
     content = templatefile("${path.module}/userdata.sh.tpl", {
-      aws_region = var.aws_region
-      s3_bucket  = var.s3_bucket
-      github_org = var.github_org
-      domain     = var.domain
+      aws_region  = var.aws_region
+      s3_bucket   = var.s3_bucket
+      github_org  = var.github_org
+      domain      = var.domain
+      alert_email = var.alert_email
     })
   }
 }

@@ -6,7 +6,11 @@ import { config } from "../config";
 
 function validateFolder(folder: string) {
     const parts = folder.split("/");
-    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster"];
+    // "ambassador-profile" added: ambassador.service.ts's getProfileImageUploadUrl()
+    // (wired to the live POST /ambassador/upload-profile-image route) builds folder
+    // `ambassador-profile/${ambassadorId}/...`, which this allow-list was missing —
+    // every profile-photo upload request was throwing "Access Denied" below.
+    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster", "ambassador-profile"];
     if (parts.length !== 3 || !validPrefixes.includes(parts[0] as string) || !parts[1] || !parts[2]) {
         throw new Error("Access Denied: Invalid folder structure.");
     }
