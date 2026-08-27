@@ -101,7 +101,7 @@ describe("ContestService.registerParticipant — ambassador referral capture (§
         );
     });
 
-    it("registers successfully with no referralCode, without touching the ambassador repo, and an unchanged response shape", async () => {
+    it("registers successfully with no referralCode, without touching the ambassador repo, and includes the effective contact in the response", async () => {
         const result = await contestService.registerParticipant("gk-cup", { ...baseDto } as any);
 
         expect(mockAmbassadorCampaignRepo.findEnrollmentByReferralCodeForContest).not.toHaveBeenCalled();
@@ -124,6 +124,8 @@ describe("ContestService.registerParticipant — ambassador referral capture (§
             participantId: "participant_1",
             paymentRequired: false,
             status: "REGISTERED",
+            contactEmail: "student@example.com",
+            contactPhone: "9876543210",
         });
     });
 
