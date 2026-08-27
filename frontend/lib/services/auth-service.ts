@@ -24,6 +24,7 @@ interface OTPVerifyResponse {
     sessionToken: string;
     registration: {
         participantId: string;
+        participantName: string | null;
     };
     deviceId: string;
     proctoringEnabled: boolean;
@@ -118,6 +119,7 @@ class AuthService {
                     contestId: string;
                     organizationId: string;
                     proctoringEnabled: boolean;
+                    firstName: string | null;
                 };
             }>('/auth/quiz/participant-login', {
                 email: contact.toLowerCase(),
@@ -146,7 +148,8 @@ class AuthService {
                 data: {
                     sessionToken: res.data.sessionToken,
                     registration: {
-                        participantId: res.data.participantId
+                        participantId: res.data.participantId,
+                        participantName: res.data.firstName ?? null
                     },
                     deviceId,
                     proctoringEnabled: res.data.proctoringEnabled ?? true

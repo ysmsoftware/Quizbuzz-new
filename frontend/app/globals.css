@@ -170,7 +170,27 @@
     }
 }
 
+@keyframes glow-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 45%, transparent);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 10px color-mix(in oklch, var(--primary) 0%, transparent);
+        transform: scale(1.035);
+    }
+}
+
 @layer components {
+    /* Draws the eye to a CTA that's easy to miss on first load — used on the
+       public contest page's sticky "Register Now" bar so new visitors don't
+       mistake the top nav (Install App / Browse Contests) for the actual
+       registration action. Respects prefers-reduced-motion via the global
+       rule above. */
+    .animate-glow-pulse {
+        animation: glow-pulse 2.2s ease-in-out infinite;
+    }
+
     .animate-skeleton {
         animation: skeleton-shimmer 2s infinite;
         background: linear-gradient(90deg,

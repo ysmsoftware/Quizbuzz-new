@@ -192,7 +192,8 @@ export class SubmissionRepository {
             include: DETAIL_INCLUDE,
         });
         if (!row) return null;
-        return this._toDetail(row);
+        const marksMap = await this._getMarksMap(row.contestId, organizationId);
+        return this._toDetail(row, marksMap);
     }
 
     /**
@@ -205,7 +206,30 @@ export class SubmissionRepository {
             include: DETAIL_INCLUDE,
         });
         if (!row) return null;
-        return this._toDetail(row);
+        const marksMap = await this._getMarksMap(row.contestId, organizationId);
+        return this._toDetail(row, marksMap);
+    }
+
+    /**
+     * Per-question marks/negativeMark for a contest, keyed by questionId.
+     * Reused for the SAME real "max possible score" the evaluation worker
+     * already computes (evaluation.worker.ts's `maxPossibleScore`) — that
+     * value was previously discarded after scoring instead of being returned
+     * to the client. See results-page scoring audit, issue 2.
+     */
+    private async _getMarksMap(
+        contestId: string,
+        organizationId: string
+    ): Promise<Map<string, { marks: number; negativeMark: number }>> {
+        const rows = await prisma.contestQuestion.findMany({
+            where: { contestId, organizationId },
+            select: { questionId: true, marks: true, negativeMark: true },
+        });
+        const map = new Map<string, { marks: number; negativeMark: number }>();
+        for (const r of rows) {
+            map.set(r.questionId, { marks: r.marks, negativeMark: Number(r.negativeMark) });
+        }
+        return map;
     }
 
     /**
@@ -386,7 +410,10 @@ export class SubmissionRepository {
         };
     }
 
-    private _toDetail(row: any): SubmissionDetail {
+    private _toDetail(
+        row: any,
+        marksMap: Map<string, { marks: number; negativeMark: number }>
+    ): SubmissionDetail {
         const summary = this._toSummary(row);
         const answers: SubmissionDetail["answers"] = (row.answers ?? []).map(
             (a: any) => {
@@ -396,6 +423,7 @@ export class SubmissionRepository {
                 const selectedOption = (a.question?.options ?? []).find(
                     (o: any) => o.id === a.selectedOptionId
                 );
+                const scoring = marksMap.get(a.questionId);
                 return {
                     questionId: a.questionId,
                     questionText: a.question?.questionText ?? "",
@@ -408,9 +436,19 @@ export class SubmissionRepository {
                     isCorrect: a.isCorrect ?? null,
                     marksAwarded:
                         a.marksAwarded !== null ? Number(a.marksAwarded) : null,
+                    maxMarks: scoring?.marks ?? 1,
+                    negativeMark: scoring?.negativeMark ?? 0,
                 };
             }
         );
+
+        // Real max-possible-score — sum of every contest question's marks, not
+        // just the ones answered. Falls back to totalQuestions (old behavior)
+        // only if the marks map came back empty (e.g. contest questions were
+        // since deleted), so this never regresses to worse than before.
+        const totalMarks = marksMap.size > 0
+            ? Array.from(marksMap.values()).reduce((sum, v) => sum + v.marks, 0)
+            : (row.totalQuestions ?? 0);
 
         return {
             ...summary,
@@ -419,6 +457,7 @@ export class SubmissionRepository {
             skipped: row.skipped ?? null,
             attempted: row.attempted ?? null,
             totalQuestions: row.totalQuestions ?? null,
+            totalMarks,
             answers,
         };
     }

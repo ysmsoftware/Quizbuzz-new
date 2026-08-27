@@ -344,14 +344,16 @@ export default function SystemCheckPage() {
           transition={{ duration: 0.4 }}
           className="backdrop-blur-xl bg-card border border-border shadow-2xl shadow-primary/10 rounded-3xl overflow-hidden"
         >
-          {/* Header */}
-          <div className="p-6 sm:p-8 border-b border-border/60 text-center">
+          {/* Header — badge left-aligned, heading/description centered, and the
+              bottom padding trimmed so the permissions grid below isn't pushed
+              down by unused whitespace. */}
+          <div className="pt-6 sm:pt-8 px-6 sm:px-8 pb-4 sm:pb-5 border-b border-border/60">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Step 2: Environment Readiness</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">System Check</h1>
-            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground text-center">System Check</h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto text-center">
               Please grant the required permissions to guarantee eligibility for the contest.
             </p>
           </div>

@@ -333,7 +333,8 @@ export class ContestController {
             const dto = RegisterStatusSchema.parse(req.body);
             const result = await this.contestService.getRegisterStatus(
                 req.params.contestSlug as string,
-                dto.contactToken
+                dto.contactToken,
+                dto.phone
             );
 
             res.status(200).json({ success: true, data: result, requestId: req.id });

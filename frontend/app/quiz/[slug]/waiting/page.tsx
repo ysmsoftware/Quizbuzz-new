@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -44,6 +44,7 @@ export default function WaitingRoomPage() {
     // Auth store
     const sessionToken = useAuthStore((s) => s.sessionToken) || "";
     const participantId = useAuthStore((s) => s.participantId) || "";
+    const participantName = useAuthStore((s) => s.participantName) || "";
     const identifier = useAuthStore((s) => s.identifier) || "";
     const contestId = useAuthStore((s) => s.contestId) || "";
 
@@ -63,6 +64,12 @@ export default function WaitingRoomPage() {
     const [timeToStart, setTimeToStart] = useState<TimeDiff>({ d: 0, h: 0, m: 0, s: 0 });
     const [showAllRules, setShowAllRules] = useState(false);
     const [startCountdown, setStartCountdown] = useState<number | null>(null);
+
+    // These two coordinate the WS-driven "starting" countdown below with the
+    // HTTP-polling fallback further down, so the two can't race each other
+    // and cut the countdown short. See live-room audit, issue 4.
+    const startCountdownActiveRef = useRef(false);
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // WS hook
     const {
@@ -140,7 +147,15 @@ export default function WaitingRoomPage() {
     useEffect(() => {
         if (wsStatus === "starting") {
             if (startCountdown === null) {
-                setStartCountdown(5);
+                setStartCountdown(3);
+            }
+            // The WS told us directly the quiz is live — the HTTP polling
+            // fallback below exists only for "WS never told us"; stop it
+            // immediately so it can't race this countdown and redirect early.
+            startCountdownActiveRef.current = true;
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
             }
         }
     }, [wsStatus, startCountdown]);
@@ -176,20 +191,28 @@ export default function WaitingRoomPage() {
         const target = contestStartTime ?? new Date(contest.startTime);
         if (Number.isNaN(target.getTime())) return;
 
-        let pollInterval: ReturnType<typeof setInterval> | null = null;
         let redirected = false;
 
         const startPolling = () => {
-            if (pollInterval || redirected) return;
+            // Never start (or continue) polling once the WS-driven countdown has
+            // taken over — it will complete the navigation on its own, and letting
+            // this fallback keep running is exactly what cut the countdown short.
+            if (startCountdownActiveRef.current || pollIntervalRef.current || redirected) return;
             // Poll every 3s — if WS missed quiz:v1:start, redirect via REST fallback.
             // `fresh` is required: the default ISR cache holds responses for 60s, which
             // would make this 3s poll return the same stale status over and over.
-            pollInterval = setInterval(async () => {
+            pollIntervalRef.current = setInterval(async () => {
+                if (startCountdownActiveRef.current) {
+                    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                    pollIntervalRef.current = null;
+                    return;
+                }
                 try {
                     const res = await contestService.getContestBySlug(slug, { fresh: true });
-                    if (res.success && res.data?.status === 'LIVE' && !redirected) {
+                    if (res.success && res.data?.status === 'LIVE' && !redirected && !startCountdownActiveRef.current) {
                         redirected = true;
-                        clearInterval(pollInterval!);
+                        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                        pollIntervalRef.current = null;
                         router.push(`/quiz/${slug}/play`);
                     }
                 } catch {
@@ -218,7 +241,10 @@ export default function WaitingRoomPage() {
         const id = setInterval(tick, 1000);
         return () => {
             clearInterval(id);
-            if (pollInterval) clearInterval(pollInterval);
+            if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+            }
         };
     }, [loading, contest, contestStartTime, slug, router, serverNow]);
 
@@ -410,7 +436,7 @@ export default function WaitingRoomPage() {
                                 <span className="text-sm font-bold text-foreground uppercase tracking-wider">Verification Details</span>
                             </div>
                             <div className="space-y-4">
-                                <InfoField label="Participant ID" value={participantId || "—"} mono />
+                                <InfoField label="Participant" value={participantName || participantId || "—"} />
                                 <InfoField label="Contact Identifier" value={maskedContact} />
                                 <InfoField label="Quiz Contest" value={contest?.title || "—"} />
                             </div>

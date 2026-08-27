@@ -88,6 +88,19 @@ export default function QuizResultsPage() {
         ? participantResult.breakdown.reduce((sum, item) => item.marksObtained < 0 ? sum + Math.abs(item.marksObtained) : sum, 0)
         : 0;
 
+    // The actual per-question negative-marking rate(s) — negativeMark is
+    // stored per-question, so in principle a contest could mix rates. Only
+    // show a single rate in the banner when every question agrees on one;
+    // otherwise fall back to just the total (still accurate either way).
+    // See results-page scoring audit, issue 3.
+    const negativeMarkRates: number[] = participantResult?.breakdown
+        ? Array.from(new Set(
+            participantResult.breakdown
+                .filter((item) => item.negativeMark > 0)
+                .map((item) => item.negativeMark)
+          ))
+        : [];
+
     const scorePercentage = participantResult
         ? (participantResult.totalMarks > 0 ? (participantResult.score / participantResult.totalMarks) * 100 : 0)
         : 0;
@@ -466,7 +479,7 @@ export default function QuizResultsPage() {
                                                             </span>
                                                             <span className="text-foreground">{participantResult.correctAnswers}</span>
                                                         </div>
-                                                        <Progress value={(participantResult.correctAnswers / participantResult.totalMarks) * 100} className="h-2 bg-secondary" />
+                                                        <Progress value={(participantResult.correctAnswers / participantResult.totalQuestions) * 100} className="h-2 bg-secondary" />
                                                     </div>
 
                                                     {/* Wrong Answers */}
@@ -477,7 +490,7 @@ export default function QuizResultsPage() {
                                                             </span>
                                                             <span className="text-foreground">{participantResult.wrongAnswers}</span>
                                                         </div>
-                                                        <Progress value={(participantResult.wrongAnswers / participantResult.totalMarks) * 100} className="h-2 bg-secondary" />
+                                                        <Progress value={(participantResult.wrongAnswers / participantResult.totalQuestions) * 100} className="h-2 bg-secondary" />
                                                     </div>
 
                                                     {/* Unattempted / Skipped */}
@@ -488,7 +501,7 @@ export default function QuizResultsPage() {
                                                             </span>
                                                             <span className="text-foreground">{participantResult.unattempted}</span>
                                                         </div>
-                                                        <Progress value={(participantResult.unattempted / participantResult.totalMarks) * 100} className="h-2 bg-secondary" />
+                                                        <Progress value={(participantResult.unattempted / participantResult.totalQuestions) * 100} className="h-2 bg-secondary" />
                                                     </div>
                                                 </div>
 
@@ -496,7 +509,11 @@ export default function QuizResultsPage() {
                                                     <div className="mt-6 p-4 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-start gap-2.5 text-destructive">
                                                         <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                                                         <p className="text-[11px] font-semibold leading-relaxed text-left">
-                                                            This quiz uses negative marking — <strong>{totalNegativeMarks.toFixed(2)}</strong> marks deducted for incorrect answers.
+                                                            This quiz uses negative marking
+                                                            {negativeMarkRates.length === 1 && (
+                                                                <> (<strong>&minus;{negativeMarkRates[0].toFixed(2)}</strong> per incorrect answer)</>
+                                                            )}
+                                                            {' '}&mdash; {participantResult.wrongAnswers} wrong answer{participantResult.wrongAnswers === 1 ? '' : 's'}, <strong>{totalNegativeMarks.toFixed(2)}</strong> marks deducted.
                                                         </p>
                                                     </div>
                                                 )}
@@ -625,7 +642,11 @@ export default function QuizResultsPage() {
                                                     <Sparkles className="h-5 w-5 text-primary" /> Question-by-Question Analysis
                                                 </h3>
 
-                                                <div className="grid gap-4">
+                                                {/* Capped-height scroll area — shows roughly 4-5 questions at a
+                                                    time instead of rendering the whole list and making the page
+                                                    scroll forever. Same "cap it, let it scroll" pattern already
+                                                    used for the in-quiz QuestionNavigator dot grid. */}
+                                                <div className="grid gap-4 overflow-y-auto pr-2 max-h-[1040px]">
                                                     {participantResult.breakdown?.map((item: any) => {
                                                         const isCorrect = item.isCorrect;
                                                         const isSkipped = item.yourAnswer.length === 0;

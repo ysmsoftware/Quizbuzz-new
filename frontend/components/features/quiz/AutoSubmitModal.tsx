@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -16,16 +16,37 @@ interface AutoSubmitModalProps {
 }
 
 export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmitModalProps) {
-  const [countdown, setCountdown] = useState(10);
+  // 5s per the live-room audit (issue 4b) — matches the waiting-room "get ready"
+  // countdown, and is now kept in sync with the real backend deadline by the
+  // caller (play/page.tsx) rather than running as a purely local timer.
+  const [countdown, setCountdown] = useState(5);
+
+  // The caller (play/page.tsx) re-renders roughly once a second while the
+  // quiz timer is running, which used to hand this component a brand-new
+  // `onAutoSubmit` function reference on every tick. Since that reference
+  // was in this effect's dependency array, the interval below was torn
+  // down and rebuilt before it ever got to fire — freezing the visible
+  // countdown at "5" until something else (the backend's own auto-submit
+  // event) forced the modal into its "Submitting..." state, which read as
+  // the countdown being skipped entirely. Reading the callback through a
+  // ref decouples "does the callback identity change" from "does the
+  // interval keep running", so the countdown always plays out 5,4,3,2,1
+  // regardless of how often the parent re-renders. See live-room audit,
+  // issue 4b (regression).
+  const onAutoSubmitRef = useRef(onAutoSubmit);
+  useEffect(() => {
+    onAutoSubmitRef.current = onAutoSubmit;
+  });
 
   useEffect(() => {
     if (!open) return;
 
+    setCountdown(5);
     const timer = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
           clearInterval(timer);
-          onAutoSubmit();
+          onAutoSubmitRef.current();
           return 0;
         }
         return c - 1;
@@ -33,7 +54,7 @@ export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmit
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [open, onAutoSubmit]);
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
@@ -69,7 +90,7 @@ export function AutoSubmitModal({ open, onAutoSubmit, isSubmitting }: AutoSubmit
                 <div className="w-full h-2 bg-border/40 rounded-full overflow-hidden mb-4">
                   <motion.div
                     initial={{ width: '100%' }}
-                    animate={{ width: `${(countdown / 10) * 100}%` }}
+                    animate={{ width: `${(countdown / 5) * 100}%` }}
                     transition={{ duration: 1, ease: 'linear' }}
                     className="h-full bg-destructive"
                   />

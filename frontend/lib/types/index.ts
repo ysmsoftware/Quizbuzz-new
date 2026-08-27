@@ -228,6 +228,11 @@ export interface QuizResult {
     participantName: string;
     score: number;
     totalMarks: number;
+    // Real question count — kept separate from totalMarks now that totalMarks
+    // is the actual max-possible-score (sum of per-question marks), which is
+    // only the same number as totalQuestions when every question is worth 1
+    // mark. See results-page scoring audit, issue 2.
+    totalQuestions: number;
     correctAnswers: number;
     wrongAnswers: number;
     unattempted: number;
@@ -248,6 +253,9 @@ export interface ResultBreakdown {
     isCorrect: boolean;
     marksObtained: number;
     maxMarks: number;
+    // This question's actual negative-marking rate — lets the results page
+    // show the real per-question rate instead of only the pre-summed total.
+    negativeMark: number;
 }
 
 export interface LeaderboardEntry {

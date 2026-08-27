@@ -920,16 +920,25 @@ export class ContestService {
 
     // ─── Registration ─────────────────────────────────────────────────────────
 
-    async getRegisterStatus(contestSlug: string, contactToken: string) {
+    async getRegisterStatus(contestSlug: string, contactToken: string, phone?: string) {
         const tokenPayload = await verifyContactToken(contactToken);
         const email = tokenPayload.email;
 
         const contest = await this.contestRepo.findBySlugPublic(contestSlug);
         if (!contest) throw new NotFoundError("Contest not found");
 
+        // A phone number is only usable for matching once it's a complete,
+        // normalized 10-digit number — anything shorter is the participant
+        // still mid-typing it into the details-step field, not a lookup key.
+        // See registration audit, issue A (phone-match should also prefill,
+        // same as an email match already does below).
+        const normalizedPhone = phone ? phone.replace(/\D/g, "").replace(/^(91|0{2}91)/, "") : undefined;
+        const phoneForLookup = normalizedPhone && /^\d{10}$/.test(normalizedPhone) ? normalizedPhone : undefined;
+
         const contact = await this.contactService.findByEmailOrPhone(
             contest.organizationId,
-            email
+            email,
+            phoneForLookup
         );
         if (!contact) {
             return { existing: null };
@@ -1051,16 +1060,32 @@ export class ContestService {
         );
 
         let contactId: string;
+        // What email/phone this registration is ACTUALLY associated with —
+        // may differ from dto.email/dto.phone when an existing contact was
+        // matched by phone under a different (older) email, since email is
+        // deliberately never overwritten on an existing contact (below).
+        // Returned to the frontend so the success screen can tell the
+        // participant the truth instead of just echoing back what they
+        // typed. See registration audit, issue A.
+        let effectiveEmail: string;
+        let effectivePhone: string;
 
         if (existingContact) {
             contactId = existingContact.id;
+            effectiveEmail = existingContact.email;
+            effectivePhone = existingContact.phone ?? dto.phone;
 
             // Sync any fields the participant actually changed (e.g. a
             // stale phone/college from a prior registration, now editable
             // on a prefilled form) back onto the Contact record. Only
             // fields that are both submitted AND different are included —
             // an optional field left blank on this submission never
-            // overwrites a value already on file.
+            // overwrites a value already on file. Email is deliberately
+            // excluded: a returning participant registering with a new
+            // email but a phone number already on file keeps their
+            // original email as the contact's email of record (see
+            // effectiveEmail above, surfaced to the frontend instead of
+            // silently overriding it either way).
             const contactUpdates: UpdateContactDTO = {};
             if (dto.firstName !== undefined && dto.firstName !== existingContact.firstName) contactUpdates.firstName = dto.firstName;
             if (dto.lastName !== undefined && dto.lastName !== existingContact.lastName) contactUpdates.lastName = dto.lastName;
@@ -1073,6 +1098,7 @@ export class ContestService {
             if (Object.keys(contactUpdates).length > 0) {
                 try {
                     await this.contactService.update(existingContact.id, contest.organizationId, contactUpdates);
+                    if (contactUpdates.phone !== undefined) effectivePhone = contactUpdates.phone;
                 } catch (err) {
                     // Don't let a profile-sync failure (e.g. the new phone
                     // number already belongs to a different contact) block
@@ -1098,6 +1124,8 @@ export class ContestService {
                 }
             );
             contactId = newContact.id;
+            effectiveEmail = dto.email;
+            effectivePhone = dto.phone;
         }
 
         // 4. Create or reuse Participant — check existing record first
@@ -1185,6 +1213,12 @@ export class ContestService {
                 participantId: participant.id,
                 paymentRequired: false,
                 status: "REGISTERED",
+                // The email/phone this registration is actually associated
+                // with — may differ from what was submitted if an existing
+                // contact was matched by phone under an older email. See
+                // registration audit, issue A.
+                contactEmail: effectiveEmail,
+                contactPhone: effectivePhone,
             };
         }
 
@@ -1197,7 +1231,9 @@ export class ContestService {
                 amount: Number(contest.paymentConfig!.amount),
                 currency: contest.paymentConfig!.currency ?? "INR",
                 description: `Registration fee for ${contest.title}`,
-            }
+            },
+            contactEmail: effectiveEmail,
+            contactPhone: effectivePhone,
         };
     }
 

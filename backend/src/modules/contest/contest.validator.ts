@@ -169,6 +169,14 @@ export const RegisterParticipantSchema = z.object({
 
 export const RegisterStatusSchema = z.object({
     contactToken: z.string().min(1),
+    // Optional — sent once the participant has typed a full phone number in
+    // the registration details step, so a contact match found by PHONE (not
+    // just by email) can also trigger the existing prefill-from-known-contact
+    // behavior. Loosely validated on purpose: this is called live as the
+    // user types, so an incomplete value should just skip the phone-based
+    // lookup rather than 400 the whole request. See registration audit,
+    // issue A.
+    phone: z.string().optional(),
 });
 
 

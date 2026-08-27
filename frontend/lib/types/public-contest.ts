@@ -102,4 +102,9 @@ export interface RegistrationResult {
     currency: string;
     description: string;
   };
+  // The email/phone this registration actually landed on — may differ from
+  // what was typed if an existing contact was matched by phone under an
+  // older email. See registration audit, issue A.
+  contactEmail?: string;
+  contactPhone?: string;
 }

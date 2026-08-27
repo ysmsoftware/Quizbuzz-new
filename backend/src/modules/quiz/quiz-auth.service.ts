@@ -331,7 +331,7 @@ export class QuizAuthService {
         contestId?: string,
         joinCode?: string,
         deviceId?: string,
-    ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string; proctoringEnabled: boolean }> {
+    ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string; proctoringEnabled: boolean; firstName: string | null }> {
         // OTP verification is bypassed/removed since the email identity is already verified during registration.
         const normalizedEmail = email.toLowerCase();
 
@@ -382,7 +382,7 @@ export class QuizAuthService {
                 contact: { email: normalizedEmail, organizationId: contest.organizationId },
                 status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
             },
-            select: { id: true, status: true },
+            select: { id: true, status: true, contact: { select: { firstName: true } } },
         });
 
         if (!participant) {
@@ -424,6 +424,9 @@ export class QuizAuthService {
             contestId: contest.id,
             organizationId: contest.organizationId,
             proctoringEnabled: contest.proctoringEnabled ?? true,
+            // Surfaced so the waiting room can greet the participant by name
+            // instead of showing the long, non-human-readable participant ID.
+            firstName: participant.contact?.firstName ?? null,
         };
     }
 }

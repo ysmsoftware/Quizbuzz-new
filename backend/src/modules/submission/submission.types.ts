@@ -86,6 +86,12 @@ export interface AnswerDetail {
     correctOptionText: string;
     isCorrect: boolean | null;
     marksAwarded: number | null;
+    // This question's actual configured marks (ContestQuestion.marks) and
+    // negative-marking rate (ContestQuestion.negativeMark) for THIS contest —
+    // previously missing entirely, which forced the frontend to assume every
+    // question was worth 1 mark. See results-page scoring audit, issue 2/3.
+    maxMarks: number;
+    negativeMark: number;
 }
 
 /** Full detail — admin review or participant result page */
@@ -95,6 +101,10 @@ export interface SubmissionDetail extends SubmissionSummary {
     skipped: number | null;
     attempted: number | null;
     totalQuestions: number | null;
+    // Sum of every contest question's `marks` — the real max-possible-score
+    // denominator. Was previously absent, so the frontend faked it from
+    // totalQuestions (only correct when every question is worth 1 mark).
+    totalMarks: number;
     answers: AnswerDetail[];
 }
 

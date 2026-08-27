@@ -79,6 +79,15 @@ function RegisterPageInner() {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [contactToken, setContactToken] = useState("");
+  // The email/phone this registration actually landed on, from the register
+  // API response — may differ from what was typed if an existing contact
+  // was matched by phone under an older email. Shown on the success screen
+  // instead of just echoing back what was typed. See registration audit,
+  // issue A.
+  const [registeredContact, setRegisteredContact] = useState<{ email: string; phone?: string } | null>(null);
+  // Tracks the last phone number we already looked up, so re-blurring the
+  // same value doesn't re-fire the request.
+  const lastPhoneLookupRef = useRef<string | null>(null);
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [registrationRef, setRegistrationRef] = useState("");
@@ -233,6 +242,40 @@ function RegisterPageInner() {
     setSubmitting(false);
   };
 
+  // Phone-triggered prefill: the email-match prefill above only fires right
+  // after OTP verification, before the participant has even typed a phone
+  // number — so a returning participant who registers with a NEW email but
+  // an OLD phone number never got prefilled, even though the same
+  // "existing contact" data exists in the system (findByEmailOrPhone on the
+  // backend already matches by phone at final submission). This mirrors
+  // that: once the phone field has a complete number, re-check registration
+  // status with that phone and fill in any fields still left blank — never
+  // overwriting anything the participant already typed. See registration
+  // audit, issue A.
+  const handlePhoneBlur = async (rawPhone: string) => {
+    const digits = rawPhone.replace(/\D/g, "").replace(/^(91|0{2}91)/, "");
+    if (!/^\d{10}$/.test(digits) || digits === lastPhoneLookupRef.current) return;
+    lastPhoneLookupRef.current = digits;
+    try {
+      const statusRes = await registrationService.checkRegistrationStatus(slug, contactToken, digits);
+      if (statusRes.knownContact) {
+        const current = detailsForm.getValues();
+        detailsForm.reset({
+          firstName: current.firstName || statusRes.knownContact.firstName || "",
+          lastName: current.lastName || statusRes.knownContact.lastName || "",
+          phone: current.phone,
+          college: current.college || statusRes.knownContact.college || "",
+          department: current.department || statusRes.knownContact.department || "",
+          city: current.city || statusRes.knownContact.city || "",
+          state: current.state || statusRes.knownContact.state || "",
+          termsAccepted: current.termsAccepted,
+        });
+      }
+    } catch {
+      // Best-effort — a failed lookup should never block filling in the form.
+    }
+  };
+
   const handleRegister = async (formData: DetailsFormData) => {
     if (!contest) return;
 
@@ -254,6 +297,10 @@ function RegisterPageInner() {
 
       setRegistrationRef(result.data.registrationRef);
       setParticipantId(result.data.participantId);
+      setRegisteredContact({
+        email: result.data.contactEmail || email,
+        phone: result.data.contactPhone,
+      });
 
       if (result.data.paymentRequired && result.data.payment) {
         setRazorpayOrder(result.data.payment);
@@ -349,6 +396,19 @@ function RegisterPageInner() {
       </div>
     );
   }
+
+  const contestStartDate = new Date(contest.startTime);
+  const formattedDate = contestStartDate.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const formattedTime = contestStartDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -660,7 +720,9 @@ function RegisterPageInner() {
                         id="phone"
                         type="tel"
                         placeholder="+91 98765 43210"
-                        {...detailsForm.register("phone")}
+                        {...detailsForm.register("phone", {
+                          onBlur: (e) => handlePhoneBlur(e.target.value),
+                        })}
                       />
                       {detailsForm.formState.errors.phone && (
                         <p className="text-sm text-destructive">
@@ -899,17 +961,23 @@ function RegisterPageInner() {
               </div>
 
               <CardContent className="p-6 space-y-6">
-                {/* Registration Ref Card */}
-                <div className="rounded-lg border-2 border-dashed border-primary/30 p-6 bg-primary/5">
-                  <div className="text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">Your Registration ID</p>
-                    <p className="text-3xl font-mono font-bold text-primary tracking-wider">
-                      {registrationRef}
+                {/* Registered Email Information */}
+                <div className="rounded-lg border border-primary/20 p-4 bg-primary/5 text-center space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Registered Email Address</p>
+                  <p className="text-lg font-semibold text-foreground">{registeredContact?.email || email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    This is your registered email and will be used for joining the contest.
+                  </p>
+                  {/* An existing contact (matched by phone number) was found under a
+                      different, older email — the registration is tied to THAT email,
+                      not the one just typed above. Surfaced explicitly instead of
+                      silently registering under the old email. See registration
+                      audit, issue A. */}
+                  {registeredContact && registeredContact.email !== email && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500 pt-1 font-medium">
+                      Note: we found an existing account of yours under this phone number, registered with {registeredContact.email}. Your registration for this contest is linked to that email — use it (not {email}) to join.
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      Save this ID - you will need it to access the quiz
-                    </p>
-                  </div>
+                  )}
                 </div>
 
                 {/* Registration Details */}
@@ -918,24 +986,25 @@ function RegisterPageInner() {
                   <div className="grid gap-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Name</span>
-                      <span className="text-foreground">
+                      <span className="text-foreground font-medium">
                         {detailsForm.getValues("firstName")} {detailsForm.getValues("lastName")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Email</span>
-                      <span className="text-foreground">{email}</span>
+                      <span className="text-foreground font-medium">{registeredContact?.email || email}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Registration ID</span>
+                      <span className="text-foreground font-mono text-xs font-medium">{registrationRef}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Contest Date</span>
-                      <span className="text-foreground">
-                        {new Date(contest.startTime).toLocaleDateString("en-US", {
-                          weekday: "long",
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </span>
+                      <span className="text-foreground font-medium">{formattedDate}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Start Time</span>
+                      <span className="text-foreground font-medium">{formattedTime}</span>
                     </div>
                   </div>
                 </div>
@@ -943,11 +1012,11 @@ function RegisterPageInner() {
                 {/* Next Steps */}
                 <div className="rounded-lg bg-muted p-4">
                   <h3 className="font-medium text-foreground mb-2">What&apos;s Next?</h3>
-                  <ul className="text-sm text-muted-foreground space-y-1">
+                  <ul className="text-sm text-muted-foreground space-y-1.5">
                     <li>1. Check your email for confirmation</li>
                     <li>2. Note the contest date and time</li>
-                    <li>3. Prepare your system for proctoring requirements</li>
-                    <li>4. Join the quiz using your Registration ID</li>
+                    <li>3. Prepare your system and ensure proctoring requirements are met</li>
+                    <li>4. Join the contest using your registered email ID and the join code received in your email</li>
                   </ul>
                 </div>
 

@@ -90,15 +90,22 @@ class RegistrationService {
     return res.data;
   }
 
-  /** Check existing registration status using contactToken */
+  /**
+   * Check existing registration status using contactToken. `phone` is
+   * optional and only meaningful once a full 10-digit number has been
+   * typed — passing it lets a contact match found by PHONE (not just by
+   * email) also trigger the knownContact prefill. See registration audit,
+   * issue A.
+   */
   async checkRegistrationStatus(
     contestSlug: string,
-    contactToken: string
+    contactToken: string,
+    phone?: string
   ): Promise<{ existing: ExistingRegistrationInfo | null; knownContact?: KnownContactInfo }> {
     const res = await publicPost<{
       success: boolean;
       data: { existing: ExistingRegistrationInfo | null; knownContact?: KnownContactInfo };
-    }>(`/contests/register-status/${contestSlug}`, { contactToken });
+    }>(`/contests/register-status/${contestSlug}`, { contactToken, ...(phone ? { phone } : {}) });
     return res.data;
   }
 

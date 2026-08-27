@@ -186,8 +186,28 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
   const topic = contest.topics?.[0] ?? '';
   const banner = publicPhaseBanner[phase];
 
+  // Shared CTA target/label for the top hero button and the sticky bottom
+  // bar (the sidebar card keeps its own distinct "Contest Ended" treatment
+  // below, since it has room for an explicit label above the button too).
+  // Once the contest has ended there's still one useful action left —
+  // checking your result — so this is shown in all three CTA spots instead
+  // of just going quiet. The results page does its own participant lookup
+  // (email/phone/registration ref), so no participantId is needed here.
+  // See contest-detail page audit.
+  const showCta = isRegistrationOpen || canJoinQuiz || phase === 'ended';
+  const ctaHref = isRegistrationOpen
+    ? `/contests/${contest.slug}/register`
+    : phase === 'ended'
+      ? `/quiz/${contest.slug}/results`
+      : `/quiz/${contest.slug}/join`;
+  const ctaLabel = isRegistrationOpen
+    ? 'Register Now'
+    : phase === 'ended'
+      ? 'Check Your Result'
+      : (phase === 'live' ? 'Join Quiz Now' : 'Join Quiz');
+
   return (
-    <div className="bg-secondary/10">
+    <div className={`bg-secondary/10${showCta ? ' pb-24' : ''}`}>
       {/* Contest Banner Image */}
       {contest.bannerImage && (
         <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
@@ -219,6 +239,25 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
             <p className="mt-4 text-lg text-muted-foreground max-w-3xl">
               {contest.description}
             </p>
+          )}
+
+          {/* Top CTA — the full registration card lives in the sidebar further
+              down the page, which can end up entirely below the fold (a
+              banner image + this hero easily push it out of view on a
+              laptop-sized viewport). Repeating a compact version of the same
+              action here means a new visitor sees a real "Register Now"
+              button immediately, instead of guessing that the top nav's
+              "Install App" or "Browse Contests" is the way to register. See
+              public-contest-page audit. */}
+          {showCta && (
+            <div className="mt-6">
+              <Link href={ctaHref}>
+                <Button size="lg" className="gap-2">
+                  {ctaLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
           )}
 
           {/* Quick Stats */}
@@ -478,9 +517,26 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                       </Button>
                     </Link>
                   ) : (
-                    <Button size="lg" className="w-full" disabled>
-                      Contest Ended
-                    </Button>
+                    // Contest is over — there's no more registering/joining to
+                    // do, but there IS still something actionable: checking
+                    // your result. Made explicit ("Contest Ended" label above
+                    // the button) so it reads as "this phase is over, here's
+                    // what to do now" rather than a dead end. The results page
+                    // does its own participant lookup (email/phone/reg ref),
+                    // so no participantId is needed here. See contest-detail
+                    // page audit.
+                    <div className="space-y-2">
+                      <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground">
+                        <XCircle className="h-4 w-4" />
+                        Contest Ended
+                      </p>
+                      <Link href={`/quiz/${contest.slug}/results`} className="block">
+                        <Button size="lg" className="w-full gap-2">
+                          Check Your Result
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
                   )}
 
                   <p className="text-xs text-center text-muted-foreground">
@@ -492,6 +548,34 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
           </div>
         </div>
       </section>
+
+      {/* Sticky bottom action bar — always visible regardless of scroll
+          position, so the way to register/join is never something the
+          visitor has to find. Complements the top CTA above; this one stays
+          on screen the whole time, with a subtle pulse to draw the eye on
+          first load. See public-contest-page audit. */}
+      {showCta && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold sm:text-base">{contest.title}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {isRegistrationOpen
+                  ? (fee === 0 ? 'Free to register' : `Entry fee: ${formatCurrency(fee)}`)
+                  : phase === 'ended'
+                    ? 'Contest ended — check how you did'
+                    : (phase === 'live' ? 'Contest is live now' : 'Already registered? Join here')}
+              </p>
+            </div>
+            <Link href={ctaHref} className="shrink-0">
+              <Button size="lg" className="animate-glow-pulse gap-2">
+                {ctaLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

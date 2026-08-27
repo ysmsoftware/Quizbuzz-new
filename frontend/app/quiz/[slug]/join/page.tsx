@@ -98,6 +98,7 @@ export default function QuizJoinPage() {
                 setSession({
                     sessionToken: res.data.sessionToken,
                     participantId: res.data.registration.participantId,
+                    participantName: res.data.registration.participantName ?? null,
                     contestId: contest?.id || "",
                     identifier: identifier,
                     identifierType: "email",

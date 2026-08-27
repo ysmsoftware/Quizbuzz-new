@@ -8,6 +8,7 @@ interface AuthState {
     // Session data
     sessionToken: string | null;
     participantId: string | null;
+    participantName: string | null;
     contestId: string | null;
     identifier: string | null; // phone or email used for OTP
     identifierType: 'phone' | 'email' | null;
@@ -20,6 +21,7 @@ interface AuthState {
     setSession: (data: {
         sessionToken: string;
         participantId: string;
+        participantName?: string | null;
         contestId: string;
         identifier: string;
         identifierType: 'phone' | 'email';
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
             // Initial state
             sessionToken: null,
             participantId: null,
+            participantName: null,
             contestId: null,
             identifier: null,
             identifierType: null,
@@ -46,6 +49,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                     sessionToken: data.sessionToken,
                     participantId: data.participantId,
+                    participantName: data.participantName ?? null,
                     contestId: data.contestId,
                     identifier: data.identifier,
                     identifierType: data.identifierType,
@@ -58,6 +62,7 @@ export const useAuthStore = create<AuthState>()(
                 set({
                     sessionToken: null,
                     participantId: null,
+                    participantName: null,
                     contestId: null,
                     identifier: null,
                     identifierType: null,

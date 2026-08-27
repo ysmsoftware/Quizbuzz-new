@@ -30,6 +30,7 @@ import { QuestionCard } from "@/components/features/quiz/QuestionCard";
 import { OptionButton } from "@/components/features/quiz/OptionButton";
 import { SubmitConfirmModal } from "@/components/features/quiz/SubmitConfirmModal";
 import { AutoSubmitModal } from "@/components/features/quiz/AutoSubmitModal";
+import { showBroadcastToast } from "@/components/features/quiz/BroadcastToast";
 import { QuizLoadingScreen } from "@/components/features/quiz/QuizLoadingScreen";
 import { QuizSubmittingScreen } from "@/components/features/quiz/QuizSubmittingScreen";
 
@@ -53,6 +54,9 @@ export default function QuizPlayPage() {
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
     const isFirstRender = useRef(true);
     const quizInitialisedRef = useRef(false);
+    // Guards against double-handling auto-submit from both the real backend
+    // event and the local countdown modal. See live-room audit, issue 4b.
+    const autoSubmitHandledRef = useRef(false);
 
     // Quiz store
     const questions = useQuizStore((s) => s.questions);
@@ -74,6 +78,7 @@ export default function QuizPlayPage() {
     const [contestId, setContestId] = useState<string>(authContestId);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
     const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
+    const [isAutoSubmitFinalizing, setIsAutoSubmitFinalizing] = useState(false);
 
     // ─── Question-mapping helper ─────────────────────────────────────────────
     const applyQuizStartPayload = useCallback((data: any) => {
@@ -217,9 +222,30 @@ export default function QuizPlayPage() {
             router.push(`/quiz/${slug}/submitted`);
         },
         onAutoSubmit: () => {
-            toast.info("Time is up! Your quiz was automatically submitted.");
-            useQuizStore.getState().resetQuiz();
-            router.push(`/quiz/${slug}/submitted?reason=timeout`);
+            // Backend's real, authoritative deadline was reached — and by the
+            // time this event arrives the submission has ALREADY been
+            // persisted server-side (quiz-timer.worker's handleAutoSubmit
+            // submits before it ever emits this event). There's no grace
+            // period synced to the client's own countdown, so this can land
+            // before, during, or after the modal's 5s visual countdown —
+            // flipping straight to "Submitting..." here was cutting that
+            // countdown short (issue 4b regression: "immediately submitted,
+            // countdown not seen properly"). Instead, just record that the
+            // backend has confirmed and make sure the modal is open; the
+            // actual "Submitting..." UI + redirect happens only once the
+            // modal's own countdown finishes (see handleAutoSubmit below),
+            // so the user always sees the full 5,4,3,2,1 play out.
+            if (autoSubmitHandledRef.current) return;
+            autoSubmitHandledRef.current = true;
+            setShowAutoSubmitModal(true);
+        },
+        onTimeWarning: (data) => {
+            // Authoritative remaining-time snapshot from the server — resync the
+            // local timer so it can't silently drift from the real deadline over
+            // a long quiz. See live-room audit, issue 4b.
+            if (typeof data?.secondsRemaining === "number") {
+                useQuizStore.getState().setTimeRemaining(data.secondsRemaining);
+            }
         },
         onDisqualified: () => {
             toast.error("You have been disqualified from this contest.");
@@ -227,16 +253,20 @@ export default function QuizPlayPage() {
             router.push(`/quiz/${slug}/disqualified`);
         },
         onBroadcast: (data) => {
-            const toastFn = data.type === "urgent" ? toast.error : data.type === "warning" ? toast.warning : toast.info;
-            toastFn(data.text, {
-                position: "top-right",
-                duration: 8000,
-                id: `broadcast-${Date.now()}`,
-            });
+            // Distinct styling + a visible 5s countdown, instead of the same
+            // generic toast used for every other in-quiz alert.
+            // See live-room audit, issue 3.
+            showBroadcastToast(data);
         },
     });
 
     // ─── Proctoring warnings → toast (side position) ─────────────────────────
+    // Deferred-until-visible + unique-per-occurrence ID: iOS Safari throttles
+    // timers on a backgrounded tab, and these violations are detected at the
+    // exact moment the tab backgrounds (tab-switch/blur) — showing the toast
+    // immediately meant it could render and auto-dismiss almost back-to-back
+    // once the tab regained focus, or collapse into a prior toast of the same
+    // type. See live-room audit, issue 2.
     const emitProctoringWarning = useCallback((type: string) => {
         if (!proctoringEnabled && CAMERA_DEPENDENT_WARNING_TYPES.has(type)) return;
 
@@ -250,11 +280,26 @@ export default function QuizPlayPage() {
             AUDIO_ANOMALY: "High background noise detected.",
             WINDOW_BLUR: "Quiz window lost focus!",
         };
-        toast.warning(msgs[type] ?? "Unusual activity detected.", {
-            position: "top-right",
-            duration: 4000,
-            id: `proc-${type}`,
-        });
+
+        const showToast = () => {
+            toast.warning(msgs[type] ?? "Unusual activity detected.", {
+                position: "top-right",
+                duration: 5000,
+                id: `proc-${type}-${Date.now()}`,
+            });
+        };
+
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+            const onVisible = () => {
+                if (document.visibilityState === "visible") {
+                    document.removeEventListener("visibilitychange", onVisible);
+                    showToast();
+                }
+            };
+            document.addEventListener("visibilitychange", onVisible);
+        } else {
+            showToast();
+        }
     }, [sendProctoringEvent, proctoringEnabled]);
 
     // Connection status toasts
@@ -284,13 +329,21 @@ export default function QuizPlayPage() {
 
     // ─── Navigation ───────────────────────────────────────────────────────
     const handleNext = useCallback(() => {
-        if (currentIndex < questions.length - 1) {
-            confirmAnswer(currentIndex);
-            const next = currentIndex + 1;
-            setCurrentQuestion(next);
-            visitQuestion(next);
+        if (currentIndex >= questions.length - 1) return;
+        // Next requires a selected answer — Skip is the only button that may
+        // advance with nothing chosen. See live-room audit, issue 5.
+        if (answers[currentIndex] === undefined) {
+            toast.warning("Please select an answer to continue, or tap Skip.", {
+                id: "next-requires-answer",
+                duration: 2500,
+            });
+            return;
         }
-    }, [currentIndex, questions.length, confirmAnswer, setCurrentQuestion, visitQuestion]);
+        confirmAnswer(currentIndex);
+        const next = currentIndex + 1;
+        setCurrentQuestion(next);
+        visitQuestion(next);
+    }, [currentIndex, questions.length, answers, confirmAnswer, setCurrentQuestion, visitQuestion]);
 
     const handleSkip = useCallback(() => {
         if (currentIndex < questions.length - 1) {
@@ -372,7 +425,27 @@ export default function QuizPlayPage() {
     }, [isConnected, emitSubmit, confirmAnswer, answers, questions, currentIndex, contest, timeRemaining, slug, participantId, sessionToken, router]);
 
     const handleManualSubmit = () => handleSubmission("MANUAL");
-    const handleAutoSubmit = () => handleSubmission("AUTO");
+    const handleAutoSubmit = () => {
+        // Called once the AutoSubmitModal's own 5s visual countdown finishes
+        // — whether it was opened by our local un-synced timer or by the
+        // backend's real auto_submit event — so this is the one place that
+        // flips to the "Submitting..." UI and redirects. See live-room
+        // audit, issue 4b (regression fix).
+        if (!autoSubmitHandledRef.current) {
+            // Backend hasn't confirmed the real force-submit yet (socket lag,
+            // or our local clock running behind the server's) — send a
+            // client-initiated submit as a safety net. Harmless if the
+            // backend's own auto-submit lands moments later; that path is a
+            // no-op against an already-submitted participant.
+            handleSubmission("AUTO");
+        }
+        setIsAutoSubmitFinalizing(true);
+        setTimeout(() => {
+            toast.info("Time is up! Your quiz was automatically submitted.");
+            useQuizStore.getState().resetQuiz();
+            router.push(`/quiz/${slug}/submitted?reason=timeout`);
+        }, 900);
+    };
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -431,7 +504,7 @@ export default function QuizPlayPage() {
                 onClose={() => setShowSubmitModal(false)}
                 onConfirm={handleManualSubmit}
             />
-            <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} />
+            <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} isSubmitting={isAutoSubmitFinalizing} />
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
             <header className="flex-none h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
@@ -520,7 +593,7 @@ export default function QuizPlayPage() {
                             {proctoringEnabled && (
                                 <div className="flex-none lg:order-last max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full lg:w-64 lg:shrink-0 lg:sticky lg:top-6 mb-3 lg:mb-0">
                                     <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
-                                        <div className="relative w-14 h-10 lg:w-full lg:h-auto lg:aspect-video rounded-lg lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
+                                        <div className="relative w-28 h-24 lg:w-full lg:h-auto lg:aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
                                             <video
                                                 ref={videoRef}
                                                 autoPlay playsInline muted
