@@ -38,7 +38,7 @@ export default function LoginPage() {
 
     const handlePasswordChange = (val: string) => {
         // Strip disallowed special characters (comma, dot, brackets, slashes, quotes, colons)
-        const sanitized = val.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+        const sanitized = val.replace(/[,.[\](){}/\\;:'"`]/g, '');
         setPassword(sanitized);
     };
 

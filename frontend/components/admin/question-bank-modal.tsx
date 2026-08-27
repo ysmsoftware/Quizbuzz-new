@@ -164,7 +164,7 @@ function adjustPercentages(
             distributedSum += baseShare;
         });
 
-        let diff = remaining - distributedSum;
+        const diff = remaining - distributedSum;
         for (let i = 0; i < diff; i++) {
             if (otherIndices[i] !== undefined) {
                 result[otherIndices[i]!] += 1;

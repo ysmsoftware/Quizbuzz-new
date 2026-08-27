@@ -43,7 +43,7 @@ export default function RegisterPage() {
     if (name === 'email') {
       sanitizedValue = value.replace(/[^a-zA-Z0-9@._\-+]/g, '');
     } else if (name === 'password' || name === 'confirmPassword') {
-      sanitizedValue = value.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+      sanitizedValue = value.replace(/[,.[\](){}/\\;:'"`]/g, '');
     }
     setFormData((prev) => ({
       ...prev,

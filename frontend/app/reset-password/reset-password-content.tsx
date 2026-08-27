@@ -10,7 +10,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-const DISALLOWED_PWD_CHARS = /[,.\[\](){}/\\;:'"`]/;
+const DISALLOWED_PWD_CHARS = /[,.[\](){}/\\;:'"`]/;
 
 export default function ResetPasswordContent() {
   const router = useRouter();
@@ -25,12 +25,12 @@ export default function ResetPasswordContent() {
 
   const handlePasswordChange = (val: string) => {
     // Strip disallowed characters immediately from password
-    const sanitized = val.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+    const sanitized = val.replace(/[,.[\](){}/\\;:'"`]/g, '');
     setPassword(sanitized);
   };
 
   const handleConfirmPasswordChange = (val: string) => {
-    const sanitized = val.replace(/[,.\[\](){}/\\;:'"`]/g, '');
+    const sanitized = val.replace(/[,.[\](){}/\\;:'"`]/g, '');
     setConfirmPassword(sanitized);
   };
 
