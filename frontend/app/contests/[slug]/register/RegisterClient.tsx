@@ -209,6 +209,22 @@ function RegisterPageInner() {
           setStep("details");
         }
       } else {
+        // No registration for THIS contest yet — but if this email has
+        // registered before (any contest in this org), prefill the form
+        // from that known contact instead of leaving it blank. Fields
+        // stay editable, so a stale phone/college can still be corrected.
+        if (statusRes.knownContact) {
+          detailsForm.reset({
+            firstName: statusRes.knownContact.firstName || "",
+            lastName: statusRes.knownContact.lastName || "",
+            phone: statusRes.knownContact.phone || "",
+            college: statusRes.knownContact.college || "",
+            department: statusRes.knownContact.department || "",
+            city: statusRes.knownContact.city || "",
+            state: statusRes.knownContact.state || "",
+            termsAccepted: false,
+          });
+        }
         setStep("details");
       }
     } catch (err: any) {

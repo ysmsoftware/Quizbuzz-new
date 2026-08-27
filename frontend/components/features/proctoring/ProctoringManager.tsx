@@ -44,6 +44,7 @@ export function ProctoringManager({
     const tabSwitchesCountRef = useRef(0);
     const fullscreenExitsCountRef = useRef(0);
     const multipleFacesCountRef = useRef(0);
+    const windowBlursCountRef = useRef(0);
 
     // ─────────────────────────────────────────────────────────────────────
     // 8. DIRECT S3/LOCAL UPLOAD & CONFIRMATION FLOW
@@ -249,6 +250,31 @@ export function ProctoringManager({
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [emitProctoringWarning, store, notifyViolation, captureEvidence]);
+
+    // 2b. WINDOW FOCUS/BLUR MONITORING (WINDOW_BLUR)
+    useEffect(() => {
+        const handleBlur = () => {
+            store.setFocused(false);
+            windowBlursCountRef.current += 1;
+            const count = windowBlursCountRef.current;
+            store.addWarning({ type: 'WINDOW_BLUR', timestamp: Date.now() });
+            emitProctoringWarning('WINDOW_BLUR');
+            notifyViolation('WINDOW_BLUR', { count });
+            if (count > 5) captureEvidence('WINDOW_BLUR');
+        };
+
+        const handleFocus = () => {
+            store.setFocused(true);
+        };
+
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, [emitProctoringWarning, store, notifyViolation, captureEvidence]);
 
     // 3. COPY / PASTE PREVENTION

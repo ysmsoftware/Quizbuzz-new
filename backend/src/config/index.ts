@@ -122,6 +122,15 @@ const envSchema = z.object({
     RATE_LIMIT_REGISTER: z.coerce.number(),
     RATE_LIMIT_OTP: z.coerce.number(),
 
+    // Participant-login (quiz join) burst limiter — deliberately separate
+    // from RATE_LIMIT_OTP/RATE_LIMIT_LOGIN and keyed by email rather than
+    // IP (see quiz-registration.routes.ts): many real participants can
+    // legitimately share one IP (a college lab/lecture hall on one NAT'd
+    // Wi-Fi), so this exists to shed genuinely abnormal load, not to cap
+    // how many students behind one router can join in the same window.
+    RATE_LIMIT_PARTICIPANT_LOGIN_WINDOW: z.coerce.number().default(60),
+    RATE_LIMIT_PARTICIPANT_LOGIN_MAX: z.coerce.number().default(300),
+
     // QUEUE
     QUEUE_REDIS_DB: z.coerce.number(),
     QUEUE_PREFIX: z.string(),
@@ -411,6 +420,10 @@ export const config = {
         login: env.RATE_LIMIT_LOGIN,
         register: env.RATE_LIMIT_REGISTER,
         otp: env.RATE_LIMIT_OTP,
+        participantLogin: {
+            window: env.RATE_LIMIT_PARTICIPANT_LOGIN_WINDOW,
+            max: env.RATE_LIMIT_PARTICIPANT_LOGIN_MAX,
+        },
     },
 
     payment: {

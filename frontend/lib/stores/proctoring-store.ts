@@ -7,6 +7,7 @@ import { isIphoneBrowser } from '../utils/device';
 
 export type WarningType =
   | 'TAB_SWITCH'
+  | 'WINDOW_BLUR'
   | 'FULLSCREEN_EXIT'
   | 'MULTIPLE_FACES'
   | 'NO_FACE'
@@ -36,6 +37,9 @@ interface ProctoringState {
 
   // Fullscreen
   isFullscreen: boolean;
+
+  // Focus tracking
+  isFocused: boolean;
 
   // Face detection
   faceDetected: boolean;
@@ -82,6 +86,9 @@ interface ProctoringActions {
   enterFullscreen: () => Promise<boolean>;
   exitFullscreen: () => Promise<void>;
 
+  // Focus
+  setFocused: (value: boolean) => void;
+
   // Warnings
   addWarning: (warning: { type: WarningType; timestamp: number }) => void;
   dismissWarningModal: () => void;
@@ -106,6 +113,7 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
     isCameraPermissionGranted: false,
     videoStream: null,
     isFullscreen: false,
+    isFocused: true,
     faceDetected: false,
     faceCount: 0,
     lightingOk: true,
@@ -186,6 +194,7 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
     // dependency array, so any state change here re-triggers that effect.
     setFullscreen: (value) => set((state) => (state.isFullscreen === value ? state : { isFullscreen: value })),
     setFullscreenEnabled: (value) => set((state) => (state.isFullscreen === value ? state : { isFullscreen: value })),
+    setFocused: (value) => set((state) => (state.isFocused === value ? state : { isFocused: value })),
 
     // Always attempts the real Fullscreen API first — as of Safari 17.4,
     // iPhone genuinely supports requestFullscreen() for ordinary page
@@ -303,6 +312,7 @@ export const useProctoringStore = create<ProctoringState & ProctoringActions>()(
         isCameraPermissionGranted: false,
         videoStream: null,
         isFullscreen: false,
+        isFocused: true,
         faceDetected: false,
         faceCount: 0,
         lightingOk: true,

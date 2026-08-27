@@ -27,6 +27,7 @@ import { config } from "../../config";
 import { verifyContactToken } from "../../utils/tokens";
 import { formatDateHuman, formatDateTimeHuman, formatTimeHuman } from "../../utils/timezone";
 import { ContactService } from "../contact/contact.service";
+import { UpdateContactDTO } from "../contact/contact.types";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { messageQueue, quizTimerQueue, contestReconciliationQueue } from "../../queues";
@@ -232,7 +233,7 @@ export class ContestService {
                 where,
                 skip: (page - 1) * limit,
                 take: limit,
-                orderBy: { startTime: 'asc' as const },
+                orderBy: { createdAt: 'desc' as const },
             }),
             this.contestRepo.countPublic(where),
         ]);
@@ -934,8 +935,25 @@ export class ContestService {
             return { existing: null };
         }
 
+        // A contact from a PRIOR registration (any contest in this org) —
+        // surfaced so the frontend can prefill the details form instead of
+        // asking a returning participant to retype everything. Only
+        // relevant on the "no participant for THIS contest yet" paths below
+        // (where the form is actually shown); once a participant record for
+        // this contest exists, the frontend shows an already-registered
+        // screen instead, so prefill data isn't needed there.
+        const knownContact = {
+            firstName:  contact.firstName,
+            lastName:   contact.lastName,
+            phone:      contact.phone,
+            college:    contact.college,
+            department: contact.department,
+            city:       contact.city,
+            state:      contact.state,
+        };
+
         if (!this.participantRepo) {
-            return { existing: null };
+            return { existing: null, knownContact };
         }
 
         const participant = await this.participantRepo.findByContactId(
@@ -945,7 +963,7 @@ export class ContestService {
         );
 
         if (!participant) {
-            return { existing: null };
+            return { existing: null, knownContact };
         }
 
         if (participant.status === ParticipantStatus.REGISTERED) {
@@ -1036,6 +1054,34 @@ export class ContestService {
 
         if (existingContact) {
             contactId = existingContact.id;
+
+            // Sync any fields the participant actually changed (e.g. a
+            // stale phone/college from a prior registration, now editable
+            // on a prefilled form) back onto the Contact record. Only
+            // fields that are both submitted AND different are included —
+            // an optional field left blank on this submission never
+            // overwrites a value already on file.
+            const contactUpdates: UpdateContactDTO = {};
+            if (dto.firstName !== undefined && dto.firstName !== existingContact.firstName) contactUpdates.firstName = dto.firstName;
+            if (dto.lastName !== undefined && dto.lastName !== existingContact.lastName) contactUpdates.lastName = dto.lastName;
+            if (dto.phone !== undefined && dto.phone !== existingContact.phone) contactUpdates.phone = dto.phone;
+            if (dto.college !== undefined && dto.college !== existingContact.college) contactUpdates.college = dto.college;
+            if (dto.department !== undefined && dto.department !== existingContact.department) contactUpdates.department = dto.department;
+            if (dto.city !== undefined && dto.city !== existingContact.city) contactUpdates.city = dto.city;
+            if (dto.state !== undefined && dto.state !== existingContact.state) contactUpdates.state = dto.state;
+
+            if (Object.keys(contactUpdates).length > 0) {
+                try {
+                    await this.contactService.update(existingContact.id, contest.organizationId, contactUpdates);
+                } catch (err) {
+                    // Don't let a profile-sync failure (e.g. the new phone
+                    // number already belongs to a different contact) block
+                    // the actual registration — the participant still gets
+                    // their seat, just with the previously-stored contact
+                    // data rather than the edited values.
+                    logger.warn(`[contest] Failed to sync contact ${existingContact.id} profile on re-registration: ${(err as Error).message}`);
+                }
+            }
         } else {
             // Create new contact
             const newContact = await this.contactService.createForRegistration(

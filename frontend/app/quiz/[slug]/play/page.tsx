@@ -25,6 +25,7 @@ import { WidgetErrorBoundary } from "@/components/shared/WidgetErrorBoundary";
 import { ProctoringManager } from "@/components/features/proctoring/ProctoringManager";
 import { FlaggedBanner } from "@/components/features/proctoring/ProctorWarningModal";
 import { FullscreenReturnOverlay } from "@/components/features/proctoring/FullscreenReturnOverlay";
+import { FocusReturnOverlay } from "@/components/features/proctoring/FocusReturnOverlay";
 import { QuestionCard } from "@/components/features/quiz/QuestionCard";
 import { OptionButton } from "@/components/features/quiz/OptionButton";
 import { SubmitConfirmModal } from "@/components/features/quiz/SubmitConfirmModal";
@@ -67,6 +68,7 @@ export default function QuizPlayPage() {
 
     const { isFullscreen, setFullscreen, enterFullscreen } = useProctoringStore();
     const faceDetected = useProctoringStore((s) => s.faceDetected);
+    const isFocused = useProctoringStore((s) => s.isFocused);
 
     const [contest, setContest] = useState<any>(null);
     const [contestId, setContestId] = useState<string>(authContestId);
@@ -246,6 +248,7 @@ export default function QuizPlayPage() {
             NO_FACE: "No face detected — please stay in frame.",
             FACE_NOT_DETECTED: "No face detected — please stay in frame.",
             AUDIO_ANOMALY: "High background noise detected.",
+            WINDOW_BLUR: "Quiz window lost focus!",
         };
         toast.warning(msgs[type] ?? "Unusual activity detected.", {
             position: "top-right",
@@ -422,6 +425,7 @@ export default function QuizPlayPage() {
 
             <FlaggedBanner />
             <FullscreenReturnOverlay isVisible={!isFullscreen} onReturn={handleReturnFullscreen} />
+            <FocusReturnOverlay isVisible={!isFocused} />
             <SubmitConfirmModal
                 isOpen={showSubmitModal}
                 onClose={() => setShowSubmitModal(false)}

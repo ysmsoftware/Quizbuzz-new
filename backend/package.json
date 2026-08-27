@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc && copyfiles -u 1 src/assets/* dist/",
+    "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
     "start": "node dist/server.js",
     "test": "jest --passWithNoTests",

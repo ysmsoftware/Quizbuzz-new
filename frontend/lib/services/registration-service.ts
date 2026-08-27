@@ -40,6 +40,22 @@ export interface PaymentStatusResult {
   failureReason: string | null;
 }
 
+/**
+ * Profile fields from a Contact the participant already has on file (from a
+ * prior registration, any contest in this org). Used to prefill the details
+ * form for a returning participant instead of asking them to retype
+ * everything — fields stay editable, this is a prefill, not a lock.
+ */
+export interface KnownContactInfo {
+  firstName: string;
+  lastName: string | null;
+  phone: string | null;
+  college: string | null;
+  department: string | null;
+  city: string | null;
+  state: string | null;
+}
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1';
 
 async function publicPost<T>(path: string, body: unknown): Promise<T> {
@@ -78,10 +94,10 @@ class RegistrationService {
   async checkRegistrationStatus(
     contestSlug: string,
     contactToken: string
-  ): Promise<{ existing: ExistingRegistrationInfo | null }> {
+  ): Promise<{ existing: ExistingRegistrationInfo | null; knownContact?: KnownContactInfo }> {
     const res = await publicPost<{
       success: boolean;
-      data: { existing: ExistingRegistrationInfo | null };
+      data: { existing: ExistingRegistrationInfo | null; knownContact?: KnownContactInfo };
     }>(`/contests/register-status/${contestSlug}`, { contactToken });
     return res.data;
   }

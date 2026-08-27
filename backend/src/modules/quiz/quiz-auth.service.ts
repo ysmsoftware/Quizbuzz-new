@@ -333,6 +333,7 @@ export class QuizAuthService {
         deviceId?: string,
     ): Promise<{ sessionToken: string; participantId: string; contestId: string; organizationId: string; proctoringEnabled: boolean }> {
         // OTP verification is bypassed/removed since the email identity is already verified during registration.
+        const normalizedEmail = email.toLowerCase();
 
         // 1. Resolve contest by slug/id (accept LIVE, PUBLISHED, REGISTRATION_CLOSED)
         const contest = await this.prisma.contest.findFirst({
@@ -365,27 +366,33 @@ export class QuizAuthService {
             throw new QuizAuthError("CONTEST_ENDED", "This contest has already ended");
         }
 
-        // 3. Resolve contact → participant
-        const contact = await this.prisma.contact.findFirst({
-            where: { email: email.toLowerCase(), organizationId: contest.organizationId },
-            select: { id: true, firstName: true },
-        });
-
-        if (!contact) {
-            throw new QuizAuthError("CONTACT_NOT_FOUND", "No account found for this email address");
-        }
-
+        // 3. Resolve contact + participant in ONE query instead of two
+        // sequential ones (was contact.findFirst then participant.findFirst).
+        // Under a join burst this cuts DB round-trips — and pool checkouts —
+        // per participant from 3 to 2 on the common/success path. The null
+        // branch below can't distinguish "no contact for this email" from
+        // "contact exists but isn't registered for this contest" on its own,
+        // so — only on that rare failure path, not on every request — it
+        // does one extra lookup to keep the CONTACT_NOT_FOUND vs
+        // NOT_REGISTERED distinction the frontend already relies on.
         const participant = await this.prisma.participant.findFirst({
             where: {
-                contactId: contact.id,
                 contestId: contest.id,
                 organizationId: contest.organizationId,
+                contact: { email: normalizedEmail, organizationId: contest.organizationId },
                 status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
             },
             select: { id: true, status: true },
         });
 
         if (!participant) {
+            const contact = await this.prisma.contact.findFirst({
+                where: { email: normalizedEmail, organizationId: contest.organizationId },
+                select: { id: true },
+            });
+            if (!contact) {
+                throw new QuizAuthError("CONTACT_NOT_FOUND", "No account found for this email address");
+            }
             throw new QuizAuthError("NOT_REGISTERED", "You are not registered for this contest");
         }
 

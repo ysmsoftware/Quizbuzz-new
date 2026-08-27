@@ -1,5 +1,5 @@
 "use client";
- 
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +22,7 @@ import { useProctoringStore } from "@/lib/stores/proctoring-store";
 import { useQuizStore } from "@/lib/stores/quiz-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
 import { isIphoneBrowser } from "@/lib/utils/device";
- 
+
 interface SystemCheck {
   id: string;
   label: string;
@@ -31,13 +31,13 @@ interface SystemCheck {
   status: "pending" | "checking" | "passed" | "failed";
   errorMessage?: string;
 }
- 
+
 export default function SystemCheckPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
   const videoRef = useRef<HTMLVideoElement>(null);
-  
+
   const { setCameraStream, setFullscreenEnabled, setCameraEnabled } = useProctoringStore();
   const proctoringEnabled = useQuizStore((s) => s.proctoringEnabled);
 
@@ -46,7 +46,7 @@ export default function SystemCheckPage() {
   const isIOS = useRef(isIphoneBrowser());
 
   const [checksStarted, setChecksStarted] = useState(false);
- 
+
   const [checks, setChecks] = useState<SystemCheck[]>([
     {
       id: "camera",
@@ -77,13 +77,14 @@ export default function SystemCheckPage() {
       status: "pending",
     },
   ]);
- 
+
   const [allChecksPassed, setAllChecksPassed] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isProceeding, setIsProceeding] = useState(false);
   const [hasFailedChecks, setHasFailedChecks] = useState(false);
   const [deviceCheckFailed, setDeviceCheckFailed] = useState(false);
- 
+  const [isEdge, setIsEdge] = useState(false);
+
   const updateCheckStatus = (
     id: string,
     status: SystemCheck["status"],
@@ -95,37 +96,37 @@ export default function SystemCheckPage() {
       )
     );
   };
- 
+
   const checkDevices = async () => {
     if (!proctoringEnabled) {
       updateCheckStatus("camera", "passed");
       updateCheckStatus("microphone", "passed");
       return true;
     }
- 
+
     updateCheckStatus("camera", "checking");
     updateCheckStatus("microphone", "checking");
- 
+
     try {
       const store = useProctoringStore.getState();
       const success = await store.requestCameraPermission();
-      
+
       if (success && store.videoStream) {
         const hasVideo = store.videoStream.getVideoTracks().some(t => t.readyState === 'live');
         const hasAudio = store.videoStream.getAudioTracks().some(t => t.readyState === 'live');
-        
+
         if (!hasVideo) {
           throw new Error("No active video track found.");
         }
         if (!hasAudio) {
           throw new Error("No active audio track found.");
         }
-        
+
         setCameraEnabled(true);
         if (videoRef.current) {
           videoRef.current.srcObject = store.videoStream;
         }
-        
+
         updateCheckStatus("camera", "passed");
         updateCheckStatus("microphone", "passed");
         return true;
@@ -147,7 +148,7 @@ export default function SystemCheckPage() {
       return false;
     }
   };
- 
+
   const checkFullscreen = async () => {
     updateCheckStatus("fullscreen", "checking");
     await new Promise((r) => setTimeout(r, 450));
@@ -184,7 +185,7 @@ export default function SystemCheckPage() {
         );
         return false;
       }
- 
+
       setFullscreenEnabled(true);
       updateCheckStatus("fullscreen", "passed");
       return true;
@@ -198,10 +199,10 @@ export default function SystemCheckPage() {
       return false;
     }
   };
- 
+
   const checkNetwork = async () => {
     updateCheckStatus("network", "checking");
-    
+
     try {
       if (!navigator.onLine) {
         updateCheckStatus(
@@ -211,9 +212,9 @@ export default function SystemCheckPage() {
         );
         return false;
       }
-      
+
       await new Promise((resolve) => setTimeout(resolve, 800));
-      
+
       updateCheckStatus("network", "passed");
       return true;
     } catch (error) {
@@ -222,7 +223,7 @@ export default function SystemCheckPage() {
       return false;
     }
   };
- 
+
   const runAllChecks = useCallback(async () => {
     setIsRetrying(true);
     setHasFailedChecks(false);
@@ -245,7 +246,7 @@ export default function SystemCheckPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
- 
+
   const retryCheck = async (id: string) => {
     setIsRetrying(true);
     try {
@@ -261,7 +262,7 @@ export default function SystemCheckPage() {
         ok = await checkFullscreen();
       }
       else if (id === "network") ok = await checkNetwork();
-      
+
       setChecks((prev) => {
         const updated = prev.map((c) =>
           c.id === id ? { ...c, status: ok ? ("passed" as const) : ("failed" as const) } : c
@@ -275,7 +276,7 @@ export default function SystemCheckPage() {
       setIsRetrying(false);
     }
   };
- 
+
   const proceedToWaitingRoom = () => {
     if (!slug || !allChecksPassed) return;
     setIsProceeding(true);
@@ -302,6 +303,7 @@ export default function SystemCheckPage() {
   };
 
   useEffect(() => {
+    setIsEdge(/edg/i.test(navigator.userAgent));
     // Any iPhone (camera-proctored or not) requires the manual "Start System
     // Checks" tap — it's the only reliable place to get a genuine user
     // gesture for the fullscreen request above, even when there's no camera
@@ -311,7 +313,7 @@ export default function SystemCheckPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
- 
+
   const getStatusIcon = (status: SystemCheck["status"]) => {
     switch (status) {
       case "pending":
@@ -374,128 +376,138 @@ export default function SystemCheckPage() {
               )}
 
               <div className="space-y-6">
-            {/* Status Checklist cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {checks
-                .filter((check) => proctoringEnabled || (check.id !== "camera" && check.id !== "microphone"))
-                .map((check) => (
-                <motion.div
-                  key={check.id}
-                  layout
-                  className={`
+                {/* Status Checklist cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {checks
+                    .filter((check) => proctoringEnabled || (check.id !== "camera" && check.id !== "microphone"))
+                    .map((check) => (
+                      <motion.div
+                        key={check.id}
+                        layout
+                        className={`
                     flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300
                     ${check.status === "failed" ? "border-destructive/30 bg-destructive/5" : ""}
                     ${check.status === "passed" ? "border-success/30 bg-success/5" : ""}
                     ${check.status === "pending" ? "border-border bg-card/20" : ""}
                     ${check.status === "checking" ? "border-primary/30 bg-primary/5 animate-pulse" : ""}
                   `}
-                >
-                  <div
-                    className={`
+                      >
+                        <div
+                          className={`
                       w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-300
                       ${check.status === "passed" ? "bg-success/10 border-success/20 text-success" : ""}
                       ${check.status === "failed" ? "bg-destructive/10 border-destructive/20 text-destructive" : ""}
                       ${check.status === "checking" ? "bg-primary/10 border-primary/20 text-primary" : ""}
                       ${check.status === "pending" ? "bg-muted border-border/60 text-muted-foreground" : ""}
                     `}
-                  >
-                    {check.icon}
-                  </div>
- 
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-foreground truncate">{check.label}</p>
-                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      {check.errorMessage || check.description}
-                    </p>
-                  </div>
- 
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(check.status)}
-                    {check.status === "failed" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isRetrying}
-                        onClick={() => retryCheck(check.id)}
-                        className="h-8 rounded-xl text-xs border-border bg-muted/40 hover:bg-muted text-foreground"
-                      >
-                        {isRetrying ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          "Retry"
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
- 
-            {hasFailedChecks && !deviceCheckFailed && (
-              <Alert className="rounded-2xl border-destructive/20 bg-destructive/5 text-destructive">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <AlertTitle className="font-bold text-xs">Validation Failed</AlertTitle>
-                <AlertDescription className="text-[11px] text-muted-foreground mt-1">
-                  Please resolve all failed items above. Try using the individual retry buttons.
-                </AlertDescription>
-              </Alert>
-            )}
- 
-            {allChecksPassed && (
-              <Alert className="rounded-2xl border-success/20 bg-success/5 text-success">
-                <CheckCircle className="h-4 w-4 text-success" />
-                <AlertTitle className="font-bold text-xs">All Systems Nominal</AlertTitle>
-                <AlertDescription className="text-[11px] text-muted-foreground mt-1">
-                  Your device has successfully passed all security and compatibility checks.
-                </AlertDescription>
-              </Alert>
-            )}
- 
-            {/* iPhone manual start overlay — also the required gesture for the real fullscreen request */}
-            {isIOS.current && !checksStarted && (
-              <Alert className="rounded-2xl border-primary/20 bg-primary/5 text-primary">
-                <AlertTriangle className="h-4 w-4 text-primary" />
-                <AlertTitle className="font-bold text-xs">Action Required</AlertTitle>
-                <AlertDescription className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                  {proctoringEnabled
-                    ? "iPhone requires a user gesture to initialize the webcam and enable fullscreen mode."
-                    : "iPhone requires a user gesture to enable fullscreen mode."}{" "}
-                  Click <strong>Start System Checks</strong> below to continue.
-                </AlertDescription>
-              </Alert>
-            )}
+                        >
+                          {check.icon}
+                        </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-4">
-              <Button
-                variant="outline"
-                className="flex-1 h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
-                disabled={isRetrying}
-                onClick={handleStartChecks}
-              >
-                {isRetrying ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>
-                ) : checksStarted ? (
-                  "Retest All Systems"
-                ) : (
-                  "Start System Checks"
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate">{check.label}</p>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {check.errorMessage || check.description}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(check.status)}
+                          {check.status === "failed" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isRetrying}
+                              onClick={() => retryCheck(check.id)}
+                              className="h-8 rounded-xl text-xs border-border bg-muted/40 hover:bg-muted text-foreground"
+                            >
+                              {isRetrying ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Retry"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                </div>
+
+                {hasFailedChecks && !deviceCheckFailed && (
+                  <Alert className="rounded-2xl border-destructive/20 bg-destructive/5 text-destructive">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <AlertTitle className="font-bold text-xs">Validation Failed</AlertTitle>
+                    <AlertDescription className="text-[11px] text-muted-foreground mt-1">
+                      Please resolve all failed items above. Try using the individual retry buttons.
+                    </AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-              <Button
-                className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all border-none flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
-                disabled={!allChecksPassed || isProceeding}
-                onClick={proceedToWaitingRoom}
-              >
-                {isProceeding ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying...</>
-                ) : (
-                  <>
-                    Enter waiting room
-                    <ArrowRight className="w-4 h-4" />
-                  </>
+
+                {allChecksPassed && (
+                  <Alert className="rounded-2xl border-success/20 bg-success/5 text-success">
+                    <CheckCircle className="h-4 w-4 text-success" />
+                    <AlertTitle className="font-bold text-xs">All Systems Nominal</AlertTitle>
+                    <AlertDescription className="text-[11px] text-muted-foreground mt-1">
+                      Your device has successfully passed all security and compatibility checks.
+                    </AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </div>
+
+                {isEdge && (
+                  <Alert className="rounded-2xl border-warning/20 bg-warning/5 text-warning">
+                    <AlertTriangle className="h-4 w-4 text-warning" />
+                    <AlertTitle className="font-bold text-xs">Edge Browser Detected</AlertTitle>
+                    <AlertDescription className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                      Microsoft Edge has aggressive power-saving settings. To prevent the quiz from freezing, please disable <strong>Sleeping Tabs</strong> and <strong>Efficiency Mode</strong> for this site.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* iPhone manual start overlay — also the required gesture for the real fullscreen request */}
+                {isIOS.current && !checksStarted && (
+                  <Alert className="rounded-2xl border-primary/20 bg-primary/5 text-primary">
+                    <AlertTriangle className="h-4 w-4 text-primary" />
+                    <AlertTitle className="font-bold text-xs">Action Required</AlertTitle>
+                    <AlertDescription className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                      {proctoringEnabled
+                        ? "iPhone requires a user gesture to initialize the webcam and enable fullscreen mode."
+                        : "iPhone requires a user gesture to enable fullscreen mode."}{" "}
+                      Click <strong>Start System Checks</strong> below to continue.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
+                    disabled={isRetrying}
+                    onClick={handleStartChecks}
+                  >
+                    {isRetrying ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>
+                    ) : checksStarted ? (
+                      "Retest All Systems"
+                    ) : (
+                      "Start System Checks"
+                    )}
+                  </Button>
+                  <Button
+                    className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all border-none flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
+                    disabled={!allChecksPassed || isProceeding}
+                    onClick={proceedToWaitingRoom}
+                  >
+                    {isProceeding ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying...</>
+                    ) : (
+                      <>
+                        Enter waiting room
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -522,10 +534,10 @@ export default function SystemCheckPage() {
                   <div className="space-y-1.5 bg-muted/40 p-3.5 rounded-xl border border-border">
                     <p className="font-bold text-foreground flex items-center gap-1">📱 iOS Safari</p>
                     <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
-                      <li>Open **Settings**</li>
-                      <li>Select **Safari**</li>
-                      <li>Change **Camera & Mic**</li>
-                      <li>Set to **Allow**</li>
+                      <li>Open <strong>Settings</strong></li>
+                      <li>Select <strong>Safari</strong></li>
+                      <li>Change <strong>Camera & Mic</strong></li>
+                      <li>Set to <strong>Allow</strong></li>
                     </ol>
                   </div>
 
@@ -533,9 +545,9 @@ export default function SystemCheckPage() {
                     <p className="font-bold text-foreground flex items-center gap-1">🤖 Android Chrome</p>
                     <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
                       <li>Tap 🔒 URL lock icon</li>
-                      <li>Go to **Site Settings**</li>
-                      <li>Find **Camera & Mic**</li>
-                      <li>Set to **Allow**</li>
+                      <li>Go to <strong>Site Settings</strong></li>
+                      <li>Find <strong>Camera & Mic</strong></li>
+                      <li>Set to <strong>Allow</strong></li>
                     </ol>
                   </div>
 
@@ -543,7 +555,7 @@ export default function SystemCheckPage() {
                     <p className="font-bold text-foreground flex items-center gap-1">💻 Desktop browsers</p>
                     <ol className="list-decimal pl-4 space-y-1 text-muted-foreground">
                       <li>Click 🔒 lock icon</li>
-                      <li>Enable **Camera & Mic**</li>
+                      <li>Enable <strong>Camera & Mic</strong></li>
                       <li>Reload the page</li>
                     </ol>
                   </div>
