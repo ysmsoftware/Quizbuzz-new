@@ -31,7 +31,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
             url = `${url}?${searchParams.toString()}`;
         }
         posthog.capture("$pageview", { $current_url: url });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [pathname, searchParams]);
 
     return <>{children}</>;

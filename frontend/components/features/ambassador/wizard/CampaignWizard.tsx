@@ -91,7 +91,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
       // inferInitialStartMode/EndMode treat that as "unknown," not "no match," and fall back
       // to CUSTOM rather than risk the sync effect further down overwriting an already-saved
       // date once the contest data does arrive.
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the `contests` closure deliberately without re-running this once-only hydration effect on every contests refetch
+       
       const resumedContest = contests.find((c) => c.id === campaign.contestId);
       setStartMode(inferInitialStartMode(campaign.startDate ?? '', resumedContest?.publishedAt || resumedContest?.registrationStartDate || undefined));
       setEndMode(inferInitialEndMode(campaign.endDate ?? '', resumedContest?.contestEndTime || undefined, resumedContest?.contestStartTime || undefined));
@@ -317,7 +317,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           />
         );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currentStep.key, draft, groups, contestTitle, selectedContest, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign]);
 
   const isWizardLocked = !!campaign && campaign.status !== 'DRAFT' && campaign.status !== 'PUBLISHED';

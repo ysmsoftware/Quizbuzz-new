@@ -64,7 +64,6 @@ export function ShareCampaignCard({
     <Card className="overflow-hidden border-border/50 py-0 gap-0">
       <div className="relative h-[104px] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary/25 to-accent/40">
         {posterImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- remote S3 poster, not a static app asset
           <img src={posterImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <MessageCircle className="h-8 w-8 text-card/90" strokeWidth={1.6} aria-hidden="true" />

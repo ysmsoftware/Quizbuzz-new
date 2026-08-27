@@ -53,7 +53,6 @@ export function QuestionDisplay({
 
         {question.imageUrl && (
           <div className="mt-4 rounded-lg overflow-hidden border bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={question.imageUrl}
               alt="Question illustration"

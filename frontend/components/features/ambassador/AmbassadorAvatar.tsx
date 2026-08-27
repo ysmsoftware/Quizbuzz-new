@@ -20,7 +20,6 @@ export function AmbassadorAvatar({ firstName, lastName, profileImageUrl, size = 
 
   if (profileImageUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- remote S3 photo, not a static app asset
       <img
         src={profileImageUrl}
         alt={`${firstName} ${lastName ?? ''}`.trim()}

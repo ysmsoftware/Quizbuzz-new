@@ -292,7 +292,7 @@ export default function QuestionBankModal({
             setRuleAvailableCounts({});
             autoGenerateChecklist.reset();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [isOpen]);
 
     const toggleSelect = (id: string) => {

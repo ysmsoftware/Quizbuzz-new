@@ -75,7 +75,7 @@ class MessageService {
     let contestTitle = 'QuizBuzz Contest';
     let contestDate = new Date().toLocaleDateString();
     let contestStartTime = new Date().toLocaleTimeString();
-    let contestLink = typeof window !== 'undefined' ? `${window.location.origin}/contests/${contestId}` : '';
+    const contestLink = typeof window !== 'undefined' ? `${window.location.origin}/contests/${contestId}` : '';
 
     if (contestId && contestId !== 'all') {
       try {

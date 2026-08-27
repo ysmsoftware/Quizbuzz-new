@@ -29,7 +29,7 @@ interface RepeatingRowTableProps<T> {
 
 /** Small repeating-row editor: Table + inline Input/Select cells, add/remove rows. Reused across the
  * reward-config editor's three sections (milestone tiers, speed bonus tiers, leaderboard prize ranks). */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- row shapes vary (some fields are nested objects like `goodie`); only the columns array is type-checked per field.
+ 
 export function RepeatingRowTable<T extends Record<string, any>>({
   rows,
   columns,

@@ -206,7 +206,8 @@ class QuizService {
           correctAnswer: correct,
           isCorrect: false,
           marksObtained: 0,
-          maxMarks: question.marks
+          maxMarks: question.marks,
+          negativeMark: question.negativeMarks || 0
         });
       } else if (isCorrect) {
         correctAnswers++;
@@ -219,7 +220,8 @@ class QuizService {
           correctAnswer: correct,
           isCorrect: true,
           marksObtained: question.marks,
-          maxMarks: question.marks
+          maxMarks: question.marks,
+          negativeMark: question.negativeMarks || 0
         });
       } else {
         wrongAnswers++;
@@ -232,7 +234,8 @@ class QuizService {
           correctAnswer: correct,
           isCorrect: false,
           marksObtained: -question.negativeMarks,
-          maxMarks: question.marks
+          maxMarks: question.marks,
+          negativeMark: question.negativeMarks || 0
         });
       }
     }
@@ -266,6 +269,7 @@ class QuizService {
       participantName: 'Participant',
       score,
       totalMarks,
+      totalQuestions: questions.length,
       correctAnswers,
       wrongAnswers,
       unattempted,

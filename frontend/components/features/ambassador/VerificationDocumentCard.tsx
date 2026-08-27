@@ -79,7 +79,6 @@ export function VerificationDocumentCard({ proofUrl, proofFieldLabel }: Verifica
               </a>
             ) : (
               <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="block">
-                {/* eslint-disable-next-line @next/next/no-img-element -- remote S3 doc, not a static app asset */}
                 <img
                   src={proofUrl}
                   alt={proofFieldLabel}

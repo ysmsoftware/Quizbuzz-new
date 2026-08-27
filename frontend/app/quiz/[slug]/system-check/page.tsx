@@ -244,7 +244,7 @@ export default function SystemCheckPage() {
     } finally {
       setIsRetrying(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const retryCheck = async (id: string) => {
@@ -311,7 +311,7 @@ export default function SystemCheckPage() {
     if (!isIOS.current) {
       runAllChecks();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const getStatusIcon = (status: SystemCheck["status"]) => {

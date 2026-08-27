@@ -798,7 +798,7 @@ function ImportCSVModal({
             setUploadedFileName(null);
             batchUpload.reset();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [isOpen]);
 
     const handleDrag = (e: React.DragEvent) => {

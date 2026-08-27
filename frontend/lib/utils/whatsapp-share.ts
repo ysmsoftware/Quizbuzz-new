@@ -54,7 +54,7 @@ export async function shareToWhatsApp({
 
   if (file && typeof navigator.clipboard?.write === 'function' && typeof window !== 'undefined' && 'ClipboardItem' in window) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ClipboardItem is DOM-lib typed, not in older TS lib targets
+       
       await navigator.clipboard.write([new (window as any).ClipboardItem({ [file.type]: file })]);
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       return 'clipboard';

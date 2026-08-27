@@ -11,8 +11,8 @@ declare module 'qrcode' {
     };
   }
 
-  interface QRCodeToCanvasOptions extends QRCodeToDataURLOptions {}
-  interface QRCodeToStringOptions extends QRCodeToDataURLOptions {}
+  type QRCodeToCanvasOptions = QRCodeToDataURLOptions;
+  type QRCodeToStringOptions = QRCodeToDataURLOptions;
 
   function toDataURL(
     data: string,

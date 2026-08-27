@@ -193,7 +193,6 @@ function KitTabContent({ tab, filledTemplates, instagramText, posterImageUrl, se
   if (tab === 'poster' && posterImageUrl) {
     return (
       <div className="flex gap-4">
-        {/* eslint-disable-next-line @next/next/no-img-element -- remote S3 poster, not a static app asset */}
         <img
           src={posterImageUrl}
           alt="Campaign poster"

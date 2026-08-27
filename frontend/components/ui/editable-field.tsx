@@ -60,7 +60,6 @@ export function EditableField({
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
       if (type !== 'date' && type !== 'time') {
-        // @ts-ignore
         inputRef.current.select();
       }
     }
