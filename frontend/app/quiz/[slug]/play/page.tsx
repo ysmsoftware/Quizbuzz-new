@@ -29,7 +29,6 @@ import { FocusReturnOverlay } from "@/components/features/proctoring/FocusReturn
 import { QuestionCard } from "@/components/features/quiz/QuestionCard";
 import { OptionButton } from "@/components/features/quiz/OptionButton";
 import { SubmitConfirmModal } from "@/components/features/quiz/SubmitConfirmModal";
-import { AutoSubmitModal } from "@/components/features/quiz/AutoSubmitModal";
 import { showBroadcastToast } from "@/components/features/quiz/BroadcastToast";
 import { QuizLoadingScreen } from "@/components/features/quiz/QuizLoadingScreen";
 import { QuizSubmittingScreen } from "@/components/features/quiz/QuizSubmittingScreen";
@@ -40,6 +39,13 @@ import { submissionService } from "@/lib/services/submission-service";
 
 const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
 const CAMERA_DEPENDENT_WARNING_TYPES = new Set(["MULTIPLE_FACES", "NO_FACE", "FACE_NOT_DETECTED", "AUDIO_ANOMALY"]);
+// A single app-switch/backgrounding gesture on mobile fires more than one
+// of these near-simultaneously: 'visibilitychange' -> hidden (TAB_SWITCH),
+// 'window.blur' (WINDOW_BLUR), and — if the quiz was in real fullscreen —
+// 'fullscreenchange' (FULLSCREEN_EXIT) all correlate with the same moment.
+// Each fires its own emitProctoringWarning call, so one switch can queue
+// 2-3 near-duplicate toasts. See emitProctoringWarning's dedup below.
+const VISIBILITY_CLASS_WARNING_TYPES = new Set(["TAB_SWITCH", "WINDOW_BLUR", "FULLSCREEN_EXIT"]);
 
 export default function QuizPlayPage() {
     const params = useParams();
@@ -57,6 +63,10 @@ export default function QuizPlayPage() {
     // Guards against double-handling auto-submit from both the real backend
     // event and the local countdown modal. See live-room audit, issue 4b.
     const autoSubmitHandledRef = useRef(false);
+    // Last time a visibility-class proctoring toast (TAB_SWITCH/WINDOW_BLUR/
+    // FULLSCREEN_EXIT) was actually shown — used to collapse the 2-3 near-
+    // duplicate warnings a single app-switch fires into one visible toast.
+    const lastVisibilityToastAtRef = useRef(0);
 
     // Quiz store
     const questions = useQuizStore((s) => s.questions);
@@ -77,8 +87,7 @@ export default function QuizPlayPage() {
     const [contest, setContest] = useState<any>(null);
     const [contestId, setContestId] = useState<string>(authContestId);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
-    const [showAutoSubmitModal, setShowAutoSubmitModal] = useState(false);
-    const [isAutoSubmitFinalizing, setIsAutoSubmitFinalizing] = useState(false);
+
 
     // ─── Question-mapping helper ─────────────────────────────────────────────
     const applyQuizStartPayload = useCallback((data: any) => {
@@ -225,19 +234,15 @@ export default function QuizPlayPage() {
             // Backend's real, authoritative deadline was reached — and by the
             // time this event arrives the submission has ALREADY been
             // persisted server-side (quiz-timer.worker's handleAutoSubmit
-            // submits before it ever emits this event). There's no grace
-            // period synced to the client's own countdown, so this can land
-            // before, during, or after the modal's 5s visual countdown —
-            // flipping straight to "Submitting..." here was cutting that
-            // countdown short (issue 4b regression: "immediately submitted,
-            // countdown not seen properly"). Instead, just record that the
-            // backend has confirmed and make sure the modal is open; the
-            // actual "Submitting..." UI + redirect happens only once the
-            // modal's own countdown finishes (see handleAutoSubmit below),
-            // so the user always sees the full 5,4,3,2,1 play out.
-            if (autoSubmitHandledRef.current) return;
-            autoSubmitHandledRef.current = true;
-            setShowAutoSubmitModal(true);
+            // submits before it ever emits this event). No countdown UI to
+            // wait out any more (see live-room audit, issue 4b/4c — that 5s
+            // modal countdown was removed since the quiz has already ended
+            // by the time it would show): go straight to the submission
+            // flow, which flips quizState to SUBMITTING and renders
+            // QuizSubmittingScreen immediately. triggerAutoSubmit owns the
+            // double-handling guard itself (shared with the local timer's
+            // own trigger below), so it isn't duplicated here.
+            triggerAutoSubmit();
         },
         onTimeWarning: (data) => {
             // Authoritative remaining-time snapshot from the server — resync the
@@ -270,6 +275,8 @@ export default function QuizPlayPage() {
     const emitProctoringWarning = useCallback((type: string) => {
         if (!proctoringEnabled && CAMERA_DEPENDENT_WARNING_TYPES.has(type)) return;
 
+        // Backend/admin still get every single occurrence regardless of
+        // whether the toast below ends up deduped or delayed.
         sendProctoringEvent(type, 1);
         const msgs: Record<string, string> = {
             TAB_SWITCH: "You left the quiz window!",
@@ -282,6 +289,17 @@ export default function QuizPlayPage() {
         };
 
         const showToast = () => {
+            if (VISIBILITY_CLASS_WARNING_TYPES.has(type)) {
+                // Collapse the 2-3 near-duplicate toasts a single app-switch
+                // fires (TAB_SWITCH + WINDOW_BLUR + sometimes FULLSCREEN_EXIT,
+                // all within the same gesture) into one visible toast, so we
+                // don't ask Sonner to mount several toasts in the same frame
+                // right as iOS is still re-establishing the tab's rendering
+                // pipeline after a background resume.
+                const now = Date.now();
+                if (now - lastVisibilityToastAtRef.current < 4000) return;
+                lastVisibilityToastAtRef.current = now;
+            }
             toast.warning(msgs[type] ?? "Unusual activity detected.", {
                 position: "top-right",
                 duration: 6000,
@@ -289,34 +307,38 @@ export default function QuizPlayPage() {
             });
         };
 
-        // Real fix for issue 2 (toasts flashing/vanishing in <1s on iPhone)
-        // is the lighter TinyFaceDetector model swap in FaceDetectionEngine.ts
-        // — that loop was stalling the main thread right as these toasts
-        // fired, so mount and the 5s auto-dismiss timer both "caught up" in
-        // the same burst once the stall cleared. This double-rAF defer is
-        // cheap extra insurance on top of that: it pushes the toast's mount
-        // past whatever render/commit work the violation's own store
-        // updates (setFaceCount/setFaceDetected/setLightingOk) just queued,
-        // instead of competing with it in the same tick. Duration bumped
-        // 5000ms -> 6000ms for a bit more margin against remaining jitter.
-        const showToastNextFrame = () => {
-            if (typeof requestAnimationFrame === "function") {
-                requestAnimationFrame(() => requestAnimationFrame(showToast));
-            } else {
-                showToast();
-            }
+        // Root cause for the toasts that STILL flashed/vanished after the
+        // TinyFaceDetector swap: a double-requestAnimationFrame defer (~2
+        // frames, ~32ms) assumes the browser is in a normal, ready-to-paint
+        // state two frames from now. That holds for an ordinary busy tick,
+        // but not for the two situations these specific warnings actually
+        // fire in — (a) a face-detection result lands right after a heavy
+        // tensor computation just finished on the main thread, or (b) the
+        // tab has JUST come back from being backgrounded (app-switch) and
+        // iOS is still re-establishing the compositor/rendering pipeline.
+        // In both cases rAF callbacks are exactly the ones liable to be
+        // delayed or coalesced unpredictably, so "2 frames from now" can
+        // land mid-stall — which is consistent with quiz-start/auto-submit/
+        // broadcast toasts (fired in quiet moments, no stall nearby) working
+        // fine while in-quiz violation toasts didn't. Swapped to a real
+        // wall-clock delay instead, which waits out the stall rather than
+        // hoping two frames is enough.
+        const showToastDeferred = () => {
+            window.setTimeout(showToast, 300);
         };
 
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
             const onVisible = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", onVisible);
-                    showToastNextFrame();
+                    // Longer delay here: resuming from a full background
+                    // suspend is more disruptive than an ordinary busy tick.
+                    window.setTimeout(showToast, 500);
                 }
             };
             document.addEventListener("visibilitychange", onVisible);
         } else {
-            showToastNextFrame();
+            showToastDeferred();
         }
     }, [sendProctoringEvent, proctoringEnabled]);
 
@@ -341,7 +363,7 @@ export default function QuizPlayPage() {
 
     // ─── Timer ────────────────────────────────────────────────────────────
     const { timeRemaining } = useQuizTimer(
-        () => setShowAutoSubmitModal(true),
+        () => triggerAutoSubmit(),
         () => { }
     );
 
@@ -443,27 +465,25 @@ export default function QuizPlayPage() {
     }, [isConnected, emitSubmit, confirmAnswer, answers, questions, currentIndex, contest, timeRemaining, slug, participantId, sessionToken, router]);
 
     const handleManualSubmit = () => handleSubmission("MANUAL");
-    const handleAutoSubmit = () => {
-        // Called once the AutoSubmitModal's own 5s visual countdown finishes
-        // — whether it was opened by our local un-synced timer or by the
-        // backend's real auto_submit event — so this is the one place that
-        // flips to the "Submitting..." UI and redirects. See live-room
-        // audit, issue 4b (regression fix).
-        if (!autoSubmitHandledRef.current) {
-            // Backend hasn't confirmed the real force-submit yet (socket lag,
-            // or our local clock running behind the server's) — send a
-            // client-initiated submit as a safety net. Harmless if the
-            // backend's own auto-submit lands moments later; that path is a
-            // no-op against an already-submitted participant.
-            handleSubmission("AUTO");
-        }
-        setIsAutoSubmitFinalizing(true);
-        setTimeout(() => {
-            toast.info("Time is up! Your quiz was automatically submitted.");
-            useQuizStore.getState().resetQuiz();
-            router.push(`/quiz/${slug}/submitted?reason=timeout`);
-        }, 900);
-    };
+    // Fires the instant either the backend's real auto_submit event lands or
+    // our own local timer reaches zero — no countdown UI in between any more.
+    // The quiz has already ended at that point (the backend auto-submits
+    // before this event even fires), and handleSubmission flips quizState to
+    // SUBMITTING immediately, which the render guard below turns straight
+    // into QuizSubmittingScreen's own "submitting" animation — a second,
+    // separate 5s countdown modal on top of that just delayed a submission
+    // that had already happened, for nothing. See live-room audit, issue 4b/4c.
+    const triggerAutoSubmit = useCallback(() => {
+        if (autoSubmitHandledRef.current) return;
+        autoSubmitHandledRef.current = true;
+        toast.info("Time is up! Your quiz is being submitted automatically.");
+        // Backend hasn't necessarily confirmed the real force-submit yet
+        // (socket lag, or our local clock running behind the server's) — send
+        // a client-initiated submit as a safety net. Harmless if the
+        // backend's own auto-submit lands moments later; that path is a
+        // no-op against an already-submitted participant.
+        handleSubmission("AUTO");
+    }, [handleSubmission]);
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -522,7 +542,6 @@ export default function QuizPlayPage() {
                 onClose={() => setShowSubmitModal(false)}
                 onConfirm={handleManualSubmit}
             />
-            <AutoSubmitModal open={showAutoSubmitModal} onAutoSubmit={handleAutoSubmit} isSubmitting={isAutoSubmitFinalizing} />
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
             <header className="flex-none h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
@@ -610,8 +629,8 @@ export default function QuizPlayPage() {
                                 between questions. */}
                             {proctoringEnabled && (
                                 <div className="flex-none lg:order-last max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full lg:w-64 lg:shrink-0 lg:sticky lg:top-6 mb-3 lg:mb-0">
-                                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
-                                        <div className="relative w-28 h-24 lg:w-full lg:h-auto lg:aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
+                                    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
+                                        <div className="relative w-36 h-20 lg:w-full lg:h-auto lg:aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
                                             <video
                                                 ref={videoRef}
                                                 autoPlay playsInline muted
@@ -655,12 +674,21 @@ export default function QuizPlayPage() {
                                             </div>
                                         </div>
 
-                                        {/* Mobile-only status row */}
-                                        <div className="min-w-0 lg:hidden">
+                                        {/* Mobile-only status column — LIVE badge (with its own pulsing
+                                            dot) stacked above the name/status text instead of split off
+                                            to the far right, so the whole thing reads as one inline block
+                                            next to the camera thumbnail. */}
+                                        <div className="min-w-0 lg:hidden flex flex-col gap-1">
+                                            <span className="inline-flex items-center gap-1.5 w-fit text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                                                <span className="relative flex h-1.5 w-1.5">
+                                                    <span className="absolute inline-flex h-full w-full rounded-full bg-primary animate-ping" />
+                                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                                                </span>
+                                                Live
+                                            </span>
                                             <p className="text-xs font-bold text-foreground leading-tight">Proctoring active</p>
                                             <p className="text-[10px] text-muted-foreground leading-tight">{faceDetected ? "Face detected" : "No face detected"}</p>
                                         </div>
-                                        <span className="ml-auto lg:hidden text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-1 shrink-0">● Live</span>
                                     </div>
                                     <p className="hidden lg:block text-center text-[10px] font-semibold text-muted-foreground mt-2">
                                         Stays visible while you scroll

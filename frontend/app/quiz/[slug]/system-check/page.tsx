@@ -18,6 +18,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { useProctoringStore } from "@/lib/stores/proctoring-store";
 import { useQuizStore } from "@/lib/stores/quiz-store";
 import { CameraCheckWidget } from "@/components/features/proctoring/CameraCheckWidget";
@@ -97,6 +105,18 @@ export default function SystemCheckPage() {
     );
   };
 
+  // Nudges the participant toward the per-row "Retry" button once a check
+  // fails — otherwise a failed permission prompt can just sit there with no
+  // clear next step until they notice the small inline Retry button
+  // themselves. Deduped to one visible toast at a time (a fixed id) so a
+  // camera+microphone failure landing together doesn't stack two copies.
+  const notifyRetryGuidance = (message: string) => {
+    toast.warning(message, {
+      id: "system-check-retry-guidance",
+      duration: 5000,
+    });
+  };
+
   const checkDevices = async () => {
     if (!proctoringEnabled) {
       updateCheckStatus("camera", "passed");
@@ -145,6 +165,7 @@ export default function SystemCheckPage() {
         "failed",
         "Microphone permission is required. Please check your browser/OS settings."
       );
+      notifyRetryGuidance("Grant camera & microphone access in your browser settings, then tap Retry below.");
       return false;
     }
   };
@@ -172,6 +193,7 @@ export default function SystemCheckPage() {
           "failed",
           "Tap “Start System Checks” again to grant fullscreen access."
         );
+        notifyRetryGuidance("Tap “Start System Checks” again to grant fullscreen access.");
       }
       return passed;
     }
@@ -494,8 +516,8 @@ export default function SystemCheckPage() {
                     once the camera-check panel pushes this column down. */}
                 <div className="hidden lg:flex gap-4">
                   <Button
-                    variant="outline"
-                    className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
+                    variant="secondary"
+                    className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold"
                     disabled={isRetrying}
                     onClick={handleStartChecks}
                   >
@@ -594,8 +616,8 @@ export default function SystemCheckPage() {
         <div className="lg:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur-xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]">
           <div className="max-w-[440px] mx-auto flex gap-4">
             <Button
-              variant="outline"
-              className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
+              variant="secondary"
+              className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border border-border bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold"
               disabled={isRetrying}
               onClick={handleStartChecks}
             >
@@ -624,6 +646,39 @@ export default function SystemCheckPage() {
           </div>
         </div>
       </div>
+      {/* Forced "Start System Checks" prompt for iPhone — the inline Alert
+          above explains why a tap is needed, but it's easy to skim past on
+          a small screen. This modal blocks interaction with everything else
+          until the participant either taps the CTA (which runs the checks
+          directly, same handler as the button below) or dismisses it —
+          making the required action unmissable instead of just implied. */}
+      <Dialog open={isIOS.current && !checksStarted}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-sm bg-card border-border text-foreground shadow-2xl rounded-3xl"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <div className="mx-auto mb-2 w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-primary" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-center">Action Required</DialogTitle>
+            <DialogDescription className="text-center text-muted-foreground">
+              {proctoringEnabled
+                ? "Your iPhone needs your permission to turn on the camera and enter fullscreen mode."
+                : "Your iPhone needs your permission to enter fullscreen mode."}{" "}
+              Tap the button below to continue — this is required before you can join the contest.
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/25"
+            onClick={handleStartChecks}
+          >
+            Start System Checks
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

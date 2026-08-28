@@ -408,11 +408,11 @@ export default function WaitingRoomPage() {
                         {contest?.title || "Quiz"}
                     </h1>
 
-                    <p className="text-muted-foreground text-sm mb-8 font-medium">Contest begins in</p>
+                    <p className="text-muted-foreground text-sm mb-4 font-medium">Contest begins in</p>
 
                     <CountdownDisplay time={timeToStart} />
 
-                    <div className="mt-8 flex items-center gap-2.5 bg-card/60 border border-border/80 px-4 py-2 rounded-full shadow-sm relative">
+                    <div className="mt-5 flex items-center gap-2.5 bg-card/60 border border-border/80 px-4 py-2 rounded-full shadow-sm relative">
                         <div className="w-2 h-2 rounded-full bg-success animate-ping absolute left-4" />
                         <div className="w-2 h-2 rounded-full bg-success" />
                         <motion.span
@@ -438,7 +438,6 @@ export default function WaitingRoomPage() {
                             <div className="space-y-4">
                                 <InfoField label="Participant" value={participantName || participantId || "—"} />
                                 <InfoField label="Contact Identifier" value={maskedContact} />
-                                <InfoField label="Quiz Contest" value={contest?.title || "—"} />
                             </div>
                         </div>
 
@@ -453,7 +452,47 @@ export default function WaitingRoomPage() {
                             </div>
                             <div className="space-y-4">
                                 <InfoField label="Questions" value={`${contest?.totalQuestions || "—"} questions`} />
+                                <InfoField label="Duration" value={contest?.durationMinutes ? `${contest.durationMinutes} minutes` : "—"} />
                                 <InfoField label="Total Marks" value={`${contest?.totalMarks || "—"} marks`} />
+                            </div>
+
+                            {/* Marking scheme — marks per correct answer, whether negative marking
+                                applies (and by how much), and what happens to skipped questions.
+                                Computed from the contest's totals rather than a literal per-question
+                                field, since marks can vary per question but this is the common-case
+                                uniform value admins configure. */}
+                            <div className="mt-5 pt-4 border-t border-border/80">
+                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-2">Marking Scheme</p>
+                                <div className="space-y-2">
+                                    <div className="flex gap-2 text-sm text-foreground/90">
+                                        <span className="text-success font-bold">•</span>
+                                        <span>
+                                            {contest?.totalQuestions ? (
+                                                <>
+                                                    <strong>{(contest.totalMarks / contest.totalQuestions).toFixed(2).replace(/\.?0+$/, "")}</strong> marks for each correct answer
+                                                </>
+                                            ) : (
+                                                "Marks are awarded for each correct answer"
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2 text-sm text-foreground/90">
+                                        <span className={contest?.negativeMarking ? "text-destructive font-bold" : "text-success font-bold"}>•</span>
+                                        <span>
+                                            {contest?.negativeMarking ? (
+                                                <>
+                                                    Negative marking: <strong>−{contest?.negativeMarkValue ?? 0}</strong> marks for each wrong answer
+                                                </>
+                                            ) : (
+                                                "No negative marking for wrong answers"
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2 text-sm text-foreground/90">
+                                        <span className="text-muted-foreground font-bold">•</span>
+                                        <span>Skipped or unanswered questions are not awarded any marks</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="mt-5 pt-4 border-t border-border/80">
@@ -511,11 +550,11 @@ function CountdownDisplay({ time }: { time: TimeDiff }) {
     ];
 
     return (
-        <div className="flex items-center gap-3 sm:gap-4 my-6">
+        <div className="flex items-center gap-3 sm:gap-4 mt-2 mb-3">
             {units.map((unit, i) => (
                 <div key={unit.label} className="flex items-center gap-3 sm:gap-4">
                     <div className="flex flex-col items-center">
-                        <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center border border-border/80 bg-card/50 backdrop-blur-md shadow-sm relative overflow-hidden group">
+                        <div className="w-[4.5rem] h-[4.5rem] sm:w-28 sm:h-28 rounded-2xl flex items-center justify-center border border-border/80 bg-card/50 backdrop-blur-md shadow-sm relative overflow-hidden group">
                             {/* Inner soft glow */}
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-50 pointer-events-none" />
                             <motion.span
@@ -523,7 +562,7 @@ function CountdownDisplay({ time }: { time: TimeDiff }) {
                                 initial={{ y: 8, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                className="text-2xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/70 font-mono tracking-tight"
+                                className="text-3xl sm:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/70 font-mono tracking-tight"
                             >
                                 {String(unit.value).padStart(2, "0")}
                             </motion.span>
@@ -534,7 +573,7 @@ function CountdownDisplay({ time }: { time: TimeDiff }) {
                     </div>
 
                     {i < units.length - 1 && (
-                        <div className="text-muted-foreground/40 text-xl sm:text-3xl font-extrabold self-start mt-6 sm:mt-10 animate-pulse">:</div>
+                        <div className="text-muted-foreground/40 text-xl sm:text-3xl font-extrabold self-start mt-6 sm:mt-12 animate-pulse">:</div>
                     )}
                 </div>
             ))}
