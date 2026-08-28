@@ -4,11 +4,12 @@
  * config.contest.startTimeSlotMinutes / CONTEST_START_TIME_SLOT_MINUTES).
  *
  * The backend Zod `.refine()` is the actual enforcement layer — this constant only
- * drives what the TimeSlotPicker offers, so an admin can't even select an off-grid
- * value in the UI in the first place. Keep this in sync with the backend default if
- * that env var ever changes (see docs/contest-start-reliability-spec.md §6.4).
+ * drives what the TimeSlotPicker/HourMinutePeriodPicker offers, so an admin can't
+ * even select an off-grid value in the UI in the first place. Keep this in sync with
+ * the backend default (CONTEST_START_TIME_SLOT_MINUTES env var, backend/src/config/index.ts)
+ * if that ever changes (see docs/contest-start-reliability-spec.md §6.4).
  */
-export const CONTEST_START_TIME_SLOT_MINUTES = 15;
+export const CONTEST_START_TIME_SLOT_MINUTES = 10;
 
 export interface TimeSlotOption {
   /** 24-hour "HH:mm", matches <input type="time"> value format */
@@ -43,4 +44,15 @@ export function isOnStartTimeGrid(
   if (!match) return false;
   const minutes = Number(match[2]);
   return minutes % stepMinutes === 0;
+}
+
+/**
+ * Mirrors the backend's START_TIME_GRID_MESSAGE (contest.validator.ts) — kept here
+ * instead of a hardcoded string in the create-contest form so the example marks
+ * always match whatever CONTEST_START_TIME_SLOT_MINUTES actually is.
+ */
+export function getStartTimeGridMessage(stepMinutes: number = CONTEST_START_TIME_SLOT_MINUTES): string {
+  const marks: string[] = [];
+  for (let m = 0; m < 60; m += stepMinutes) marks.push(`:${String(m).padStart(2, '0')}`);
+  return `Start time must land on a ${stepMinutes}-minute mark (${marks.join(', ')})`;
 }

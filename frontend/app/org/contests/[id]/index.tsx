@@ -212,7 +212,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
 
             {/* Stats Row */}
             <WidgetErrorBoundary name="Contest Summary Stats">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard
                         label="Registered"
                         value={snapshot?.totalParticipants || contest?._count?.participants || 0}

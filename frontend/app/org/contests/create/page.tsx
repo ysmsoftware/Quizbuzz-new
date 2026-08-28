@@ -33,7 +33,7 @@ import { useContests } from '@/lib/hooks/useContests';
 import { Stepper } from '@/components/shared/Stepper';
 import { Loader2 } from 'lucide-react';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
-import { isOnStartTimeGrid } from '@/lib/constants/contest-scheduling';
+import { isOnStartTimeGrid, getStartTimeGridMessage } from '@/lib/constants/contest-scheduling';
 import { toLocalInputValue } from '@/lib/utils/datetime';
 import { FileUpload } from '@/components/features/shared/FileUpload';
 import { uploadBanner } from '@/lib/api/contests.api';
@@ -336,7 +336,7 @@ export default function CreateContestPage() {
                     // Defense in depth alongside the picker itself, which should make this
                     // unreachable — mirrors the backend's isOnStartTimeGrid refine so a
                     // rejection never has to make a round trip to be caught.
-                    newErrors.startTime = 'Start time must land on a 15-minute mark (e.g. 2:00, 2:15, 2:30, 2:45)';
+                    newErrors.startTime = getStartTimeGridMessage();
                 }
             }
 

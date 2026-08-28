@@ -6,8 +6,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Send, ChevronRight, SkipForward, Shield } from "lucide-react";
+import { Clock, Send, ChevronRight, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -547,9 +548,14 @@ export default function QuizPlayPage() {
             <header className="flex-none h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
                 {/* Contest title */}
                 <div className="min-w-0 flex-1 mr-2 sm:mr-4 flex items-center gap-2 sm:gap-3">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
-                        <Shield className="w-4 h-4 text-primary-foreground" />
-                    </div>
+                    <Image
+                        src="/quizBuzz-logo.png"
+                        alt="QuizBuzz"
+                        width={140}
+                        height={40}
+                        priority
+                        className="h-7 sm:h-8 w-auto shrink-0"
+                    />
                     <div>
                         <p className="hidden sm:block text-[10px] text-primary uppercase tracking-widest font-black leading-none mb-1">
                             Secure Portal
@@ -732,7 +738,7 @@ export default function QuizPlayPage() {
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -15 }}
                                             transition={{ duration: 0.22, ease: "easeOut" }}
-                                            className="grid gap-3 pb-2"
+                                            className="grid gap-2.5 lg:gap-3 pb-2"
                                         >
                                             {currentQuestion.options.map((option, i) => (
                                                 <OptionButton

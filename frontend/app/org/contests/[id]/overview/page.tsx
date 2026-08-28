@@ -25,6 +25,7 @@ import {
     Loader2,
     Trash2,
     Check,
+    Copy,
     X,
     Pencil
 } from 'lucide-react';
@@ -70,6 +71,7 @@ export default function ContestOverviewPage() {
     const [uploadingBanner, setUploadingBanner] = useState(false);
     const [closingRegistration, setClosingRegistration] = useState(false);
     const [prizesModalOpen, setPrizesModalOpen] = useState(false);
+    const [joinCodeCopied, setJoinCodeCopied] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const confirmingRef = useRef(false);
 
@@ -269,6 +271,14 @@ export default function ContestOverviewPage() {
     };
 
     const isOpenForRegistration = phase === 'PUBLISHED';
+
+    const handleCopyJoinCode = () => {
+        if (!contest?.joinCode) return;
+        navigator.clipboard.writeText(contest.joinCode);
+        setJoinCodeCopied(true);
+        toast.success('Join code copied to clipboard');
+        setTimeout(() => setJoinCodeCopied(false), 2000);
+    };
 
     const handleCloseRegistration = () => {
         setConfirmModal({
@@ -496,6 +506,27 @@ export default function ContestOverviewPage() {
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Timezone</label>
                                     <p className="text-sm font-medium">{contest.timezone} (UTC+05:30)</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Join Code</label>
+                                    {contest.joinCode ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-mono font-bold tracking-widest bg-muted/50 border border-border/60 rounded-md px-2.5 py-1">
+                                                {contest.joinCode}
+                                            </span>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-7 w-7 shrink-0"
+                                                onClick={handleCopyJoinCode}
+                                                title="Copy join code"
+                                            >
+                                                {joinCodeCopied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground italic">Generated when published</p>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

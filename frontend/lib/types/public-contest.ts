@@ -72,6 +72,10 @@ export interface PublicContestDetail extends PublicContestSummary {
   totalQuestions: number;
   /** Sum of ContestQuestion.marks across all questions assigned to this contest. */
   totalMarks: number;
+  /** Sum of ContestQuestion.negativeMark across all questions — 0 means no
+   *  negative marking anywhere in this contest. Divide by totalQuestions for
+   *  a per-question average, same approach as totalMarks/totalQuestions. */
+  totalNegativeMarks: number;
   /**
    * Server clock (ISO) at response time. Clients should anchor countdowns to this
    * rather than to their own clock, since the quiz starts on the server's schedule.

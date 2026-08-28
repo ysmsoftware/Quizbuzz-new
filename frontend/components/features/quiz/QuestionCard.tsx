@@ -23,10 +23,18 @@ export function QuestionCard({
 }: QuestionCardProps) {
     return (
         <div className="space-y-3 lg:space-y-4">
-            {/* Compact mobile label — plain block, not flex, so a floated camera
-          preview can still wrap the question text below it. */}
-            <div className="lg:hidden text-xs font-black tracking-widest text-primary font-mono">
-                Q{questionNumber}
+            {/* Compact mobile header — Q-number sits inline with the start of the
+                question text (not stacked in its own row above it), so the label
+                doesn't waste a full line of blank space beside it; the text wraps
+                normally beneath once it runs past the label's width. */}
+            <div className="lg:hidden flex items-start gap-2">
+                <span className="text-xs font-black tracking-widest text-primary font-mono shrink-0 mt-0.5">
+                    Q{questionNumber}
+                </span>
+                <div
+                    className="text-foreground text-[16px] leading-snug font-bold font-sans"
+                    dangerouslySetInnerHTML={{ __html: question.text }}
+                />
             </div>
 
             {/* Header Row — full detail, desktop only */}
@@ -38,9 +46,10 @@ export function QuestionCard({
                 </div>
             </div>
 
-            {/* Question Text */}
+            {/* Question Text — desktop only; mobile renders it inline with the
+                Q-label above instead */}
             <div
-                className="text-foreground text-[19px] leading-snug font-bold lg:text-xl lg:font-medium lg:leading-relaxed font-sans"
+                className="hidden lg:block text-foreground text-xl font-medium leading-relaxed font-sans"
                 dangerouslySetInnerHTML={{ __html: question.text }}
             />
 

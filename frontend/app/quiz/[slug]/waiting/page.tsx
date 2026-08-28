@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    Shield,
     Clock,
     Users,
     CheckCircle2,
@@ -317,10 +317,14 @@ export default function WaitingRoomPage() {
             {/* ─── Top Bar ──────────────────────────────── */}
             <header className="fixed top-0 left-0 right-0 z-40 h-[56px] flex items-center justify-between px-4 sm:px-6 bg-card/40 border-b border-border/80 backdrop-blur-md">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <Shield className="w-4 h-4 text-primary-foreground" />
-                    </div>
-                    <span className="text-sm font-bold text-foreground tracking-tight">QuizBuzz</span>
+                    <Image
+                        src="/quizBuzz-logo.png"
+                        alt="QuizBuzz"
+                        width={140}
+                        height={40}
+                        priority
+                        className="h-7 w-auto"
+                    />
                 </div>
                 <WSConnectionStatus 
                     status={
@@ -452,7 +456,7 @@ export default function WaitingRoomPage() {
                             </div>
                             <div className="space-y-4">
                                 <InfoField label="Questions" value={`${contest?.totalQuestions || "—"} questions`} />
-                                <InfoField label="Duration" value={contest?.durationMinutes ? `${contest.durationMinutes} minutes` : "—"} />
+                                <InfoField label="Duration" value={contest?.duration ? `${contest.duration} minutes` : "—"} />
                                 <InfoField label="Total Marks" value={`${contest?.totalMarks || "—"} marks`} />
                             </div>
 
@@ -477,11 +481,11 @@ export default function WaitingRoomPage() {
                                         </span>
                                     </div>
                                     <div className="flex gap-2 text-sm text-foreground/90">
-                                        <span className={contest?.negativeMarking ? "text-destructive font-bold" : "text-success font-bold"}>•</span>
+                                        <span className={contest?.totalNegativeMarks > 0 ? "text-destructive font-bold" : "text-success font-bold"}>•</span>
                                         <span>
-                                            {contest?.negativeMarking ? (
+                                            {contest?.totalNegativeMarks > 0 ? (
                                                 <>
-                                                    Negative marking: <strong>−{contest?.negativeMarkValue ?? 0}</strong> marks for each wrong answer
+                                                    Negative marking: <strong>−{(contest.totalNegativeMarks / (contest.totalQuestions || 1)).toFixed(2).replace(/\.?0+$/, "")}</strong> marks for each wrong answer
                                                 </>
                                             ) : (
                                                 "No negative marking for wrong answers"

@@ -72,7 +72,7 @@ export function OptionButton({
       whileTap={!isAnswered ? { scale: 0.99 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className={cn(
-        "w-full flex items-center gap-4 p-4 rounded-2xl min-h-[64px] text-left border transition-all duration-300 select-none",
+        "w-full flex items-center gap-4 px-4 py-3 lg:p-4 rounded-2xl min-h-[56px] lg:min-h-[64px] text-left border transition-all duration-300 select-none",
         styles.bg,
         styles.border,
         disabled ? 'cursor-default opacity-50' : 'cursor-pointer',

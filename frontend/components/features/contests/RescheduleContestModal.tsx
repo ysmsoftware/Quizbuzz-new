@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
-import { isOnStartTimeGrid } from '@/lib/constants/contest-scheduling';
+import { isOnStartTimeGrid, getStartTimeGridMessage } from '@/lib/constants/contest-scheduling';
 import { useRescheduleContest } from '@/lib/hooks/useContestLifecycle';
 
 interface RescheduleContestModalProps {
@@ -85,7 +85,7 @@ export function RescheduleContestModal({
     const startTimeStr = `${String(startValue.getHours()).padStart(2, '0')}:${String(startValue.getMinutes()).padStart(2, '0')}`;
     if (!isOnStartTimeGrid(startTimeStr)) {
       // Belt and suspenders — the picker itself should make this unreachable.
-      return { error: 'Start time must land on a 15-minute mark.', lines: [] };
+      return { error: getStartTimeGridMessage(), lines: [] };
     }
     if (!mins || mins < 10 || mins > 480) {
       return { error: 'Duration must be between 10 and 480 minutes.', lines: [] };

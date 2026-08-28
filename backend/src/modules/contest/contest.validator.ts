@@ -3,10 +3,10 @@ import { ContestStatus } from "@prisma/client";
 import { config } from "../../config";
 
 /**
- * Enforcement layer for the 15-minute start-time grid (contest-start-reliability
- * spec §6.4) — reduces user mis-entry of odd start times. The frontend picker is a UX
- * nicety on top of this, not the source of truth; config.contest.startTimeSlotMinutes
- * stays the single place this threshold is defined.
+ * Enforcement layer for the start-time grid (contest-start-reliability spec §6.4,
+ * currently a 10-minute grid) — reduces user mis-entry of odd start times. The
+ * frontend picker is a UX nicety on top of this, not the source of truth;
+ * config.contest.startTimeSlotMinutes stays the single place this threshold is defined.
  */
 function isOnStartTimeGrid(date: Date): boolean {
     return date.getMinutes() % config.contest.startTimeSlotMinutes === 0 && date.getSeconds() === 0;

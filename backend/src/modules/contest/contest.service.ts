@@ -255,6 +255,16 @@ export class ContestService {
         const totalMarks = Array.isArray(questions)
             ? questions.reduce((sum: number, q: { marks: number }) => sum + (q.marks ?? 0), 0)
             : 0;
+        // Number(...) — negativeMark is a Prisma Decimal; summing the raw Decimal
+        // instances (or letting them serialize as-is) is the same bug class as
+        // elsewhere in this codebase (see question.shuffle.ts, submission.repository.ts).
+        // The waiting room derives "negative marking on/off" and a per-question
+        // average from this sum, the same way it derives marks-per-question from
+        // totalMarks — there's no single per-contest negativeMark column since it's
+        // set per question.
+        const totalNegativeMarks = Array.isArray(questions)
+            ? questions.reduce((sum: number, q: { negativeMark?: unknown }) => sum + (Number(q.negativeMark) || 0), 0)
+            : 0;
 
         // Same "missing/unrecognized code -> proceed silently" rule as the attribution
         // lookup in registerParticipant below: an invalid/expired ?ref= never breaks the
@@ -269,6 +279,7 @@ export class ContestService {
             joinCodeRequired: !!joinCode,
             totalQuestions: safeContest._count?.questions ?? 0,
             totalMarks,
+            totalNegativeMarks,
             // Server's clock at the moment this payload was built. The waiting room
             // anchors its countdown to this instead of the browser clock — the quiz
             // actually starts on the SERVER's schedule, so a client whose clock drifts

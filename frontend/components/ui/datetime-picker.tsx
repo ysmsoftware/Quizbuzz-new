@@ -8,13 +8,13 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { TimeSlotList } from '@/components/ui/time-slot-list'
+import { HourMinutePeriodPicker } from '@/components/ui/hour-minute-period-picker'
 import { getTimeSlotOptions, CONTEST_START_TIME_SLOT_MINUTES } from '@/lib/constants/contest-scheduling'
 
 export interface DateTimePickerProps {
   value?: Date
   onChange?: (date: Date | undefined) => void
-  /** Grid step in minutes for the time column — defaults to the contest start-time grid (15). */
+  /** Grid step in minutes for the time column — defaults to the contest start-time grid (10). */
   stepMinutes?: number
   placeholder?: string
   className?: string
@@ -39,7 +39,7 @@ const CALENDAR_CLASSNAMES = {
   cell: 'h-8 w-8 text-center text-xs relative p-0 focus-within:relative focus-within:z-20',
   day: 'h-8 w-8 p-0 font-normal transition-all rounded-full hover:bg-muted/50 cursor-pointer flex items-center justify-center',
   day_selected: 'bg-primary text-primary-foreground font-bold hover:bg-primary/90 rounded-full',
-  day_today: 'bg-accent/40 text-accent-foreground font-bold',
+  day_today: 'border border-accent text-foreground font-bold bg-background',
   day_outside: 'text-muted-foreground/30 opacity-40',
   day_disabled: 'text-muted-foreground/20 opacity-30 cursor-not-allowed',
   day_hidden: 'invisible',
@@ -144,15 +144,15 @@ export function DateTimePicker({
             className="p-3 border-none bg-transparent"
             classNames={CALENDAR_CLASSNAMES}
           />
-          <div className="sm:border-l border-t sm:border-t-0 border-border p-2 sm:w-[136px] flex flex-col min-h-0">
+          <div className="sm:border-l border-t sm:border-t-0 border-border p-2 sm:w-[200px] flex flex-col min-h-0">
             <div className="text-[10px] font-black uppercase tracking-wider text-muted-foreground px-1 pb-1.5 pt-0.5 shrink-0">
               Time
             </div>
-            <TimeSlotList
-              options={options}
+            <HourMinutePeriodPicker
               value={draftTime}
-              onSelect={(option) => setDraftTime(option.value)}
-              className="max-h-56 sm:max-h-[260px] pr-1"
+              onChange={setDraftTime}
+              stepMinutes={stepMinutes}
+              className="flex-1 min-h-0"
             />
           </div>
         </div>

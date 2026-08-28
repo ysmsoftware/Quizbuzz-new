@@ -17,7 +17,7 @@ export interface TimeSlotPickerProps {
   /** 24-hour "HH:mm" */
   value?: string
   onChange?: (value: string) => void
-  /** Grid step in minutes — defaults to the contest start-time grid (15). */
+  /** Grid step in minutes — defaults to the contest start-time grid (10). */
   stepMinutes?: number
   placeholder?: string
   className?: string
