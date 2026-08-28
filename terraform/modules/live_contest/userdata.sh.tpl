@@ -142,6 +142,16 @@ POSTHOG_HOST=$(get_ssm_optional "/quizbuzz/prod/POSTHOG_HOST")
 SENTRY_DSN=$(get_ssm_optional "/quizbuzz/prod/SENTRY_DSN")
 OPS_BASE_URL=$(get_ssm_optional "/quizbuzz/prod/OPS_BASE_URL")
 
+# Feature flags now come from SSM too, not hardcoded below. This used to be
+# a literal `false` baked directly into the .env heredoc, permanently
+# overriding whatever backend/.env.production said and requiring a
+# Terraform edit + re-apply (or a manual SSH fix) to ever change. Optional +
+# defaulted to "true" so instances that predate this SSM param, or orgs
+# that never create it, still get the expected default instead of silently
+# going dark.
+ENABLE_PROCTORING=$(get_ssm_optional "/quizbuzz/prod/ENABLE_PROCTORING")
+ENABLE_PROCTORING="${ENABLE_PROCTORING:-true}"
+
 if [ -z "$POSTHOG_HOST" ]; then
   POSTHOG_HOST="https://us.i.posthog.com"
 fi
@@ -295,7 +305,7 @@ AISENSY_API_KEY=$AISENSY_API_KEY
 AISENSY_SENDER_ID=QuizBuzz
 
 # ── FEATURE FLAGS ─────────────────────────────────────────────────────────────
-ENABLE_PROCTORING=false
+ENABLE_PROCTORING=$ENABLE_PROCTORING
 ENABLE_ANALYTICS=true
 ENABLE_CERTIFICATES=true
 ENABLE_NOTIFICATIONS=true

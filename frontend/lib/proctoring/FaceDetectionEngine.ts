@@ -7,7 +7,17 @@ export class FaceDetectionEngine {
   private MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
 
   /**
-   * Load the tiny SSD MobileNetV1 model (~2MB).
+   * Load the TinyFaceDetector model (~190KB) instead of SsdMobilenetv1
+   * (~5.4MB). This detection loop runs every 2s for the entire quiz
+   * duration (useFaceDetection.ts), and SsdMobilenetv1 + 68-point
+   * landmarks is heavy enough on iOS Safari/Chrome's WebGL backend
+   * (WebKit's TF.js perf trails desktop Chrome/Mac Safari by a lot) that
+   * it was stalling the main thread right as a violation toast tried to
+   * mount — the toast would render and its 5s auto-dismiss timer would
+   * both "catch up" in the same burst once the stall cleared, looking
+   * like it flashed and vanished in under a second. TinyFaceDetector is
+   * face-api.js's own recommended model for real-time/mobile use and is
+   * accurate enough for presence/count/gaze checks at this resolution.
    * face-api.js caches to IndexedDB automatically after first download.
    */
   async loadModel(): Promise<void> {
@@ -16,7 +26,7 @@ export class FaceDetectionEngine {
 
     try {
       await Promise.all([
-        faceapi.nets.ssdMobilenetv1.load(this.MODEL_URL),
+        faceapi.nets.tinyFaceDetector.load(this.MODEL_URL),
         faceapi.nets.faceLandmark68Net.load(this.MODEL_URL),
       ]);
       this.modelLoaded = true;
@@ -51,7 +61,10 @@ export class FaceDetectionEngine {
     }
 
     try {
-      const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
+      // inputSize 320 (vs the 416 default) trims a bit more per-frame cost —
+      // presence/count/gaze doesn't need the extra resolution, and this is
+      // the model swap issue 2's fix is built around (see loadModel above).
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
       
       let detections: any[] = [];
       try {

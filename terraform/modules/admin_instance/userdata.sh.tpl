@@ -97,6 +97,16 @@ POSTHOG_HOST=$(get_ssm_optional "/quizbuzz/prod/POSTHOG_HOST")
 SENTRY_DSN=$(get_ssm_optional "/quizbuzz/prod/SENTRY_DSN")
 OPS_BASE_URL=$(get_ssm_optional "/quizbuzz/prod/OPS_BASE_URL")
 
+# Feature flags now come from SSM too, not hardcoded below. This used to be
+# a literal `false` baked directly into the .env heredoc, permanently
+# overriding whatever backend/.env.production said and requiring a
+# Terraform edit + re-apply (or a manual SSH fix) to ever change. Optional +
+# defaulted to "true" so instances that predate this SSM param, or orgs
+# that never create it, still get the expected default instead of silently
+# going dark.
+ENABLE_PROCTORING=$(get_ssm_optional "/quizbuzz/prod/ENABLE_PROCTORING")
+ENABLE_PROCTORING="${ENABLE_PROCTORING:-true}"
+
 if [ -z "$POSTHOG_HOST" ]; then
   POSTHOG_HOST="https://us.i.posthog.com"
 fi
@@ -134,8 +144,12 @@ echo "Instance: $INSTANCE_ID  |  Image tag: $IMAGE_TAG"
 #
 # HOW VALUES ARE CATEGORISED:
 #   - Secrets (from SSM above): DB URL, JWT secrets, payment keys, SMTP, etc.
-#   - Non-secret config: ports, timeouts, feature flags — hardcoded here.
-#     To change a non-secret value, update this script and re-deploy.
+#   - ENABLE_PROCTORING also comes from SSM now (optional, defaults to
+#     "true") so it can be toggled platform-wide from Parameter Store
+#     without a Terraform edit — see the get_ssm_optional call above.
+#   - Everything else non-secret: ports, timeouts, other feature flags —
+#     hardcoded here. To change one of those, update this script and
+#     re-deploy.
 # ─────────────────────────────────────────────────────────────────────────────
 echo "--- Writing /app/.env ---"
 mkdir -p /app
@@ -251,7 +265,7 @@ AISENSY_API_KEY=$AISENSY_API_KEY
 AISENSY_SENDER_ID=QuizBuzz
 
 # ── FEATURE FLAGS ─────────────────────────────────────────────────────────────
-ENABLE_PROCTORING=false
+ENABLE_PROCTORING=$ENABLE_PROCTORING
 ENABLE_ANALYTICS=true
 ENABLE_CERTIFICATES=true
 ENABLE_NOTIFICATIONS=true
@@ -779,6 +793,8 @@ POSTHOG_HOST=$(get_ssm_optional /quizbuzz/prod/POSTHOG_HOST)
 SENTRY_DSN=$(get_ssm_optional /quizbuzz/prod/SENTRY_DSN)
 OPS_BASE_URL=$(get_ssm_optional /quizbuzz/prod/OPS_BASE_URL)
 IMAGE_TAG=$(get_ssm /quizbuzz/prod/image-tag)
+ENABLE_PROCTORING=$(get_ssm_optional /quizbuzz/prod/ENABLE_PROCTORING)
+ENABLE_PROCTORING="${ENABLE_PROCTORING:-true}"
 
 # Patch all SSM-sourced values in .env
 sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DATABASE_URL|" /app/.env
@@ -797,6 +813,13 @@ sed -i "s|^AISENSY_API_KEY=.*|AISENSY_API_KEY=$AISENSY_API_KEY|" /app/.env
 sed -i "s|^POSTHOG_API_KEY=.*|POSTHOG_API_KEY=$POSTHOG_API_KEY|" /app/.env
 sed -i "s|^POSTHOG_HOST=.*|POSTHOG_HOST=$POSTHOG_HOST|" /app/.env
 sed -i "s|^SENTRY_DSN=.*|SENTRY_DSN=$SENTRY_DSN|" /app/.env
+
+# ENABLE_PROCTORING may not exist yet on instances booted before this was
+# added to SSM — patch if present, append if not (same self-healing
+# pattern as OPS_BASE_URL below).
+grep -q '^ENABLE_PROCTORING=' /app/.env \
+  && sed -i "s|^ENABLE_PROCTORING=.*|ENABLE_PROCTORING=$ENABLE_PROCTORING|" /app/.env \
+  || echo "ENABLE_PROCTORING=$ENABLE_PROCTORING" >> /app/.env
 
 # OPS_BASE_URL may not exist yet on instances booted before this was added —
 # patch if present, append if not (same self-healing pattern as deploy.yml).

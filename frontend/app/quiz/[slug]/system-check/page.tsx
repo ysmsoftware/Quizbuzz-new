@@ -263,6 +263,15 @@ export default function SystemCheckPage() {
       }
       else if (id === "network") ok = await checkNetwork();
 
+      // Camera/mic retry succeeding must also clear the stale "Permissions
+      // Required" troubleshooting panel — it's gated on deviceCheckFailed,
+      // which runAllChecks() resets on every full run, but this per-row
+      // Retry path never touched it, so fixing camera/mic here left the
+      // panel stuck open even once every check showed green.
+      if (id === "camera" || id === "microphone") {
+        setDeviceCheckFailed(!ok);
+      }
+
       setChecks((prev) => {
         const updated = prev.map((c) =>
           c.id === id ? { ...c, status: ok ? ("passed" as const) : ("failed" as const) } : c
@@ -337,7 +346,7 @@ export default function SystemCheckPage() {
       <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[130px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-primary/10 blur-[130px] pointer-events-none" />
 
-      <div className="w-full max-w-[440px] lg:max-w-4xl mx-auto min-h-screen relative flex flex-col justify-center p-4 py-10 z-10">
+      <div className="w-full max-w-[440px] lg:max-w-4xl mx-auto min-h-screen relative flex flex-col justify-center p-4 pt-10 pb-28 lg:py-10 z-10">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -479,11 +488,14 @@ export default function SystemCheckPage() {
                   </Alert>
                 )}
 
-                {/* Action buttons */}
-                <div className="flex gap-4">
+                {/* Action buttons — desktop/tablet copy only (lg+).
+                    Mobile has its own fixed bottom bar, see below the card,
+                    so these controls stay reachable without scrolling even
+                    once the camera-check panel pushes this column down. */}
+                <div className="hidden lg:flex gap-4">
                   <Button
                     variant="outline"
-                    className="flex-1 h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
+                    className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
                     disabled={isRetrying}
                     onClick={handleStartChecks}
                   >
@@ -496,7 +508,7 @@ export default function SystemCheckPage() {
                     )}
                   </Button>
                   <Button
-                    className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all border-none flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
+                    className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all border-none flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
                     disabled={!allChecksPassed || isProceeding}
                     onClick={proceedToWaitingRoom}
                   >
@@ -572,6 +584,45 @@ export default function SystemCheckPage() {
             </p>
           </div>
         </motion.div>
+
+        {/* Mobile-only fixed action bar (see issue 1a): keeps Start/Retest
+            and Enter waiting room reachable without scrolling on phones,
+            regardless of how tall the camera-check panel, checklist, or
+            alerts stack gets above it. Hidden at lg+, where the desktop
+            two-column layout already has room and keeps the inline button
+            row inside the card. */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur-xl px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]">
+          <div className="max-w-[440px] mx-auto flex gap-4">
+            <Button
+              variant="outline"
+              className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl border-border bg-muted/40 hover:bg-muted text-muted-foreground font-semibold"
+              disabled={isRetrying}
+              onClick={handleStartChecks}
+            >
+              {isRetrying ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>
+              ) : checksStarted ? (
+                "Retest All Systems"
+              ) : (
+                "Start System Checks"
+              )}
+            </Button>
+            <Button
+              className="flex-1 min-w-0 shrink whitespace-normal h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold transition-all border-none flex items-center justify-center gap-2 shadow-lg shadow-primary/25"
+              disabled={!allChecksPassed || isProceeding}
+              onClick={proceedToWaitingRoom}
+            >
+              {isProceeding ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying...</>
+              ) : (
+                <>
+                  Enter waiting room
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

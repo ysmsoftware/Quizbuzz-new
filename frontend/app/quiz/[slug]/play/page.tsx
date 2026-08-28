@@ -284,21 +284,39 @@ export default function QuizPlayPage() {
         const showToast = () => {
             toast.warning(msgs[type] ?? "Unusual activity detected.", {
                 position: "top-right",
-                duration: 5000,
+                duration: 6000,
                 id: `proc-${type}-${Date.now()}`,
             });
+        };
+
+        // Real fix for issue 2 (toasts flashing/vanishing in <1s on iPhone)
+        // is the lighter TinyFaceDetector model swap in FaceDetectionEngine.ts
+        // — that loop was stalling the main thread right as these toasts
+        // fired, so mount and the 5s auto-dismiss timer both "caught up" in
+        // the same burst once the stall cleared. This double-rAF defer is
+        // cheap extra insurance on top of that: it pushes the toast's mount
+        // past whatever render/commit work the violation's own store
+        // updates (setFaceCount/setFaceDetected/setLightingOk) just queued,
+        // instead of competing with it in the same tick. Duration bumped
+        // 5000ms -> 6000ms for a bit more margin against remaining jitter.
+        const showToastNextFrame = () => {
+            if (typeof requestAnimationFrame === "function") {
+                requestAnimationFrame(() => requestAnimationFrame(showToast));
+            } else {
+                showToast();
+            }
         };
 
         if (typeof document !== "undefined" && document.visibilityState === "hidden") {
             const onVisible = () => {
                 if (document.visibilityState === "visible") {
                     document.removeEventListener("visibilitychange", onVisible);
-                    showToast();
+                    showToastNextFrame();
                 }
             };
             document.addEventListener("visibilitychange", onVisible);
         } else {
-            showToast();
+            showToastNextFrame();
         }
     }, [sendProctoringEvent, proctoringEnabled]);
 
