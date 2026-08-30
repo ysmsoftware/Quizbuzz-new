@@ -12,13 +12,26 @@ dotenv.config();
 import logger from "./config/logger";
 
 // Initialize DI and inject quiz-timer worker deps (gateway, quizService, prisma, etc.)
-import "./container";
+import { opsMetricsService } from "./container";
+import { config } from "./config";
 
 import { startWorkers } from "./workers";
 
 logger.info("Worker process started");
 
 startWorkers();
+
+// Ops metrics heartbeat for this process, reported under its own
+// "worker" role key so a heap-vs-container-limit mismatch on the worker
+// specifically (see the WebSocket memory audit's addendum — the worker's
+// NODE_OPTIONS heap ceiling can exceed its own Docker memory limit in live
+// mode, independent of the backend container) is visible on its own,
+// not folded into the backend instance's numbers.
+void opsMetricsService.reportHeartbeat("worker");
+setInterval(
+    () => void opsMetricsService.reportHeartbeat("worker"),
+    config.opsMetrics.heartbeatIntervalMs,
+).unref();
 
 process.on("uncaughtException", (err) => {
     Sentry.captureException(err, { tags: { process: "worker" } });

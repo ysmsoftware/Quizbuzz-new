@@ -21,9 +21,11 @@ import { createServer, Server } from "http";
 import './config';
 import { config } from './config';
 import { quizGateway, adminGateway } from "./container.js";
+import { opsMetricsService } from "./container.js";
 
 let server: Server;
 let isShuttingDown = false;
+let opsMetricsHeartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
 async function bootstrap() {
     try {
@@ -50,6 +52,18 @@ async function bootstrap() {
             logger.info(`Server is running on port ${config.app.port}`);
         });
 
+        // Ops metrics heartbeat — fire once immediately so the fleet view
+        // isn't empty for the first interval tick, then on a timer. See
+        // ops-metrics.service.ts / the WebSocket memory audit's addendum
+        // for why this needs to be a Redis fan-in rather than a direct
+        // per-instance scrape (ASG quiz instances have no public IP).
+        void opsMetricsService.reportHeartbeat("backend");
+        opsMetricsHeartbeatTimer = setInterval(
+            () => void opsMetricsService.reportHeartbeat("backend"),
+            config.opsMetrics.heartbeatIntervalMs,
+        );
+        opsMetricsHeartbeatTimer.unref();
+
         process.on("SIGTERM", shutdown);
         process.on("SIGINT", shutdown);
 
@@ -73,6 +87,8 @@ async function shutdown() {
         process.exit(1);
     }, 15_000);
     forceExit.unref();
+
+    if (opsMetricsHeartbeatTimer) clearInterval(opsMetricsHeartbeatTimer);
 
     // 1. Shut down Socket.IO (stops accepting new WS connections)
     try {

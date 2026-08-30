@@ -1,3 +1,5 @@
+import { OpsMetricsService } from './modules/ops-metrics/ops-metrics.service.js';
+import { OpsMetricsController } from './modules/ops-metrics/ops-metrics.controller.js';
 import { AdminAuthController } from './modules/admin/auth/admin-auth.controller.js';
 import { AdminAuthRepository } from './modules/admin/auth/admin-auth.repository.js';
 import { AdminAuthService } from './modules/admin/auth/admin-auth.service.js';
@@ -116,6 +118,9 @@ export const questionService = new QuestionService(questionRepository, contestSe
 export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService, payoutService);
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
 export const quizSession = new QuizSession();
+
+export const opsMetricsService = new OpsMetricsService(quizSession);
+export const opsMetricsController = new OpsMetricsController(opsMetricsService);
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
 export const durabilityService = new DurabilityService(durabilityRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);

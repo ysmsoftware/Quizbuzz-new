@@ -53,6 +53,13 @@ const envSchema = z.object({
     BILLING_HANDOFF_SECRET: z.string().default("billing_handoff_secret_shared_key_998877"),
     OPS_BASE_URL: z.string().default("http://localhost:3010"),
 
+    // OPS METRICS — shared secret the quizbuzz-ops-next dashboard presents on
+    // /api/v1/ops/metrics/* (see ops-metrics-auth.middleware.ts). Defaulted so
+    // local/dev boots without extra setup; MUST be overridden via SSM in any
+    // environment reachable from the public internet.
+    OPS_METRICS_SECRET: z.string().default("ops_metrics_shared_key_change_me"),
+    OPS_METRICS_HEARTBEAT_INTERVAL_MS: z.coerce.number().default(10000),
+
     // DATABASE
     DATABASE_URL: z.string().url(),
     DB_POOL_MIN: z.coerce.number().default(5),
@@ -534,6 +541,11 @@ export const config = {
     proctoring: {
         threshold: env.PROCTORING_EVENT_THRESHOLD,
         strictMode: env.PROCTORING_STRICT_MODE,
+    },
+
+    opsMetrics: {
+        secret: env.OPS_METRICS_SECRET,
+        heartbeatIntervalMs: env.OPS_METRICS_HEARTBEAT_INTERVAL_MS,
     },
 
     observability: {
