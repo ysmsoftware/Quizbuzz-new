@@ -65,7 +65,11 @@ function RankEditor({
       newRow={() => ({ rank: rankRows.length + 1, cashAmount: 0, label: '' })}
       onChange={(rows) =>
         onChange({
-          ranks: rows.map((r) => ({ rank: r.rank, cashAmount: r.cashAmount, label: r.label.trim() || undefined })),
+          // Keep the raw label text — don't trim on every keystroke, which would strip a
+          // trailing space as soon as it's typed (this is a controlled input fed back from
+          // `cut.ranks` above) and make a multi-word label impossible to type. `.trim()`
+          // still decides emptiness; real trimming happens server-side at save time.
+          ranks: rows.map((r) => ({ rank: r.rank, cashAmount: r.cashAmount, label: r.label.trim() ? r.label : undefined })),
         })
       }
     />

@@ -25,6 +25,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
+import { usePublicCampaigns } from '@/lib/hooks/useAmbassadorCampaigns';
+import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import type { AvailableCampaignItem } from '@/lib/types/ambassador';
 
 const STEPS = [
   {
@@ -143,6 +146,20 @@ const AVATAR_STYLES = [
   'bg-[oklch(0.58_0.15_190)]',
 ];
 
+function rateRangeLabel(campaign: AvailableCampaignItem): string {
+  const rates = (campaign.rewardConfig.milestoneTiers ?? []).map((t) => t.amountPerRegistration);
+  if (rates.length === 0) return '—';
+  const min = Math.min(...rates);
+  const max = Math.max(...rates);
+  return min === max ? `₹${min}` : `₹${min}–${max}`;
+}
+
+function daysLeftLabel(campaign: AvailableCampaignItem): string {
+  if (!campaign.endDate) return '—';
+  const days = Math.max(0, Math.ceil((new Date(campaign.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 const GRAIN_URI =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
@@ -154,6 +171,7 @@ const GRAIN_URI =
  */
 export default function AmbassadorLandingPage() {
   const { types, isLoading: typesLoading } = usePlatformAmbassadorTypes();
+  const { campaigns: liveCampaigns, isLoading: campaignsLoading } = usePublicCampaigns({ limit: 6 });
 
   return (
     <div className="min-h-screen bg-background">
@@ -318,6 +336,70 @@ export default function AmbassadorLandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ---------------- Live campaigns — every organization's, cross-org like the rest of
+          this page (mirrors how /contests isn't scoped to one org either) ---------------- */}
+      <section className="px-4 py-14" id="live-campaigns">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Open now</p>
+          <h2 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Campaigns accepting applications</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Every organization&apos;s active campaign, in one place — see what each one pays before you apply.
+          </p>
+        </div>
+        <div className="mx-auto mt-10 max-w-5xl">
+          {campaignsLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Skeleton className="h-48 w-full rounded-xl" />
+              <Skeleton className="h-48 w-full rounded-xl" />
+              <Skeleton className="h-48 w-full rounded-xl" />
+            </div>
+          ) : liveCampaigns.length === 0 ? (
+            <Empty>
+              <EmptyMedia variant="icon">
+                <Megaphone className="h-5 w-5" />
+              </EmptyMedia>
+              <EmptyTitle>No campaigns are live right now</EmptyTitle>
+              <EmptyDescription>Check back soon, or sign up now so you&apos;re ready to apply the moment one opens.</EmptyDescription>
+            </Empty>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {liveCampaigns.map((campaign) => (
+                <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
+                  <Card className="h-full border-border/60 transition hover:-translate-y-1 hover:shadow-lg">
+                    <CardContent className="flex h-full flex-col pt-6">
+                      <p className="text-xs font-semibold text-muted-foreground truncate">{campaign.organizationName}</p>
+                      <p className="mt-0.5 text-base font-bold text-foreground truncate">{campaign.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground truncate">Promoting {campaign.contestTitle}</p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {campaign.ambassadorTypesAllowed.map((key) => (
+                          <Badge key={key} variant="secondary" className="font-normal text-[11px]">
+                            {types.find((t) => t.key === key)?.label ?? key}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="mt-auto flex items-center justify-between gap-3 pt-4 mt-4 border-t border-border/60 text-xs">
+                        <div>
+                          <p className="font-bold text-foreground">{rateRangeLabel(campaign)}</p>
+                          <p className="text-muted-foreground">per reg</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-foreground">{daysLeftLabel(campaign)}</p>
+                          <p className="text-muted-foreground">left</p>
+                        </div>
+                      </div>
+                      <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">
+                        View campaign
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

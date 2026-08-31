@@ -10,6 +10,10 @@ export const ambassadorPublicRouter = Router();
 ambassadorPublicRouter.get("/types",                 (req, res, next) => ctrl().getTypes(req, res, next));            // org-scoped: ?organizationId=
 ambassadorPublicRouter.get("/platform-types",        (req, res, next) => ctrl().getPlatformTypes(req, res, next));    // platform-wide: signup flow
 ambassadorPublicRouter.post("/upload-proof",         (req, res, next) => ctrl().getUploadUrl(req, res, next));
+// "/campaigns" (list) is registered before "/campaigns/:id" purely for readability — Express
+// already distinguishes them by segment count, so order between the two doesn't matter here.
+ambassadorPublicRouter.get("/campaigns",             (req, res, next) => ctrl().listPublicCampaigns(req, res, next));
+ambassadorPublicRouter.get("/campaigns/:id",         (req, res, next) => ctrl().getPublicCampaignPreview(req, res, next));
 
 // Signup — 2-step, platform-level identity (no organizationId anywhere in this flow)
 ambassadorPublicRouter.post("/signup/start",         otpLimiter, (req, res, next) => ctrl().signupStart(req, res, next));

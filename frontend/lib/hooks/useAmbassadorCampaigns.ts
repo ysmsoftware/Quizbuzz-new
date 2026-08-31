@@ -57,3 +57,52 @@ export function useJoinedCampaign(campaignId: string) {
     isError,
   };
 }
+
+/**
+ * Finds one available (not-yet-applied-to) campaign's public preview slice by id. There's no
+ * single-campaign ambassador endpoint for this, so — same trick as useJoinedCampaign above —
+ * it reuses the "available" list the campaigns page already fetches and finds by id.
+ */
+export function useAvailableCampaign(campaignId: string) {
+  const { campaigns, isLoading, isError } = useAvailableCampaigns({ limit: 100 });
+  return {
+    campaign: campaigns.find((c) => c.id === campaignId),
+    isLoading,
+    isError,
+  };
+}
+
+/** Every LIVE campaign across every organization — no ambassador session required. Backs the
+ *  "campaigns accepting applications" section on the /ambassador landing page. */
+export function usePublicCampaigns(params: { page?: number; limit?: number } = {}) {
+  const query = useQuery({
+    queryKey: ['ambassador-campaigns', 'public', params],
+    queryFn: () => ambassadorService.listPublicCampaigns(params),
+    staleTime: 1000 * 60,
+  });
+
+  return {
+    campaigns: query.data?.data ?? [],
+    pagination: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+/** Unauthenticated campaign preview, for the public shareable-link page — no ambassador
+ *  session required, unlike every other hook in this file. */
+export function usePublicCampaignPreview(campaignId: string) {
+  const query = useQuery({
+    queryKey: ['ambassador-campaign-public-preview', campaignId],
+    queryFn: () => ambassadorService.getPublicCampaignPreview(campaignId),
+    enabled: !!campaignId,
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+
+  return {
+    campaign: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}

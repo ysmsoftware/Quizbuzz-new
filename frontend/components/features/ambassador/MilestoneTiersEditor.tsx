@@ -46,13 +46,20 @@ export function MilestoneTiersEditor({
   const handleChange = (nextRows: MilestoneRow[]) => {
     onChange(
       nextRows.map((r) => ({
-        label: r.label.trim() || undefined,
+        // Keep the raw text here — don't trim on every keystroke. `rows` above is fed
+        // straight back from `tiers`, so this is a controlled input: trimming on every
+        // change would strip a trailing space the instant it's typed (typing "Level "
+        // would immediately snap back to "Level" on the next render), making it
+        // impossible to type a multi-word label. `.trim()` is still used to decide
+        // whether the field counts as empty; leading/trailing whitespace is trimmed for
+        // real at the actual save boundary by the backend's Zod schema (label: z.string().trim()).
+        label: r.label.trim() ? r.label : undefined,
         minRegistrations: r.minRegistrations,
         maxRegistrations: r.maxRegistrations,
         rewardType: 'PER_REGISTRATION' as const,
         amountPerRegistration: r.amountPerRegistration,
         goodie: r.goodieLabel.trim()
-          ? { label: r.goodieLabel.trim(), cashEquivalent: r.goodieCashEquivalent || undefined }
+          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined }
           : undefined,
       })),
     );

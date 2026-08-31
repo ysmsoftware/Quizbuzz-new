@@ -20,9 +20,28 @@ export interface FindTemplatesFilter {
     sortOrder: "asc" | "desc";
 }
 
-export type CampaignWithContestTitle = AmbassadorCampaign & { contest: { title: string; slug: string } | null; _count: { enrollments: number } };
+/** Duration/timing fields a campaign preview needs to describe "what you're promoting" —
+ *  kept as one shared select shape so every query that joins contest stays in sync. */
+export const CONTEST_PREVIEW_SELECT = {
+    title: true,
+    slug: true,
+    duration: true,
+    cutoffScore: true,
+    startTime: true,
+    registrationDeadline: true,
+} as const;
+type ContestPreview = {
+    title: string;
+    slug: string;
+    duration: number;
+    cutoffScore: number | null;
+    startTime: Date;
+    registrationDeadline: Date;
+};
+
+export type CampaignWithContestTitle = AmbassadorCampaign & { contest: ContestPreview | null; _count: { enrollments: number } };
 export type CampaignWithContestAndOrg = AmbassadorCampaign & {
-    contest: { title: string; slug: string } | null;
+    contest: ContestPreview | null;
     organization: { name: string; slug: string };
     _count: { enrollments: number };
 };
@@ -53,6 +72,7 @@ export class AmbassadorCampaignRepository {
         sourceCampaignId?: string | null;
         sourceTemplateId?: string | null;
         status?: AmbassadorCampaignStatus;
+        wizardStep?: number;
         createdById: string;
         startDate?: Date | null;
         endDate?: Date | null;
@@ -65,7 +85,7 @@ export class AmbassadorCampaignRepository {
     async findById(id: string, organizationId: string): Promise<CampaignWithContestTitle | null> {
         return prisma.ambassadorCampaign.findFirst({
             where: { id, organizationId },
-            include: { contest: { select: { title: true, slug: true } }, _count: { select: { enrollments: true } } },
+            include: { contest: { select: CONTEST_PREVIEW_SELECT }, _count: { select: { enrollments: true } } },
         });
     }
 
@@ -79,7 +99,7 @@ export class AmbassadorCampaignRepository {
     async findByIdGlobal(id: string): Promise<CampaignWithContestTitle | null> {
         return prisma.ambassadorCampaign.findUnique({
             where: { id },
-            include: { contest: { select: { title: true, slug: true } }, _count: { select: { enrollments: true } } },
+            include: { contest: { select: CONTEST_PREVIEW_SELECT }, _count: { select: { enrollments: true } } },
         });
     }
 
@@ -97,7 +117,7 @@ export class AmbassadorCampaignRepository {
                 skip: filter.skip,
                 take: filter.take,
                 orderBy: { [filter.sortBy]: filter.sortOrder },
-                include: { contest: { select: { title: true, slug: true } }, _count: { select: { enrollments: true } } },
+                include: { contest: { select: CONTEST_PREVIEW_SELECT }, _count: { select: { enrollments: true } } },
             }),
             prisma.ambassadorCampaign.count({ where }),
         ]);
@@ -149,7 +169,33 @@ export class AmbassadorCampaignRepository {
                 take: params.take,
                 orderBy: { createdAt: "desc" },
                 include: {
-                    contest: { select: { title: true, slug: true } },
+                    contest: { select: CONTEST_PREVIEW_SELECT },
+                    organization: { select: { name: true, slug: true } },
+                    _count: { select: { enrollments: true } },
+                },
+            }),
+            prisma.ambassadorCampaign.count({ where }),
+        ]);
+
+        return { rows, total };
+    }
+
+    /** Public, unauthenticated browse — every LIVE campaign across every organization, no
+     *  ambassador identity to filter by type or exclude already-joined ones (there isn't one
+     *  yet). Backs the "campaigns accepting applications" section on the /ambassador landing
+     *  page, newest-activated first — same ordering as findActiveForType's authenticated
+     *  browse above, so the two lists don't disagree on what "recent" means. */
+    async findAllLive(params: { skip: number; take: number }): Promise<{ rows: CampaignWithContestAndOrg[]; total: number }> {
+        const where: Prisma.AmbassadorCampaignWhereInput = { status: AmbassadorCampaignStatus.LIVE };
+
+        const [rows, total] = await prisma.$transaction([
+            prisma.ambassadorCampaign.findMany({
+                where,
+                skip: params.skip,
+                take: params.take,
+                orderBy: { createdAt: "desc" },
+                include: {
+                    contest: { select: CONTEST_PREVIEW_SELECT },
                     organization: { select: { name: true, slug: true } },
                     _count: { select: { enrollments: true } },
                 },

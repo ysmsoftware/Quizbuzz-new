@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -24,8 +24,17 @@ const BRAND_POINTS = [
   { icon: LineChart, text: 'See rewards update as your registrations grow' },
 ];
 
+/** Only a same-site relative path is accepted — `next=https://evil.com` or the
+ *  protocol-relative `next=//evil.com` trick must never be honored as a post-login redirect. */
+function safeNextPath(raw: string | null): string {
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  return '/ambassador/dashboard';
+}
+
 export default function AmbassadorLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get('next'));
 
   const { requestOtp, verifyOtp, requestOtpLoading, verifyOtpLoading } = useAmbassadorAuth();
 
@@ -58,7 +67,7 @@ export default function AmbassadorLoginPage() {
     setOtpError('');
     try {
       await verifyOtp({ email, otp });
-      router.push('/ambassador/dashboard');
+      router.push(next);
     } catch (err: any) {
       setOtpError(err.message || 'Invalid OTP. Please try again.');
     }
@@ -190,7 +199,7 @@ export default function AmbassadorLoginPage() {
                     </Button>
                     <p className="text-center text-xs text-muted-foreground">
                       New here?{' '}
-                      <Link href="/ambassador/signup" className="text-primary hover:underline">
+                      <Link href={`/ambassador/signup?next=${encodeURIComponent(next)}`} className="text-primary hover:underline">
                         Sign up instead
                       </Link>
                     </p>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Megaphone, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,9 +10,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useAvailableCampaigns, useMyCampaigns } from '@/lib/hooks/useAmbassadorCampaigns';
 import { CampaignCard } from '@/components/features/ambassador/CampaignCard';
-import { CampaignDetailsSheet } from '@/components/features/ambassador/CampaignDetailsSheet';
-import { toast } from 'sonner';
-import type { AvailableCampaignItem } from '@/lib/types/ambassador';
 
 /**
  * Cross-organization by design — mirrors the public /contests "browse all" page. An
@@ -19,19 +17,9 @@ import type { AvailableCampaignItem } from '@/lib/types/ambassador';
  * every organization running a live campaign, not just one.
  */
 export default function AmbassadorCampaignsPage() {
-  const { campaigns: joinedCampaigns, isLoading: joinedLoading, apply } = useMyCampaigns();
+  const router = useRouter();
+  const { campaigns: joinedCampaigns, isLoading: joinedLoading } = useMyCampaigns();
   const { campaigns: availableCampaigns, isLoading: availableLoading, isError: availableError } = useAvailableCampaigns();
-  const [selectedCampaign, setSelectedCampaign] = useState<AvailableCampaignItem | null>(null);
-
-  const handleApply = async (campaignId: string) => {
-    try {
-      await apply(campaignId);
-      toast.success('Application submitted — the organizer will review it');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to apply');
-      throw err;
-    }
-  };
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -75,41 +63,35 @@ export default function AmbassadorCampaignsPage() {
             </Empty>
           ) : (
             <div className="space-y-2">
-              {availableCampaigns.map((campaign) => (
-                <Card
-                  key={campaign.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedCampaign(campaign)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedCampaign(campaign)}
-                  className="border-border/50 cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
-                >
-                  <CardContent className="py-4 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{campaign.name}</p>
-                      <Badge variant="secondary" className="font-normal text-xs mt-1">
-                        {campaign.organizationName}
-                      </Badge>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedCampaign(campaign);
-                      }}
-                    >
-                      View details
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+              {availableCampaigns.map((campaign) => {
+                const href = `/ambassador/dashboard/campaigns/${campaign.id}`;
+                return (
+                  <Card
+                    key={campaign.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(href)}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && router.push(href)}
+                    className="border-border/50 cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  >
+                    <CardContent className="py-4 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">{campaign.name}</p>
+                        <Badge variant="secondary" className="font-normal text-xs mt-1">
+                          {campaign.organizationName}
+                        </Badge>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()} asChild>
+                        <Link href={href}>View details</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </section>
       </div>
-
-      <CampaignDetailsSheet campaign={selectedCampaign} onClose={() => setSelectedCampaign(null)} onApply={handleApply} />
     </div>
   );
 }

@@ -54,6 +54,29 @@ export class AmbassadorController {
         }
     };
 
+    /** Unauthenticated — a shareable campaign link (ads, socials) has to render before anyone
+     *  has signed up. */
+    getPublicCampaignPreview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const result = await this.service.getPublicCampaignPreview(req.params.id as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /** Unauthenticated — backs the "campaigns accepting applications" section on the
+     *  /ambassador landing page, which has to render before anyone has signed up. */
+    listPublicCampaigns = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { page, limit } = ListCampaignsQuerySchema.parse(req.query);
+            const result = await this.service.listPublicCampaigns(page, limit);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     // ─── Signup (2-step) ─────────────────────────────────────────────────────────
 
     signupStart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

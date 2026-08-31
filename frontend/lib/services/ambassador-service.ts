@@ -95,6 +95,18 @@ class AmbassadorService {
     return publicPost<{ storageKey: string; url: string }>('/public/ambassador/upload-proof', body);
   }
 
+  /** Unauthenticated campaign preview — for a shareable link (ads, socials) that renders
+   *  before anyone has signed up. Same public-safe slice as getAvailableCampaigns' rows. */
+  getPublicCampaignPreview(campaignId: string) {
+    return publicGet<AvailableCampaignItem>(`/public/ambassador/campaigns/${campaignId}`);
+  }
+
+  /** Unauthenticated — every LIVE campaign across every organization, backing the "campaigns
+   *  accepting applications" section on the /ambassador landing page. */
+  listPublicCampaigns(params?: { page?: number; limit?: number }) {
+    return publicGet<PaginatedResult<AvailableCampaignItem>>('/public/ambassador/campaigns', params);
+  }
+
   // ── Signup (2-step platform identity) ──────────────────────────────────────
 
   signupStart(body: { firstName: string; lastName?: string; email: string; phone?: string }) {

@@ -124,6 +124,11 @@ export const ambassadorCampaignApi = {
     ambassadorTypesAllowed?: string[];
     rewardConfig?: DraftRewardConfig;
     shareTemplates?: ShareTemplates;
+    // Lets the wizard's first Save & Continue create the row already pointed at the target
+    // step, instead of always defaulting to 1 (Basics) server-side — see CampaignWizard's
+    // persistAndGo, which remounts on the create's router.replace and would otherwise
+    // re-hydrate from a stale wizardStep and appear to "do nothing" on the first click.
+    wizardStep?: number;
     startDate?: string; // ISO
     endDate?: string; // ISO
     phaseTemplate?: CampaignPhaseTemplateEntry[] | null;

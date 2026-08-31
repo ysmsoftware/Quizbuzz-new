@@ -4,11 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 import { ambassadorService } from '@/lib/services/ambassador-service';
 import type { LeaderboardScope } from '@/lib/types/ambassador';
 
-export function useAmbassadorCampaignStats(campaignId: string) {
+export function useAmbassadorCampaignStats(campaignId: string, options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   const query = useQuery({
     queryKey: ['ambassador-campaign-stats', campaignId],
     queryFn: () => ambassadorService.getCampaignStats(campaignId),
-    enabled: !!campaignId,
+    // Gated server-side to an APPROVED enrollment — callers viewing a campaign before
+    // approval must pass enabled: false to avoid firing a request that always 400s.
+    enabled: !!campaignId && enabled,
     staleTime: 1000 * 30,
   });
 

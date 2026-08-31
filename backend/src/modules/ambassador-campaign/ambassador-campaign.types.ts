@@ -123,6 +123,7 @@ export interface CreateCampaignDTO {
     ambassadorTypesAllowed?: string[] | undefined;
     rewardConfig?: DraftRewardConfig | undefined;
     shareTemplates?: ShareTemplates | undefined;
+    wizardStep?: number | undefined;
     startDate?: string | undefined; // ISO
     endDate?: string | undefined; // ISO
 }
@@ -322,6 +323,12 @@ export interface AvailableCampaignItem {
     contestId: string;
     contestSlug: string;
     contestTitle: string;
+    // What the referral link actually sends someone to register for — shown on the
+    // preview/landing pages as "what you're promoting", before anyone has applied.
+    contestDurationMinutes: number;
+    contestStartTime: Date;
+    contestRegistrationDeadline: Date;
+    contestPassingScore: number | null;
     ambassadorTypesAllowed: string[];
     organizationName: string;
     organizationSlug: string;
@@ -330,6 +337,9 @@ export interface AvailableCampaignItem {
     startDate: Date | null;
     endDate: Date | null;
     phases: CampaignPhase[];
+    // The ambassador kit's share poster — a generic promotional image (no referral link
+    // baked in), safe to show before approval, unlike the text templates it's paired with.
+    posterImageUrl?: string | undefined;
 }
 
 export interface MyCampaignItem {
@@ -397,6 +407,7 @@ export interface CampaignStatsDetail extends CampaignStats {
         endDate: Date | null;
         phases: CampaignPhase[];
         milestoneTiers: MilestoneTier[];
+        leaderboardPrizes: LeaderboardCut[];
     };
 }
 

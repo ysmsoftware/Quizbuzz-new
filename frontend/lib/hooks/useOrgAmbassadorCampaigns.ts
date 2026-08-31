@@ -20,6 +20,7 @@ export function useOrgAmbassadorCampaigns(filters: CampaignsFilters = {}) {
       ambassadorTypesAllowed?: string[];
       rewardConfig?: DraftRewardConfig;
       shareTemplates?: ShareTemplates;
+      wizardStep?: number;
       startDate?: string;
       endDate?: string;
       phaseTemplate?: CampaignPhaseTemplateEntry[] | null;

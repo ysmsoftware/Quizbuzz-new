@@ -343,6 +343,70 @@ export class AmbassadorService {
 
     // ─── Campaigns — cross-organization, mirrors how /contests isn't org-scoped ─
 
+    /** Public, unauthenticated preview of one LIVE campaign — the same public-safe slice
+     *  listAvailableCampaigns returns per-row (reward tiers + timeline, no personal data),
+     *  fetched directly by id instead of needing an ambassador identity to compute "available
+     *  for you". Meant for a shareable link (ads, socials, a QR code) that renders before
+     *  anyone has signed up — Apply on that page still requires logging in. */
+    async getPublicCampaignPreview(campaignId: string): Promise<AvailableCampaignItem> {
+        const campaign = await this.campaignRepo.findByIdGlobal(campaignId);
+        if (!campaign || campaign.status !== AmbassadorCampaignStatus.LIVE) {
+            throw new NotFoundError("Campaign not found.");
+        }
+
+        const organization = await this.organizationRepo.findById(campaign.organizationId);
+        return this._toAvailableCampaignItem(campaign, organization?.name ?? "", organization?.slug ?? "");
+    }
+
+    /** Public, unauthenticated browse — every LIVE campaign across every organization, for
+     *  the "campaigns accepting applications" section on the /ambassador landing page. No
+     *  ambassador identity yet, so unlike listAvailableCampaigns below this can't filter by
+     *  type or exclude already-joined campaigns — it's the same list every visitor sees. */
+    async listPublicCampaigns(page: number, limit: number): Promise<PaginatedResult<AvailableCampaignItem>> {
+        const skip = (page - 1) * limit;
+        const { rows, total } = await this.campaignRepo.findAllLive({ skip, take: limit });
+        const data = rows.map((c) => this._toAvailableCampaignItem(c, c.organization.name, c.organization.slug));
+        return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    /** Shared shape-builder for the public-safe campaign preview — contestId/contest are
+     *  guaranteed non-null here: every caller only reaches LIVE campaigns, and a campaign can
+     *  only reach LIVE via publishCampaign(), which requires contestId to be set
+     *  (PublishCampaignSchema). */
+    private _toAvailableCampaignItem(
+        campaign: { id: string; name: string; contestId: string | null; contest: { slug: string; title: string; duration: number; cutoffScore: number | null; startTime: Date; registrationDeadline: Date } | null; ambassadorTypesAllowed: string[]; status: AmbassadorCampaignStatus; rewardConfig: Prisma.JsonValue; startDate: Date | null; endDate: Date | null; phases: Prisma.JsonValue; shareTemplates: Prisma.JsonValue },
+        organizationName: string,
+        organizationSlug: string,
+    ): AvailableCampaignItem {
+        return {
+            id: campaign.id,
+            name: campaign.name,
+            contestId: campaign.contestId as string,
+            contestSlug: campaign.contest!.slug,
+            contestTitle: campaign.contest!.title,
+            contestDurationMinutes: campaign.contest!.duration,
+            contestStartTime: campaign.contest!.startTime,
+            contestRegistrationDeadline: campaign.contest!.registrationDeadline,
+            contestPassingScore: campaign.contest!.cutoffScore,
+            ambassadorTypesAllowed: campaign.ambassadorTypesAllowed,
+            organizationName,
+            organizationSlug,
+            status: campaign.status,
+            // Public-safe preview slice for the details-before-apply page — reward tiers,
+            // timeline, and share poster only, converted to rupees the same way every other
+            // ambassador-facing money field is (see reward-config-currency.ts). No description
+            // field exists on AmbassadorCampaign yet, so there's nothing to add here until
+            // that's introduced.
+            rewardConfig: rewardConfigPaiseToRupees(campaign.rewardConfig as unknown as DraftRewardConfig),
+            startDate: campaign.startDate,
+            endDate: campaign.endDate,
+            phases: (campaign.phases ?? []) as unknown as CampaignPhase[],
+            ...((campaign.shareTemplates as unknown as ShareTemplates)?.posterImageUrl && {
+                posterImageUrl: (campaign.shareTemplates as unknown as ShareTemplates).posterImageUrl,
+            }),
+        };
+    }
+
     async listAvailableCampaigns(
         ambassadorId: string,
         page: number,
@@ -361,28 +425,7 @@ export class AmbassadorService {
             take: limit,
         });
 
-        // contestId/contest are guaranteed non-null here: findActiveForType only returns
-        // LIVE campaigns, and a campaign can only reach LIVE via publishCampaign(), which
-        // requires contestId to be set (PublishCampaignSchema).
-        const data: AvailableCampaignItem[] = rows.map((c) => ({
-            id: c.id,
-            name: c.name,
-            contestId: c.contestId as string,
-            contestSlug: c.contest!.slug,
-            contestTitle: c.contest!.title,
-            ambassadorTypesAllowed: c.ambassadorTypesAllowed,
-            organizationName: c.organization.name,
-            organizationSlug: c.organization.slug,
-            status: c.status,
-            // Public-safe preview slice for the details-before-apply drawer — reward tiers and
-            // timeline only, converted to rupees the same way every other ambassador-facing
-            // money field is (see reward-config-currency.ts). No description field exists on
-            // AmbassadorCampaign yet, so there's nothing to add here until that's introduced.
-            rewardConfig: rewardConfigPaiseToRupees(c.rewardConfig as unknown as DraftRewardConfig),
-            startDate: c.startDate,
-            endDate: c.endDate,
-            phases: (c.phases ?? []) as unknown as CampaignPhase[],
-        }));
+        const data = rows.map((c) => this._toAvailableCampaignItem(c, c.organization.name, c.organization.slug));
 
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     }
@@ -520,6 +563,8 @@ export class AmbassadorService {
             }),
         );
 
+        const convertedRewardConfig = rewardConfigPaiseToRupees(rewardConfig);
+
         return {
             ...campaignStatsPaiseToRupees({ ...stats, leaderboardRanks: [] }),
             leaderboardRanks,
@@ -535,7 +580,11 @@ export class AmbassadorService {
                 startDate: campaign.startDate,
                 endDate: campaign.endDate,
                 phases: campaign.phases as unknown as CampaignPhase[],
-                milestoneTiers: rewardConfigPaiseToRupees(rewardConfig).milestoneTiers,
+                milestoneTiers: convertedRewardConfig.milestoneTiers,
+                // The rank→prize schedule (not just this ambassador's own rank, above) — the
+                // detail page needs it to show "what each leaderboard cut pays" up front,
+                // not only once someone actually occupies a paid rank.
+                leaderboardPrizes: convertedRewardConfig.leaderboardPrizes,
             },
         };
     }

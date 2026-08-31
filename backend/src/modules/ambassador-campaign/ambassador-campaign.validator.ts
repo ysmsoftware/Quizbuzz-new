@@ -184,6 +184,11 @@ export const CreateCampaignSchema = z.object({
     ambassadorTypesAllowed: z.array(z.string().min(1)).optional(),
     rewardConfig: draftRewardConfigSchema.optional(),
     shareTemplates: shareTemplatesSchema.optional(),
+    // Lets the wizard's very first "Save & Continue" create the row already pointed at the
+    // step the admin is moving to, instead of always defaulting to 1 (Basics) — see
+    // CampaignWizard.tsx's persistAndGo, which otherwise has to remount on the create's
+    // router.replace and re-hydrate from a stale wizardStep.
+    wizardStep: z.number().int().min(1).max(8).optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
 });

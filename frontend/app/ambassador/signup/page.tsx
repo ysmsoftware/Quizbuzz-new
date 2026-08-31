@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -37,8 +37,16 @@ const RAIL_STEPS: { key: Step; label: string }[] = [
   { key: 'done', label: 'All set' },
 ];
 
+/** Only a same-site relative path is accepted — see the matching guard on the login page. */
+function safeNextPath(raw: string | null): string {
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  return '/ambassador/dashboard';
+}
+
 export default function AmbassadorSignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNextPath(searchParams.get('next'));
   const { types, isLoading: typesLoading } = usePlatformAmbassadorTypes();
   const { start, startLoading, verifyOtp, verifyOtpLoading, requestUploadUrl, complete, completeLoading } = useAmbassadorSignup();
 
@@ -147,7 +155,7 @@ export default function AmbassadorSignupPage() {
       });
 
       setStep('done');
-      setTimeout(() => router.push('/ambassador/dashboard'), 1200);
+      setTimeout(() => router.push(next), 1200);
     } catch (err) {
       if (err instanceof AmbassadorApiError && err.violations?.length) {
         err.violations.forEach((v) => profileForm.setError(v.field, { message: v.issue }));

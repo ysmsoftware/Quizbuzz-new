@@ -193,6 +193,10 @@ export interface AvailableCampaignItem {
   contestId: string;
   contestSlug: string;
   contestTitle: string;
+  contestDurationMinutes: number;
+  contestStartTime: string; // ISO
+  contestRegistrationDeadline: string; // ISO
+  contestPassingScore: number | null;
   ambassadorTypesAllowed: string[];
   organizationName: string;
   organizationSlug: string;
@@ -201,6 +205,9 @@ export interface AvailableCampaignItem {
   startDate: string | null; // ISO
   endDate: string | null; // ISO
   phases: CampaignPhase[];
+  /** The ambassador kit's share poster — a generic promotional image, safe to show
+   *  pre-approval unlike the text templates (which carry a personal referral link). */
+  posterImageUrl?: string;
 }
 
 export interface CampaignStatsProgress {
@@ -262,6 +269,7 @@ export interface StatsCampaignSummary {
   endDate: string | null; // ISO
   phases: CampaignPhase[];
   milestoneTiers: MilestoneTier[];
+  leaderboardPrizes: LeaderboardCut[];
 }
 
 export interface CampaignStatsDetail extends CampaignStats {

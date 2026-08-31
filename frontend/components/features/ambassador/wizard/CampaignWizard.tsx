@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { listContests } from '@/lib/api/contests.api';
 import { ApiRequestError } from '@/lib/api/apiClient';
 import { useOrgAmbassadorCampaign, useOrgAmbassadorCampaignGroups, useOrgAmbassadorCampaigns } from '@/lib/hooks/useOrgAmbassadorCampaigns';
+import { useContest } from '@/lib/hooks/useContest';
 import { detailsToErrorMap, type FieldErrorMap } from '../campaign-schema';
 import { ShareTemplatesEditor } from '../ShareTemplatesEditor';
 import { StepperNav } from './StepperNav';
@@ -72,6 +73,17 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
   const contests = contestsRes?.data?.data ?? [];
   const selectedContest = contests.find((c) => c.id === draft.contestId);
   const contestTitle = selectedContest?.title ?? null;
+  // `selectedContest` above comes straight off `listContests()`, which returns the list
+  // endpoint's shallow `ContestSummary` shape (id/title/slug/status/startTime/
+  // registrationDeadline/…) — it never derives `registrationStartDate`, `publishedAt`,
+  // `contestStartTime`, or `contestEndTime` the way `adaptServerContest` does for a single
+  // contest fetch, so those four fields are always `undefined` on `selectedContest` no
+  // matter which contest is picked. That's what was permanently disabling Speed Bonus's
+  // "Same as registration start" / "Weeks after" options, and silently no-op'ing Timeline's
+  // equivalent contest-anchored sync. `useContest` fetches and adapts the single selected
+  // contest the same way every other page in this app already does — use its `contest` for
+  // anything that needs those derived fields.
+  const { contest: selectedContestDetail } = useContest(draft.contestId || '');
 
   // Seed local draft state from the fetched campaign once, when resuming an existing draft.
   useEffect(() => {
@@ -138,13 +150,13 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     if (!speedBonus?.enabled) return;
     const mode = speedBonus.campaignStartAtMode ?? 'CONTEST_START';
     if (mode === 'CUSTOM') return;
-    const anchor = selectedContest?.registrationStartDate;
+    const anchor = selectedContestDetail?.registrationStartDate;
     if (!anchor) return;
     const resolved = mode === 'OFFSET_WEEKS' ? addWeeksIso(anchor, speedBonus.campaignStartAtOffsetWeeks ?? 0) : anchor;
     if (resolved !== speedBonus.campaignStartAt) {
       setDraft((d) => ({ ...d, rewardConfig: { ...d.rewardConfig, speedBonus: { ...speedBonus, campaignStartAt: resolved } } }));
     }
-  }, [draft.rewardConfig.speedBonus, selectedContest?.registrationStartDate]);
+  }, [draft.rewardConfig.speedBonus, selectedContestDetail?.registrationStartDate]);
 
   // Timeline's start/end dates — same "sync lives where it stays mounted" fix as Speed Bonus's
   // campaignStartAt above, for the identical reason: TimelineStep unmounts whenever the admin
@@ -152,19 +164,19 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
   // picked back up until the admin happened to revisit Timeline.
   useEffect(() => {
     if (startMode === 'CUSTOM') return;
-    const anchor = selectedContest?.publishedAt || selectedContest?.registrationStartDate || undefined;
+    const anchor = selectedContestDetail?.publishedAt || selectedContestDetail?.registrationStartDate || undefined;
     if (anchor && anchor !== draft.startDate) {
       setDraft((d) => ({ ...d, startDate: anchor }));
     }
-  }, [startMode, selectedContest?.publishedAt, selectedContest?.registrationStartDate, draft.startDate]);
+  }, [startMode, selectedContestDetail?.publishedAt, selectedContestDetail?.registrationStartDate, draft.startDate]);
 
   useEffect(() => {
     if (endMode === 'CUSTOM') return;
-    const anchor = endMode === 'CONTEST_START' ? selectedContest?.contestStartTime : selectedContest?.contestEndTime;
+    const anchor = endMode === 'CONTEST_START' ? selectedContestDetail?.contestStartTime : selectedContestDetail?.contestEndTime;
     if (anchor && anchor !== draft.endDate) {
       setDraft((d) => ({ ...d, endDate: anchor }));
     }
-  }, [endMode, selectedContest?.contestStartTime, selectedContest?.contestEndTime, draft.endDate]);
+  }, [endMode, selectedContestDetail?.contestStartTime, selectedContestDetail?.contestEndTime, draft.endDate]);
 
   const currentStep = WIZARD_STEPS[stepIndex]!;
 
@@ -184,6 +196,11 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           ambassadorTypesAllowed: draft.ambassadorTypesAllowed.length ? draft.ambassadorTypesAllowed : undefined,
           rewardConfig: draft.rewardConfig,
           shareTemplates: draft.shareTemplates,
+          // The router.replace below remounts this component against a fresh fetch of the
+          // campaign — without this, that fetch would come back with the Prisma default
+          // (wizardStep: 1) and silently reset stepIndex to Basics, making the first
+          // Save & Continue look like it did nothing.
+          wizardStep: targetIndex + 1,
           startDate: draft.startDate || undefined,
           endDate: draft.endDate || undefined,
           phaseTemplate: draft.phaseTemplate,
@@ -267,7 +284,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           <RewardsStep
             value={draft.rewardConfig}
             onChange={(rewardConfig) => setDraft((d) => ({ ...d, rewardConfig }))}
-            contestRegistrationStartDate={selectedContest?.registrationStartDate}
+            contestRegistrationStartDate={selectedContestDetail?.registrationStartDate}
             errors={stepErrors}
           />
         );
@@ -286,7 +303,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
             startDate={draft.startDate}
             endDate={draft.endDate}
             phaseTemplate={draft.phaseTemplate}
-            contest={selectedContest}
+            contest={selectedContestDetail}
             startMode={startMode}
             endMode={endMode}
             onStartModeChange={setStartMode}
@@ -318,7 +335,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
         );
     }
      
-  }, [currentStep.key, draft, groups, contestTitle, selectedContest, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign]);
+  }, [currentStep.key, draft, groups, contestTitle, selectedContestDetail, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign]);
 
   const isWizardLocked = !!campaign && campaign.status !== 'DRAFT' && campaign.status !== 'PUBLISHED';
   if (campaignId && (isLoading || !hydrated || isWizardLocked)) {

@@ -290,6 +290,7 @@ export class AmbassadorCampaignService {
             ambassadorTypesAllowed: dto.ambassadorTypesAllowed ?? [],
             rewardConfig: (dto.rewardConfig ? rewardConfigRupeesToPaise(dto.rewardConfig) : {}) as unknown as Prisma.InputJsonValue,
             shareTemplates: (dto.shareTemplates ?? {}) as unknown as Prisma.InputJsonValue,
+            ...(dto.wizardStep !== undefined && { wizardStep: dto.wizardStep }),
             createdById,
             startDate,
             endDate,

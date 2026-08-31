@@ -1,11 +1,87 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+
+/** Editable "type or pick a suggestion" cell for `combobox` columns — free text is always
+ *  accepted (typed directly into the input), and the popover below it offers the column's
+ *  suggestions as one-click fills. Replaces a previous `<Input list=…>` + `<datalist>`
+ *  implementation: that gave no visible dropdown affordance (nothing to click — you had to
+ *  know to start typing to trigger the browser's native suggestion popup) and, worse, sat
+ *  inside this table's `overflow-x-auto` wrapper below, which Chromium clips a `<datalist>`
+ *  popup against. This uses the same Popover primitive the rest of the app already relies on
+ *  for dropdowns — it portals to `document.body` (see `PopoverContent`), so it isn't clipped
+ *  by this table's horizontal scroll container the way the native datalist was. */
+function ComboboxCell({
+  value,
+  options,
+  placeholder,
+  error,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  placeholder?: string;
+  error?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="relative">
+          {/* No onFocus-triggered open here: Popover's asChild trigger already opens on
+              click (Radix's own click handler on this wrapper), and pairing that with an
+              onFocus-driven setOpen(true) would race it — focus fires before click, so the
+              click's toggle would immediately re-close what focus just opened. Clicking into
+              the field (or its chevron) opens the suggestions; typing always works regardless
+              of whether the popover is open. */}
+          <Input
+            className={cn('h-8 pr-6', error && 'border-destructive focus-visible:ring-destructive/20')}
+            placeholder={placeholder}
+            value={value}
+            aria-invalid={error}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <ChevronsUpDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        </div>
+      </PopoverTrigger>
+      {options.length > 0 && (
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-1"
+          align="start"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col">
+            {options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                className={cn(
+                  'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted',
+                  opt === value && 'bg-muted font-medium',
+                )}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      )}
+    </Popover>
+  );
+}
 
 export interface RepeatingRowColumn<T> {
   key: keyof T;
@@ -84,21 +160,13 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                             </SelectContent>
                           </Select>
                         ) : col.type === 'combobox' ? (
-                          <>
-                            <Input
-                              className={cn('h-8', cellError && 'border-destructive focus-visible:ring-destructive/20')}
-                              list={`${String(col.key)}-${index}-suggestions`}
-                              placeholder={col.placeholder}
-                              value={row[col.key] ?? ''}
-                              aria-invalid={!!cellError}
-                              onChange={(e) => updateCell(index, col.key, e.target.value)}
-                            />
-                            <datalist id={`${String(col.key)}-${index}-suggestions`}>
-                              {(col.options ?? []).map((opt) => (
-                                <option key={opt} value={opt} />
-                              ))}
-                            </datalist>
-                          </>
+                          <ComboboxCell
+                            value={row[col.key] ? String(row[col.key]) : ''}
+                            options={col.options ?? []}
+                            placeholder={col.placeholder}
+                            error={!!cellError}
+                            onChange={(v) => updateCell(index, col.key, v)}
+                          />
                         ) : (
                           <Input
                             className={cn('h-8', cellError && 'border-destructive focus-visible:ring-destructive/20')}

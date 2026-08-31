@@ -39,8 +39,9 @@ export function StepperNav({
 
   return (
     <nav className="relative flex flex-col gap-6 pl-1.5">
-      {/* Vertical Rail Line */}
-      <div className="absolute left-[19.5px] top-4 bottom-4 w-[2px] bg-border/40 z-0" />
+      {/* Vertical Rail Line — centered under the step dots: nav's pl-1.5 (6px) + button's
+          px-3 (12px) + half of the dot's h-6/w-6 (12px) = 30px from the nav's left edge. */}
+      <div className="absolute left-[30px] top-4 bottom-4 w-[2px] bg-border/40 z-0" />
 
       {PHASES.map((phase) => (
         <div key={phase.title} className="relative z-10 space-y-2">

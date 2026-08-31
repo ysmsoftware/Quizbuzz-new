@@ -88,13 +88,19 @@ export function SpeedBonusEditor({
   const handleTiersChange = (nextRows: SpeedBonusRow[]) => {
     onChange({
       ...speedBonus,
+      // Keep the raw text for label/goodieLabel here — don't trim on every keystroke.
+      // These flow straight back into `rows` above as a controlled input's value, so
+      // trimming on every change strips a trailing space the instant it's typed (typing
+      // "Fast " immediately snaps back to "Fast"), making a multi-word label impossible
+      // to type. Leading/trailing whitespace is trimmed for real at the save boundary by
+      // the backend's Zod schema (label: z.string().trim()).
       tiers: nextRows.map((r) => ({
         withinDays: r.withinDays,
         bonusAmount: r.bonusAmount,
-        label: r.label.trim(),
+        label: r.label,
         maxWinners: r.maxWinners || undefined,
         goodie: r.goodieLabel.trim()
-          ? { label: r.goodieLabel.trim(), cashEquivalent: r.goodieCashEquivalent || undefined }
+          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined }
           : undefined,
       })),
     });
