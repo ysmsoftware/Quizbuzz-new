@@ -14,7 +14,7 @@ export class MessageWorkerService {
 
     constructor(private messageService: MessagingService) { }
 
-    async process(messageLogId: string, jobId: string, attemptsMade: number) {
+    async process(messageLogId: string, jobId: string, attemptsMade: number, enqueuedAt?: number) {
         const log = await this.messageService.getMessageById(messageLogId)
 
         if (!log) {
@@ -49,7 +49,7 @@ export class MessageWorkerService {
         // Only the first attempt marks the job "started" — a retry
         // shouldn't push the ScheduledJob summary's startedAt forward.
         if (attemptsMade === 0) {
-            recordJobBoundary(checkpointMeta, "STARTED");
+            recordJobBoundary(checkpointMeta, "STARTED", undefined, enqueuedAt);
         }
 
         try {

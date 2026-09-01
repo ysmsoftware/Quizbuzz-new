@@ -282,6 +282,14 @@ const envSchema = z.object({
     QUIZ_SUBMISSION_LOCK_TTL_MS: z.coerce.number().default(15000),
     // 10-minute start-time grid (contest-start-reliability spec §6.4).
     CONTEST_START_TIME_SLOT_MINUTES: z.coerce.number().default(10),
+    // Cache TTL for a contest's scoring config (marks/negativeMark/correctOptionId
+    // per question) — read once per evaluation job, identical for every participant
+    // in a contest. Safe to cache generously: assignQuestionsToContest,
+    // removeQuestionFromContest, updateContestQuestion, and updateContest's
+    // applyToExistingQuestions bulk-update all require DRAFT/PUBLISHED status, so
+    // the underlying rows cannot change during the LIVE-and-later window evaluation
+    // jobs actually run in. 0 disables caching (falls back to a DB read every time).
+    CONTEST_SCORING_CONFIG_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(3600),
     MAX_SLUG_RETRIES: z.coerce.number().default(5),
     JOIN_CODE_LENGTH: z.coerce.number().default(6),
     BULK_IMPORT_LIMIT: z.coerce.number().default(500),
@@ -587,6 +595,8 @@ export const config = {
     contest: {
         // Start times must land on this grid (minutes) — see contest.validator.ts.
         startTimeSlotMinutes: env.CONTEST_START_TIME_SLOT_MINUTES,
+        // See scoring-config.cache.ts / question.service.ts's getContestScoringConfigCached().
+        scoringConfigCacheTtlSeconds: env.CONTEST_SCORING_CONFIG_CACHE_TTL_SECONDS,
     },
 
     // Convenience alias — quiz module uses config.ws / config.app.frontendUrl

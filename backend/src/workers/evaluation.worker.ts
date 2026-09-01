@@ -9,7 +9,7 @@
  * Standalone process:
  *   node dist/workers/evaluation.worker.js
  *
- * Depends on: submissionService, questionRepository (read-only scoring data), leaderboardRepository
+ * Depends on: submissionService, questionService (cached, read-only scoring data), leaderboardRepository
  * Writes via: submissionService.applyEvaluationResult (→ submissionRepository)
  *            leaderboardQueue.add (→ leaderboard worker)
  */
@@ -21,7 +21,7 @@ type Decimal = Prisma.Decimal;
 import { redis } from "../config/redis";
 import { config } from "../config";
 import { submissionService } from "../container";
-import { questionRepository } from "../container";
+import { questionService } from "../container";
 import { leaderboardRepository } from "../container";
 import { contestRepository } from "../container";
 import { EvaluationJobPayload } from "../modules/submission/submission.types";
@@ -153,44 +153,6 @@ export function scoreSubmission(
     };
 }
 
-/**
- * Schedule a leaderboard rebuild for this contest.
- *
- * BUG FIX (leaderboard frozen on the first submitter): the previous approach
- * tried to detect "was this the last evaluation to finish" by comparing a
- * live INCR counter against submissionService.countByContest()'s live count
- * of SUBMITTED/EVALUATED rows — but both numbers move independently as more
- * participants submit over time. The very first participant to be evaluated
- * could trivially satisfy `evaluated(1) >= totalSubmitted(1)` while everyone
- * else was still mid-quiz, firing the build once for a "contest of one" and
- * then resetting the counter (leaderboard.worker.ts deletes it on success).
- * Every later evaluation restarted the counter from 1 against an
- * already-higher live total, so `evaluated >= totalSubmitted` almost never
- * became true again — the leaderboard stayed frozen on that first submitter
- * for the rest of the contest.
- *
- * Fix: stop trying to detect "the last one" at all. leaderboard.worker.ts's
- * buildLeaderboard() already does a full, cheap (O(N log N), one query) recompute
- * from every currently-EVALUATED submission on each run — it is naturally
- * idempotent and safe to run after every single evaluation. So just schedule a
- * rebuild after each one. To avoid firing a full rebuild job per submission
- * during a burst (e.g. everyone hitting submit near contest end), this uses a
- * short delay plus BullMQ's jobId dedup as a debounce: if a rebuild for this
- * contest is already waiting/delayed, later calls collapse into it instead of
- * adding a duplicate, since that pending job will run fresh and pick up
- * everything evaluated by the time it fires.
- *
- * Edge case this also has to cover: a build job that is already ACTIVE (its
- * DB read is running right now) can still miss an evaluation whose DB write
- * lands a few milliseconds after that read — collapsing into an active job
- * the same way as a delayed one would silently drop that evaluation from the
- * leaderboard until some later, unrelated evaluation happens to trigger
- * another build. So an active build gets exactly one bounded follow-up job
- * queued right behind it (`${jobId}-followup`) instead of being treated as
- * "already covered" — guaranteed via the same jobId-dedup mechanism, so a
- * burst of evaluations finishing while the build is active still only queues
- * one follow-up, not one per evaluation.
- */
 async function scheduleLeaderboardRebuild(
     contestId: string,
     organizationId: string,
@@ -207,19 +169,14 @@ async function scheduleLeaderboardRebuild(
         }
 
         if (state === "active") {
-            // Currently running and may not see this evaluation's write —
-            // ensure one guaranteed follow-up is queued right behind it,
-            // unless this call IS already the follow-up (avoid recursing
-            // into a follow-up-of-a-follow-up chain).
+
             if (!jobId.endsWith("-followup")) {
                 await scheduleLeaderboardRebuild(contestId, organizationId, `${jobId}-followup`);
             }
             return;
         }
 
-        // Terminal state (completed slipped past removeOnComplete, or failed
-        // and kept around by removeOnFail) still holds the jobId slot — clear
-        // it so a fresh rebuild can actually be scheduled.
+
         await existing.remove().catch((err) => {
             logger.warn(`[evaluation-worker] Failed to clear stale leaderboard job ${jobId}: ${(err as Error).message}`);
         });
@@ -272,7 +229,7 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
         entityId: submissionId,
     };
     if (job.attemptsMade === 0) {
-        recordJobBoundary(checkpointMeta, "STARTED");
+        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
     }
 
     // ── Step 2: Load submission (with all answer rows) ────────────────────────
@@ -309,12 +266,19 @@ async function processEvaluationInner(job: Job<EvaluationJobPayload>): Promise<v
     await job.updateProgress(30);
 
     // ── Step 3: Load scoring configuration from contest_questions ────────────
-    // Uses QuestionRepository directly — evaluation worker is the only consumer
+    // Uses QuestionService directly — evaluation worker is the only consumer
     // of this data and it is read-only. No SubmissionService method wraps this
     // because scoring config is owned by the Question domain, not Submission.
+    //
+    // Cached (config.contest.scoringConfigCacheTtlSeconds, default 1hr): every
+    // evaluation job for every participant in the same contest was re-running
+    // this exact query — audit logs showed it averaging ~500-700ms per job on
+    // its own. See question.service.ts's getContestScoringConfigCached() and
+    // scoring-config.cache.ts for the cache-aside implementation and why the
+    // underlying rows are safe to cache for the whole window evaluation runs in.
 
     const scoringRows = await withCheckpoint(checkpointMeta, "load_scoring_config", () =>
-        questionRepository.getContestQuestionsWithScoringData(contestId, organizationId)
+        questionService.getContestScoringConfigCached(contestId, organizationId)
     );
 
     if (scoringRows.length === 0) {

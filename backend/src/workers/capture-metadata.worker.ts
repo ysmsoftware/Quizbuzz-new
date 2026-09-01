@@ -9,6 +9,7 @@ import { prisma } from "../config/db";
 import { ViolationType } from "@prisma/client";
 import { quizSession, quizService } from "../container";
 import { CaptureMetadataJobPayload } from "../queues";
+import { recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 export class CaptureMetadataWorker implements Worker {
     public name = "CaptureMetadataWorker";
@@ -30,6 +31,24 @@ export class CaptureMetadataWorker implements Worker {
                 } = job.data;
 
                 logger.info(`[capture-metadata-worker] Processing job ${job.id} of type: ${type} for participant: ${participantId}`);
+
+                // Boundary-only — no per-stage withCheckpoint. This queue can run at
+                // meaningful volume during a proctored contest (every violation/snapshot
+                // per participant), so it only records STARTED/COMPLETED/FAILED rather
+                // than timing each internal step, to keep the checkpoint stream's Redis
+                // budget (checkpointConfig.redis.softFlushEntryThreshold) headroom mostly
+                // for the lower-volume queues. See common/job-checkpoint.ts.
+                const checkpointMeta: CheckpointMeta = {
+                    jobId: job.id ?? `${participantId}-${type}`,
+                    queue: "capture-metadata-queue",
+                    organizationId,
+                    contestId,
+                    entityType: type,
+                    entityId: participantId,
+                };
+                if (job.attemptsMade === 0) {
+                    recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
+                }
 
                 const isSnapshot = type.startsWith("SNAPSHOT_");
 
@@ -188,6 +207,8 @@ export class CaptureMetadataWorker implements Worker {
                         );
                     }
                 }
+
+                recordJobBoundary(checkpointMeta, "COMPLETED");
             },
             {
                 connection: redis,
@@ -202,6 +223,21 @@ export class CaptureMetadataWorker implements Worker {
 
         this.worker.on("failed", (job, err) => {
             logger.error(`[capture-metadata-worker] Job ${job?.id} failed with error:`, err);
+
+            if (job?.data) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? `${job.data.participantId}-${job.data.type}`,
+                        queue: "capture-metadata-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: job.data.type,
+                        entityId: job.data.participantId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         const shutdown = async (signal: string): Promise<void> => {

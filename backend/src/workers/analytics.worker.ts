@@ -7,6 +7,7 @@ import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { QuizSession } from "../modules/quiz/quiz.session";
 import { prisma } from "../config/db";
+import { recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 /**
  * Flush Redis participant phase state → DB.
@@ -95,9 +96,25 @@ export class AnalyticsWorker implements Worker {
 
                 } else if (job.name === "compute-contest-snapshot") {
                     const { contestId, organizationId } = job.data;
+                    // Boundary-only — this is the only analytics-queue job that carries a
+                    // single organizationId (compute-all-snapshots spans every org in one
+                    // run, so it can't get a ScheduledJob summary row — see
+                    // common/job-checkpoint.ts and claude/job-timeline-audit-log-fixes-audit-and-plan.md).
+                    const checkpointMeta: CheckpointMeta = {
+                        jobId: job.id ?? `snapshot-${contestId}`,
+                        queue: "analytics-queue",
+                        organizationId,
+                        contestId,
+                        entityType: "CONTEST_SNAPSHOT",
+                        entityId: contestId,
+                    };
+                    if (job.attemptsMade === 0) {
+                        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
+                    }
                     await analyticsService.generateSnapshot(contestId, organizationId);
                     // Flush for this specific contest
                     await flushParticipantStatuses(this.session, contestId);
+                    recordJobBoundary(checkpointMeta, "COMPLETED");
                 }
             },
             {
@@ -113,6 +130,21 @@ export class AnalyticsWorker implements Worker {
 
         this.worker.on("failed", (job, err) => {
             logger.error(`[analytics-worker] Job ${job?.id} failed:`, err);
+
+            if (job?.name === "compute-contest-snapshot" && job.data?.contestId && job.data?.organizationId) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? `snapshot-${job.data.contestId}`,
+                        queue: "analytics-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: "CONTEST_SNAPSHOT",
+                        entityId: job.data.contestId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         // ─── Graceful shutdown ────────────────────────────────────────────────────────

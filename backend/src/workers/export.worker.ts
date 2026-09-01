@@ -10,6 +10,7 @@ import { workerRegistry } from "./worker.registry";
 import puppeteer from "puppeteer";
 import { organizationRepository } from "../container";
 import { formatDateTimeHuman } from "../utils/timezone";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 export class ExportWorker {
     public readonly name = "ExportWorker";
@@ -50,6 +51,22 @@ export class ExportWorker {
             return;
         }
 
+        // Checkpoint identity — organizationId only becomes known after the
+        // exportLog lookup above (the job payload is just { exportId }), so
+        // STARTED is recorded here rather than at the top of the function.
+        // See common/job-checkpoint.ts.
+        const checkpointMeta: CheckpointMeta = {
+            jobId: job.id ?? exportId,
+            queue: "export-queue",
+            organizationId: exportLog.organizationId,
+            contestId: exportLog.contestId,
+            entityType: "EXPORT",
+            entityId: exportId,
+        };
+        if (job.attemptsMade === 0) {
+            recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
+        }
+
         try {
             await prisma.exportLog.update({
                 where: { id: exportId },
@@ -71,33 +88,41 @@ export class ExportWorker {
                 ];
             }
 
-            const participants = await prisma.participant.findMany({
-                where: whereClause,
-                include: { contact: true },
-                orderBy: { createdAt: 'desc' }
-            });
+            const participants = await withCheckpoint(checkpointMeta, "fetch_participants", () =>
+                prisma.participant.findMany({
+                    where: whereClause,
+                    include: { contact: true },
+                    orderBy: { createdAt: 'desc' }
+                })
+            );
 
             await prisma.exportLog.update({
                 where: { id: exportId },
                 data: { progress: 40 }
             });
 
-            let buffer: Buffer;
+            // contentType/fileExt determined synchronously (TS can prove they're
+            // assigned before use below); the actual generation work — the part
+            // worth timing — is what's wrapped in withCheckpoint.
             let contentType: string;
             let fileExt: string;
-
             if (exportLog.format === "csv") {
-                buffer = this.generateCSV(participants);
                 contentType = "text/csv";
                 fileExt = "csv";
             } else if (exportLog.format === "pdf") {
-                const timezone = await organizationRepository.findTimezone(exportLog.organizationId);
-                buffer = await this.generatePDF(participants, exportLog.contest.title, timezone);
                 contentType = "application/pdf";
                 fileExt = "pdf";
             } else {
                 throw new Error("Unsupported format");
             }
+
+            const buffer = await withCheckpoint(checkpointMeta, "generate_file", async () => {
+                if (exportLog.format === "csv") {
+                    return this.generateCSV(participants);
+                }
+                const timezone = await organizationRepository.findTimezone(exportLog.organizationId);
+                return this.generatePDF(participants, exportLog.contest.title, timezone);
+            });
 
             await prisma.exportLog.update({
                 where: { id: exportId },
@@ -109,7 +134,9 @@ export class ExportWorker {
             const fileName = `${safeTitle}_${timestamp}.${fileExt}`;
             const storageKey = `exports/${exportLog.organizationId}/${exportLog.contestId}/${fileName}`;
 
-            const uploadResult = await storageService.upload(storageKey, buffer, contentType);
+            const uploadResult = await withCheckpoint(checkpointMeta, "upload_storage", () =>
+                storageService.upload(storageKey, buffer, contentType)
+            );
 
             await prisma.exportLog.update({
                 where: { id: exportId },
@@ -121,6 +148,8 @@ export class ExportWorker {
                 }
             });
 
+            recordJobBoundary(checkpointMeta, "COMPLETED");
+
         } catch (error: any) {
             await prisma.exportLog.update({
                 where: { id: exportId },
@@ -129,6 +158,7 @@ export class ExportWorker {
                     error: error.message || "Unknown error occurred"
                 }
             });
+            recordJobBoundary(checkpointMeta, "FAILED", error.message);
             throw error;
         }
     }

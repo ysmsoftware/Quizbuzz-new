@@ -98,7 +98,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
         entityId: payload.participantId,
     };
     if (job.attemptsMade === 0) {
-        recordJobBoundary(checkpointMeta, "STARTED");
+        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
     }
 
     // ── Step 2: Persist to DB via SubmissionService ───────────────────────────

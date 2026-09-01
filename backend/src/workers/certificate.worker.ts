@@ -199,7 +199,7 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
     // this function shouldn't push the ScheduledJob summary's startedAt
     // forward and quietly erase the original queue-wait time.
     if (job.attemptsMade === 0) {
-        recordJobBoundary(checkpointMeta, "STARTED");
+        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
     }
 
     // ── Step 2: Mark as GENERATING ────────────────────────────────────────────

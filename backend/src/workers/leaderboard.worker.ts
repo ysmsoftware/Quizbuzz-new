@@ -22,6 +22,7 @@ import { LeaderboardBuildPayload } from "../queues";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
+import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 // ─── Pure ranking function — no I/O ──────────────────────────────────────────
 
@@ -64,14 +65,33 @@ async function buildLeaderboard(job: Job<LeaderboardBuildPayload>): Promise<void
     }
     await job.updateProgress(10);
 
+    // Checkpoint identity for this job — see common/job-checkpoint.ts. Only
+    // recorded to Redis, batched into Postgres by checkpoint-drain.worker.ts —
+    // never a synchronous write on this hot path. Mirrors evaluation.worker.ts's
+    // pattern (this job is itself debounced-triggered by that worker).
+    const checkpointMeta: CheckpointMeta = {
+        jobId: job.id ?? contestId,
+        queue: "leaderboard-queue",
+        organizationId,
+        contestId,
+        entityType: "CONTEST",
+        entityId: contestId,
+    };
+    if (job.attemptsMade === 0) {
+        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
+    }
+
     // ── Step 1: Fetch all evaluated scores (one query) ────────────────────────
-    const scores = await leaderboardRepository.fetchEvaluatedScores(contestId, organizationId);
+    const scores = await withCheckpoint<ScoredRow[]>(checkpointMeta, "fetch_scores", () =>
+        leaderboardRepository.fetchEvaluatedScores(contestId, organizationId)
+    );
 
     if (scores.length === 0) {
         logger.warn(
             `[leaderboard-worker] No evaluated submissions for contest ${contestId} — skipping`
         );
         await job.updateProgress(100);
+        recordJobBoundary(checkpointMeta, "COMPLETED");
         return;
     }
 
@@ -81,7 +101,7 @@ async function buildLeaderboard(job: Job<LeaderboardBuildPayload>): Promise<void
     await job.updateProgress(40);
 
     // ── Step 2: Sort in memory (pure JS — O(N log N), no DB) ─────────────────
-    const ranked = rankRows(scores);
+    const ranked = await withCheckpoint(checkpointMeta, "sort_rankings", async () => rankRows(scores));
 
     logger.info(
         `[leaderboard-worker] Sorted ${ranked.length} entries — top score: ${ranked[0]?.score}`
@@ -89,12 +109,15 @@ async function buildLeaderboard(job: Job<LeaderboardBuildPayload>): Promise<void
     await job.updateProgress(70);
 
     // ── Step 3: Bulk insert in one transaction ────────────────────────────────
-    await leaderboardRepository.buildLeaderboard(contestId, organizationId, ranked);
+    await withCheckpoint(checkpointMeta, "persist_leaderboard", () =>
+        leaderboardRepository.buildLeaderboard(contestId, organizationId, ranked)
+    );
 
     logger.info(
         `[leaderboard-worker] Leaderboard built for contest ${contestId}: ${ranked.length} entries`
     );
     await job.updateProgress(100);
+    recordJobBoundary(checkpointMeta, "COMPLETED");
 }
 
 // ─── Worker registration ──────────────────────────────────────────────────────
@@ -122,6 +145,21 @@ export class LeaderboardWorker implements Worker {
             logger.error(
                 `[leaderboard-worker] Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`
             );
+
+            if (job?.data?.contestId && job.data.organizationId) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? job.data.contestId,
+                        queue: "leaderboard-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: "CONTEST",
+                        entityId: job.data.contestId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         this.worker.on("error", (err) => {

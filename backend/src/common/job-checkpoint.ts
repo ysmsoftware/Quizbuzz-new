@@ -61,12 +61,23 @@ export async function withCheckpoint<T>(
 export function recordJobBoundary(
     meta: CheckpointMeta,
     kind: "STARTED" | "COMPLETED" | "FAILED",
-    errorMessage?: string
+    errorMessage?: string,
+    /**
+     * True enqueue time (BullMQ's own `job.timestamp` — set the instant
+     * `queue.add()` was called), passed only on the "STARTED" boundary.
+     * The drain worker uses this to set ScheduledJob.createdAt explicitly
+     * instead of falling through to Prisma's `@default(now())`, which
+     * otherwise stamps createdAt at DRAIN-FLUSH time (up to ~10 min after
+     * the job actually ran) — producing negative queue-wait/total times.
+     * See claude/job-timeline-audit-log-fixes-audit-and-plan.md, Issue 1.
+     */
+    enqueuedAt?: number
 ): void {
     const now = Date.now();
     recordCheckpoint(meta, JOB_BOUNDARY_STAGE, now, now, kind === "FAILED" ? "ERROR" : "OK", {
         boundaryKind: kind,
         ...(errorMessage ? { errorMessage: errorMessage.slice(0, 500) } : {}),
+        ...(enqueuedAt !== undefined ? { enqueuedAt: String(enqueuedAt) } : {}),
     });
 }
 

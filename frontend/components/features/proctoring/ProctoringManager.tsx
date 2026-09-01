@@ -45,6 +45,16 @@ export function ProctoringManager({
     const fullscreenExitsCountRef = useRef(0);
     const multipleFacesCountRef = useRef(0);
     const windowBlursCountRef = useRef(0);
+    const faceNotDetectedCountRef = useRef(0);
+
+    // Hard per-participant ceiling on snapshot uploads for the whole contest,
+    // across every trigger type combined (scheduled + evidence captures).
+    // Client-side only by design — see the capture-count-cap decision in
+    // claude/proctoring-snapshot-capture-size-storage-audit.md.
+    // TODO: pull into config/ (e.g. config.proctoring.maxSnapshotsPerParticipant)
+    // instead of this literal, per this project's own config-agnostic rule.
+    const MAX_SNAPSHOTS_PER_PARTICIPANT = 6;
+    const snapshotCountRef = useRef(0);
 
     // ─────────────────────────────────────────────────────────────────────
     // 8. DIRECT S3/LOCAL UPLOAD & CONFIRMATION FLOW
@@ -56,6 +66,16 @@ export function ProctoringManager({
         // No camera module for this contest — nothing to capture.
         if (!proctoringEnabled) return;
         if (!videoRef.current || !sessionToken) return;
+        // Hard cap: once this participant has hit MAX_SNAPSHOTS_PER_PARTICIPANT
+        // for the contest, stop uploading more — checked and incremented
+        // synchronously (no await between the two) so concurrent triggers
+        // (e.g. a socket capture request landing alongside a violation-driven
+        // one) can't both slip past the check before either increments it.
+        if (snapshotCountRef.current >= MAX_SNAPSHOTS_PER_PARTICIPANT) {
+            console.log(`[QuizPro] Snapshot cap (${MAX_SNAPSHOTS_PER_PARTICIPANT}) reached — skipping ${captureType} capture`);
+            return;
+        }
+        snapshotCountRef.current += 1;
         const video = videoRef.current;
 
         // Ensure video is playing and ready to capture
@@ -161,13 +181,20 @@ export function ProctoringManager({
     // single time it happens — not just once some repeat-count threshold is
     // crossed. Handled server-side by quiz.gateway.ts's handleViolation(),
     // which persists it and pushes admin:v1:violation_alert to the live
-    // Violation Feed. Kept separate from evidence capture (below) so every
-    // occurrence is visible to admins without uploading an S3 snapshot for
-    // every single momentary tab switch.
+    // Violation Feed. Used for every violation type, including the ones
+    // below that no longer capture evidence.
     //
-    // captureEvidence: uploads a snapshot as supporting evidence. Still
-    // reserved for the repeated/serious case (past each type's own
-    // threshold) — bandwidth/cost reasons, not visibility ones.
+    // captureEvidence: uploads a snapshot as supporting evidence. Deliberately
+    // NOT wired up for TAB_SWITCH, FULLSCREEN_EXIT or WINDOW_BLUR — a face
+    // photo doesn't show what the participant actually did (which tab, what
+    // was outside fullscreen), so it isn't useful evidence for those triggers,
+    // just S3 cost. Reserved for MULTIPLE_FACES and FACE_NOT_DETECTED, past
+    // each one's own repeat-count threshold, since those are the triggers a
+    // face snapshot can actually substantiate. Every capture call also goes
+    // through handleCaptureAndUpload's own MAX_SNAPSHOTS_PER_PARTICIPANT cap
+    // (currently 6), shared across every trigger type including the
+    // always-on SNAPSHOT_START/MID_POINT/RANDOM captures.
+    // See claude/proctoring-snapshot-capture-size-storage-audit.md.
     // ─────────────────────────────────────────────────────────────────────
     const notifyViolation = useCallback((type: string, metadata: Record<string, unknown> = {}) => {
         socket?.emit('quiz:v1:violation', {
@@ -222,10 +249,10 @@ export function ProctoringManager({
                 const count = fullscreenExitsCountRef.current;
                 store.addWarning({ type: 'FULLSCREEN_EXIT', timestamp: Date.now() });
                 emitProctoringWarning('FULLSCREEN_EXIT');
-                // Admin sees every exit from the first one; evidence capture
-                // is still reserved for the repeated case (> 5).
+                // Admin sees every exit from the first one. No evidence snapshot:
+                // a face photo doesn't show what the participant did outside
+                // fullscreen, so it isn't useful evidence for this trigger.
                 notifyViolation('FULLSCREEN_EXIT', { count });
-                if (count > 5) captureEvidence('FULLSCREEN_EXIT');
             }
             store.setFullscreen(isCurrentlyFullscreen);
         };
@@ -242,10 +269,10 @@ export function ProctoringManager({
                 const count = tabSwitchesCountRef.current;
                 store.addWarning({ type: 'TAB_SWITCH', timestamp: Date.now() });
                 emitProctoringWarning('TAB_SWITCH');
-                // Admin sees every switch from the first one; evidence capture
-                // is still reserved for the repeated case (> 5).
+                // Admin sees every switch from the first one. No evidence snapshot:
+                // a face photo doesn't show what tab/app the participant switched
+                // to, so it isn't useful evidence for this trigger.
                 notifyViolation('TAB_SWITCH', { count });
-                if (count > 5) captureEvidence('TAB_SWITCH');
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
@@ -260,8 +287,9 @@ export function ProctoringManager({
             const count = windowBlursCountRef.current;
             store.addWarning({ type: 'WINDOW_BLUR', timestamp: Date.now() });
             emitProctoringWarning('WINDOW_BLUR');
+            // No evidence snapshot: same reasoning as TAB_SWITCH/FULLSCREEN_EXIT —
+            // a face photo isn't useful evidence for a window-blur event.
             notifyViolation('WINDOW_BLUR', { count });
-            if (count > 5) captureEvidence('WINDOW_BLUR');
         };
 
         const handleFocus = () => {
@@ -374,6 +402,19 @@ export function ProctoringManager({
                 notifyViolation('MULTIPLE_FACES', { count });
                 if (count > 3) {
                     captureEvidence('MULTIPLE_FACES');
+                    return; // Skip standard user warning
+                }
+            } else if (type === 'FACE_NOT_DETECTED') {
+                // Each occurrence here already passed useFaceDetection's own
+                // 5s continuous-absence threshold, so repeated occurrences are
+                // meaningfully serious — capture evidence past a small repeat
+                // count, same pattern as MULTIPLE_FACES.
+                // TODO: pull the >3 threshold into config/, same as MULTIPLE_FACES.
+                faceNotDetectedCountRef.current += 1;
+                const count = faceNotDetectedCountRef.current;
+                notifyViolation('FACE_NOT_DETECTED', { count });
+                if (count > 3) {
+                    captureEvidence('FACE_NOT_DETECTED');
                     return; // Skip standard user warning
                 }
             } else {

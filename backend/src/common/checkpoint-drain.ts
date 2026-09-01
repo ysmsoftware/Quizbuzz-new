@@ -23,6 +23,8 @@ interface ParsedEntry {
     durationMs: number;
     boundaryKind?: string | undefined;
     errorMessage?: string | undefined;
+    /** True BullMQ enqueue time (job.timestamp), only present on STARTED boundary entries. */
+    enqueuedAt?: number | undefined;
 }
 
 function parseEntry(streamId: string, fields: string[]): ParsedEntry {
@@ -49,6 +51,7 @@ function parseEntry(streamId: string, fields: string[]): ParsedEntry {
         durationMs: Number(map.durationMs ?? 0),
         boundaryKind: map.boundaryKind,
         errorMessage: map.errorMessage,
+        enqueuedAt: map.enqueuedAt ? Number(map.enqueuedAt) : undefined,
     };
 }
 
@@ -148,6 +151,12 @@ async function applyJobBoundaries(tx: Prisma.TransactionClient, boundaries: Pars
             payload,
             status: "ACTIVE",
             ...(started ? { startedAt: new Date(started.startedAt) } : {}),
+            // True enqueue time, when the STARTED boundary carried one — overrides
+            // Prisma's @default(now()), which would otherwise stamp createdAt at
+            // THIS flush's insert time rather than when the job actually entered
+            // the queue. Only set on first insert (create), never on update — a
+            // later batch's boundary for the same job must not move createdAt.
+            ...(started?.enqueuedAt ? { createdAt: new Date(started.enqueuedAt) } : {}),
         };
 
         const updateData: Prisma.ScheduledJobUpdateInput = {

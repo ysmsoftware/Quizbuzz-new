@@ -21,6 +21,7 @@ import type { QuizTimerJobPayload } from "../queues";
 import type { PrismaClient } from "@prisma/client";
 import { QuizSession } from "../modules/quiz/quiz.session";
 import { QuizSchedulerService } from "../modules/quiz/quiz-scheduler.service";
+import { recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
 
 // Stateless — safe to instantiate directly rather than threading through the
 // injection setter, which exists only to break the gateway/service import cycle.
@@ -74,6 +75,23 @@ async function processTimerJob(job: Job<QuizTimerJobPayload>): Promise<void> {
         `[quiz-timer] Processing ${type} for contest ${contestId} (job ${job.id})`,
     );
 
+    // Checkpoint identity — boundary-only (no per-stage withCheckpoint) since
+    // this queue dispatches six structurally different event types and can
+    // fire at meaningful volume (per-participant CAPTURE_REQUEST jobs); see
+    // common/job-checkpoint.ts. entityType/entityId distinguish the event
+    // kind in the Job Timeline UI without adding extra Redis writes per stage.
+    const checkpointMeta: CheckpointMeta = {
+        jobId: job.id ?? `${type}-${contestId}`,
+        queue: "quiz-timer-queue",
+        organizationId,
+        contestId,
+        entityType: type,
+        entityId: job.data.participantId ?? contestId,
+    };
+    if (job.attemptsMade === 0) {
+        recordJobBoundary(checkpointMeta, "STARTED", undefined, job.timestamp);
+    }
+
     switch (type) {
         case "CONTEST_START":
             await handleContestStart(contestId, organizationId);
@@ -102,6 +120,8 @@ async function processTimerJob(job: Job<QuizTimerJobPayload>): Promise<void> {
         default:
             logger.warn(`[quiz-timer] Unknown job type: ${type}`);
     }
+
+    recordJobBoundary(checkpointMeta, "COMPLETED");
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -432,6 +452,21 @@ export class QuizTimerWorker implements Worker {
             logger.error(
                 `[quiz-timer] Job ${job?.id} failed: ${err.message}`,
             );
+
+            if (job?.data) {
+                recordJobBoundary(
+                    {
+                        jobId: job.id ?? `${job.data.type}-${job.data.contestId}`,
+                        queue: "quiz-timer-queue",
+                        organizationId: job.data.organizationId,
+                        contestId: job.data.contestId,
+                        entityType: job.data.type,
+                        entityId: job.data.participantId ?? job.data.contestId,
+                    },
+                    "FAILED",
+                    err.message
+                );
+            }
         });
 
         this.worker.on("error", (err) => {

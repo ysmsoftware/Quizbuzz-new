@@ -405,12 +405,10 @@ export default function QuizPlayPage() {
         useQuizStore.setState({ quizState: "SUBMITTING" });
         const toastId = toast.loading("Submitting your quiz...");
 
-        try {
-            if (typeof window !== "undefined" && (window as any).__triggerProctoringCapture) {
-                await (window as any).__triggerProctoringCapture("SNAPSHOT_PRE_SUBMIT");
-            }
-        } catch { /* ignore */ }
-
+        // SNAPSHOT_PRE_SUBMIT capture removed — deemed unnecessary evidence
+        // (see claude/proctoring-snapshot-capture-size-storage-audit.md).
+        // START, MID_POINT and RANDOM remain as the scheduled identity-audit
+        // captures.
         try {
             confirmAnswer(currentIndex);
 

@@ -18,6 +18,9 @@ import { config } from "../../config";
 import { ContestService } from "../contest/contest.service";
 import { prisma } from "../../config/db";
 import { logAudit } from "../../common/audit-log";
+import { redis } from "../../config/redis";
+import logger from "../../config/logger";
+import { contestScoringConfigCacheKey, invalidateContestScoringConfigCache } from "./scoring-config.cache";
 // Plan-limit enforcement (questions/contest) now runs as middleware ahead of
 // these routes — see src/middlewares/plan-limit.middleware.ts.
 
@@ -185,6 +188,10 @@ export class QuestionService {
 
         const result = await this.questionRepo.assignToContest(organizationId, contestId, dto.questions);
 
+        // New questions change the scoring rows this contest's cached scoring
+        // config would return — invalidate so the next evaluation re-reads.
+        await invalidateContestScoringConfigCache(contestId, organizationId);
+
         // skipDuplicates means count = only newly inserted rows
         const assigned = result.count;
         const skipped = dto.questions.length - assigned;
@@ -213,7 +220,9 @@ export class QuestionService {
         const assignment = await this.questionRepo.getContestQuestion(contestId, questionId, organizationId);
         if (!assignment) throw new NotFoundError("Question is not assigned to this contest");
 
-        return this.questionRepo.removeFromContest(contestId, questionId, organizationId);
+        const removed = await this.questionRepo.removeFromContest(contestId, questionId, organizationId);
+        await invalidateContestScoringConfigCache(contestId, organizationId);
+        return removed;
     }
 
     async updateContestQuestion(contestId: string, questionId: string, organizationId: string, dto: UpdateContestQuestionInput) {
@@ -226,7 +235,9 @@ export class QuestionService {
         const assignment = await this.questionRepo.getContestQuestion(contestId, questionId, organizationId);
         if (!assignment) throw new NotFoundError("Question is not assigned to this contest");
 
-        return this.questionRepo.updateContestQuestion(contestId, questionId, organizationId, dto);
+        const updated = await this.questionRepo.updateContestQuestion(contestId, questionId, organizationId, dto);
+        await invalidateContestScoringConfigCache(contestId, organizationId);
+        return updated;
     }
 
     // ─── Contest Question Reads ─────────────────────────────────────────────
@@ -234,6 +245,53 @@ export class QuestionService {
     async getContestQuestions(contestId: string, organizationId: string) {
         await this.contestService.getContestContext(contestId, organizationId);
         return this.questionRepo.getContestQuestions(contestId, organizationId);
+    }
+
+    /**
+     * Cached scoring config for a contest: {questionId, marks, negativeMark,
+     * correctOptionId} per question. This is evaluation.worker.ts's
+     * "load_scoring_config" step — every evaluation job for every participant
+     * in a contest calls this with the exact same (contestId, organizationId)
+     * and gets back an identical result, so it's a straightforward
+     * cache-aside candidate (audit logs showed this DB read alone averaging
+     * ~500-700ms per job). See scoring-config.cache.ts for why the rows are
+     * safe to cache for config.contest.scoringConfigCacheTtlSeconds and for
+     * how the cache gets invalidated on writes.
+     *
+     * No auth/contest-context check here on purpose — unlike getContestQuestions
+     * above, this is called from evaluation.worker.ts (a background job, no
+     * request/admin context to check against), exactly like the direct
+     * questionRepository call it replaces.
+     */
+    async getContestScoringConfigCached(contestId: string, organizationId: string): Promise<Array<{
+        questionId: string;
+        marks: number;
+        negativeMark: string;
+        correctOptionId: string;
+    }>> {
+        const ttl = config.contest.scoringConfigCacheTtlSeconds;
+        const key = contestScoringConfigCacheKey(contestId, organizationId);
+
+        if (ttl > 0) {
+            try {
+                const cached = await redis.get(key);
+                if (cached) return JSON.parse(cached);
+            } catch (err) {
+                logger.warn(`[question-service] Scoring config cache read failed for ${key}: ${(err as Error).message}`);
+            }
+        }
+
+        const rows = await this.questionRepo.getContestQuestionsWithScoringData(contestId, organizationId);
+
+        if (ttl > 0) {
+            try {
+                await redis.setex(key, ttl, JSON.stringify(rows));
+            } catch (err) {
+                logger.warn(`[question-service] Scoring config cache write failed for ${key}: ${(err as Error).message}`);
+            }
+        }
+
+        return rows;
     }
 
     // ─── Quiz Delivery ───────────────────────────────────────────────────────

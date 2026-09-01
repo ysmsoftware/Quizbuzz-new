@@ -29,6 +29,7 @@ import { formatDateHuman, formatDateTimeHuman, formatTimeHuman } from "../../uti
 import { ContactService } from "../contact/contact.service";
 import { UpdateContactDTO } from "../contact/contact.types";
 import { CreateContestDTO, ListContestsFilter } from "./contest.types";
+import { invalidateContestScoringConfigCache } from "../question/scoring-config.cache";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { messageQueue, quizTimerQueue, contestReconciliationQueue } from "../../queues";
 import { rankRows } from "../../workers/leaderboard.worker";
@@ -362,8 +363,8 @@ export class ContestService {
 
         const { applyToExistingQuestions, ...contestData } = dto;
 
-        return await prisma.$transaction(async (tx) => {
-            const updatedContest = await this.contestRepo.update(
+        const updatedContest = await prisma.$transaction(async (tx) => {
+            const updated = await this.contestRepo.update(
                 contestId,
                 organizationId,
                 { ...contestData, endTime: newEndTime } as any,
@@ -383,8 +384,17 @@ export class ContestService {
                 });
             }
 
-            return updatedContest;
+            return updated;
         });
+
+        if (applyToExistingQuestions) {
+            // Bulk mark/negativeMark update changes every row the cached
+            // scoring config would return for this contest — invalidate
+            // outside the transaction (cache isn't transactional with Postgres).
+            await invalidateContestScoringConfigCache(contestId, organizationId);
+        }
+
+        return updatedContest;
     }
 
     async updateContestCertificateTemplate(contestId: string, organizationId: string, certificateTemplateId: string) {

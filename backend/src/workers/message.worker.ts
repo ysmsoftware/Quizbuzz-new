@@ -24,7 +24,7 @@ export class MessageWorker implements Worker {
             async (job) => {
                 switch (job.name) {
                     case "send-message":
-                        await this.workerService.process(job.data.messageLogId, job.id ?? job.data.messageLogId, job.attemptsMade);
+                        await this.workerService.process(job.data.messageLogId, job.id ?? job.data.messageLogId, job.attemptsMade, job.timestamp);
                         break;
                     case "bulk-notify":
                         await this.workerService.processBulkNotify(job.data);
