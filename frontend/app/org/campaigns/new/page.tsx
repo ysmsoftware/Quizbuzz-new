@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FileStack, Loader2, Sparkles, Trash2, ArrowRight, Layers, Users, Award, ChevronLeft } from 'lucide-react';
+import { FileStack, Loader2, Sparkles, Trash2, ArrowRight, Layers, Users, Award, ChevronLeft, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useOrgAmbassadorCampaignTemplates } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import { CampaignWizard } from '@/components/features/ambassador/wizard/CampaignWizard';
+import { ViewTemplateModal } from '@/components/features/ambassador/ViewTemplateModal';
+import type { CampaignTemplate } from '@/lib/types/ambassador';
 
 /**
  * "Start from scratch" vs "Use a template" picker (§5.7) — the very first thing an admin
@@ -24,6 +26,7 @@ export default function NewAmbassadorCampaignPage() {
     useOrgAmbassadorCampaignTemplates({ limit: 50 });
   const [instantiatingId, setInstantiatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewingTemplate, setViewingTemplate] = useState<CampaignTemplate | null>(null);
 
   if (mode === 'scratch') {
     return <CampaignWizard />;
@@ -168,10 +171,21 @@ export default function NewAmbassadorCampaignPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-foreground border-border/50 transition-colors"
+                        onClick={() => setViewingTemplate(template)}
+                        title="View Template Details"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="outline"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10 border-border/50 transition-colors"
                         disabled={deletingId === template.id && deleteTemplateLoading}
                         onClick={() => handleDeleteTemplate(template.id)}
+                        title="Delete Template"
                       >
                         {deletingId === template.id && deleteTemplateLoading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -199,6 +213,15 @@ export default function NewAmbassadorCampaignPage() {
           )}
         </div>
       </div>
+
+      <ViewTemplateModal
+        template={viewingTemplate}
+        open={!!viewingTemplate}
+        onOpenChange={(open) => {
+          if (!open) setViewingTemplate(null);
+        }}
+      />
     </div>
   );
 }
+

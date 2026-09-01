@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, BarChart3, MoreVertical, Pencil, Users, Wallet, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BarChart3, BookmarkPlus, MoreVertical, Pencil, Users, Wallet, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +22,7 @@ import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from '@/components/features/ambassador/campaign-status';
 import { calculateCampaignCapacity } from '@/components/features/ambassador/campaign-capacity';
 import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/admin/CampaignManagePanel';
+import { SaveAsTemplateModal } from '@/components/features/ambassador/SaveAsTemplateModal';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -158,6 +159,7 @@ export default function CampaignOverviewPage() {
   // opened to whichever tab is relevant.
   const [manageOpen, setManageOpen] = useState(false);
   const [manageTab, setManageTab] = useState<ManageTabKey>('settings');
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const openManage = (tab: ManageTabKey) => {
     setManageTab(tab);
     setManageOpen(true);
@@ -291,6 +293,9 @@ export default function CampaignOverviewPage() {
                   <Link href={reportHref}>
                     <BarChart3 className="h-4 w-4 mr-2" /> Full Report
                   </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSaveTemplateOpen(true)}>
+                  <BookmarkPlus className="h-4 w-4 mr-2" /> Save as Template
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openManage('settings')}>
                   <Pencil className="h-4 w-4 mr-2" /> Edit Campaign
@@ -431,6 +436,10 @@ export default function CampaignOverviewPage() {
                 Full Report
               </Link>
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setSaveTemplateOpen(true)}>
+              <BookmarkPlus className="h-4 w-4 mr-2" />
+              Save as Template
+            </Button>
             <Button size="sm" onClick={() => openManage('settings')}>
               <Pencil className="h-4 w-4 mr-2" />
               Edit Campaign
@@ -544,6 +553,13 @@ export default function CampaignOverviewPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <SaveAsTemplateModal
+        campaignId={id}
+        campaignName={campaign.name}
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
+      />
     </div>
   );
 }

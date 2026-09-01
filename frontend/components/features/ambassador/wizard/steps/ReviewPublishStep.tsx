@@ -1,9 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { AlertTriangle, BookmarkPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SaveAsTemplateModal } from '../../SaveAsTemplateModal';
 import type { FieldErrorMap } from '../../campaign-schema';
 import { calculateCampaignCapacity } from '../../campaign-capacity';
 import { Rupees } from '../../Rupees';
@@ -20,6 +21,7 @@ function SummaryRow({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function ReviewPublishStep({
+  campaignId,
   draft,
   groups,
   contestTitle,
@@ -28,6 +30,7 @@ export function ReviewPublishStep({
   onGoToStep,
   onPublish,
 }: {
+  campaignId?: string;
   draft: WizardDraft;
   groups: AmbassadorGroupInput[];
   contestTitle: string | null;
@@ -37,6 +40,7 @@ export function ReviewPublishStep({
   onGoToStep: (step: StepKey) => void;
   onPublish: () => void;
 }) {
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const errorEntries = publishErrors ? Object.entries(publishErrors) : [];
   const capacity = calculateCampaignCapacity(groups);
 
@@ -130,10 +134,28 @@ export function ReviewPublishStep({
         </Card>
       )}
 
-      <Button disabled={publishing} onClick={onPublish} className="w-full sm:w-auto">
-        {publishing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        Publish Campaign
-      </Button>
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        <Button disabled={publishing} onClick={onPublish} className="w-full sm:w-auto">
+          {publishing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          Publish Campaign
+        </Button>
+        {campaignId && (
+          <Button variant="outline" onClick={() => setSaveTemplateOpen(true)} className="w-full sm:w-auto">
+            <BookmarkPlus className="h-4 w-4 mr-2" />
+            Save as Template
+          </Button>
+        )}
+      </div>
+
+      {campaignId && (
+        <SaveAsTemplateModal
+          campaignId={campaignId}
+          campaignName={draft.name}
+          open={saveTemplateOpen}
+          onOpenChange={setSaveTemplateOpen}
+        />
+      )}
     </div>
   );
 }
+

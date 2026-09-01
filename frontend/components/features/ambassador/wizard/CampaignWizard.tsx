@@ -288,6 +288,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
       case 'review':
         return (
           <ReviewPublishStep
+            campaignId={id}
             draft={draft}
             groups={groups}
             contestTitle={contestTitle}
@@ -299,7 +300,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
         );
     }
 
-  }, [currentStep.key, draft, groups, contestTitle, selectedContestDetail, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign]);
+  }, [currentStep.key, draft, groups, contestTitle, selectedContestDetail, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign, id]);
 
   const isWizardLocked = !!campaign && campaign.status !== 'DRAFT' && campaign.status !== 'PUBLISHED';
   if (campaignId && (isLoading || !hydrated || isWizardLocked)) {
