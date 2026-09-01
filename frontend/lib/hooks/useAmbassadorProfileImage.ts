@@ -6,11 +6,11 @@ import { toast } from 'sonner';
 import { ambassadorService } from '@/lib/services/ambassador-service';
 import { compressImage } from '@/lib/utils/image-compress';
 
-const MAX_UPLOAD_BYTES = 500 * 1024;
+const MAX_UPLOAD_BYTES = 100 * 1024; // 100 KB cap
 
-/** Compress-then-upload for the profile photo — never sends the original file, so there's
- *  no server-side size cap to hit or reject against. Circular display is a CSS concern
- *  (AmbassadorAvatar); this only handles getting a small file onto storage and saved. */
+/** Compress-then-upload for the profile photo — compresses client-side to <= 100 KB
+ *  before uploading to S3, preserving visual quality without hitting server-side limits.
+ *  Circular display is a CSS concern (AmbassadorAvatar). */
 export function useAmbassadorProfileImage() {
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);

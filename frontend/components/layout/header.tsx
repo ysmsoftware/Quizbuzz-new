@@ -5,12 +5,11 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
-import { Menu, X, Trophy, Users, HelpCircle, Download, Megaphone } from 'lucide-react';
+import { Menu, X, Trophy, Users, Download, Megaphone } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 
 const navigation = [
     { name: 'Browse Contests', href: '/contests', icon: Trophy },
-    { name: 'How It Works', href: '/#how-it-works', icon: HelpCircle },
     { name: 'For Organizers', href: '/#organizers', icon: Users },
     { name: 'Ambassador Program', href: '/ambassador', icon: Megaphone },
 ];
@@ -68,12 +67,12 @@ export function Header() {
                 <div className="hidden md:flex md:items-center md:gap-3">
                     <Link href="/login">
                         <Button variant="outline" size="sm">
-                            Sign In
+                            Organizer Sign In
                         </Button>
                     </Link>
                     <Link href="/register">
                         <Button size="sm">
-                            Create Account
+                            Host a Contest
                         </Button>
                     </Link>
                     <ThemeToggle />
@@ -128,12 +127,12 @@ export function Header() {
                             )}
                             <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                                 <Button variant="outline" className="w-full">
-                                    Sign In
+                                    Organizer Sign In
                                 </Button>
                             </Link>
                             <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
                                 <Button className="w-full">
-                                    Create Account
+                                    Host a Contest
                                 </Button>
                             </Link>
                         </div>

@@ -73,16 +73,6 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
   const contests = contestsRes?.data?.data ?? [];
   const selectedContest = contests.find((c) => c.id === draft.contestId);
   const contestTitle = selectedContest?.title ?? null;
-  // `selectedContest` above comes straight off `listContests()`, which returns the list
-  // endpoint's shallow `ContestSummary` shape (id/title/slug/status/startTime/
-  // registrationDeadline/…) — it never derives `registrationStartDate`, `publishedAt`,
-  // `contestStartTime`, or `contestEndTime` the way `adaptServerContest` does for a single
-  // contest fetch, so those four fields are always `undefined` on `selectedContest` no
-  // matter which contest is picked. That's what was permanently disabling Speed Bonus's
-  // "Same as registration start" / "Weeks after" options, and silently no-op'ing Timeline's
-  // equivalent contest-anchored sync. `useContest` fetches and adapts the single selected
-  // contest the same way every other page in this app already does — use its `contest` for
-  // anything that needs those derived fields.
   const { contest: selectedContestDetail } = useContest(draft.contestId || '');
 
   // Seed local draft state from the fetched campaign once, when resuming an existing draft.
@@ -98,12 +88,8 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
         endDate: campaign.endDate ?? '',
         phaseTemplate: campaign.phaseTemplate,
       });
-      // Classify Timeline's start/end mode from whatever's already saved. If the contests
-      // list hasn't finished loading yet, the anchor lookups below just come back undefined —
-      // inferInitialStartMode/EndMode treat that as "unknown," not "no match," and fall back
-      // to CUSTOM rather than risk the sync effect further down overwriting an already-saved
-      // date once the contest data does arrive.
-       
+
+
       const resumedContest = contests.find((c) => c.id === campaign.contestId);
       setStartMode(inferInitialStartMode(campaign.startDate ?? '', resumedContest?.publishedAt || resumedContest?.registrationStartDate || undefined));
       setEndMode(inferInitialEndMode(campaign.endDate ?? '', resumedContest?.contestEndTime || undefined, resumedContest?.contestStartTime || undefined));
@@ -114,12 +100,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     }
   }, [campaignId, campaign, hydrated]);
 
-  // Guard against the wizard being reached (e.g. a stale bookmark/deep link) for a campaign
-  // that's no longer wizard-editable. The wizard resends the whole draft — including
-  // ambassadorTypesAllowed/wizardStep, which are DRAFT-only per CAMPAIGN_FIELD_EDITABLE_STATUSES
-  // — on every step save, so a LIVE/ENDED/ARCHIVED campaign here would 400 on the very first
-  // Continue click. DRAFT and PUBLISHED are both fine: everything the wizard touches (reward
-  // config, timeline, share templates, name) stays editable through PUBLISHED.
+
   useEffect(() => {
     if (campaign && campaign.status !== 'DRAFT' && campaign.status !== 'PUBLISHED') {
       toast.error('This campaign is already live and can no longer be edited in the wizard.');
@@ -127,9 +108,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     }
   }, [campaign, router]);
 
-  // Groups only exist once the campaign row does — seed local state from whatever's already
-  // saved the first time the fetch resolves for this id (covers both "resuming a draft that
-  // already has groups" and "just created the campaign, groups are empty").
+
   useEffect(() => {
     if (id && !groupsLoading && !groupsHydrated) {
       setGroups(fetchedGroups.map((g) => ({ groupType: g.groupType, name: g.name, ambassadorTarget: g.ambassadorTarget, registrationTarget: g.registrationTarget })));
@@ -137,14 +116,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     }
   }, [id, groupsLoading, groupsHydrated, fetchedGroups]);
 
-  // Speed Bonus's campaignStartAt — kept in sync with the promoted contest's registration
-  // start (or an N-week offset) whenever the admin hasn't chosen a custom date, regardless of
-  // which wizard step is currently open. This lives here rather than inside SpeedBonusEditor
-  // because that component unmounts whenever the admin leaves the Rewards step — reselecting
-  // the contest from Promotion (or enabling Speed Bonus before ever picking a contest) could
-  // otherwise leave campaignStartAt blank all the way to Review & Publish, since nothing would
-  // be mounted to notice the contest had changed. See ambassador-campaign.validator.ts's
-  // speedBonusSchema for the strict "campaignStartAt is required once enabled" check this feeds.
+
   useEffect(() => {
     const speedBonus = draft.rewardConfig.speedBonus;
     if (!speedBonus?.enabled) return;
@@ -158,10 +130,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     }
   }, [draft.rewardConfig.speedBonus, selectedContestDetail?.registrationStartDate]);
 
-  // Timeline's start/end dates — same "sync lives where it stays mounted" fix as Speed Bonus's
-  // campaignStartAt above, for the identical reason: TimelineStep unmounts whenever the admin
-  // leaves the Timeline step, so reselecting the contest from Promotion wouldn't otherwise be
-  // picked back up until the admin happened to revisit Timeline.
+
   useEffect(() => {
     if (startMode === 'CUSTOM') return;
     const anchor = selectedContestDetail?.publishedAt || selectedContestDetail?.registrationStartDate || undefined;
@@ -196,10 +165,6 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           ambassadorTypesAllowed: draft.ambassadorTypesAllowed.length ? draft.ambassadorTypesAllowed : undefined,
           rewardConfig: draft.rewardConfig,
           shareTemplates: draft.shareTemplates,
-          // The router.replace below remounts this component against a fresh fetch of the
-          // campaign — without this, that fetch would come back with the Prisma default
-          // (wizardStep: 1) and silently reset stepIndex to Basics, making the first
-          // Save & Continue look like it did nothing.
           wizardStep: targetIndex + 1,
           startDate: draft.startDate || undefined,
           endDate: draft.endDate || undefined,
@@ -220,8 +185,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           endDate: draft.endDate || undefined,
           phaseTemplate: draft.phaseTemplate,
         });
-        // Groups only exist once the campaign row does, so this only runs from here on —
-        // same "always send the whole accumulated state" approach as the campaign PATCH above.
+
         await replaceGroups(groups);
       }
       setStepIndex(targetIndex);
@@ -251,7 +215,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     try {
       await publishCampaign();
       toast.success('Campaign published');
-      router.push('/org/ambassadors');
+      router.push('/org/campaigns');
     } catch (err) {
       if (err instanceof ApiRequestError && err.details) {
         setPublishErrors(detailsToErrorMap(err.details));
@@ -334,7 +298,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           />
         );
     }
-     
+
   }, [currentStep.key, draft, groups, contestTitle, selectedContestDetail, startMode, endMode, publishCampaignLoading, publishErrors, stepErrors, campaign]);
 
   const isWizardLocked = !!campaign && campaign.status !== 'DRAFT' && campaign.status !== 'PUBLISHED';
@@ -346,9 +310,9 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 py-2">
-      <Button 
-        variant="ghost" 
-        size="sm" 
+      <Button
+        variant="ghost"
+        size="sm"
         className="w-fit text-muted-foreground hover:text-foreground -ml-2.5 transition-colors"
         onClick={() => router.push('/org/campaigns')}
       >
@@ -375,18 +339,18 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
 
           {!isReview && (
             <div className="flex items-center justify-between pt-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="border-border/50 hover:bg-muted/50 transition-colors"
-                disabled={stepIndex === 0 || saving} 
+                disabled={stepIndex === 0 || saving}
                 onClick={() => persistAndGo(stepIndex - 1)}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <Button 
+              <Button
                 className="shadow-sm hover:shadow transition-all"
-                disabled={saving} 
+                disabled={saving}
                 onClick={() => persistAndGo(stepIndex + 1)}
               >
                 {saving ? (
@@ -401,10 +365,10 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
             </div>
           )}
           {isReview && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="border-border/50 hover:bg-muted/50 transition-colors"
-              disabled={saving} 
+              disabled={saving}
               onClick={() => persistAndGo(stepIndex - 1)}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
