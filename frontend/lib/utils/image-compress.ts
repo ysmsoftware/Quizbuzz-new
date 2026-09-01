@@ -8,7 +8,7 @@ export async function compressImage(
   { maxDimension = 512, maxBytes = 100 * 1024, minQuality = 0.5 }: { maxDimension?: number; maxBytes?: number; minQuality?: number } = {}
 ): Promise<File> {
   const bitmap = await createImageBitmap(file);
-  let scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
   let width = Math.round(bitmap.width * scale);
   let height = Math.round(bitmap.height * scale);
 
