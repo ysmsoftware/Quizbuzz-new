@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { HeroInstallButton, BottomInstallButton, FloatingInstallButton } from '@/components/pwa/LandingInstallButtons';
+import { StandalonePwaEntryRedirect } from '@/components/pwa/StandalonePwaEntryRedirect';
 import { Button } from '@/components/ui/button';
 import { FeaturedContests } from '@/components/home/featured-contests';
 import { WebApplicationJsonLd } from '@/lib/seo/json-ld';
@@ -75,6 +76,7 @@ export default function HomePage() {
     return (
         <div className="flex min-h-screen flex-col">
             <WebApplicationJsonLd />
+            <StandalonePwaEntryRedirect />
             <Header />
 
             <main className="flex-1">
