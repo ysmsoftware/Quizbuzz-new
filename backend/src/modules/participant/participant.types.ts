@@ -3,7 +3,7 @@ import { Prisma, ParticipantStatus } from "@prisma/client";
 export type ParticipantListRecord = Prisma.ParticipantGetPayload<{
     include: {
         contact: {
-            select: { firstName: true; lastName: true; email: true; phone: true };
+            select: { firstName: true; lastName: true; email: true; phone: true; college: true; department: true; city: true; state: true };
         };
         payment: { select: { status: true; amount: true } };
     };
@@ -40,4 +40,6 @@ export interface CreateParticipantInput {
     status?: ParticipantStatus;
     /** Set when registration came in through an ambassador referral link (§6.5). */
     referredByEnrollmentId?: string;
+    /** Values for the contest's organizer-defined registrationFields, keyed by field id. */
+    customFields?: Record<string, string>;
 }

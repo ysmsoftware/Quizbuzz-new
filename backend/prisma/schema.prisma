@@ -396,6 +396,10 @@ model Contest {
   defaultQuestionMarks        Int            @default(1)
   defaultQuestionNegativeMark Decimal        @default(1.00) @db.Decimal(4, 2)
   bannerImage                 String?
+  // Organizer-defined extra registration fields (id, label, type, required, options,
+  // placeholder) rendered on the public registration form in addition to the fixed
+  // fields (name/email/phone/college/city/state). Null/empty = no extra fields.
+  registrationFields          Json?
   isDeleted                   Boolean        @default(false)
   isArchived                  Boolean        @default(false)
   createdAt                   DateTime       @default(now())
@@ -448,6 +452,8 @@ model Prize {
   currency       String   @default("INR")
   label          String? // e.g. "Gold", "Silver", "Participation"
   benefits       String[] // e.g. ["Certificate", "Internship opportunity"]
+  goodieLabel          String? // e.g. "Gift voucher", "Bluetooth speaker"
+  goodieCashEquivalent Decimal? @db.Decimal(10, 2) // optional estimated value of the goodie
   createdAt      DateTime @default(now())
 
   // Relations
@@ -568,6 +574,9 @@ model Participant {
   checkedInAt     DateTime? // when they verified with joinCode
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  // Values submitted for the contest's organizer-defined Contest.registrationFields,
+  // keyed by field id. Null/empty when the contest has no extra fields.
+  customFields    Json?
 
   // Relations
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)

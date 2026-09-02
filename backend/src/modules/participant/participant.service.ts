@@ -85,6 +85,7 @@ export class ParticipantService {
         registrationRef: string;
         status?: ParticipantStatus;
         referredByEnrollmentId?: string;
+        customFields?: Record<string, string>;
     }) {
         const contest = await this.contestRepo.findById(input.contestId, input.organizationId);
         if (!contest) {

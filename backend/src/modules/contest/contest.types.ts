@@ -8,6 +8,8 @@ export interface PrizeDTO {
   currency?: string | undefined;
   label?: string | undefined;
   benefits?: string[] | undefined;
+  goodieLabel?: string | undefined;
+  goodieCashEquivalent?: number | undefined;
 }
 
 export interface PrizeDetail {
@@ -18,7 +20,20 @@ export interface PrizeDetail {
   currency?: string | undefined;
   label?: string | undefined;
   benefits?: string[] | undefined;
+  goodieLabel?: string | undefined;
+  goodieCashEquivalent?: number | undefined;
 }
+
+// REGISTRATION FIELD (organizer-defined)
+export interface RegistrationFieldDTO {
+  id: string;
+  label: string;
+  type: "text" | "number" | "select" | "email" | "tel";
+  required: boolean;
+  options?: string[] | undefined;
+  placeholder?: string | undefined;
+}
+
 // CREATE CONTEST
 
 export interface CreateContestDTO {
@@ -46,6 +61,7 @@ export interface CreateContestDTO {
   prizes?: PrizeDTO[] | undefined;
   bannerImage?: string | null | undefined;
   certificateTemplateId?: string | null | undefined;
+  registrationFields?: RegistrationFieldDTO[] | undefined;
 }
 
 

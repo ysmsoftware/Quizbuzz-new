@@ -91,6 +91,16 @@ export interface PublicContestDetail extends PublicContestSummary {
     posterImageUrl?: string | null;
     ambassadorFirstName: string;
   } | null;
+  /** Organizer-defined extra fields to render on the registration form, in addition
+   *  to the fixed fields (name/email/phone/college/city/state). */
+  registrationFields?: {
+    id: string;
+    label: string;
+    type: 'text' | 'number' | 'select' | 'email' | 'tel';
+    required: boolean;
+    options?: string[];
+    placeholder?: string;
+  }[];
 }
 
 /**

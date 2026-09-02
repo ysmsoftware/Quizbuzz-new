@@ -124,6 +124,8 @@ class RegistrationService {
       state?: string;
       /** Ambassador Program referral code, from the `?ref=` query param on the register link. */
       referralCode?: string;
+      /** Values for the contest's organizer-defined registrationFields, keyed by field id. */
+      customFields?: Record<string, string>;
     }
   ): Promise<{ success: boolean; data: RegistrationResult }> {
     return publicPost<{ success: boolean; data: RegistrationResult }>(

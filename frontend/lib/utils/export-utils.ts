@@ -39,8 +39,7 @@ export function exportToCSV({ contestTitle, registrations }: ExportDataOptions) 
     'Registration Status',
     'Payment Status',
     'Amount Paid (₹)',
-    'Live Quiz Status',
-    'WhatsApp Opt-In'
+    'Live Quiz Status'
   ];
 
   const rows = registrations.map(reg => {
@@ -57,8 +56,7 @@ export function exportToCSV({ contestTitle, registrations }: ExportDataOptions) 
       reg.status || 'pending',
       reg.paymentStatus || 'free',
       reg.amount !== undefined ? reg.amount : '0',
-      reg.quizStatus || 'not_joined',
-      reg.whatsappOptIn ? 'Yes' : 'No'
+      reg.quizStatus || 'not_joined'
     ].map(escapeCSVField);
   });
 

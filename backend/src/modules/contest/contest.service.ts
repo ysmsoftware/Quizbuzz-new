@@ -1198,6 +1198,7 @@ export class ContestService {
                         ? ParticipantStatus.PENDING_PAYMENT
                         : ParticipantStatus.REGISTERED,
                     ...(referredByEnrollmentId ? { referredByEnrollmentId } : {}),
+                    ...(dto.customFields ? { customFields: dto.customFields } : {}),
                 });
             } catch (err: any) {
                 if (err?.code === "P2002") {

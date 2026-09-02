@@ -22,7 +22,8 @@ import {
     MessageSquare,
     Award,
     Download,
-    AlertCircle
+    AlertCircle,
+    GraduationCap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -74,6 +75,7 @@ export default function ContactProfilePage() {
         email: '',
         phone: '',
         college: '',
+        department: '',
         city: '',
         state: '',
     });
@@ -86,6 +88,7 @@ export default function ContactProfilePage() {
                 email: contact.email || '',
                 phone: contact.phone || '',
                 college: contact.college || '',
+                department: contact.department || '',
                 city: contact.city || '',
                 state: contact.state || '',
             });
@@ -245,6 +248,15 @@ export default function ContactProfilePage() {
                                         <div>
                                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Institutional Affiliation</p>
                                             <p className="text-sm font-medium">{contact.college || 'Not Specified'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-9 w-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground">
+                                            <GraduationCap className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Department</p>
+                                            <p className="text-sm font-medium">{contact.department || 'Not Specified'}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -464,6 +476,14 @@ export default function ContactProfilePage() {
                                 id="college"
                                 value={formData.college}
                                 onChange={(e) => setFormData({ ...formData, college: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="department">Department</Label>
+                            <Input
+                                id="department"
+                                value={formData.department}
+                                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">

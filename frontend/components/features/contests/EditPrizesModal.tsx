@@ -29,6 +29,8 @@ export interface PrizeBracketDraft {
     currency: string;
     label: string;
     benefits: string[];
+    goodieLabel: string;
+    goodieCashEquivalent: number;
 }
 
 interface RawPrize {
@@ -38,6 +40,8 @@ interface RawPrize {
     currency?: string;
     label?: string | null;
     benefits?: string[];
+    goodieLabel?: string | null;
+    goodieCashEquivalent?: number | string | null;
 }
 
 interface EditPrizesModalProps {
@@ -62,6 +66,8 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                     currency: p.currency || 'INR',
                     label: p.label || '',
                     benefits: p.benefits || [],
+                    goodieLabel: p.goodieLabel || '',
+                    goodieCashEquivalent: Number(p.goodieCashEquivalent) || 0,
                 }))
             );
             setBenefitInputs({});
@@ -78,6 +84,8 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                 currency: 'INR',
                 label: '',
                 benefits: [],
+                goodieLabel: '',
+                goodieCashEquivalent: 0,
             },
         ]);
     };
@@ -277,6 +285,28 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                                                         </button>
                                                     </Badge>
                                                 ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie (optional)</label>
+                                                <Input
+                                                    value={prize.goodieLabel}
+                                                    onChange={(e) => handleFieldChange(idx, 'goodieLabel', e.target.value)}
+                                                    placeholder="Gift voucher, Bluetooth speaker…"
+                                                    className="h-8 text-xs"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie Value (₹, optional)</label>
+                                                <Input
+                                                    type="number"
+                                                    value={prize.goodieCashEquivalent}
+                                                    onChange={(e) => handleFieldChange(idx, 'goodieCashEquivalent', Number(e.target.value))}
+                                                    placeholder="2000"
+                                                    className="h-8 text-xs"
+                                                />
                                             </div>
                                         </div>
 

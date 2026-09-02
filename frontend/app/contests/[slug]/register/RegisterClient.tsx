@@ -34,6 +34,7 @@ const detailsSchema = z.object({
   department: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
+  referralCode: z.string().optional(),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions",
   }),
@@ -70,7 +71,9 @@ function RegisterPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
-  const referralCode = searchParams.get("ref") || undefined;
+  // Prefills from the `?ref=` link param, but stays editable — someone who has a
+  // code without the link needs somewhere to type it in.
+  const referralCodeFromLink = searchParams.get("ref") || "";
 
   // State
   const [contest, setContest] = useState<PublicContestDetail | null>(null);
@@ -88,6 +91,9 @@ function RegisterPageInner() {
   // Tracks the last phone number we already looked up, so re-blurring the
   // same value doesn't re-fire the request.
   const lastPhoneLookupRef = useRef<string | null>(null);
+  // Values for the contest's organizer-defined registrationFields, keyed by field id.
+  // Kept outside react-hook-form since the set of fields is dynamic per contest.
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [registrationRef, setRegistrationRef] = useState("");
@@ -154,6 +160,7 @@ function RegisterPageInner() {
       department: "",
       city: "",
       state: "",
+      referralCode: referralCodeFromLink,
       termsAccepted: false,
     },
   });
@@ -231,6 +238,7 @@ function RegisterPageInner() {
             department: statusRes.knownContact.department || "",
             city: statusRes.knownContact.city || "",
             state: statusRes.knownContact.state || "",
+            referralCode: detailsForm.getValues("referralCode"),
             termsAccepted: false,
           });
         }
@@ -268,6 +276,7 @@ function RegisterPageInner() {
           department: current.department || statusRes.knownContact.department || "",
           city: current.city || statusRes.knownContact.city || "",
           state: current.state || statusRes.knownContact.state || "",
+          referralCode: current.referralCode,
           termsAccepted: current.termsAccepted,
         });
       }
@@ -278,6 +287,15 @@ function RegisterPageInner() {
 
   const handleRegister = async (formData: DetailsFormData) => {
     if (!contest) return;
+
+    const registrationFields = contest.registrationFields || [];
+    const missingRequired = registrationFields.find(
+      (f) => f.required && !customFieldValues[f.id]?.trim()
+    );
+    if (missingRequired) {
+      setApiError(`${missingRequired.label} is required`);
+      return;
+    }
 
     setSubmitting(true);
     setApiError("");
@@ -292,7 +310,8 @@ function RegisterPageInner() {
         department: formData.department || undefined,
         city: formData.city || undefined,
         state: formData.state || undefined,
-        referralCode,
+        referralCode: formData.referralCode?.trim() || undefined,
+        customFields: registrationFields.length > 0 ? customFieldValues : undefined,
       });
 
       setRegistrationRef(result.data.registrationRef);
@@ -770,6 +789,52 @@ function RegisterPageInner() {
                         />
                       </div>
                     </div>
+
+                    {/* Referral Code */}
+                    <div className="space-y-2">
+                      <Label htmlFor="referralCode">Referral Code (optional)</Label>
+                      <Input
+                        id="referralCode"
+                        placeholder="Have an ambassador's code? Enter it here"
+                        {...detailsForm.register("referralCode")}
+                      />
+                    </div>
+
+                    {/* Organizer-defined extra fields */}
+                    {(contest.registrationFields || []).map((field) => (
+                      <div key={field.id} className="space-y-2">
+                        <Label htmlFor={`custom-${field.id}`}>
+                          {field.label} {field.required && "*"}
+                        </Label>
+                        {field.type === "select" ? (
+                          <select
+                            id={`custom-${field.id}`}
+                            value={customFieldValues[field.id] || ""}
+                            onChange={(e) =>
+                              setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                            }
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="">Select…</option>
+                            {(field.options || []).map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            id={`custom-${field.id}`}
+                            type={field.type}
+                            placeholder={field.placeholder}
+                            value={customFieldValues[field.id] || ""}
+                            onChange={(e) =>
+                              setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                            }
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   {/* Terms */}

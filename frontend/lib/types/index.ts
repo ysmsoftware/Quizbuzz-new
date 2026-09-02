@@ -163,8 +163,7 @@ export interface Registration {
     paymentMethod?: string;
     participantDetails: ParticipantDetails;
 
-    // Custom Fields & Opt-ins
-    whatsappOptIn?: boolean;
+    // Custom Fields
     customFields?: Record<string, string>;
 
     // Quiz Status (for LIVE/ENDED)
@@ -183,6 +182,7 @@ export interface ParticipantDetails {
     phone: string;
     dateOfBirth?: string;
     institution?: string;
+    department?: string;
     city?: string;
     state?: string;
     country?: string;

@@ -51,6 +51,17 @@ interface PrizeBracket {
     currency: string;
     label: string;
     benefits: string[];
+    goodieLabel: string;
+    goodieCashEquivalent: number;
+}
+
+interface RegistrationFieldRow {
+    id: string;
+    label: string;
+    type: 'text' | 'number' | 'select' | 'email' | 'tel';
+    required: boolean;
+    placeholder: string;
+    options: string; // comma-separated, only used when type === 'select'
 }
 
 interface ContestForm {
@@ -70,6 +81,7 @@ interface ContestForm {
     paymentCurrency: string;
     paymentDescription: string;
     prizes: PrizeBracket[];
+    registrationFields: RegistrationFieldRow[];
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
     proctoringEnabled: boolean;
@@ -108,6 +120,7 @@ export default function CreateContestPage() {
         paymentCurrency: 'INR',
         paymentDescription: '',
         prizes: [],
+        registrationFields: [],
         shuffleQuestions: true,
         shuffleOptions: false,
         proctoringEnabled: true,
@@ -250,6 +263,8 @@ export default function CreateContestPage() {
                     currency: 'INR',
                     label: '',
                     benefits: [],
+                    goodieLabel: '',
+                    goodieCashEquivalent: 0,
                 },
             ],
         }));
@@ -297,6 +312,39 @@ export default function CreateContestPage() {
                 benefits: updatedPrizes[prizeIndex].benefits.filter((_, idx) => idx !== benefitIndex),
             };
             return { ...prev, prizes: updatedPrizes };
+        });
+    };
+
+    // Registration field helpers (organizer-defined extra fields on the public form)
+    const handleAddRegistrationField = () => {
+        setForm(prev => ({
+            ...prev,
+            registrationFields: [
+                ...prev.registrationFields,
+                {
+                    id: `field_${Date.now()}_${prev.registrationFields.length}`,
+                    label: '',
+                    type: 'text',
+                    required: false,
+                    placeholder: '',
+                    options: '',
+                },
+            ],
+        }));
+    };
+
+    const handleRemoveRegistrationField = (indexToRemove: number) => {
+        setForm(prev => ({
+            ...prev,
+            registrationFields: prev.registrationFields.filter((_, idx) => idx !== indexToRemove),
+        }));
+    };
+
+    const handleRegistrationFieldChange = (index: number, field: keyof RegistrationFieldRow, value: any) => {
+        setForm(prev => {
+            const updated = [...prev.registrationFields];
+            updated[index] = { ...updated[index], [field]: value };
+            return { ...prev, registrationFields: updated };
         });
     };
 
@@ -431,7 +479,21 @@ export default function CreateContestPage() {
                     currency: p.currency || 'INR',
                     label: p.label || undefined,
                     benefits: p.benefits,
+                    goodieLabel: p.goodieLabel || undefined,
+                    goodieCashEquivalent: p.goodieCashEquivalent || undefined,
                 })),
+                registrationFields: form.registrationFields
+                    .filter(f => f.label.trim())
+                    .map(f => ({
+                        id: f.id,
+                        label: f.label,
+                        type: f.type,
+                        required: f.required,
+                        placeholder: f.placeholder || undefined,
+                        options: f.type === 'select'
+                            ? f.options.split(',').map(o => o.trim()).filter(Boolean)
+                            : undefined,
+                    })),
                 bannerImage: form.bannerImage || undefined,
             };
 
@@ -932,6 +994,131 @@ export default function CreateContestPage() {
                                                                         </button>
                                                                     </Badge>
                                                                 ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Goodie */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie (optional)</label>
+                                                                <Input
+                                                                    value={prize.goodieLabel}
+                                                                    onChange={(e) => handlePrizeFieldChange(idx, 'goodieLabel', e.target.value)}
+                                                                    placeholder="Gift voucher, Bluetooth speaker…"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie Value (₹, optional)</label>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={prize.goodieCashEquivalent}
+                                                                    onChange={(e) => handlePrizeFieldChange(idx, 'goodieCashEquivalent', Number(e.target.value))}
+                                                                    placeholder="2000"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Registration Fields */}
+                                <div className="border border-border/50 rounded-2xl p-4 bg-muted/10 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-semibold">Registration Fields</h3>
+                                            <p className="text-xs text-muted-foreground mt-0.5">Extra fields to collect on the registration form, in addition to name, email, phone, college, and city/state.</p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleAddRegistrationField}
+                                            className="gap-1"
+                                        >
+                                            <Plus className="h-4 w-4" /> Add Field
+                                        </Button>
+                                    </div>
+
+                                    {form.registrationFields.length === 0 ? (
+                                        <div className="text-center py-6 border border-dashed rounded-lg text-muted-foreground text-xs">
+                                            No extra fields defined. Add one if you need to collect anything beyond the default fields.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {form.registrationFields.map((field, idx) => (
+                                                <Card key={field.id} className="border-border/60 bg-background relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveRegistrationField(idx)}
+                                                        className="absolute top-3 right-3 text-muted-foreground hover:text-destructive transition-colors"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                    <CardContent className="pt-4 space-y-3">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-8">
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Field Label</label>
+                                                                <Input
+                                                                    value={field.label}
+                                                                    onChange={(e) => handleRegistrationFieldChange(idx, 'label', e.target.value)}
+                                                                    placeholder="T-shirt size"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Field Type</label>
+                                                                <Select
+                                                                    value={field.type}
+                                                                    onValueChange={(val) => handleRegistrationFieldChange(idx, 'type', val)}
+                                                                >
+                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="text">Text</SelectItem>
+                                                                        <SelectItem value="number">Number</SelectItem>
+                                                                        <SelectItem value="select">Select (dropdown)</SelectItem>
+                                                                        <SelectItem value="email">Email</SelectItem>
+                                                                        <SelectItem value="tel">Phone</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
+                                                        </div>
+
+                                                        {field.type === 'select' && (
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Options (comma-separated)</label>
+                                                                <Input
+                                                                    value={field.options}
+                                                                    onChange={(e) => handleRegistrationFieldChange(idx, 'options', e.target.value)}
+                                                                    placeholder="S, M, L, XL"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Placeholder (optional)</label>
+                                                                <Input
+                                                                    value={field.placeholder}
+                                                                    onChange={(e) => handleRegistrationFieldChange(idx, 'placeholder', e.target.value)}
+                                                                    placeholder="e.g. Enter your size"
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center gap-2 pb-1.5">
+                                                                <Checkbox
+                                                                    id={`field-required-${field.id}`}
+                                                                    checked={field.required}
+                                                                    onCheckedChange={(checked) => handleRegistrationFieldChange(idx, 'required', checked === true)}
+                                                                />
+                                                                <label htmlFor={`field-required-${field.id}`} className="text-xs text-muted-foreground cursor-pointer">Required</label>
                                                             </div>
                                                         </div>
                                                     </CardContent>

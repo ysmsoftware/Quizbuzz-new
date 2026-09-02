@@ -244,10 +244,6 @@ export function ParticipantDrawer({
                                                             : '—'
                                                     }
                                                 />
-                                                <DetailItem
-                                                    label="WhatsApp Opt-in"
-                                                    value={registration.whatsappOptIn ? 'Yes' : 'No'}
-                                                />
                                             </div>
                                         </DetailSection>
 
@@ -260,6 +256,12 @@ export function ParticipantDrawer({
                                                     label="College/Institution"
                                                     value={
                                                         registration.participantDetails?.institution || '—'
+                                                    }
+                                                />
+                                                <DetailItem
+                                                    label="Department"
+                                                    value={
+                                                        registration.participantDetails?.department || '—'
                                                     }
                                                 />
                                                 {Object.entries(

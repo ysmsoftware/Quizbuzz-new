@@ -57,6 +57,7 @@ export class ContestRepository implements IContestRepository {
                     proctoringEnabled: contestData.proctoringEnabled ?? true,
                     showResultsAfter: contestData.showResultsAfter ?? 24,
                     bannerImage: contestData.bannerImage ?? null,
+                    registrationFields: contestData.registrationFields ?? undefined,
                 }
             });
 
@@ -84,6 +85,8 @@ export class ContestRepository implements IContestRepository {
                         currency: p.currency ?? 'INR',
                         label: p.label ?? null,
                         benefits: p.benefits ?? [],
+                        goodieLabel: p.goodieLabel ?? null,
+                        goodieCashEquivalent: p.goodieCashEquivalent ?? null,
                     }))
                 });
             }

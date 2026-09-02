@@ -219,9 +219,7 @@ export default function AmbassadorLandingPage() {
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/ambassador/login">Already an ambassador? Log in</Link>
-              </Button>
+
             </div>
             <div className="mt-7 flex items-center gap-3">
               <div className="flex -space-x-2">
@@ -235,7 +233,7 @@ export default function AmbassadorLandingPage() {
                 ))}
               </div>
               <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">500+ ambassadors</span> already sharing across{' '}
+                <span className="font-semibold text-foreground">100+ ambassadors</span> already sharing across{' '}
                 <span className="font-semibold text-foreground">40+ colleges</span>
               </p>
             </div>
@@ -255,7 +253,7 @@ export default function AmbassadorLandingPage() {
               }}
             />
             <div className="relative z-10 rounded-2xl border border-border bg-card p-6 shadow-xl">
-              <p className="text-sm font-semibold text-foreground">Priya&apos;s reward tiers</p>
+              <p className="text-sm font-semibold text-foreground">Reward tiers</p>
               <div className="mt-3.5 flex flex-col gap-2.5">
                 <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
@@ -427,7 +425,7 @@ export default function AmbassadorLandingPage() {
                     <step.icon className="h-5 w-5 text-primary" />
                   </div>
                   <p className="text-sm font-semibold text-foreground">
-                    {i + 1}. {step.title}
+                    {step.title}
                   </p>
                   <p className="text-sm text-muted-foreground">{step.description}</p>
                 </CardContent>
@@ -453,15 +451,13 @@ export default function AmbassadorLandingPage() {
               transition={{ duration: 0.3, delay: i * 0.05 }}
             >
               <Card
-                className={`h-full transition hover:-translate-y-1 hover:shadow-lg ${
-                  item.featured ? 'border-accent/50 bg-gradient-to-b from-accent/10 to-transparent' : 'border-border/60'
-                }`}
+                className={`h-full transition hover:-translate-y-1 hover:shadow-lg ${item.featured ? 'border-accent/50 bg-gradient-to-b from-accent/10 to-transparent' : 'border-border/60'
+                  }`}
               >
                 <CardContent className="space-y-2 pt-6">
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                      item.featured ? 'bg-accent/50 text-accent-foreground' : 'bg-primary/10 text-primary'
-                    }`}
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.featured ? 'bg-accent/50 text-accent-foreground' : 'bg-primary/10 text-primary'
+                      }`}
                   >
                     <item.icon className="h-5 w-5" />
                   </div>

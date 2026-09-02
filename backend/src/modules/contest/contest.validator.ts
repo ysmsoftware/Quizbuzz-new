@@ -28,8 +28,23 @@ export const PrizeSchema = z.object({
     currency: z.string().default("INR"),
     label: z.string().max(100).optional(),
     benefits: z.array(z.string()).max(10).optional(),
+    // Optional non-cash goodie (e.g. "Gift voucher", "Bluetooth speaker"), mirroring
+    // the ambassador campaign milestone tier reward pattern.
+    goodieLabel: z.string().max(200).optional(),
+    goodieCashEquivalent: z.number().min(0).optional(),
 }).refine((p) => p.rankTo >= p.rankFrom, {
     message: "rankTo must be >= rankFrom",
+});
+
+// REGISTRATION FIELD (organizer-defined, extra field on the public registration form)
+
+export const RegistrationFieldSchema = z.object({
+    id: z.string().min(1).max(100),
+    label: z.string().min(1).max(200),
+    type: z.enum(["text", "number", "select", "email", "tel"]),
+    required: z.boolean().default(false),
+    options: z.array(z.string().max(200)).max(50).optional(),
+    placeholder: z.string().max(200).optional(),
 });
 
 // CREATE CONTEST
@@ -63,6 +78,7 @@ const CreateContestBase = z.object({
     defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),
     prizes: z.array(PrizeSchema).optional(),
     certificateTemplateId: z.string().optional().nullable(),
+    registrationFields: z.array(RegistrationFieldSchema).max(20).optional(),
 });
 
 export const CreateContestSchema = CreateContestBase.refine(
@@ -165,6 +181,8 @@ export const RegisterParticipantSchema = z.object({
     city: z.string().max(100).optional(),
     state: z.string().max(100).optional(),
     referralCode: z.string().trim().min(1).optional(),
+    /** Values for the contest's organizer-defined registrationFields, keyed by field id. */
+    customFields: z.record(z.string(), z.string().max(1000)).optional(),
 });
 
 export const RegisterStatusSchema = z.object({

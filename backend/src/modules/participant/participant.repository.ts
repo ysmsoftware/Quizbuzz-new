@@ -93,10 +93,11 @@ export class ParticipantRepository implements IParticipantRepository {
                 orderBy: { createdAt: "asc" },
                 include: {
                     contact: {
-                        select: { firstName: true, lastName: true, email: true, phone: true },
+                        select: { firstName: true, lastName: true, email: true, phone: true, college: true, department: true, city: true, state: true },
                     },
                     payment: { select: { id: true, status: true, amount: true, razorpayPaymentId: true, paidAt: true, provider: true } },
                 },
+                // customFields is a scalar column on Participant, included by default
             }),
             prisma.participant.count({ where }),
         ]);
@@ -145,6 +146,7 @@ export class ParticipantRepository implements IParticipantRepository {
                 registrationRef: input.registrationRef,
                 status: input.status ?? ParticipantStatus.REGISTERED,
                 referredByEnrollmentId: input.referredByEnrollmentId ?? null,
+                customFields: input.customFields ?? undefined,
             },
         });
     }

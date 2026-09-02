@@ -44,6 +44,22 @@ function ambassadorLoginOtpKey(email: string): string {
     return `auth:ambassador:otp:${email.toLowerCase()}`;
 }
 
+// Crockford-ish base32 (no 0/O/1/I) — short, unambiguous when read aloud or typed
+// in by hand. 256 is evenly divisible by 32, so byte % alphabet.length is unbiased.
+const REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const REFERRAL_CODE_LENGTH = 6;
+
+/** Enrollment referral code — collision-checked with a retry loop at the call site,
+ *  so 6 chars (~30 bits) is plenty for the scale of one ambassador program. */
+function generateReferralCode(): string {
+    const bytes = crypto.randomBytes(REFERRAL_CODE_LENGTH);
+    let code = "";
+    for (let i = 0; i < REFERRAL_CODE_LENGTH; i++) {
+        code += REFERRAL_CODE_ALPHABET[bytes.readUInt8(i) % REFERRAL_CODE_ALPHABET.length];
+    }
+    return code;
+}
+
 export class AmbassadorService {
     constructor(
         private readonly ambassadorRepo: AmbassadorRepository,
@@ -509,7 +525,7 @@ export class AmbassadorService {
 
         let enrollment;
         for (let attempt = 0; attempt < 5; attempt++) {
-            const referralCode = crypto.randomBytes(5).toString("hex").toUpperCase();
+            const referralCode = generateReferralCode();
             try {
                 enrollment = await this.campaignRepo.createEnrollment(campaignId, ambassadorId, referralCode);
                 break;
