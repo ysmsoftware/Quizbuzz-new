@@ -57,7 +57,7 @@ export class ContestRepository implements IContestRepository {
                     proctoringEnabled: contestData.proctoringEnabled ?? true,
                     showResultsAfter: contestData.showResultsAfter ?? 24,
                     bannerImage: contestData.bannerImage ?? null,
-                    registrationFields: contestData.registrationFields ?? undefined,
+                    ...(contestData.registrationFields ? { registrationFields: contestData.registrationFields } : {}),
                 }
             });
 

@@ -146,7 +146,7 @@ export class ParticipantRepository implements IParticipantRepository {
                 registrationRef: input.registrationRef,
                 status: input.status ?? ParticipantStatus.REGISTERED,
                 referredByEnrollmentId: input.referredByEnrollmentId ?? null,
-                customFields: input.customFields ?? undefined,
+                ...(input.customFields ? { customFields: input.customFields } : {}),
             },
         });
     }
