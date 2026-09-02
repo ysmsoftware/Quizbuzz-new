@@ -57,7 +57,7 @@ export class ContestRepository implements IContestRepository {
                     proctoringEnabled: contestData.proctoringEnabled ?? true,
                     showResultsAfter: contestData.showResultsAfter ?? 24,
                     bannerImage: contestData.bannerImage ?? null,
-                    ...(contestData.registrationFields ? { registrationFields: contestData.registrationFields } : {}),
+                    ...(contestData.registrationFields ? { registrationFields: contestData.registrationFields as unknown as Prisma.InputJsonValue } : {}),
                 }
             });
 
