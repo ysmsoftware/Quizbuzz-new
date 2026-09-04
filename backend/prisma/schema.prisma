@@ -224,7 +224,6 @@ model Organization {
   name                  String
   slug                  String         @unique
   logoUrl               String?
-  website               String?
   isActive              Boolean        @default(true)
   isDeleted             Boolean        @default(false)
   onboardingStep        OnboardingStep @default(NOT_STARTED)
@@ -270,6 +269,21 @@ model Organization {
   @@index([isActive, isDeleted])
   @@index([onboardingCompleted]) // ops-dashboard funnel queries
   @@map("organizations")
+}
+
+/**
+ * Singleton row holding platform-wide branding, managed remotely from the
+ * quizbuzz-ops-next dashboard over the /api/v1/ops/settings/* endpoints
+ * (shared-secret auth — see ops-settings-auth.middleware.ts). appLogoKey is
+ * the StorageService key, kept so a replace/remove can delete the old object.
+ */
+model PlatformAppSettings {
+  id         String   @id @default("app_settings_default")
+  appLogoUrl String?
+  appLogoKey String?
+  updatedAt  DateTime @updatedAt
+
+  @@map("platform_app_settings")
 }
 
 /**

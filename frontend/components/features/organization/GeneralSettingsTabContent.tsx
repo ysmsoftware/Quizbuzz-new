@@ -1,20 +1,23 @@
 'use client';
 
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2, Save, ShieldCheck } from 'lucide-react';
+import { FileUpload } from '@/components/features/shared/FileUpload';
+import { uploadOrgLogo } from '@/lib/api/organization.api';
 
 interface GeneralSettingsTabContentProps {
+    orgId: string;
     formData: {
         orgName: string;
-        website: string;
         logoUrl: string;
     };
     org: {
         name?: string | null;
         slug: string;
-        website?: string | null;
         logoUrl?: string | null;
     };
     admin?: {
@@ -24,17 +27,33 @@ interface GeneralSettingsTabContentProps {
     } | null;
     isSaving: boolean;
     handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onLogoChange: (logoUrl: string | null) => void;
     handleSaveGeneral: (e: React.FormEvent) => void;
 }
 
 export function GeneralSettingsTabContent({
+    orgId,
     formData,
     org,
     admin,
     isSaving,
     handleInputChange,
+    onLogoChange,
     handleSaveGeneral,
 }: GeneralSettingsTabContentProps) {
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+    const handleLogoSelect = async (file: File, preview: string) => {
+        setIsUploadingLogo(true);
+        try {
+            const res = await uploadOrgLogo(orgId, { fileData: preview, fileName: file.name });
+            onLogoChange(res.data.url);
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to upload logo');
+        } finally {
+            setIsUploadingLogo(false);
+        }
+    };
     return (
         <div className="space-y-6">
             <form onSubmit={handleSaveGeneral} className="space-y-6">
@@ -72,42 +91,19 @@ export function GeneralSettingsTabContent({
                             </div>
 
                             <div>
-                                <label className="text-sm font-medium text-foreground">Website</label>
-                                <Input
-                                    name="website"
-                                    type="url"
-                                    value={formData.website}
-                                    onChange={handleInputChange}
-                                    placeholder="https://example.com"
-                                    className="mt-2"
+                                <FileUpload
+                                    label="Organization Logo"
+                                    aspectRatio="square"
+                                    maxSizeMB={2}
+                                    helperText="PNG, JPG or SVG · square image recommended · up to 2MB. Shown on certificates and anywhere your branding appears."
+                                    preview={formData.logoUrl || null}
+                                    onFileSelect={handleLogoSelect}
+                                    onClear={() => onLogoChange(null)}
                                 />
-                            </div>
-
-                            <div>
-                                <label className="text-sm font-medium text-foreground">Logo URL</label>
-                                <Input
-                                    name="logoUrl"
-                                    type="url"
-                                    value={formData.logoUrl}
-                                    onChange={handleInputChange}
-                                    placeholder="https://example.com/logo.png"
-                                    className="mt-2"
-                                />
-                                {formData.logoUrl && (
-                                    <div className="mt-4 flex items-center gap-4 p-3 rounded-lg border border-border/50 bg-secondary/20">
-                                        <img
-                                            src={formData.logoUrl}
-                                            alt="Logo preview"
-                                            className="h-12 w-12 rounded object-contain border bg-white"
-                                            onError={(e) => {
-                                                (e.target as HTMLElement).style.display = 'none';
-                                            }}
-                                        />
-                                        <div>
-                                            <span className="text-xs font-semibold text-foreground block">Logo Preview</span>
-                                            <span className="text-xs text-muted-foreground block truncate max-w-xs">{formData.logoUrl}</span>
-                                        </div>
-                                    </div>
+                                {isUploadingLogo && (
+                                    <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                                        <Loader2 className="h-3 w-3 animate-spin" /> Uploading...
+                                    </p>
                                 )}
                             </div>
                         </div>

@@ -89,6 +89,8 @@ export interface RepeatingRowColumn<T> {
   type: 'text' | 'number' | 'select' | 'combobox';
   options?: string[]; // for 'select': the only allowed values; for 'combobox': suggestions only, free text still accepted
   placeholder?: string;
+  minWidth?: string;
+  min?: number;
 }
 
 interface RepeatingRowTableProps<T> {
@@ -131,7 +133,9 @@ export function RepeatingRowTable<T extends Record<string, any>>({
             <TableHeader>
               <TableRow>
                 {columns.map((col) => (
-                  <TableHead key={String(col.key)}>{col.label}</TableHead>
+                  <TableHead key={String(col.key)} className={cn(col.minWidth || 'min-w-[110px]')}>
+                    {col.label}
+                  </TableHead>
                 ))}
                 <TableHead className="w-10" />
               </TableRow>
@@ -142,7 +146,7 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                   {columns.map((col) => {
                     const cellError = getCellError?.(index, col.key);
                     return (
-                      <TableCell key={String(col.key)} className="min-w-[120px] align-top">
+                      <TableCell key={String(col.key)} className={cn(col.minWidth || 'min-w-[110px]', 'align-top')}>
                         {col.type === 'select' ? (
                           <Select
                             value={row[col.key] ? String(row[col.key]) : ''}
@@ -171,12 +175,20 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                           <Input
                             className={cn('h-8', cellError && 'border-destructive focus-visible:ring-destructive/20')}
                             type={col.type}
+                            min={col.type === 'number' ? (col.min ?? 0) : undefined}
                             placeholder={col.placeholder}
                             value={row[col.key] ?? ''}
                             aria-invalid={!!cellError}
-                            onChange={(e) =>
-                              updateCell(index, col.key, col.type === 'number' ? Number(e.target.value) : e.target.value)
-                            }
+                            onChange={(e) => {
+                              if (col.type === 'number') {
+                                const numVal = Number(e.target.value);
+                                const minBound = col.min ?? 0;
+                                const safeVal = isNaN(numVal) ? minBound : Math.max(minBound, numVal);
+                                updateCell(index, col.key, safeVal);
+                              } else {
+                                updateCell(index, col.key, e.target.value);
+                              }
+                            }}
                           />
                         )}
                         {cellError && <p className="text-xs text-destructive mt-1">{cellError}</p>}

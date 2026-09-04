@@ -60,6 +60,11 @@ const envSchema = z.object({
     OPS_METRICS_SECRET: z.string().default("ops_metrics_shared_key_change_me"),
     OPS_METRICS_HEARTBEAT_INTERVAL_MS: z.coerce.number().default(10000),
 
+    // OPS SETTINGS — shared secret the quizbuzz-ops-next dashboard presents on
+    // /api/v1/ops/settings/* to manage platform-wide branding (e.g. the app
+    // logo). Same shared-secret pattern as OPS_METRICS_SECRET above.
+    OPS_SETTINGS_SECRET: z.string().default("ops_settings_shared_key_change_me"),
+
     // DATABASE
     DATABASE_URL: z.string().url(),
     DB_POOL_MIN: z.coerce.number().default(5),
@@ -554,6 +559,10 @@ export const config = {
     opsMetrics: {
         secret: env.OPS_METRICS_SECRET,
         heartbeatIntervalMs: env.OPS_METRICS_HEARTBEAT_INTERVAL_MS,
+    },
+
+    opsSettings: {
+        secret: env.OPS_SETTINGS_SECRET,
     },
 
     observability: {

@@ -15,6 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChipSelect } from '@/components/shared/ChipSelect';
 import { Combobox } from '@/components/shared/Combobox';
+import { FileUpload } from '@/components/features/shared/FileUpload';
+import { uploadOrgLogo, updateOrg } from '@/lib/api/organization.api';
+import { toast } from 'sonner';
 import {
   USE_CASES,
   ORG_SIZES,
@@ -60,6 +63,8 @@ export function OnboardingModal({ open, onComplete, onTriggerUpgradePrompt }: On
 
   // Step Data state
   const [identityData, setIdentityData] = useState({ name: '' });
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [useCaseData, setUseCaseData] = useState<Record<string, unknown>>({
     primaryUseCase: '',
     useCaseOther: '',
@@ -214,6 +219,30 @@ export function OnboardingModal({ open, onComplete, onTriggerUpgradePrompt }: On
     }
   };
 
+  const handleLogoSelect = async (file: File, preview: string) => {
+    if (!activeOrg?.id) return;
+    setIsUploadingLogo(true);
+    try {
+      const uploadRes = await uploadOrgLogo(activeOrg.id, { fileData: preview, fileName: file.name });
+      await updateOrg(activeOrg.id, { logoUrl: uploadRes.data.url });
+      setLogoUrl(uploadRes.data.url);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to upload logo');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleLogoClear = async () => {
+    if (!activeOrg?.id) return;
+    setLogoUrl(null);
+    try {
+      await updateOrg(activeOrg.id, { logoUrl: null });
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to remove logo');
+    }
+  };
+
   const handleBack = () => {
     if (currentIdx > 0) setCurrentIdx((i) => i - 1);
   };
@@ -303,6 +332,25 @@ export function OnboardingModal({ open, onComplete, onTriggerUpgradePrompt }: On
                   <p className="text-xs text-muted-foreground">
                     This will be displayed across your contest portals, certificates, and team dashboard.
                   </p>
+
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-sm font-medium">
+                      Organization Logo <span className="text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    <FileUpload
+                      aspectRatio="square"
+                      maxSizeMB={2}
+                      helperText="PNG, JPG or SVG · square image recommended · up to 2MB"
+                      preview={logoUrl}
+                      onFileSelect={handleLogoSelect}
+                      onClear={handleLogoClear}
+                    />
+                    {isUploadingLogo && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Uploading...
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

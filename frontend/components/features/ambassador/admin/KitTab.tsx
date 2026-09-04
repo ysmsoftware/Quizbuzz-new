@@ -51,11 +51,25 @@ export function KitTab({ campaign }: { campaign: CampaignResult }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 bg-card border border-border/50 rounded-xl p-3.5 shadow-2xs">
+        <div>
+          <h4 className="text-sm font-bold text-foreground">Manage Ambassador Share Kits</h4>
+          <p className="text-xs text-muted-foreground">Save template modifications, poster uploads, and assets.</p>
+        </div>
+        <Button size="sm" disabled={!dirty || updateCampaignLoading} onClick={handleSave} className="shrink-0 font-semibold">
+          {updateCampaignLoading && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+          Save Changes
+        </Button>
+      </div>
+
       <ShareTemplatesEditor value={shareTemplates} onChange={setShareTemplates} />
-      <Button disabled={!dirty || updateCampaignLoading} onClick={handleSave}>
-        {updateCampaignLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        Save Changes
-      </Button>
+
+      <div className="flex justify-end pt-2">
+        <Button disabled={!dirty || updateCampaignLoading} onClick={handleSave}>
+          {updateCampaignLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          Save Changes
+        </Button>
+      </div>
     </div>
   );
 }

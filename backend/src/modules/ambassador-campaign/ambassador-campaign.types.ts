@@ -72,12 +72,30 @@ export interface ShareMessageTemplate {
     includePoster: boolean;
 }
 
+export interface ShareKitAsset {
+    id: string;
+    label: string;
+    fileUrl: string;
+    mimeType?: string | undefined;
+}
+
+export interface ShareKit {
+    id: string;
+    name: string;
+    description?: string | undefined;
+    templateText: string;
+    posterImageUrl?: string | undefined;
+    assets?: ShareKitAsset[] | undefined;
+}
+
 export interface ShareTemplates {
     whatsappText?: string | undefined;
     whatsappTemplates?: ShareMessageTemplate[] | undefined;
     instagramText?: string | undefined;
     posterImageUrl?: string | undefined;
+    kits?: ShareKit[] | undefined;
 }
+
 
 /** Shape while a campaign is still DRAFT — mirrors draftRewardConfigSchema's *inferred output*
  *  exactly (not just `Partial<RewardConfig>`): milestoneTiers/leaderboardPrizes are always

@@ -19,18 +19,40 @@ interface RewardsKitTabProps {
 }
 
 export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, referralLink }: RewardsKitTabProps) {
-  const templates = shareTemplates.whatsappTemplates?.length
-    ? shareTemplates.whatsappTemplates
-    : shareTemplates.whatsappText
-      ? [{ id: 'primary', label: 'WhatsApp message', text: shareTemplates.whatsappText, includePoster: false }]
-      : [];
-
-  const kitItems = [
-    ...templates.map((t) => ({ label: t.label, sub: 'WhatsApp template', text: t.text.replace('{referralLink}', referralLink) })),
-    ...(shareTemplates.instagramText
-      ? [{ label: 'Instagram caption', sub: 'Text template', text: shareTemplates.instagramText.replace('{referralLink}', referralLink) }]
-      : []),
-  ];
+  const kitItems = shareTemplates.kits?.length
+    ? shareTemplates.kits
+        .filter((k) => k.templateText)
+        .map((k) => ({
+          label: k.name,
+          sub: k.description || 'Share Kit Template',
+          text: k.templateText.replace(/\{referralLink\}/g, referralLink),
+        }))
+    : [
+        ...(shareTemplates.whatsappTemplates?.length
+          ? shareTemplates.whatsappTemplates.map((t) => ({
+              label: t.label,
+              sub: 'WhatsApp template',
+              text: t.text.replace(/\{referralLink\}/g, referralLink),
+            }))
+          : shareTemplates.whatsappText
+            ? [
+                {
+                  label: 'WhatsApp message',
+                  sub: 'Share template',
+                  text: shareTemplates.whatsappText.replace(/\{referralLink\}/g, referralLink),
+                },
+              ]
+            : []),
+        ...(shareTemplates.instagramText
+          ? [
+              {
+                label: 'Instagram caption',
+                sub: 'Text template',
+                text: shareTemplates.instagramText.replace(/\{referralLink\}/g, referralLink),
+              },
+            ]
+          : []),
+      ];
 
   return (
     <div className="space-y-5">
@@ -69,7 +91,7 @@ export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, ref
               <CardContent className="py-3.5 px-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground truncate">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.sub}</p>
+                  <p className="text-xs text-muted-foreground truncate">{item.sub}</p>
                 </div>
                 <CopyIconButton text={item.text} label={`${item.label} copied`} />
               </CardContent>

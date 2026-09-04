@@ -27,6 +27,7 @@ import { ambassadorPublicRouter, ambassadorRouter } from "./modules/ambassador/a
 import { orgAmbassadorRouter, campaignRouter } from "./modules/ambassador-campaign/ambassador-campaign.routes";
 import { opsMetricsRouter } from "./modules/ops-metrics/ops-metrics.routes";
 import { referenceDataRouter } from "./modules/reference-data/reference-data.routes";
+import { platformSettingsPublicRouter, opsSettingsRouter } from "./modules/platform-settings/platform-settings.routes";
 
 const apiRouter = Router();
 
@@ -61,6 +62,8 @@ apiRouter.use("/proctoring", proctoringRouter);
 apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/ops/metrics", opsMetricsRouter);
+apiRouter.use("/ops/settings", opsSettingsRouter);
+apiRouter.use("/platform", platformSettingsPublicRouter);
 apiRouter.use("/public/ambassador", ambassadorPublicRouter);
 apiRouter.use("/public/colleges", referenceDataRouter);
 apiRouter.use("/ambassador", ambassadorRouter);

@@ -361,7 +361,6 @@ export interface Organization {
     name: string;
     slug: string;
     description?: string;
-    website?: string;
     industry?: string;
     logo?: string;
     favicon?: string;

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { Menu, X, Download } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
+import { useAppLogo } from '@/lib/hooks/useAppLogo';
 
 const navigation = [
     { name: 'Browse Contests', href: '/contests' },
@@ -18,6 +19,7 @@ export function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
     const [showInstallBtn, setShowInstallBtn] = useState(false);
+    const appLogoUrl = useAppLogo();
 
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
@@ -39,14 +41,19 @@ export function Header() {
             <nav className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Logo */}
                 <Link href="/" className="flex items-center">
-                    <Image
-                        src="/quizBuzz-logo.png"
-                        alt="QuizBuzz"
-                        width={140}
-                        height={40}
-                        priority
-                        className="h-8 w-auto sm:h-9"
-                    />
+                    {appLogoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- dynamic upload URL, not a known static/remote-pattern domain
+                        <img src={appLogoUrl} alt="QuizBuzz" className="h-8 w-auto sm:h-9" />
+                    ) : (
+                        <Image
+                            src="/quizBuzz-logo.png"
+                            alt="QuizBuzz"
+                            width={140}
+                            height={40}
+                            priority
+                            className="h-8 w-auto sm:h-9"
+                        />
+                    )}
                 </Link>
 
                 {/* Desktop Navigation — Centered */}

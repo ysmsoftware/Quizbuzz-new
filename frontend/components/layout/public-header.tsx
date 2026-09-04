@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePwaStore } from '@/lib/stores/pwa-store';
+import { useAppLogo } from '@/lib/hooks/useAppLogo';
 
 /**
  * Minimal header for public contest/quiz flows — no admin Sign In / Create Account.
@@ -13,6 +14,7 @@ import { usePwaStore } from '@/lib/stores/pwa-store';
 export function PublicHeader() {
   const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const appLogoUrl = useAppLogo();
 
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
@@ -33,13 +35,18 @@ export function PublicHeader() {
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur">
       <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center">
-          <Image
-            src="/quizBuzz-logo.png"
-            alt="QuizBuzz"
-            width={120}
-            height={34}
-            className="h-7 w-auto"
-          />
+          {appLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- dynamic upload URL, not a known static/remote-pattern domain
+            <img src={appLogoUrl} alt="QuizBuzz" className="h-7 w-auto" />
+          ) : (
+            <Image
+              src="/quizBuzz-logo.png"
+              alt="QuizBuzz"
+              width={120}
+              height={34}
+              className="h-7 w-auto"
+            />
+          )}
         </Link>
         <div className="flex items-center gap-4">
           {showInstallBtn && (

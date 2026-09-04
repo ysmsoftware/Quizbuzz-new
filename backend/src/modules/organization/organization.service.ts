@@ -426,7 +426,6 @@ export class OrganizationService {
         name: string;
         slug: string;
         logoUrl: string | null;
-        website: string | null;
         isActive: boolean;
         createdAt: Date;
         planSlug?: string | null;
@@ -438,7 +437,6 @@ export class OrganizationService {
             name: org.name,
             slug: org.slug,
             logoUrl: org.logoUrl,
-            website: org.website,
             isActive: org.isActive,
             createdAt: org.createdAt,
             planSlug: org.planSlug ?? null,

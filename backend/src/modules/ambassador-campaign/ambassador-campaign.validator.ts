@@ -169,11 +169,28 @@ const shareMessageTemplateSchema = z.object({
     includePoster: z.boolean(),
 });
 
+const shareKitAssetSchema = z.object({
+    id: z.string().min(1),
+    label: z.string().trim().min(1, "Asset label is required"),
+    fileUrl: z.string().min(1, "File URL is required"),
+    mimeType: z.string().optional(),
+});
+
+const shareKitSchema = z.object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1, "Kit name is required"),
+    description: z.string().optional(),
+    templateText: z.string(),
+    posterImageUrl: z.string().optional(),
+    assets: z.array(shareKitAssetSchema).optional(),
+});
+
 const shareTemplatesSchema = z.object({
     whatsappText: z.string().optional(),
     whatsappTemplates: z.array(shareMessageTemplateSchema).optional(),
     instagramText: z.string().optional(),
     posterImageUrl: z.string().optional(),
+    kits: z.array(shareKitSchema).optional(),
 });
 
 // POST /campaigns — starts a DRAFT. Only `name` is required; everything else is filled in

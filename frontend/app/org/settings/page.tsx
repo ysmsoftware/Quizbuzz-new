@@ -28,7 +28,6 @@ export default function SettingsPage() {
 
     const [formData, setFormData] = useState({
         orgName: '',
-        website: '',
         logoUrl: '',
     });
 
@@ -58,7 +57,6 @@ export default function SettingsPage() {
         if (org) {
             setFormData({
                 orgName: org.name || '',
-                website: org.website || '',
                 logoUrl: org.logoUrl || '',
             });
             if (org.profile) {
@@ -121,22 +119,9 @@ export default function SettingsPage() {
                 return;
             }
 
-            if (formData.website && !formData.website.startsWith('http://') && !formData.website.startsWith('https://')) {
-                toast.error('Website must be a valid URL starting with http:// or https://');
-                setIsSaving(false);
-                return;
-            }
-
-            if (formData.logoUrl && !formData.logoUrl.startsWith('http://') && !formData.logoUrl.startsWith('https://')) {
-                toast.error('Logo must be a valid URL starting with http:// or https://');
-                setIsSaving(false);
-                return;
-            }
-
             await updateOrgMutation.mutateAsync({
                 name: formData.orgName.trim(),
-                website: formData.website.trim() || undefined,
-                logoUrl: formData.logoUrl.trim() || undefined,
+                logoUrl: formData.logoUrl.trim() || null,
             });
 
             toast.success('Organization settings saved successfully');
@@ -273,11 +258,13 @@ export default function SettingsPage() {
                     <div className="flex-1 w-full min-w-0">
                         <TabsContent value="general" className="mt-0 space-y-6 focus-visible:outline-none">
                             <GeneralSettingsTabContent
+                                orgId={orgId}
                                 formData={formData}
                                 org={org}
                                 admin={admin}
                                 isSaving={isSaving}
                                 handleInputChange={handleInputChange}
+                                onLogoChange={(logoUrl) => setFormData((prev) => ({ ...prev, logoUrl: logoUrl || '' }))}
                                 handleSaveGeneral={handleSaveGeneral}
                             />
                         </TabsContent>

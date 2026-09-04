@@ -166,15 +166,29 @@ export interface ShareMessageTemplate {
   includePoster: boolean; // whether this message is shared together with the poster image
 }
 
+export interface ShareKitAsset {
+  id: string;
+  label: string;
+  fileUrl: string;
+  mimeType?: string;
+}
+
+export interface ShareKit {
+  id: string;
+  name: string; // e.g. "Launch Announcement"
+  description?: string;
+  templateText: string; // single message template per kit with placeholders
+  posterImageUrl?: string;
+  assets?: ShareKitAsset[];
+}
+
 export interface ShareTemplates {
-  /** Kept in sync with whatsappTemplates[0]?.text — the "primary" message, and the only one
-   *  the ambassador-facing dashboard (ShareCampaignCard, KitTab summary) reads today. Reading
-   *  a single field there means the multi-template picker below can be introduced without
-   *  needing dashboard changes in this pass. */
+  /** Kept in sync with kits[0]?.templateText — the primary message for quick-share cards. */
   whatsappText?: string;
   whatsappTemplates?: ShareMessageTemplate[];
   instagramText?: string;
   posterImageUrl?: string;
+  kits?: ShareKit[];
 }
 
 export interface PaginatedResult<T> {

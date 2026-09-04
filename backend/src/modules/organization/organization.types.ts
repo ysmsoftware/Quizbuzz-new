@@ -4,8 +4,7 @@ import { OrgMemberRole, OrganizationProfile } from "@prisma/client";
 
 export interface UpdateOrganizationDTO {
     name?: string;
-    logoUrl?: string;
-    website?: string;
+    logoUrl?: string | null;
 }
 
 export interface UpdateOrganizationProfileDTO {
@@ -45,7 +44,6 @@ export interface OrganizationResult {
     name: string;
     slug: string;
     logoUrl: string | null;
-    website: string | null;
     isActive: boolean;
     createdAt: Date;
     // Synced by ops on every plan assign/change/renewal — see

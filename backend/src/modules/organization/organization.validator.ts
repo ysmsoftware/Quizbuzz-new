@@ -7,8 +7,7 @@ export const updateOrganizationSchema = z.object({
         .min(2, "Name must be at least 2 characters")
         .max(100, "Name cannot exceed 100 characters")
         .optional(),
-    logoUrl: z.string().url("Must be a valid URL").optional(),
-    website: z.string().url("Must be a valid URL").optional(),
+    logoUrl: z.string().url("Must be a valid URL").nullable().optional(),
 });
 
 export const inviteMemberSchema = z.object({

@@ -102,14 +102,6 @@ export function ShareCampaignCard({
             Copy
           </Button>
         </div>
-
-        <div className="flex items-center gap-2.5 mt-3.5 pt-3.5 border-t border-border/60">
-          {/* White plate behind the code so it stays scannable in dark mode too. */}
-          <div className="rounded-md bg-white p-1 shrink-0">
-            <QRCodeSVG value={referralLink} size={34} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
-          </div>
-          <p className="text-[11px] text-muted-foreground">Scan to open the same link</p>
-        </div>
       </CardContent>
     </Card>
   );

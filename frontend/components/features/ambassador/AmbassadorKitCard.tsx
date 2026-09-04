@@ -1,216 +1,411 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, Download, Gift, MessageCircle } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import {
+  ChevronRight,
+  Download,
+  Eye,
+  FileText,
+  Gift,
+  MessageCircle,
+  Paperclip,
+  Share2,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { CopyIconButton } from './CopyIconButton';
 import { fillShareTemplate, type ShareTemplateValues } from '@/lib/utils/share-template';
 import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
-import type { ShareTemplates } from '@/lib/types/ambassador';
+import type { ShareKit, ShareTemplates } from '@/lib/types/ambassador';
 
 interface AmbassadorKitCardProps {
   shareTemplates: ShareTemplates;
-  /** Every {referralLink}/{ambassadorName}/{contestName} token a template can contain (see
-   *  ShareTemplatesEditor.tsx), already resolved to this ambassador's real values — so what
-   *  renders here is exactly the message that gets sent, not the raw placeholder text. */
   values: ShareTemplateValues;
-  /** Used as the Web Share API's title and to label the poster file when a template's
-   *  "attach the poster" switch is on. */
   campaignName?: string;
 }
 
-/** Ready-to-send share assets, separate from the reward-tier ladder above. Tabbed by kind
- *  (WhatsApp / Instagram / Poster) once more than one is configured — a single configured
- *  kind renders directly, no pointless one-tab switcher. */
 export function AmbassadorKitCard({ shareTemplates, values, campaignName }: AmbassadorKitCardProps) {
-  const { referralLink } = values;
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [selectedKit, setSelectedKit] = useState<ShareKit | null>(null);
 
-  const handleShare = async (templateId: string, text: string, includePoster: boolean) => {
-    setSendingId(templateId);
+  // Normalize share kits
+  const kits: ShareKit[] = shareTemplates.kits?.length
+    ? shareTemplates.kits
+    : [
+        {
+          id: 'primary',
+          name: 'Primary Share Kit',
+          description: 'Share templates for promoting this campaign',
+          templateText:
+            shareTemplates.whatsappText ||
+            shareTemplates.whatsappTemplates?.[0]?.text ||
+            '',
+          posterImageUrl: shareTemplates.posterImageUrl,
+          assets: [],
+        },
+      ].filter((k) => k.templateText || k.posterImageUrl);
+
+  const handleShareWhatsApp = async (kitId: string, text: string, posterImageUrl?: string) => {
+    setSendingId(kitId);
     try {
       const result = await shareToWhatsApp({
         text,
-        posterImageUrl: includePoster ? shareTemplates.posterImageUrl : undefined,
+        posterImageUrl,
         title: campaignName,
       });
       if (result === 'shared') {
-        toast.success('Shared — message and poster sent together');
+        toast.success('Shared successfully');
       } else if (result === 'clipboard') {
-        toast.success('Poster copied — paste it (⌘V / Ctrl+V) into the chat before sending', { duration: 5000 });
-      } else if (result === 'text-only' && includePoster && shareTemplates.posterImageUrl) {
-        toast.info('WhatsApp opened with the message — attach the poster manually, it couldn\'t be added automatically', {
-          duration: 5000,
-        });
+        toast.success('Poster copied to clipboard');
+      } else if (result === 'text-only' && posterImageUrl) {
+        toast.info('WhatsApp opened with text. Attach poster manually if needed.');
       }
     } finally {
       setSendingId(null);
     }
   };
-  const templates = shareTemplates.whatsappTemplates?.length
-    ? shareTemplates.whatsappTemplates
-    : shareTemplates.whatsappText
-      ? [{ id: 'primary', label: 'WhatsApp message', text: shareTemplates.whatsappText, includePoster: false }]
-      : [];
-  const filledTemplates = templates.map((t) => ({ ...t, text: fillShareTemplate(t.text, values) }));
-  const instagramText = shareTemplates.instagramText ? fillShareTemplate(shareTemplates.instagramText, values) : undefined;
-  const hasPoster = !!shareTemplates.posterImageUrl;
 
-  const tabs = [
-    filledTemplates.length > 0 && { value: 'whatsapp', label: 'WhatsApp' },
-    instagramText && { value: 'instagram', label: 'Instagram' },
-    hasPoster && { value: 'poster', label: 'Poster' },
-  ].filter((t): t is { value: string; label: string } => !!t);
-
-  const [linkCopied, setLinkCopied] = useState(false);
-  const copyLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    setLinkCopied(true);
-    toast.success('Link copied');
-    setTimeout(() => setLinkCopied(false), 2000);
+  const handleNativeShare = async (title: string, text: string, url?: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url: url || values.referralLink });
+        toast.success('Shared!');
+      } catch {
+        // User cancelled or share failed
+      }
+    } else {
+      await navigator.clipboard.writeText(`${text}\n\n${url || values.referralLink}`);
+      toast.success('Message and link copied to clipboard');
+    }
   };
 
-  return (
-    <Card className="border-border/50">
-      <CardContent className="space-y-3.5">
-        {tabs.length === 0 ? (
-          <Empty className="py-8">
+  if (kits.length === 0) {
+    return (
+      <Card className="border-border/50">
+        <CardContent className="py-8">
+          <Empty>
             <EmptyMedia variant="icon">
               <Gift className="h-5 w-5" />
             </EmptyMedia>
             <EmptyTitle className="text-sm">No kit assets yet</EmptyTitle>
-            <EmptyDescription className="text-xs">The organizer hasn&apos;t added share templates for this campaign.</EmptyDescription>
+            <EmptyDescription className="text-xs">
+              The organizer hasn&apos;t added share templates for this campaign.
+            </EmptyDescription>
           </Empty>
-        ) : tabs.length === 1 ? (
-          <KitTabContent
-            tab={tabs[0].value}
-            filledTemplates={filledTemplates}
-            instagramText={instagramText}
-            posterImageUrl={shareTemplates.posterImageUrl}
-            sendingId={sendingId}
-            onShare={handleShare}
-          />
-        ) : (
-          <Tabs defaultValue={tabs[0].value}>
-            <TabsList>
-              {tabs.map((t) => (
-                <TabsTrigger key={t.value} value={t.value}>
-                  {t.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {tabs.map((t) => (
-              <TabsContent key={t.value} value={t.value} className="space-y-3.5">
-                <KitTabContent
-                  tab={t.value}
-                  filledTemplates={filledTemplates}
-                  instagramText={instagramText}
-                  posterImageUrl={shareTemplates.posterImageUrl}
-                  sendingId={sendingId}
-                  onShare={handleShare}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-        )}
+        </CardContent>
+      </Card>
+    );
+  }
 
-        <div className="flex items-center gap-2.5 pt-3.5 border-t border-border/60">
-          <div className="flex-1 min-w-0 bg-muted rounded-lg px-3 py-2">
-            <span className="text-xs font-mono text-muted-foreground truncate block">{referralLink}</span>
+  return (
+    <>
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Ambassador Kits &amp; Resources
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ready-to-use promotional kits. Select any kit to preview, share, or download assets.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs font-semibold">
+              {kits.length} {kits.length === 1 ? 'Kit Available' : 'Kits Available'}
+            </Badge>
           </div>
-          <Button variant="outline" size="icon" onClick={copyLink} aria-label="Copy referral link">
-            {linkCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-          </Button>
-          <div className="rounded-md bg-white p-1 shrink-0">
-            <QRCodeSVG value={referralLink} size={32} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {kits.map((kit) => {
+            const filledText = kit.templateText ? fillShareTemplate(kit.templateText, values) : '';
+            return (
+              <div
+                key={kit.id}
+                onClick={() => setSelectedKit(kit)}
+                className="group relative rounded-xl border border-border/60 hover:border-primary/40 bg-card hover:bg-muted/40 p-4 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              >
+                {/* Left section: Poster thumbnail / Icon & Title */}
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {kit.posterImageUrl ? (
+                    <img
+                      src={kit.posterImageUrl}
+                      alt={kit.name}
+                      className="w-14 h-14 rounded-lg border border-border/50 object-cover shrink-0 bg-muted group-hover:scale-105 transition-transform duration-200 shadow-2xs"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary group-hover:bg-primary/20 transition-colors">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                  )}
+
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                        {kit.name}
+                      </h4>
+                      {kit.templateText && (
+                        <Badge variant="secondary" className="text-[10px] font-medium py-0 px-1.5 bg-primary/10 text-primary border-primary/20">
+                          Message Ready
+                        </Badge>
+                      )}
+                    </div>
+                    {kit.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed">
+                        {kit.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground flex-wrap">
+                      {kit.posterImageUrl && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <FileText className="h-3 w-3 text-muted-foreground" />
+                          Poster graphic included
+                        </span>
+                      )}
+                      {kit.assets && kit.assets.length > 0 && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <Paperclip className="h-3 w-3 text-muted-foreground" />
+                          {kit.assets.length} {kit.assets.length === 1 ? 'file attached' : 'files attached'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right section: Quick actions & View Kit button */}
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                  {filledText && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="bg-[#25D366] text-white hover:bg-[#20bd5a] h-8 text-xs font-semibold shadow-xs"
+                        disabled={sendingId === kit.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShareWhatsApp(kit.id, filledText, kit.posterImageUrl);
+                        }}
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                        {sendingId === kit.id ? 'Preparing…' : 'WhatsApp'}
+                      </Button>
+
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <CopyIconButton text={filledText} label="Message copied" />
+                      </div>
+                    </>
+                  )}
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-medium group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedKit(kit);
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    View Kit
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Kit Detail Modal */}
+      <AmbassadorKitDetailModal
+        kit={selectedKit}
+        open={!!selectedKit}
+        onOpenChange={(open) => {
+          if (!open) setSelectedKit(null);
+        }}
+        values={values}
+        campaignName={campaignName}
+        sendingId={sendingId}
+        onShareWhatsApp={handleShareWhatsApp}
+        onNativeShare={handleNativeShare}
+      />
+    </>
   );
 }
 
-interface KitTabContentProps {
-  tab: string;
-  filledTemplates: { id: string; label: string; text: string; includePoster: boolean }[];
-  instagramText?: string;
-  posterImageUrl?: string;
+function AmbassadorKitDetailModal({
+  kit,
+  open,
+  onOpenChange,
+  values,
+  campaignName,
+  sendingId,
+  onShareWhatsApp,
+  onNativeShare,
+}: {
+  kit: ShareKit | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  values: ShareTemplateValues;
+  campaignName?: string;
   sendingId: string | null;
-  onShare: (templateId: string, text: string, includePoster: boolean) => void;
-}
+  onShareWhatsApp: (kitId: string, text: string, posterImageUrl?: string) => void;
+  onNativeShare: (title: string, text: string, url?: string) => void;
+}) {
+  if (!kit) return null;
 
-function KitTabContent({ tab, filledTemplates, instagramText, posterImageUrl, sendingId, onShare }: KitTabContentProps) {
-  if (tab === 'whatsapp') {
-    return (
-      <>
-        {filledTemplates.map((t) => (
-          <div key={t.id} className="rounded-xl border border-border/60 p-4">
-            <div className="flex items-center justify-between gap-3 mb-2.5">
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground truncate">{t.label}</p>
-                <p className="text-[11px] text-muted-foreground">WhatsApp template</p>
+  const filledText = kit.templateText ? fillShareTemplate(kit.templateText, values) : '';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl max-h-[85vh] flex flex-col p-0 overflow-hidden border-border/60">
+        <DialogHeader className="p-6 pb-4 border-b border-border/40">
+          <div className="flex items-center justify-between gap-3 pr-6">
+            <div className="space-y-1">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                <Sparkles className="h-5 w-5 text-primary" />
+                {kit.name}
+              </DialogTitle>
+              {kit.description && (
+                <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                  {kit.description}
+                </DialogDescription>
+              )}
+            </div>
+            <Badge variant="outline" className="shrink-0 text-xs font-semibold">
+              Share Kit
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Share Message Section */}
+          {filledText ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-primary" />
+                  Ready-to-Send Share Message
+                </h4>
+                <CopyIconButton text={filledText} label="Message copied" />
               </div>
-              <CopyIconButton text={t.text} label={`${t.label} copied`} />
+
+              <div className="bg-muted/40 border border-border/50 rounded-xl p-4 text-xs space-y-3">
+                <p className="whitespace-pre-line leading-relaxed text-foreground font-sans">
+                  {filledText}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+                  <Button
+                    size="sm"
+                    className="bg-[#25D366] text-white hover:bg-[#20bd5a] h-8 text-xs font-semibold"
+                    disabled={sendingId === kit.id}
+                    onClick={() => onShareWhatsApp(kit.id, filledText, kit.posterImageUrl)}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                    {sendingId === kit.id ? 'Preparing…' : 'Share via WhatsApp'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => onNativeShare(campaignName || kit.name, filledText)}
+                  >
+                    <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                    Share / Copy Link
+                  </Button>
+                </div>
+              </div>
             </div>
-            <p className="text-sm leading-relaxed bg-muted rounded-lg px-3.5 py-3 text-foreground whitespace-pre-line">{t.text}</p>
-            <div className="flex items-center gap-2 mt-3">
-              <Button
-                size="sm"
-                className="bg-success text-success-foreground hover:bg-success/90"
-                disabled={sendingId === t.id}
-                onClick={() => onShare(t.id, t.text, t.includePoster)}
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                {sendingId === t.id ? 'Preparing…' : 'Share via WhatsApp'}
-              </Button>
+          ) : (
+            <div className="bg-muted/30 border border-border/40 rounded-xl p-4 text-xs text-muted-foreground text-center">
+              No message template defined for this kit.
             </div>
-          </div>
-        ))}
-      </>
-    );
-  }
+          )}
 
-  if (tab === 'instagram') {
-    return (
-      <div className="rounded-xl border border-border/60 p-4">
-        <div className="flex items-center justify-between gap-3 mb-2.5">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-foreground">Instagram caption</p>
-            <p className="text-[11px] text-muted-foreground">Text template</p>
-          </div>
-          <CopyIconButton text={instagramText ?? ''} label="Caption copied" />
+          {/* Campaign Poster Section */}
+          {kit.posterImageUrl && (
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Campaign Poster &amp; Graphic
+              </h4>
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-card border border-border/50 rounded-xl p-4">
+                <img
+                  src={kit.posterImageUrl}
+                  alt="Kit poster"
+                  className="w-full sm:w-28 h-36 rounded-lg object-cover border border-border/50 bg-muted shrink-0 shadow-sm"
+                />
+                <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Promotional Poster</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                      High-resolution promotional banner for WhatsApp status, Instagram stories, and social feeds.
+                    </p>
+                  </div>
+                  <a href={kit.posterImageUrl} target="_blank" rel="noopener noreferrer" download className="inline-block pt-1">
+                    <Button variant="outline" size="sm" className="h-8 text-xs font-medium">
+                      <Download className="h-3.5 w-3.5 mr-1.5" />
+                      Download Poster
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Attached Files & Resources Section */}
+          {kit.assets && kit.assets.length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Attached Files &amp; Resources ({kit.assets.length})
+              </h4>
+              <div className="grid grid-cols-1 gap-2.5">
+                {kit.assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors text-xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary">
+                        <Paperclip className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{asset.label}</p>
+                        {asset.mimeType && <p className="text-[10px] text-muted-foreground truncate">{asset.mimeType}</p>}
+                      </div>
+                    </div>
+                    <a href={asset.fileUrl} target="_blank" rel="noopener noreferrer" download>
+                      <Button variant="outline" size="sm" className="h-8 text-xs">
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Download
+                      </Button>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <p className="text-sm leading-relaxed bg-muted rounded-lg px-3.5 py-3 text-foreground whitespace-pre-line">{instagramText}</p>
-      </div>
-    );
-  }
 
-  if (tab === 'poster' && posterImageUrl) {
-    return (
-      <div className="flex gap-4">
-        <img
-          src={posterImageUrl}
-          alt="Campaign poster"
-          className="w-[92px] h-[116px] rounded-xl border border-border/60 object-cover shrink-0 bg-muted"
-        />
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <p className="text-sm font-bold text-foreground mb-0.5">Campaign poster</p>
-          <p className="text-xs text-muted-foreground mb-2.5">Shareable graphic, ready to post</p>
-          <a href={posterImageUrl} download className="inline-block w-fit">
-            <Button variant="outline" size="sm">
-              <Download className="h-3.5 w-3.5" />
-              Download poster
-            </Button>
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+        <DialogFooter className="p-4 bg-muted/30 border-t border-border/40 flex items-center justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
+

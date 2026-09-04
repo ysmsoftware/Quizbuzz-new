@@ -88,6 +88,16 @@ export function ReviewPublishStep({
                 : 'Not set'
             }
           />
+          <SummaryRow
+            label="Share Kits & Assets"
+            value={
+              draft.shareTemplates.kits?.length
+                ? `${draft.shareTemplates.kits.length} Share Kit${draft.shareTemplates.kits.length > 1 ? 's' : ''}`
+                : draft.shareTemplates.whatsappText || draft.shareTemplates.posterImageUrl
+                ? '1 Share Kit (Legacy)'
+                : 'Not set'
+            }
+          />
         </CardContent>
       </Card>
 

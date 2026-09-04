@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Copy, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Check, Copy, MessageCircle, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +20,7 @@ import { RewardTiersCard } from '@/components/features/ambassador/RewardTiersCar
 import { AmbassadorKitCard } from '@/components/features/ambassador/AmbassadorKitCard';
 import { MyReferralsCard } from '@/components/features/ambassador/MyReferralsCard';
 import { CampaignPreview } from '@/components/features/ambassador/CampaignPreview';
+import { ReferralQrModal } from '@/components/features/ambassador/ReferralQrModal';
 import { fillShareTemplate } from '@/lib/utils/share-template';
 import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
@@ -47,6 +48,7 @@ export default function AmbassadorCampaignDetailPage() {
   const [sharing, setSharing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   // The "available" list this preview's data comes from excludes anything already applied
   // to — so the moment Apply succeeds and that list refetches, this campaign drops out of
@@ -177,7 +179,11 @@ export default function AmbassadorCampaignDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => setQrModalOpen(true)}>
+              <QrCode className="h-4 w-4" />
+              QR Code
+            </Button>
             <Button variant="outline" size="sm" onClick={copyReferralLink}>
               {linkCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
               {linkCopied ? 'Copied' : 'Copy referral link'}
@@ -260,7 +266,7 @@ export default function AmbassadorCampaignDetailPage() {
           </div>
 
           <div className="space-y-4 lg:sticky lg:top-8">
-            <RankRewardCards stats={stats} />
+            <RankRewardCards stats={stats} referralLink={referralLink} onOpenQr={() => setQrModalOpen(true)} />
 
             <ShareCampaignCard
               campaignName={campaign.name}
@@ -274,6 +280,15 @@ export default function AmbassadorCampaignDetailPage() {
           </div>
         </div>
       </div>
+
+      <ReferralQrModal
+        open={qrModalOpen}
+        onOpenChange={setQrModalOpen}
+        campaignName={campaign.name}
+        organizationName={joinedCampaign?.organizationName ?? undefined}
+        ambassadorName={ambassador ? [ambassador.firstName, ambassador.lastName].filter(Boolean).join(' ') : undefined}
+        referralLink={referralLink}
+      />
     </div>
   );
 }

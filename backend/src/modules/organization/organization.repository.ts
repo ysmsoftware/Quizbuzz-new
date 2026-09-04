@@ -53,8 +53,7 @@ export class OrganizationRepository {
 
     async update(id: string, data: {
         name?: string;
-        logoUrl?: string;
-        website?: string;
+        logoUrl?: string | null;
     }): Promise<Organization> {
         return prisma.organization.update({
             where: { id },

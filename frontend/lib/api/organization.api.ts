@@ -48,11 +48,20 @@ export async function updateOrg(
   orgId: string,
   body: {
     name?: string;
-    logoUrl?: string;
-    website?: string;
+    logoUrl?: string | null;
   }
 ): Promise<ApiResponse> {
   return patch(`/org/${orgId}`, body);
+}
+
+/**
+ * POST /org/:orgId/upload-logo
+ */
+export async function uploadOrgLogo(
+  orgId: string,
+  body: { fileData: string; fileName: string }
+): Promise<ApiResponse<{ url: string; key: string }>> {
+  return post(`/org/${orgId}/upload-logo`, body);
 }
 
 /**

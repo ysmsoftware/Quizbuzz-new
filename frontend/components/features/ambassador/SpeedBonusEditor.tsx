@@ -26,12 +26,12 @@ interface SpeedBonusRow {
 }
 
 const COLUMNS: RepeatingRowColumn<SpeedBonusRow>[] = [
-  { key: 'withinDays', label: 'Within Days', type: 'number' },
-  { key: 'bonusAmount', label: 'Bonus Amount (₹)', type: 'number' },
-  { key: 'label', label: 'Label', type: 'text', placeholder: 'Fast Starter' },
-  { key: 'maxWinners', label: 'Max Winners (optional)', type: 'number', placeholder: '10' },
-  { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Badge, merch…' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number' },
+  { key: 'withinDays', label: 'Within Days', type: 'number', minWidth: 'w-24' },
+  { key: 'bonusAmount', label: 'Bonus Amount (₹)', type: 'number', minWidth: 'w-28' },
+  { key: 'label', label: 'Label', type: 'text', placeholder: 'Fast Starter', minWidth: 'min-w-[140px]' },
+  { key: 'maxWinners', label: 'Max Winners (optional)', type: 'number', placeholder: '10', minWidth: 'w-28' },
+  { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Badge, merch…', minWidth: 'min-w-[160px]' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'w-28' },
 ];
 
 const EMPTY: SpeedBonusConfig = { enabled: false, milestoneThreshold: 0, tiers: [] };
@@ -72,8 +72,9 @@ export function SpeedBonusEditor({
   };
 
   const setOffsetWeeks = (weeks: number) => {
-    const resolved = contestRegistrationStartDate ? addWeeksIso(contestRegistrationStartDate, weeks) : speedBonus.campaignStartAt;
-    onChange({ ...speedBonus, campaignStartAtMode: 'OFFSET_WEEKS', campaignStartAtOffsetWeeks: weeks, campaignStartAt: resolved });
+    const safeWeeks = Math.max(0, weeks);
+    const resolved = contestRegistrationStartDate ? addWeeksIso(contestRegistrationStartDate, safeWeeks) : speedBonus.campaignStartAt;
+    onChange({ ...speedBonus, campaignStartAtMode: 'OFFSET_WEEKS', campaignStartAtOffsetWeeks: safeWeeks, campaignStartAt: resolved });
   };
 
   const rows: SpeedBonusRow[] = speedBonus.tiers.map((t) => ({
@@ -95,12 +96,12 @@ export function SpeedBonusEditor({
       // to type. Leading/trailing whitespace is trimmed for real at the save boundary by
       // the backend's Zod schema (label: z.string().trim()).
       tiers: nextRows.map((r) => ({
-        withinDays: r.withinDays,
-        bonusAmount: r.bonusAmount,
+        withinDays: Math.max(0, r.withinDays),
+        bonusAmount: Math.max(0, r.bonusAmount),
         label: r.label,
-        maxWinners: r.maxWinners || undefined,
+        maxWinners: r.maxWinners ? Math.max(0, r.maxWinners) : undefined,
         goodie: r.goodieLabel.trim()
-          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined }
+          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent ? Math.max(0, r.goodieCashEquivalent) : undefined }
           : undefined,
       })),
     });
@@ -154,7 +155,7 @@ export function SpeedBonusEditor({
                   aria-label="Weeks after registration start"
                   value={offsetWeeks || ''}
                   disabled={startMode !== 'OFFSET_WEEKS' || !contestRegistrationStartDate}
-                  onChange={(e) => setOffsetWeeks(Number(e.target.value) || 0)}
+                  onChange={(e) => setOffsetWeeks(Math.max(0, Number(e.target.value) || 0))}
                   className="h-8 w-16"
                 />
               </div>
@@ -191,9 +192,10 @@ export function SpeedBonusEditor({
             <Label>Milestone Threshold (Registrations required for speed bonus)</Label>
             <Input
               type="number"
+              min={0}
               value={speedBonus.milestoneThreshold || ''}
               placeholder="e.g. 100"
-              onChange={(e) => onChange({ ...speedBonus, milestoneThreshold: Number(e.target.value) })}
+              onChange={(e) => onChange({ ...speedBonus, milestoneThreshold: Math.max(0, Number(e.target.value) || 0) })}
               aria-invalid={!!errors[`${PREFIX}.milestoneThreshold`]}
               className={cn('max-w-xs', errors[`${PREFIX}.milestoneThreshold`] && 'border-destructive focus-visible:ring-destructive/20')}
             />

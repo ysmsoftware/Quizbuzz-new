@@ -32,7 +32,7 @@ export function CampaignSummarySidebar({
   const tierCount = draft.rewardConfig.milestoneTiers?.length ?? 0;
   const leaderboardCount = draft.rewardConfig.leaderboardPrizes?.length ?? 0;
   const speedBonusOn = draft.rewardConfig.speedBonus?.enabled ? 'Active' : 'Inactive';
-  const kitFilled = [draft.shareTemplates.whatsappText, draft.shareTemplates.instagramText, draft.shareTemplates.posterImageUrl].filter(Boolean).length;
+  const kitCount = draft.shareTemplates.kits?.length ?? [draft.shareTemplates.whatsappText, draft.shareTemplates.instagramText, draft.shareTemplates.posterImageUrl].filter(Boolean).length;
   const capacity = calculateCampaignCapacity(groups);
 
   // Calculate Speed Bonus Total
@@ -114,7 +114,7 @@ export function CampaignSummarySidebar({
               )
             }
           />
-          <Row label="Ambassador Kit" value={kitFilled ? `${kitFilled}/3 elements` : '—'} />
+          <Row label="Ambassador Kit" value={kitCount ? `${kitCount} Kit${kitCount === 1 ? '' : 's'}` : '—'} />
         </div>
 
         {totalEstimatedInvestment > 0 && (

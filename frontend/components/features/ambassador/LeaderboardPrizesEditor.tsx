@@ -21,9 +21,9 @@ const MAX_GROUP_FIELD_KEYS = 3;
 // rankRange or goodie editing yet. Add a "range" toggle per row if a campaign
 // actually needs banded prizes (e.g. rank 4-10 share a reward).
 const RANK_COLUMNS: RepeatingRowColumn<{ rank: number; cashAmount: number; label: string }>[] = [
-  { key: 'rank', label: 'Rank', type: 'number' },
-  { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number' },
-  { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner' },
+  { key: 'rank', label: 'Rank', type: 'number', minWidth: 'w-24' },
+  { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number', minWidth: 'w-32' },
+  { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner', minWidth: 'min-w-[160px]' },
 ];
 
 const PREFIX = 'rewardConfig.leaderboardPrizes';

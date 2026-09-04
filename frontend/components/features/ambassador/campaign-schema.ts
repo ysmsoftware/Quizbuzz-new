@@ -94,8 +94,10 @@ export const campaignFormSchema = z.object({
   }),
   shareTemplates: z.object({
     whatsappText: z.string().optional(),
+    whatsappTemplates: z.array(z.any()).optional(),
     instagramText: z.string().optional(),
     posterImageUrl: z.string().optional(),
+    kits: z.array(z.any()).optional(),
   }),
 });
 

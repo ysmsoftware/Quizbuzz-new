@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { Check, Trophy, Zap } from 'lucide-react';
+import { Check, ChevronRight, Eye, FileText, MessageSquare, Paperclip, Plus, Sparkles, Trophy, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CampaignLifecycleActions } from '@/components/features/ambassador/admin/CampaignLifecycleActions';
 import { substitutePlaceholders } from '@/components/features/ambassador/ShareTemplatesEditor';
+import { ViewKitModal } from '@/components/features/ambassador/admin/ViewKitModal';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { cn } from '@/lib/utils';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
@@ -23,6 +24,7 @@ import type {
   LeaderboardCut,
   LeaderboardEntryResult,
   RecentlyJoinedAmbassador,
+  ShareKit,
   ShareTemplates,
   SpeedBonusConfig,
 } from '@/lib/types/ambassador';
@@ -454,53 +456,149 @@ export function LeaderboardsCard({
 
 export function AmbassadorKitCard({
   shareTemplates,
-  whatsappTemplates,
-  primaryTemplate,
   contestTitle,
   onEdit,
 }: {
   shareTemplates: ShareTemplates;
-  whatsappTemplates: { label: string; text: string }[];
-  primaryTemplate: { label: string; text: string } | undefined;
+  whatsappTemplates?: { label: string; text: string }[];
+  primaryTemplate?: { label: string; text: string } | undefined;
   contestTitle: string | undefined;
   onEdit: () => void;
 }) {
+  const [selectedKit, setSelectedKit] = useState<ShareKit | null>(null);
+
+  const kits: ShareKit[] = shareTemplates.kits?.length
+    ? shareTemplates.kits
+    : [
+        {
+          id: 'primary-kit',
+          name: 'Primary Share Kit',
+          description: 'Default sharing assets',
+          templateText:
+            shareTemplates.whatsappText ||
+            shareTemplates.whatsappTemplates?.[0]?.text ||
+            '',
+          posterImageUrl: shareTemplates.posterImageUrl,
+          assets: [],
+        },
+      ].filter((k) => k.templateText || k.posterImageUrl);
+
   return (
-    <Card className={CARD}>
-      <CardHeader>
-        <CardTitle className="text-base">Ambassador Kit</CardTitle>
-        <CardAction>
-          <Button variant="link" size="sm" className="h-auto p-0" onClick={onEdit}>Edit →</Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-[96px_1fr] gap-3">
-          {shareTemplates.posterImageUrl ? (
-            <img src={shareTemplates.posterImageUrl} alt="Campaign poster" className="w-full aspect-square object-cover rounded-lg border border-border/50" />
+    <>
+      <Card className={CARD}>
+        <CardHeader>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {kits.length} kit{kits.length === 1 ? '' : 's'} configured
+            </p>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Ambassador Kits &amp; Resources
+            </CardTitle>
+          </div>
+          <CardAction className="flex items-center gap-2">
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={onEdit}>
+              Edit Kits →
+            </Button>
+          </CardAction>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {kits.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No share kits configured yet.</p>
           ) : (
-            <div className="w-full aspect-square rounded-lg border border-dashed border-border flex items-center justify-center">
-              <p className="text-[10px] text-muted-foreground text-center px-1">No poster</p>
-            </div>
+            kits.map((kit) => (
+              <div
+                key={kit.id}
+                onClick={() => setSelectedKit(kit)}
+                className="group relative rounded-xl border border-border/60 hover:border-primary/40 bg-card hover:bg-muted/40 p-4 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              >
+                {/* Left section: Poster thumbnail / Icon & Title */}
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {kit.posterImageUrl ? (
+                    <img
+                      src={kit.posterImageUrl}
+                      alt={kit.name}
+                      className="w-14 h-14 rounded-lg border border-border/50 object-cover shrink-0 bg-muted group-hover:scale-105 transition-transform duration-200 shadow-2xs"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary group-hover:bg-primary/20 transition-colors">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                  )}
+
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                        {kit.name}
+                      </h4>
+                      {kit.templateText && (
+                        <Badge variant="secondary" className="text-[10px] font-medium py-0 px-1.5 bg-primary/10 text-primary border-primary/20">
+                          Message Ready
+                        </Badge>
+                      )}
+                    </div>
+                    {kit.description ? (
+                      <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed">
+                        {kit.description}
+                      </p>
+                    ) : kit.templateText ? (
+                      <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed font-sans">
+                        {substitutePlaceholders(kit.templateText, contestTitle)}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2 pt-0.5 text-[11px] text-muted-foreground flex-wrap">
+                      {kit.posterImageUrl && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <FileText className="h-3 w-3 text-muted-foreground" />
+                          Poster graphic included
+                        </span>
+                      )}
+                      {kit.assets && kit.assets.length > 0 && (
+                        <span className="flex items-center gap-1 font-medium">
+                          <Paperclip className="h-3 w-3 text-muted-foreground" />
+                          {kit.assets.length} {kit.assets.length === 1 ? 'file attached' : 'files attached'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right section: View Kit button */}
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-medium group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedKit(kit);
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    View Kit
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
+                  </Button>
+                </div>
+              </div>
+            ))
           )}
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center justify-between py-1 text-sm border-b border-border/40">
-              <span className="text-muted-foreground">WhatsApp templates</span>
-              <span className="font-medium">{whatsappTemplates.length ? `${whatsappTemplates.length} active` : '—'}</span>
-            </div>
-            <div className="flex items-center justify-between py-1 text-sm">
-              <span className="text-muted-foreground">Instagram caption</span>
-              <span className="font-medium">{shareTemplates.instagramText ? 'Set' : '—'}</span>
-            </div>
-          </div>
-        </div>
-        {primaryTemplate && (
-          <div className="mt-2.5 rounded-lg bg-muted/50 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">{primaryTemplate.label} · sample preview</p>
-            <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed line-clamp-4">{substitutePlaceholders(primaryTemplate.text, contestTitle)}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+          <Button type="button" variant="outline" size="sm" className="w-full text-xs border-dashed" onClick={onEdit}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Add / Manage Share Kits
+          </Button>
+        </CardContent>
+      </Card>
+
+      <ViewKitModal
+        kit={selectedKit}
+        open={!!selectedKit}
+        onOpenChange={(open) => !open && setSelectedKit(null)}
+        contestTitle={contestTitle}
+        onEdit={onEdit}
+      />
+    </>
   );
 }
 

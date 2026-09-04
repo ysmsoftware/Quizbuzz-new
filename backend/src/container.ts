@@ -1,5 +1,8 @@
 import { OpsMetricsService } from './modules/ops-metrics/ops-metrics.service.js';
 import { OpsMetricsController } from './modules/ops-metrics/ops-metrics.controller.js';
+import { PlatformSettingsRepository } from './modules/platform-settings/platform-settings.repository.js';
+import { PlatformSettingsService } from './modules/platform-settings/platform-settings.service.js';
+import { PlatformSettingsController } from './modules/platform-settings/platform-settings.controller.js';
 import { AdminAuthController } from './modules/admin/auth/admin-auth.controller.js';
 import { AdminAuthRepository } from './modules/admin/auth/admin-auth.repository.js';
 import { AdminAuthService } from './modules/admin/auth/admin-auth.service.js';
@@ -121,6 +124,9 @@ export const quizSession = new QuizSession();
 
 export const opsMetricsService = new OpsMetricsService(quizSession);
 export const opsMetricsController = new OpsMetricsController(opsMetricsService);
+export const platformSettingsRepository = new PlatformSettingsRepository();
+export const platformSettingsService = new PlatformSettingsService(platformSettingsRepository);
+export const platformSettingsController = new PlatformSettingsController(platformSettingsService);
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);
 export const durabilityService = new DurabilityService(durabilityRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);

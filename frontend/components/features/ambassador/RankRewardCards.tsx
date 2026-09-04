@@ -4,18 +4,20 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Rupees } from './Rupees';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type { CampaignStats } from '@/lib/types/ambassador';
+import { QRCodeSVG } from 'qrcode.react';
+import { Maximize2, QrCode } from 'lucide-react';
 
-/** "Your rank" (one row per configured leaderboard cut this ambassador has a rank in — not
- *  just individual-ambassador, a campaign can also rank by department/group) plus "Next
- *  reward" (the rate/goodie one tier up) — both folded into ONE compact card instead of a
- *  stack of near-empty ones (each rank used to be its own full Card, mostly whitespace around
- *  a single number). Sits in the hub's sidebar column. Both derived from data GET .../stats
- *  already returns, no new API. */
-export function RankRewardCards({ stats }: { stats: CampaignStats }) {
+interface RankRewardCardsProps {
+  stats: CampaignStats;
+  referralLink?: string;
+  onOpenQr?: () => void;
+}
+
+export function RankRewardCards({ stats, referralLink, onOpenQr }: RankRewardCardsProps) {
   const rankEntries = stats.leaderboardRanks.filter((r) => r.rank !== null);
   const nextTier = stats.nextTier;
 
-  if (rankEntries.length === 0 && !nextTier) return null;
+  if (rankEntries.length === 0 && !nextTier && !referralLink) return null;
 
   return (
     <Card className="border-border/50 py-4 gap-0">
@@ -37,6 +39,27 @@ export function RankRewardCards({ stats }: { stats: CampaignStats }) {
           <p className="text-xs text-muted-foreground mt-0.5">
             at {nextTier.label ?? 'the next tier'}{nextTier.goodie ? ` · plus ${nextTier.goodie.label}` : ''}
           </p>
+        </CardContent>
+      )}
+      {referralLink && onOpenQr && (
+        <CardContent className={rankEntries.length > 0 || nextTier ? 'pt-3 mt-3 border-t border-border/40' : undefined}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Referral QR</p>
+              <p className="text-xs text-muted-foreground">Tap to expand & share</p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenQr}
+              className="flex items-center gap-2 p-1.5 rounded-xl border border-border/60 bg-muted/40 hover:bg-muted/80 transition-colors group cursor-pointer"
+              title="Click to view & download QR Code"
+            >
+              <div className="rounded-md bg-white p-1 shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                <QRCodeSVG value={referralLink} size={34} bgColor="#ffffff" fgColor="#09090b" level="M" />
+              </div>
+              <Maximize2 className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground mr-0.5" />
+            </button>
+          </div>
         </CardContent>
       )}
     </Card>

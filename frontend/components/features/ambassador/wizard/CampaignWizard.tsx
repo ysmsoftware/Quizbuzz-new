@@ -310,7 +310,7 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
   const isReview = currentStep.key === 'review';
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-2">
+    <div className="max-w-[1400px] mx-auto space-y-6 py-2 px-4 sm:px-6 lg:px-8">
       <Button
         variant="ghost"
         size="sm"
@@ -330,10 +330,12 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_280px] gap-8 items-start pt-2">
-        <StepperNav current={currentStep.key} furthestVisited={WIZARD_STEPS[furthestIndex]!.key} onSelect={goToStep} />
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_300px] gap-6 xl:gap-8 items-start pt-2">
+        <div className="lg:sticky lg:top-6">
+          <StepperNav current={currentStep.key} furthestVisited={WIZARD_STEPS[furthestIndex]!.key} onSelect={goToStep} />
+        </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 flex-1 space-y-6">
           <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm min-h-[300px]">
             {stepBody}
           </div>
@@ -378,7 +380,9 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
           )}
         </div>
 
-        <CampaignSummarySidebar draft={draft} groups={groups} contestTitle={contestTitle} currentStepKey={currentStep.key} />
+        <div className="lg:sticky lg:top-6">
+          <CampaignSummarySidebar draft={draft} groups={groups} contestTitle={contestTitle} currentStepKey={currentStep.key} />
+        </div>
       </div>
     </div>
   );

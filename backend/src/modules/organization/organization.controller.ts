@@ -8,6 +8,8 @@ import {
     acceptInviteSchema,
     updateOrganizationProfileSchema,
 } from "./organization.validator";
+import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
+import { storageService } from "../../services/storage.service";
 
 export class OrganizationController {
     constructor(
@@ -110,6 +112,49 @@ export class OrganizationController {
                 updateData as any,
             );
             res.json({ success: true, data: org });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // POST /organizations/:orgId/upload-logo
+    uploadLogo = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const { fileData, fileName } = req.body;
+            if (!fileData || !fileName) {
+                throw new BadRequestError("File data and file name are required.");
+            }
+
+            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            let buffer: Buffer;
+            let contentType: string;
+
+            if (matches && matches.length === 3) {
+                contentType = matches[1];
+                buffer = Buffer.from(matches[2], "base64");
+            } else {
+                contentType = "image/png";
+                buffer = Buffer.from(fileData, "base64");
+            }
+
+            const cleanFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+            const key = `logos/${req.params.orgId}/${Date.now()}_${cleanFileName}`;
+
+            const uploadResult = await storageService.upload(key, buffer, contentType);
+
+            res.status(200).json({
+                success: true,
+                message: "Logo uploaded successfully",
+                data: {
+                    url: uploadResult.url,
+                    key: uploadResult.key,
+                },
+                requestId: req.id,
+            });
         } catch (err) {
             next(err);
         }

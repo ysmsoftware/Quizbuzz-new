@@ -21,6 +21,7 @@ function ctrl() {
 organizationRouter.get("/:orgId",                          authenticatedOrgMiddleware, (req, res, next) => ctrl().getOrganization(req, res, next));
 organizationRouter.get("/:orgId/usage",                    authenticatedOrgMiddleware, (req, res, next) => ctrl().getUsage(req, res, next));
 organizationRouter.patch("/:orgId",                        authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganization(req, res, next));
+organizationRouter.post("/:orgId/upload-logo",              authenticatedOrgMiddleware, (req, res, next) => ctrl().uploadLogo(req, res, next));
 organizationRouter.patch("/:orgId/profile",                authenticatedOrgMiddleware, (req, res, next) => ctrl().updateOrganizationProfile(req, res, next));
 
 // Members
