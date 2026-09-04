@@ -19,3 +19,23 @@ export function useOrgAmbassadorReport(campaignId: string, filters: ReportFilter
     exportUrl: ambassadorCampaignApi.getReportExportUrl(campaignId),
   };
 }
+
+/** Drill-down behind one report row's registrationCount — the individual registrations that
+ *  ambassador's referral link brought in, full contact detail. `enrollmentId` null/undefined
+ *  keeps the query disabled, so this is safe to call unconditionally with the currently-open
+ *  row's id (or none). */
+export function useOrgAmbassadorReferrals(campaignId: string, enrollmentId: string | null, page: number) {
+  const query = useQuery({
+    queryKey: ['org-ambassador-referrals', campaignId, enrollmentId, page],
+    queryFn: () => ambassadorCampaignApi.getReferrals(campaignId, enrollmentId as string, { page, limit: 20 }),
+    enabled: !!campaignId && !!enrollmentId,
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    rows: query.data?.data?.data ?? [],
+    pagination: query.data?.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}

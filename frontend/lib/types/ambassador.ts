@@ -9,6 +9,11 @@ export interface ApplicationFieldDef {
   type: ApplicationFieldType;
   required: boolean;
   options?: string[]; // only meaningful when type === "SELECT"
+  // Live-fetched options instead of the static `options` list above — see
+  // lib/services/reference-data-service.ts. `dependsOnKey`, only meaningful for
+  // "departments", names the sibling field whose selected college id filters the list.
+  optionsSource?: "colleges" | "departments";
+  dependsOnKey?: string;
 }
 
 export interface AmbassadorTypeDefinition {
@@ -422,12 +427,34 @@ export interface CampaignTemplate {
 
 export interface ApplicationReportRow {
   ambassadorId: string;
+  enrollmentId: string;
   firstName: string;
   lastName: string | null;
   email: string;
   registrationCount: number;
   currentTierLabel: string | null;
   accruedAmount: number; // rupees
+  createdAt: string;
+}
+
+/** Admin drill-down behind one ambassador's registrationCount — full contact detail. */
+export interface ReferralListItem {
+  participantId: string;
+  registrationRef: string;
+  status: string;
+  createdAt: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  college: string | null;
+}
+
+/** Ambassador-facing referral list — name + college only, no other contact detail. */
+export interface MyReferralItem {
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
   createdAt: string;
 }
 

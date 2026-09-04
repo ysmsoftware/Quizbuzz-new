@@ -10,6 +10,7 @@ import {
     ListOrgAmbassadorsQuerySchema,
     RejectApplicationSchema,
     ListReportQuerySchema,
+    ListReferralsQuerySchema,
     LeaderboardQuerySchema,
     ReplaceGroupsSchema,
     CreateTemplateSchema,
@@ -295,6 +296,22 @@ export class AmbassadorCampaignController {
             const organizationId = req.user!.organizationId;
             const query = ListReportQuerySchema.parse(req.query);
             const result = await this.service.getCampaignReport(organizationId, req.params.id as string, query);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getCampaignReferrals = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const query = ListReferralsQuerySchema.parse(req.query);
+            const result = await this.service.getCampaignReferrals(
+                organizationId,
+                req.params.id as string,
+                req.params.enrollmentId as string,
+                query,
+            );
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);

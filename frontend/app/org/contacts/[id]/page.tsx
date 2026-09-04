@@ -49,6 +49,11 @@ import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { SectionErrorBoundary } from '@/components/admin/contacts/section-error-boundary';
+import { Combobox, type ComboboxOption } from '@/components/shared/Combobox';
+import { referenceDataService, type CollegeOption, type DepartmentOption } from '@/lib/services/reference-data-service';
+
+// Sentinel Combobox value meaning "not in the catalog" — reveals a free-text fallback input.
+const OTHER_VALUE = '__OTHER__';
 
 export default function ContactProfilePage() {
     const { id: contactId } = useParams() as { id: string };
@@ -76,9 +81,30 @@ export default function ContactProfilePage() {
         phone: '',
         college: '',
         department: '',
+        collegeId: null as string | null,
+        departmentId: null as string | null,
         city: '',
         state: '',
     });
+
+    // College/Department catalog (see backend/src/common/colleges.ts) — same
+    // Combobox + "Other" fallback pattern as the public registration form.
+    const [colleges, setColleges] = useState<CollegeOption[]>([]);
+    const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+    const [selectedCollegeId, setSelectedCollegeId] = useState('');
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
+
+    useEffect(() => {
+        referenceDataService.getColleges().then(setColleges).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (!selectedCollegeId || selectedCollegeId === OTHER_VALUE) {
+            setDepartments([]);
+            return;
+        }
+        referenceDataService.getDepartments(selectedCollegeId).then(setDepartments).catch(() => setDepartments([]));
+    }, [selectedCollegeId]);
 
     useEffect(() => {
         if (contact) {
@@ -89,11 +115,45 @@ export default function ContactProfilePage() {
                 phone: contact.phone || '',
                 college: contact.college || '',
                 department: contact.department || '',
+                collegeId: contact.collegeId ?? null,
+                departmentId: contact.departmentId ?? null,
                 city: contact.city || '',
                 state: contact.state || '',
             });
+            setSelectedCollegeId(contact.collegeId || (contact.college ? OTHER_VALUE : ''));
+            setSelectedDepartmentId(contact.departmentId || (contact.department ? OTHER_VALUE : ''));
         }
     }, [contact]);
+
+    const collegeOptions: ComboboxOption[] = [
+        ...colleges.map((c) => ({ value: c.id, label: c.name })),
+        { value: OTHER_VALUE, label: 'Other (not listed)' },
+    ];
+    const departmentOptions: ComboboxOption[] = [
+        ...departments.map((d) => ({ value: d.id, label: d.name })),
+        { value: OTHER_VALUE, label: 'Other (not listed)' },
+    ];
+
+    const handleCollegeSelect = (value: string) => {
+        setSelectedCollegeId(value);
+        setSelectedDepartmentId('');
+        if (value === OTHER_VALUE) {
+            setFormData((prev) => ({ ...prev, college: '', collegeId: null, department: '', departmentId: null }));
+        } else {
+            const college = colleges.find((c) => c.id === value);
+            setFormData((prev) => ({ ...prev, college: college?.name ?? '', collegeId: value, department: '', departmentId: null }));
+        }
+    };
+
+    const handleDepartmentSelect = (value: string) => {
+        setSelectedDepartmentId(value);
+        if (value === OTHER_VALUE) {
+            setFormData((prev) => ({ ...prev, department: '', departmentId: null }));
+        } else {
+            const department = departments.find((d) => d.id === value);
+            setFormData((prev) => ({ ...prev, department: department?.name ?? '', departmentId: value }));
+        }
+    };
 
     if (isLoadingContact) {
         return <div className="p-8 flex items-center justify-center">Loading profile...</div>;
@@ -472,19 +532,47 @@ export default function ContactProfilePage() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="college">Institutional Affiliation</Label>
-                            <Input
-                                id="college"
-                                value={formData.college}
-                                onChange={(e) => setFormData({ ...formData, college: e.target.value })}
+                            <Combobox
+                                options={collegeOptions}
+                                value={selectedCollegeId}
+                                onChange={handleCollegeSelect}
+                                placeholder="Select college"
+                                searchPlaceholder="Search colleges..."
                             />
+                            {selectedCollegeId === OTHER_VALUE && (
+                                <Input
+                                    placeholder="Enter college name"
+                                    value={formData.college}
+                                    onChange={(e) => setFormData({ ...formData, college: e.target.value })}
+                                />
+                            )}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="department">Department</Label>
-                            <Input
-                                id="department"
-                                value={formData.department}
-                                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                            />
+                            {selectedCollegeId && selectedCollegeId !== OTHER_VALUE ? (
+                                <>
+                                    <Combobox
+                                        options={departmentOptions}
+                                        value={selectedDepartmentId}
+                                        onChange={handleDepartmentSelect}
+                                        placeholder="Select department"
+                                        searchPlaceholder="Search departments..."
+                                    />
+                                    {selectedDepartmentId === OTHER_VALUE && (
+                                        <Input
+                                            placeholder="Enter department"
+                                            value={formData.department}
+                                            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                                        />
+                                    )}
+                                </>
+                            ) : (
+                                <Input
+                                    id="department"
+                                    value={formData.department}
+                                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                                />
+                            )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">

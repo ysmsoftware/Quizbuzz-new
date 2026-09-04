@@ -6,6 +6,10 @@ export interface CreateContactDTO {
   lastName?:  string | undefined;
   college?:   string | undefined;
   department?: string | undefined;
+  // Set when college/department were picked from the catalog (src/common/colleges.ts)
+  // rather than typed as "Other" free text.
+  collegeId?:   string | undefined;
+  departmentId?: string | undefined;
   city?:      string | undefined;
   state?:     string | undefined;
 }
@@ -16,6 +20,8 @@ export interface UpdateContactDTO {
   lastName?:   string | undefined;
   college?:    string | undefined;
   department?: string | undefined;
+  collegeId?:   string | null | undefined;
+  departmentId?: string | null | undefined;
   city?:       string | undefined;
   state?:      string | undefined;
 }
@@ -46,6 +52,8 @@ export interface ContactResult {
   lastName:    string | null;
   college:     string | null;
   department:  string | null;
+  collegeId:   string | null;
+  departmentId: string | null;
   city:        string | null;
   state:       string | null;
   createdAt:   Date;
@@ -134,6 +142,8 @@ export interface UpsertContactInput {
   lastName?:      string | undefined;
   college?:       string | undefined;
   department?:    string | undefined;
+  collegeId?:     string | undefined;
+  departmentId?:  string | undefined;
   city?:          string | undefined;
   state?:         string | undefined;
 }
@@ -144,6 +154,8 @@ export interface UpdateContactInput {
   lastName?:   string | undefined;
   college?:    string | undefined;
   department?: string | undefined;
+  collegeId?:  string | null | undefined;
+  departmentId?: string | null | undefined;
   city?:       string | undefined;
   state?:      string | undefined;
 }

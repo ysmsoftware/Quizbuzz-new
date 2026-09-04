@@ -21,6 +21,46 @@ export class AmbassadorController {
 
     constructor(private readonly service: AmbassadorService) { }
 
+    // helper
+
+    private getDevice(req: Request) {
+        return {
+            ipAddress: (req.ip ?? req.socket.remoteAddress ?? "unknown"),
+            userAgent: req.headers["user-agent"] ?? "unknown",
+        };
+    }
+
+    private setCookies(res: Response, tokens: { accessToken: string; refreshToken: string; expiresIn: number }): void {
+        const { domain, secure, sameSite } = config.auth.cookie;
+
+        res.cookie("ambassadorToken", tokens.accessToken, {
+            httpOnly: true,
+            secure,
+            sameSite: sameSite as any,
+            domain: domain || undefined,
+            path: "/",
+            maxAge: tokens.expiresIn * 1000,
+        });
+        res.cookie("ambassadorRefreshToken", tokens.refreshToken, {
+            httpOnly: true,
+            secure,
+            sameSite: sameSite as any,
+            domain: domain || undefined,
+            path: "/api/v1/public/ambassador/auth/refresh",
+            maxAge: config.auth.jwt.refreshTtl * 1000,
+        });
+    }
+
+    private clearCookies(res: Response): void {
+        const { domain, secure, sameSite } = config.auth.cookie;
+        const cookieOpts = { httpOnly: true, secure, sameSite: sameSite as any, domain: domain || undefined };
+        // Must match setCookies' options exactly (domain/secure/sameSite/path) or the browser
+        // treats the Set-Cookie as a different cookie and leaves the old one alive — same
+        // footgun admin-auth.controller.ts's clearCookies documents.
+        res.clearCookie("ambassadorToken", { ...cookieOpts, path: "/" });
+        res.clearCookie("ambassadorRefreshToken", { ...cookieOpts, path: "/api/v1/public/ambassador/auth/refresh" });
+    }
+
     // ─── Public catalog + upload ─────────────────────────────────────────────────
 
     /** Platform-wide catalog — used by the generic ambassador signup flow. */
@@ -102,17 +142,9 @@ export class AmbassadorController {
     signupComplete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const data = SignupCompleteSchema.parse(req.body);
-            const result = await this.service.signupComplete(data);
+            const result = await this.service.signupComplete(data, this.getDevice(req));
 
-            const { domain, secure, sameSite } = config.auth.cookie;
-            res.cookie("ambassadorToken", result.token, {
-                httpOnly: true,
-                secure,
-                sameSite: sameSite as any,
-                domain: domain || undefined,
-                path: "/",
-                maxAge: result.expiresIn * 1000,
-            });
+            this.setCookies(res, result);
 
             res.status(201).json({
                 success: true,
@@ -140,21 +172,37 @@ export class AmbassadorController {
     verifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { email, otp } = VerifyOtpSchema.parse(req.body);
-            const result = await this.service.verifyOtp(email, otp);
+            const result = await this.service.verifyOtp(email, otp, this.getDevice(req));
 
-            const { domain, secure, sameSite } = config.auth.cookie;
-            res.cookie("ambassadorToken", result.token, {
-                httpOnly: true,
-                secure,
-                sameSite: sameSite as any,
-                domain: domain || undefined,
-                path: "/",
-                maxAge: result.expiresIn * 1000,
-            });
+            this.setCookies(res, result);
 
             res.status(200).json({
                 success: true,
                 message: "OTP verified",
+                data: { expiresIn: result.expiresIn },
+                requestId: req.id,
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    /** POST /public/ambassador/auth/refresh — unauthenticated (that's the point: the access
+     *  token cookie has expired by the time this is called), cookie-scoped to this path only. */
+    refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const rawRefreshToken = req.cookies?.ambassadorRefreshToken;
+            if (!rawRefreshToken) {
+                res.status(401).json({ success: false, message: "No refresh token", requestId: req.id });
+                return;
+            }
+
+            const result = await this.service.refresh(rawRefreshToken, this.getDevice(req));
+            this.setCookies(res, result);
+
+            res.status(200).json({
+                success: true,
+                message: "Token refreshed",
                 data: { expiresIn: result.expiresIn },
                 requestId: req.id,
             });
@@ -188,8 +236,11 @@ export class AmbassadorController {
 
     logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const { domain, secure, sameSite } = config.auth.cookie;
-            res.clearCookie("ambassadorToken", { httpOnly: true, secure, sameSite: sameSite as any, domain: domain || undefined, path: "/" });
+            const rawRefreshToken = req.cookies?.ambassadorRefreshToken;
+            if (rawRefreshToken) {
+                await this.service.logout(rawRefreshToken);
+            }
+            this.clearCookies(res);
             res.status(200).json({ success: true, message: "Logged out", requestId: req.id });
         } catch (err) {
             next(err);
@@ -291,6 +342,17 @@ export class AmbassadorController {
                 page,
                 limit,
             );
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    getMyReferrals = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { id } = req.ambassador!;
+            const { page, limit } = ListCampaignsQuerySchema.parse(req.query);
+            const result = await this.service.getMyReferrals(id, req.params.campaignId as string, page, limit);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);

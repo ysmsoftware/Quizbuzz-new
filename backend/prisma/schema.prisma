@@ -542,6 +542,13 @@ model Contact {
   lastName       String?
   college        String?
   department     String?
+  // Set when college/department were picked from the PlatformCollege/PlatformDepartment catalog
+  // rather than typed as free text ("Other") — college/department above still always carry the
+  // display name either way. Deliberately NOT a @relation/FK: the catalog is an eventually-
+  // consistent write-through from quizbuzz-ops-next (see PlatformCollege's comment), so a hard FK
+  // could reject a registration in the rare race where a brand-new college hasn't synced yet.
+  collegeId      String?
+  departmentId   String?
   city           String?
   state          String?
   isDeleted      Boolean  @default(false)
@@ -558,6 +565,7 @@ model Contact {
   @@unique([organizationId, phone])
   @@index([email])
   @@index([phone])
+  @@index([collegeId])
   @@map("contacts")
 }
 
@@ -1250,9 +1258,28 @@ model Ambassador {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  enrollments AmbassadorCampaignEnrollment[]
+  enrollments   AmbassadorCampaignEnrollment[]
+  refreshTokens AmbassadorRefreshToken[]
 
   @@map("ambassadors")
+}
+
+model AmbassadorRefreshToken {
+  id           String    @id @default(ulid())
+  ambassadorId String
+  tokenHash    String    @unique // store hash of the token, not plaintext
+  deviceInfo   String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  ambassador Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+
+  @@index([ambassadorId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("ambassador_refresh_tokens")
 }
 
 model AmbassadorCampaign {
@@ -1379,6 +1406,33 @@ model PlatformAmbassadorType {
   updatedAt         DateTime @updatedAt
 
   @@map("platform_ambassador_types")
+}
+
+// Read-only mirror of quizbuzz-ops-next's College/Department catalog — same write-through
+// mechanism as PlatformAmbassadorType above. This app only ever reads these tables. No DB-level
+// FK from Contact.collegeId/departmentId to these — see the comment on Contact for why.
+model PlatformCollege {
+  id        String   @id
+  name      String
+  state     String?
+  district  String?
+  city      String?
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@index([state])
+  @@map("platform_colleges")
+}
+
+model PlatformDepartment {
+  id        String   @id
+  collegeId String
+  name      String
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@index([collegeId])
+  @@map("platform_departments")
 }
 
 model OrganizationAmbassadorTypeAccess {

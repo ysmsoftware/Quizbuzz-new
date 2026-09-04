@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Clock, XCircle } from 'lucide-react';
+import { ArrowRight, Clock, Loader2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,9 +10,14 @@ import type { MyCampaignItem } from '@/lib/types/ambassador';
 
 interface CampaignCardProps {
   campaign: MyCampaignItem;
+  /** Present only where the caller has a mutation wired up (the campaigns list page) — lets a
+   *  REJECTED application be resubmitted after the ambassador fixes whatever the org flagged,
+   *  instead of being stuck rejected forever. */
+  onReapply?: () => void;
+  reapplyLoading?: boolean;
 }
 
-export function CampaignCard({ campaign }: CampaignCardProps) {
+export function CampaignCard({ campaign, onReapply, reapplyLoading }: CampaignCardProps) {
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-3">
@@ -36,9 +41,17 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
             </Button>
           </>
         ) : campaign.status === 'REJECTED' ? (
-          <p className="text-sm text-muted-foreground">
-            {campaign.rejectionReason || 'This application was not approved.'}
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground">
+              {campaign.rejectionReason || 'This application was not approved.'}
+            </p>
+            {onReapply && (
+              <Button size="sm" variant="outline" className="w-full" onClick={onReapply} disabled={reapplyLoading}>
+                {reapplyLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Reapply
+              </Button>
+            )}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">
             Your application is with {campaign.organizationName} for review. You&apos;ll get your referral link once approved.

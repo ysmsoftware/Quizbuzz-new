@@ -23,6 +23,9 @@ ambassadorPublicRouter.post("/signup/complete",      (req, res, next) => ctrl().
 // Login — returning ambassador
 ambassadorPublicRouter.post("/auth/request-otp",     otpLimiter, (req, res, next) => ctrl().requestOtp(req, res, next));
 ambassadorPublicRouter.post("/auth/verify-otp",      otpLimiter, (req, res, next) => ctrl().verifyOtp(req, res, next));
+// Unauthenticated by design — called once the access token has already expired, using only
+// the refresh-token cookie (scoped to this path, see setCookies in the controller).
+ambassadorPublicRouter.post("/auth/refresh",         (req, res, next) => ctrl().refresh(req, res, next));
 
 // Ambassador-authenticated, mounted at /api/v1/ambassador — cross-organization: an ambassador
 // is one platform identity, browsing/applying to campaigns from any organization (mirrors how
@@ -44,4 +47,5 @@ ambassadorRouter.post("/campaigns/:campaignId/apply",            (req, res, next
 ambassadorRouter.get("/campaigns/:campaignId/stats",             (req, res, next) => ctrl().getCampaignStats(req, res, next));
 ambassadorRouter.get("/campaigns/:campaignId/leaderboard",       (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));
 ambassadorRouter.get("/campaigns/:campaignId/social-proof",      (req, res, next) => ctrl().getCampaignSocialProof(req, res, next));
+ambassadorRouter.get("/campaigns/:campaignId/referrals",         (req, res, next) => ctrl().getMyReferrals(req, res, next));
 ambassadorRouter.get("/activity",                                (req, res, next) => ctrl().getMyActivity(req, res, next));

@@ -978,6 +978,8 @@ export class ContestService {
             phone:      contact.phone,
             college:    contact.college,
             department: contact.department,
+            collegeId:    contact.collegeId,
+            departmentId: contact.departmentId,
             city:       contact.city,
             state:      contact.state,
         };
@@ -1111,8 +1113,19 @@ export class ContestService {
             if (dto.firstName !== undefined && dto.firstName !== existingContact.firstName) contactUpdates.firstName = dto.firstName;
             if (dto.lastName !== undefined && dto.lastName !== existingContact.lastName) contactUpdates.lastName = dto.lastName;
             if (dto.phone !== undefined && dto.phone !== existingContact.phone) contactUpdates.phone = dto.phone;
-            if (dto.college !== undefined && dto.college !== existingContact.college) contactUpdates.college = dto.college;
-            if (dto.department !== undefined && dto.department !== existingContact.department) contactUpdates.department = dto.department;
+            // college/collegeId (and department/departmentId) are always submitted together as a
+            // pair from the registration form — collegeId is only set when a catalog entry was
+            // picked, undefined when "Other" free text was typed instead. Updated together so a
+            // returning participant switching TO "Other" actually clears the stale id, rather than
+            // leaving college pointing at new free text while collegeId still names the old college.
+            if (dto.college !== undefined && (dto.college !== existingContact.college || dto.collegeId !== existingContact.collegeId)) {
+                contactUpdates.college = dto.college;
+                contactUpdates.collegeId = dto.collegeId ?? null;
+            }
+            if (dto.department !== undefined && (dto.department !== existingContact.department || dto.departmentId !== existingContact.departmentId)) {
+                contactUpdates.department = dto.department;
+                contactUpdates.departmentId = dto.departmentId ?? null;
+            }
             if (dto.city !== undefined && dto.city !== existingContact.city) contactUpdates.city = dto.city;
             if (dto.state !== undefined && dto.state !== existingContact.state) contactUpdates.state = dto.state;
 
@@ -1140,6 +1153,8 @@ export class ContestService {
                     lastName: dto.lastName,
                     college: dto.college,
                     department: dto.department,
+                    collegeId: dto.collegeId,
+                    departmentId: dto.departmentId,
                     city: dto.city,
                     state: dto.state,
                 }

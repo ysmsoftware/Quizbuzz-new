@@ -12,9 +12,11 @@ import logger from "../../config/logger";
 
 import { PaymentListResult, PaymentDetailResult } from "./payment.types";
 import { PayoutService } from "../payout/payout.service";
+import { OrganizationRepository } from "../organization/organization.repository";
 import { routeTransferQueue, RouteTransferJobPayload, paymentCleanupQueue } from "../../queues";
 import { config } from "../../config";
 import { logAudit } from "../../common/audit-log";
+import { formatDateHuman, formatTimeHuman } from "../../utils/timezone";
 
 
 export class PaymentService {
@@ -26,6 +28,7 @@ export class PaymentService {
         private participantService: ParticipantService,
         private messagingService: MessagingService,
         private payoutService?: PayoutService,
+        private organizationRepo?: OrganizationRepository,
     ) { }
 
 
@@ -318,31 +321,53 @@ export class PaymentService {
                     logger.info(`[payment] Confirmed registration for participant ${payment.participantId} after payment captured`);
                 }
 
-                // Send payment confirmation email
+                // Send payment confirmation + registration-successful emails (the latter
+                // mirrors the free-contest confirmation contest.service.ts sends on
+                // registration — paid contests only get it once payment is captured).
                 if (payment.participantId) {
-                    this.participantService.getParticipantById(
-                        payment.contestId,
-                        payment.participantId,
-                        payment.organizationId
-                    ).then((participant) => {
+                    Promise.all([
+                        this.participantService.getParticipantById(
+                            payment.contestId,
+                            payment.participantId,
+                            payment.organizationId
+                        ),
+                        this.organizationRepo?.findTimezone(payment.organizationId) ?? Promise.resolve(null),
+                    ]).then(([participant, timezone]) => {
                         const fullName = participant.contact.lastName
                             ? `${participant.contact.firstName} ${participant.contact.lastName}`
                             : participant.contact.firstName;
 
-                        return this.messagingService.enqueueMessage(payment.organizationId, {
-                            participantId: payment.participantId,
-                            contestId: payment.contestId ?? undefined,
-                            channel: "EMAIL",
-                            template: MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE,
-                            recipient: paymentEntity.email ?? '',
-                            params: {
-                                name: fullName,
-                                amount: `₹${(payment.amount / 100).toFixed(2)}`,
-                                eventName: participant.contest.title,
-                            },
-                        });
+                        return Promise.all([
+                            this.messagingService.enqueueMessage(payment.organizationId, {
+                                participantId: payment.participantId,
+                                contestId: payment.contestId ?? undefined,
+                                channel: "EMAIL",
+                                template: MessageTemplate.PAYMENT_CONFIRMATION_MESSAGE,
+                                recipient: paymentEntity.email ?? '',
+                                params: {
+                                    name: fullName,
+                                    amount: `₹${(payment.amount / 100).toFixed(2)}`,
+                                    eventName: participant.contest.title,
+                                },
+                            }),
+                            this.messagingService.enqueueMessage(payment.organizationId, {
+                                participantId: payment.participantId,
+                                contestId: payment.contestId ?? undefined,
+                                channel: "EMAIL",
+                                template: MessageTemplate.REGISTRATION_SUCCESSFUL,
+                                recipient: paymentEntity.email ?? '',
+                                params: {
+                                    name: fullName,
+                                    eventName: participant.contest.title,
+                                    date: participant.contest.startTime ? formatDateHuman(participant.contest.startTime, timezone) : 'TBD',
+                                    time: participant.contest.startTime ? formatTimeHuman(participant.contest.startTime, timezone) : 'TBD',
+                                    link: `${config.app.frontendUrl}/quiz/${participant.contest.slug}/join`,
+                                    joinCode: participant.contest.joinCode || 'N/A',
+                                },
+                            }),
+                        ]);
                     }).catch((err) => {
-                        logger.error(`[payment] Failed to enqueue payment confirmation: ${(err as Error).message}`);
+                        logger.error(`[payment] Failed to enqueue post-payment messages: ${(err as Error).message}`);
                     });
                 }
                 break;

@@ -52,4 +52,5 @@ campaignRouter.post("/:id/duplicate",    (req, res, next) => ctrl().duplicateCam
 campaignRouter.get("/:id/stats",         (req, res, next) => ctrl().getCampaignStatsSummary(req, res, next));
 campaignRouter.get("/:id/report",        (req, res, next) => ctrl().getCampaignReport(req, res, next));
 campaignRouter.get("/:id/report/export", (req, res, next) => ctrl().exportCampaignReport(req, res, next));
+campaignRouter.get("/:id/enrollments/:enrollmentId/referrals", (req, res, next) => ctrl().getCampaignReferrals(req, res, next));
 campaignRouter.get("/:id/leaderboard",   (req, res, next) => ctrl().getCampaignLeaderboard(req, res, next));

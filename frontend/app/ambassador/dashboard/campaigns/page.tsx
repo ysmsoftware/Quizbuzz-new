@@ -18,7 +18,7 @@ import { CampaignCard } from '@/components/features/ambassador/CampaignCard';
  */
 export default function AmbassadorCampaignsPage() {
   const router = useRouter();
-  const { campaigns: joinedCampaigns, isLoading: joinedLoading } = useMyCampaigns();
+  const { campaigns: joinedCampaigns, isLoading: joinedLoading, apply, applyLoading } = useMyCampaigns();
   const { campaigns: availableCampaigns, isLoading: availableLoading, isError: availableError } = useAvailableCampaigns();
 
   return (
@@ -43,7 +43,12 @@ export default function AmbassadorCampaignsPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {joinedCampaigns.map((campaign) => (
-                <CampaignCard key={campaign.campaignId} campaign={campaign} />
+                <CampaignCard
+                  key={campaign.campaignId}
+                  campaign={campaign}
+                  onReapply={() => apply(campaign.campaignId)}
+                  reapplyLoading={applyLoading}
+                />
               ))}
             </div>
           )}

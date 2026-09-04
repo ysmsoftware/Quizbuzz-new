@@ -1,5 +1,12 @@
-import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, AmbassadorCampaignTemplate, AmbassadorGroup, AmbassadorStatus, Prisma } from "@prisma/client";
+import { Ambassador, AmbassadorCampaign, AmbassadorCampaignEnrollment, AmbassadorCampaignStatus, AmbassadorCampaignTemplate, AmbassadorGroup, AmbassadorStatus, ParticipantStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../config/db";
+
+/** A referral only "counts" — toward leaderboard/milestone/speed-bonus numbers, and toward
+ *  the referral list — once the registration it came from is actually real: PENDING_PAYMENT
+ *  rows are seats held while Razorpay checkout is in progress, and are silently abandoned or
+ *  fail more often than not. Every referral-counting query below shares this filter so a
+ *  failed/abandoned paid registration can't inflate an ambassador's count or reward payout. */
+const COUNTED_REFERRAL_STATUS: Prisma.ParticipantWhereInput = { status: { not: ParticipantStatus.PENDING_PAYMENT } };
 
 export interface FindCampaignsFilter {
     organizationId: string;
@@ -263,6 +270,17 @@ export class AmbassadorCampaignRepository {
         });
     }
 
+    /** Reapply after rejection — @@unique([campaignId, ambassadorId]) means a second apply for
+     *  the same pair can never be a new row, so a REJECTED enrollment is put back to PENDING
+     *  in place instead. Clears the prior review so the campaign's org sees it as a fresh
+     *  application, not a stale rejected one. */
+    async resetEnrollmentToPending(id: string): Promise<AmbassadorCampaignEnrollment> {
+        return prisma.ambassadorCampaignEnrollment.update({
+            where: { id },
+            data: { status: AmbassadorStatus.PENDING, reviewedAt: null, reviewedById: null, rejectionReason: null },
+        });
+    }
+
     /**
      * Real single lookup off the globally-unique referralCode, with the
      * contestId + ACTIVE check as a data-integrity guard rather than the
@@ -393,14 +411,14 @@ export class AmbassadorCampaignRepository {
     // Live stats support — computed at read time, never stored (§6.3)
 
     async countReferrals(enrollmentId: string): Promise<number> {
-        return prisma.participant.count({ where: { referredByEnrollmentId: enrollmentId } });
+        return prisma.participant.count({ where: { referredByEnrollmentId: enrollmentId, ...COUNTED_REFERRAL_STATUS } });
     }
 
     async countReferralsForEnrollments(enrollmentIds: string[]): Promise<Map<string, number>> {
         if (enrollmentIds.length === 0) return new Map();
         const grouped = await prisma.participant.groupBy({
             by: ["referredByEnrollmentId"],
-            where: { referredByEnrollmentId: { in: enrollmentIds } },
+            where: { referredByEnrollmentId: { in: enrollmentIds }, ...COUNTED_REFERRAL_STATUS },
             _count: { _all: true },
         });
         const map = new Map<string, number>();
@@ -413,13 +431,41 @@ export class AmbassadorCampaignRepository {
     /** createdAt of the Nth (1-indexed) referral for this enrollment, or null if fewer than n exist. */
     async findNthReferralCreatedAt(enrollmentId: string, n: number): Promise<Date | null> {
         const rows = await prisma.participant.findMany({
-            where: { referredByEnrollmentId: enrollmentId },
+            where: { referredByEnrollmentId: enrollmentId, ...COUNTED_REFERRAL_STATUS },
             orderBy: { createdAt: "asc" },
             skip: n - 1,
             take: 1,
             select: { createdAt: true },
         });
         return rows[0]?.createdAt ?? null;
+    }
+
+    /** Referral list for one enrollment — the registrations behind the count above, for the
+     *  "who did I refer" view (ambassador: names only; admin: full detail — the service layer
+     *  decides what to select/return, this just does the paginated fetch). Same counted-status
+     *  filter as the aggregate numbers, so the list and the count an ambassador sees always
+     *  agree. */
+    async listReferrals(enrollmentId: string, params: { skip: number; take: number }): Promise<{ rows: Array<{ id: string; registrationRef: string; status: ParticipantStatus; createdAt: Date; contact: { firstName: string; lastName: string | null; email: string | null; phone: string | null; college: string | null } }>; total: number }> {
+        const where: Prisma.ParticipantWhereInput = { referredByEnrollmentId: enrollmentId, ...COUNTED_REFERRAL_STATUS };
+
+        const [rows, total] = await prisma.$transaction([
+            prisma.participant.findMany({
+                where,
+                skip: params.skip,
+                take: params.take,
+                orderBy: { createdAt: "desc" },
+                select: {
+                    id: true,
+                    registrationRef: true,
+                    status: true,
+                    createdAt: true,
+                    contact: { select: { firstName: true, lastName: true, email: true, phone: true, college: true } },
+                },
+            }),
+            prisma.participant.count({ where }),
+        ]);
+
+        return { rows, total };
     }
 
     /** Every enrollment id this ambassador has APPROVED, across every campaign/org — the
@@ -438,7 +484,7 @@ export class AmbassadorCampaignRepository {
     async listReferralCreatedAtSince(enrollmentIds: string[], since: Date): Promise<Date[]> {
         if (enrollmentIds.length === 0) return [];
         const rows = await prisma.participant.findMany({
-            where: { referredByEnrollmentId: { in: enrollmentIds }, createdAt: { gte: since } },
+            where: { referredByEnrollmentId: { in: enrollmentIds }, createdAt: { gte: since }, ...COUNTED_REFERRAL_STATUS },
             select: { createdAt: true },
         });
         return rows.map((r) => r.createdAt);

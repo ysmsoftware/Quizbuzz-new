@@ -220,6 +220,8 @@ export class ContactService {
         lastName: string | null;
         college: string | null;
         department: string | null;
+        collegeId: string | null;
+        departmentId: string | null;
         city: string | null;
         state: string | null;
         createdAt: Date;
@@ -233,6 +235,8 @@ export class ContactService {
             lastName: contact.lastName,
             college: contact.college,
             department: contact.department,
+            collegeId: contact.collegeId,
+            departmentId: contact.departmentId,
             city: contact.city,
             state: contact.state,
             createdAt: contact.createdAt,

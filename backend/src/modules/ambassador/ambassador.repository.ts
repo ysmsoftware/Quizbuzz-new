@@ -1,6 +1,6 @@
-import { Ambassador, Prisma } from "@prisma/client";
+import { Ambassador, AmbassadorRefreshToken, Prisma } from "@prisma/client";
 import { prisma } from "../../config/db";
-import { CreateAmbassadorInput } from "./ambassador.types";
+import { CreateAmbassadorInput, CreateRefreshTokenInput } from "./ambassador.types";
 
 export class AmbassadorRepository {
 
@@ -28,6 +28,30 @@ export class AmbassadorRepository {
                 proofStorageKey: data.proofStorageKey,
                 proofUrl: data.proofUrl,
             },
+        });
+    }
+
+    // ─── Refresh tokens (§7.1) — same pattern as AdminAuthRepository's admin_refresh_tokens ──
+
+    async createRefreshToken(input: CreateRefreshTokenInput): Promise<AmbassadorRefreshToken> {
+        return prisma.ambassadorRefreshToken.create({ data: input });
+    }
+
+    async findRefreshTokenByHash(hash: string): Promise<AmbassadorRefreshToken | null> {
+        return prisma.ambassadorRefreshToken.findUnique({ where: { tokenHash: hash } });
+    }
+
+    async revokeRefreshToken(hash: string): Promise<void> {
+        await prisma.ambassadorRefreshToken.update({
+            where: { tokenHash: hash },
+            data: { revokedAt: new Date() },
+        });
+    }
+
+    async revokeAllRefreshTokenByAmbassador(ambassadorId: string): Promise<void> {
+        await prisma.ambassadorRefreshToken.updateMany({
+            where: { ambassadorId, revokedAt: null },
+            data: { revokedAt: new Date() },
         });
     }
 }

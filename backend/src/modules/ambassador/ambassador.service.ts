@@ -5,7 +5,7 @@ import { AmbassadorRepository } from "./ambassador.repository";
 import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
 import { bucketDailyRegistrations, computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, DailyActivityPoint, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
 import { campaignStatsPaiseToRupees, leaderboardEntryPaiseToRupees, rewardConfigPaiseToRupees } from "../ambassador-campaign/reward-config-currency";
-import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, CampaignStats, CampaignStatsDetail, CampaignStatsSummary, CampaignPhase, DraftRewardConfig, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
+import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, MyReferralItem, CampaignStats, CampaignStatsDetail, CampaignStatsSummary, CampaignPhase, DraftRewardConfig, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { EmailProvider } from "../../providers/email.provider";
 import { FileStorageProvider } from "../../providers/storage.provider";
@@ -21,6 +21,7 @@ import {
     ConflictError,
     InvalidApplicationDataError,
     NotFoundError,
+    UnauthorizedError,
 } from "../../error/http-errors";
 import {
     SignupStartDTO,
@@ -28,6 +29,8 @@ import {
     AmbassadorResult,
     RequestUploadUrlDTO,
     UploadUrlResult,
+    DeviceInfo,
+    TokenPair,
 } from "./ambassador.types";
 import { UpdateProfileInput, UpdateProofInput, UpdateProfileImageInput } from "./ambassador.validator";
 
@@ -154,7 +157,7 @@ export class AmbassadorService {
         };
     }
 
-    async signupComplete(dto: SignupCompleteDTO): Promise<{ token: string; expiresIn: number }> {
+    async signupComplete(dto: SignupCompleteDTO, device: DeviceInfo): Promise<TokenPair> {
         const key = ambassadorSignupKey(dto.email);
         const stored = await redis.hgetall(key);
 
@@ -191,13 +194,7 @@ export class AmbassadorService {
 
         await redis.del(key);
 
-        const token = jwt.sign(
-            { ambassadorId: ambassador.id },
-            config.auth.jwt.accessSecret,
-            { expiresIn: config.auth.jwt.accessTtl },
-        );
-
-        return { token, expiresIn: config.auth.jwt.accessTtl };
+        return this._issueTokenPairAndStore(ambassador.id, device);
     }
 
     private _validateApplicationData(
@@ -244,7 +241,7 @@ export class AmbassadorService {
             });
     }
 
-    async verifyOtp(email: string, otp: string): Promise<{ token: string; expiresIn: number }> {
+    async verifyOtp(email: string, otp: string, device: DeviceInfo): Promise<TokenPair> {
         const key = ambassadorLoginOtpKey(email);
         const stored = await redis.hgetall(key);
 
@@ -269,13 +266,74 @@ export class AmbassadorService {
         const ambassador = await this.ambassadorRepo.findByEmail(email);
         if (!ambassador) throw new NotFoundError("No ambassador account found for this email.");
 
-        const token = jwt.sign(
-            { ambassadorId: ambassador.id },
+        return this._issueTokenPairAndStore(ambassador.id, device);
+    }
+
+    /** Rotates a refresh token for a new access+refresh pair — same rotate-on-use pattern as
+     *  AdminAuthService.refresh: the old token is revoked immediately, and a reused/revoked
+     *  token revokes every other live session for that ambassador (replay-attack guard). This
+     *  is what was missing before (§7.1 audit finding #1): the ambassador dashboard had no way
+     *  to renew its 30-minute access token, so every session hard-expired and bounced to login. */
+    async refresh(rawRefreshToken: string, device: DeviceInfo): Promise<TokenPair> {
+        let payload: { ambassadorId: string };
+        try {
+            payload = jwt.verify(rawRefreshToken, config.auth.jwt.refreshSecret) as { ambassadorId: string };
+        } catch {
+            throw new UnauthorizedError("Invalid or expired refresh token. Please log in again.");
+        }
+
+        const hash = this._hashToken(rawRefreshToken);
+        const record = await this.ambassadorRepo.findRefreshTokenByHash(hash);
+
+        if (!record || record.revokedAt !== null) {
+            if (record?.ambassadorId) {
+                await this.ambassadorRepo.revokeAllRefreshTokenByAmbassador(record.ambassadorId);
+            }
+            throw new UnauthorizedError("Refresh token is invalid or revoked.");
+        }
+
+        if (record.expiresAt < new Date()) {
+            throw new UnauthorizedError("Refresh token has expired. Please log in again.");
+        }
+
+        await this.ambassadorRepo.revokeRefreshToken(hash);
+
+        return this._issueTokenPairAndStore(payload.ambassadorId, device);
+    }
+
+    async logout(rawRefreshToken: string): Promise<void> {
+        const hash = this._hashToken(rawRefreshToken);
+        const record = await this.ambassadorRepo.findRefreshTokenByHash(hash);
+        if (record && !record.revokedAt) {
+            await this.ambassadorRepo.revokeRefreshToken(hash);
+        }
+    }
+
+    private async _issueTokenPairAndStore(ambassadorId: string, device: DeviceInfo): Promise<TokenPair> {
+        const accessToken = jwt.sign(
+            { ambassadorId },
             config.auth.jwt.accessSecret,
             { expiresIn: config.auth.jwt.accessTtl },
         );
+        const refreshToken = jwt.sign(
+            { ambassadorId },
+            config.auth.jwt.refreshSecret,
+            { expiresIn: config.auth.jwt.refreshTtl },
+        );
 
-        return { token, expiresIn: config.auth.jwt.accessTtl };
+        await this.ambassadorRepo.createRefreshToken({
+            ambassadorId,
+            tokenHash: this._hashToken(refreshToken),
+            deviceInfo: device.userAgent,
+            ipAddress: device.ipAddress,
+            expiresAt: new Date(Date.now() + config.auth.jwt.refreshTtl * 1000),
+        });
+
+        return { accessToken, refreshToken, expiresIn: config.auth.jwt.accessTtl };
+    }
+
+    private _hashToken(token: string): string {
+        return crypto.createHash("sha256").update(token).digest("hex");
     }
 
     async getMe(ambassadorId: string): Promise<AmbassadorResult> {
@@ -518,9 +576,16 @@ export class AmbassadorService {
         }
 
         const existing = await this.campaignRepo.findEnrollment(campaignId, ambassadorId);
-        if (existing) {
+        if (existing && existing.status !== AmbassadorStatus.REJECTED) {
             // Idempotent-safe: a double-click returns the existing application rather than erroring.
             return this._toEnrollmentResult(existing);
+        }
+
+        // A previously-rejected ambassador can reapply — @@unique([campaignId, ambassadorId])
+        // means this has to reset the same row rather than create a new one.
+        if (existing && existing.status === AmbassadorStatus.REJECTED) {
+            const reset = await this.campaignRepo.resetEnrollmentToPending(existing.id);
+            return this._toEnrollmentResult(reset);
         }
 
         let enrollment;
@@ -641,6 +706,26 @@ export class AmbassadorService {
      *  same numbers the org-admin dashboard already computes (getCampaignStatsSummary),
      *  gated the same way getCampaignStats is: only an ambassador APPROVED on this
      *  campaign can see it, not the public. */
+    /** Name-only list of who this ambassador's referral link brought in for one campaign —
+     *  the ambassador-facing view of the same data the org-admin report drills into with full
+     *  contact detail (AmbassadorCampaignService.getCampaignReferrals). */
+    async getMyReferrals(ambassadorId: string, campaignId: string, page: number, limit: number): Promise<PaginatedResult<MyReferralItem>> {
+        const enrollment = await this.campaignRepo.findEnrollment(campaignId, ambassadorId);
+        if (!enrollment) throw new NotFoundError("You have not applied to this campaign.");
+
+        const skip = (page - 1) * limit;
+        const { rows, total } = await this.campaignRepo.listReferrals(enrollment.id, { skip, take: limit });
+
+        const data: MyReferralItem[] = rows.map((r) => ({
+            firstName: r.contact.firstName,
+            lastName: r.contact.lastName,
+            email: r.contact.email,
+            createdAt: r.createdAt,
+        }));
+
+        return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
     async getCampaignSocialProof(ambassadorId: string, campaignId: string): Promise<CampaignStatsSummary> {
         const enrollment = await this.campaignRepo.findEnrollment(campaignId, ambassadorId);
         if (!enrollment || enrollment.status !== AmbassadorStatus.APPROVED) {

@@ -52,6 +52,7 @@ import {
     OrgAmbassadorListItem,
     OrgAmbassadorProfile,
     PaginatedResult,
+    ReferralListItem,
     ReplaceGroupsDTO,
     RewardConfig,
     ShareTemplates,
@@ -774,6 +775,39 @@ export class AmbassadorCampaignService {
         return [header.join(","), ...lines].join("\n");
     }
 
+    /** Full-detail drill-down behind one ambassador's registrationCount on the report — the
+     *  individual registrations that referral code brought in, for the org-admin only (see
+     *  AmbassadorService.getMyReferrals for the name-only ambassador-facing equivalent). */
+    async getCampaignReferrals(
+        organizationId: string,
+        campaignId: string,
+        enrollmentId: string,
+        query: { page: number; limit: number },
+    ): Promise<PaginatedResult<ReferralListItem>> {
+        const campaign = await this.campaignRepo.findById(campaignId, organizationId);
+        if (!campaign) throw new NotFoundError("Campaign not found.");
+
+        const enrollment = await this.campaignRepo.findEnrollmentById(enrollmentId);
+        if (!enrollment || enrollment.campaignId !== campaignId) throw new NotFoundError("Enrollment not found.");
+
+        const skip = (query.page - 1) * query.limit;
+        const { rows, total } = await this.campaignRepo.listReferrals(enrollmentId, { skip, take: query.limit });
+
+        const data: ReferralListItem[] = rows.map((r) => ({
+            participantId: r.id,
+            registrationRef: r.registrationRef,
+            status: r.status,
+            createdAt: r.createdAt,
+            firstName: r.contact.firstName,
+            lastName: r.contact.lastName,
+            email: r.contact.email,
+            phone: r.contact.phone,
+            college: r.contact.college,
+        }));
+
+        return { data, total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) };
+    }
+
     async getCampaignLeaderboard(
         organizationId: string,
         campaignId: string,
@@ -818,6 +852,7 @@ export class AmbassadorCampaignService {
                 const stats = await computeEnrollmentStats(this.campaignRepo, enrollment.id, rewardConfig);
                 return {
                     ambassadorId: enrollment.ambassadorId,
+                    enrollmentId: enrollment.id,
                     firstName: enrollment.ambassador.firstName,
                     lastName: enrollment.ambassador.lastName,
                     email: enrollment.ambassador.email,

@@ -9,11 +9,14 @@ import { AmbassadorNav } from '@/components/features/ambassador/AmbassadorNav';
 export default function AmbassadorDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { ambassador, isLoading, isError } = useAmbassadorMe();
+  const { ambassador, isLoading, isError, isFetching } = useAmbassadorMe();
 
   useEffect(() => {
-    if (isError) router.replace('/ambassador/login');
-  }, [isError, router]);
+    // isFetching guards against a stale cached error (e.g. left over from an earlier
+    // unauthenticated check) redirecting to login while a fresh, now-authenticated refetch
+    // is still in flight — only redirect once that refetch has actually settled as an error.
+    if (isError && !isFetching) router.replace('/ambassador/login');
+  }, [isError, isFetching, router]);
 
   if (isLoading) {
     return (

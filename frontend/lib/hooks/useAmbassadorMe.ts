@@ -15,6 +15,7 @@ export function useAmbassadorMe(options?: { enabled?: boolean }) {
     ambassador: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
+    isFetching: query.isFetching,
     refetch: query.refetch,
   };
 }

@@ -16,6 +16,11 @@ export interface ApplicationFieldDef {
     type: ApplicationFieldType;
     required: boolean;
     options?: string[]; // only meaningful when type === "SELECT"
+    // Live-fetched options instead of the static `options` list above — see
+    // src/common/colleges.ts. `dependsOnKey`, only meaningful for "departments",
+    // names the sibling field whose selected college id filters the department list.
+    optionsSource?: "colleges" | "departments";
+    dependsOnKey?: string;
 }
 
 export interface AmbassadorTypeDefinition {

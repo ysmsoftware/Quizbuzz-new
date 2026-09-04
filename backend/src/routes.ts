@@ -26,6 +26,7 @@ import { quizProctoringRouter } from "./modules/quiz/quiz-proctoring.routes.js";
 import { ambassadorPublicRouter, ambassadorRouter } from "./modules/ambassador/ambassador.routes";
 import { orgAmbassadorRouter, campaignRouter } from "./modules/ambassador-campaign/ambassador-campaign.routes";
 import { opsMetricsRouter } from "./modules/ops-metrics/ops-metrics.routes";
+import { referenceDataRouter } from "./modules/reference-data/reference-data.routes";
 
 const apiRouter = Router();
 
@@ -61,6 +62,7 @@ apiRouter.use("/analytics", analyticsLimiter, analyticsRouter);
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/ops/metrics", opsMetricsRouter);
 apiRouter.use("/public/ambassador", ambassadorPublicRouter);
+apiRouter.use("/public/colleges", referenceDataRouter);
 apiRouter.use("/ambassador", ambassadorRouter);
 apiRouter.use("/queues", authenticatedOrgMiddleware, bullBoardRouter);
 apiRouter.use("/", submissionRouter); // submission routes carry their own full prefixes

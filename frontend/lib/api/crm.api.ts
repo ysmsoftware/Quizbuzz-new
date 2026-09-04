@@ -11,6 +11,8 @@ export interface Contact {
   lastName: string;
   college?: string;
   department?: string;
+  collegeId?: string | null;
+  departmentId?: string | null;
   city?: string;
   state?: string;
   createdAt: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ambassadorService } from '@/lib/services/ambassador-service';
 
 export function useAvailableCampaigns(params: { page?: number; limit?: number } = {}) {
@@ -83,6 +83,26 @@ export function usePublicCampaigns(params: { page?: number; limit?: number } = {
 
   return {
     campaigns: query.data?.data ?? [],
+    pagination: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+/** Name-only list of who this ambassador's referral link brought in — the admin equivalent
+ *  (full contact detail) is useOrgAmbassadorReferrals. `enabled` defaults to true but lets a
+ *  caller that only shows this list inside an on-demand drawer skip the fetch until it's
+ *  actually opened, instead of loading a page of referrals nobody may ever look at. */
+export function useMyReferrals(campaignId: string, page: number, enabled = true) {
+  const query = useQuery({
+    queryKey: ['ambassador-my-referrals', campaignId, page],
+    queryFn: () => ambassadorService.getMyReferrals(campaignId, { page, limit: 20 }),
+    enabled: !!campaignId && enabled,
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    referrals: query.data?.data ?? [],
     pagination: query.data,
     isLoading: query.isLoading,
     isError: query.isError,

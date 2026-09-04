@@ -75,6 +75,8 @@ export class ContactRepository {
         lastName?: string | null | undefined;
         college?: string | null | undefined;
         department?: string | null | undefined;
+        collegeId?: string | null | undefined;
+        departmentId?: string | null | undefined;
         city?: string | null | undefined;
         state?: string | null | undefined;
     }): Promise<Contact> {
@@ -87,6 +89,8 @@ export class ContactRepository {
                 lastName: data.lastName ?? null,
                 college: data.college ?? null,
                 department: data.department ?? null,
+                collegeId: data.collegeId ?? null,
+                departmentId: data.departmentId ?? null,
                 city: data.city ?? null,
                 state: data.state ?? null,
             },
@@ -109,6 +113,8 @@ export class ContactRepository {
                 lastName: input.lastName ?? null,
                 college: input.college ?? null,
                 department: input.department ?? null,
+                collegeId: input.collegeId ?? null,
+                departmentId: input.departmentId ?? null,
                 city: input.city ?? null,
                 state: input.state ?? null,
             },
@@ -119,6 +125,8 @@ export class ContactRepository {
                 ...(input.lastName !== undefined && { lastName: input.lastName }),
                 ...(input.college !== undefined && { college: input.college }),
                 ...(input.department !== undefined && { department: input.department }),
+                ...(input.collegeId !== undefined && { collegeId: input.collegeId }),
+                ...(input.departmentId !== undefined && { departmentId: input.departmentId }),
                 ...(input.city !== undefined && { city: input.city }),
                 ...(input.state !== undefined && { state: input.state }),
             },
@@ -134,6 +142,8 @@ export class ContactRepository {
                 ...(data.lastName !== undefined && { lastName: data.lastName }),
                 ...(data.college !== undefined && { college: data.college }),
                 ...(data.department !== undefined && { department: data.department }),
+                ...(data.collegeId !== undefined && { collegeId: data.collegeId }),
+                ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
                 ...(data.city !== undefined && { city: data.city }),
                 ...(data.state !== undefined && { state: data.state }),
             },

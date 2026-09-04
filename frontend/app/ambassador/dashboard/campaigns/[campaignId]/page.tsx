@@ -18,6 +18,7 @@ import { SocialProofStrip } from '@/components/features/ambassador/SocialProofSt
 import { ShareCampaignCard } from '@/components/features/ambassador/ShareCampaignCard';
 import { RewardTiersCard } from '@/components/features/ambassador/RewardTiersCard';
 import { AmbassadorKitCard } from '@/components/features/ambassador/AmbassadorKitCard';
+import { MyReferralsCard } from '@/components/features/ambassador/MyReferralsCard';
 import { CampaignPreview } from '@/components/features/ambassador/CampaignPreview';
 import { fillShareTemplate } from '@/lib/utils/share-template';
 import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
@@ -239,6 +240,14 @@ export default function AmbassadorCampaignDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground py-6 text-center">No leaderboard configured for this campaign.</p>
               )}
+            </section>
+
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-[17px] font-bold text-foreground">Your referrals</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Everyone who registered through your link.</p>
+              </div>
+              <MyReferralsCard campaignId={campaignId} registrationCount={stats.registrationCount} />
             </section>
 
             <section className="space-y-3">

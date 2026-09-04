@@ -381,6 +381,11 @@ export const ListReportQuerySchema = z.object({
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
+export const ListReferralsQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 // ?scope=APPLICATION_FIELD_GROUP&groupByFieldKeys=college,department or ?scope=INDIVIDUAL_AMBASSADOR —
 // query strings can't carry nested objects, so this is the flat encoding of leaderboardScopeSchema,
 // same comma-separated-multi-value convention as statusListSchema.

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
+import { State, City } from "country-state-city";
 import { ArrowLeft, Loader2, CreditCard, CheckCircle, Mail, KeyRound } from "lucide-react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
@@ -17,8 +18,27 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { contestService } from "@/lib/services/contest-service";
 import { registrationService, type ExistingRegistrationInfo } from "@/lib/services/registration-service";
+import { referenceDataService, type CollegeOption, type DepartmentOption } from "@/lib/services/reference-data-service";
+import { Combobox, type ComboboxOption } from "@/components/shared/Combobox";
 import { useRazorpay } from "@/lib/hooks/usePayment";
 import type { PublicContestDetail } from "@/lib/types/public-contest";
+
+// India-only state/city picker, same country-state-city dataset already used for org
+// onboarding (OnboardingModal.tsx) — reused here instead of adding a new dependency.
+const INDIA_ISO = "IN";
+const STATE_OPTIONS: ComboboxOption[] = State.getStatesOfCountry(INDIA_ISO).map((s) => ({
+  value: s.name,
+  label: s.name,
+}));
+
+function getCityOptionsForState(stateName: string): ComboboxOption[] {
+  const state = State.getStatesOfCountry(INDIA_ISO).find((s) => s.name === stateName);
+  if (!state) return [];
+  return City.getCitiesOfState(INDIA_ISO, state.isoCode).map((c) => ({ value: c.name, label: c.name }));
+}
+
+// Sentinel Combobox value meaning "not in the catalog" — reveals a free-text fallback input.
+const OTHER_VALUE = "__OTHER__";
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -32,6 +52,8 @@ const detailsSchema = z.object({
   phone: z.string().min(10, "Phone number must be at least 10 digits").optional().or(z.literal("")),
   college: z.string().optional(),
   department: z.string().optional(),
+  collegeId: z.string().optional(),
+  departmentId: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   referralCode: z.string().optional(),
@@ -94,6 +116,17 @@ function RegisterPageInner() {
   // Values for the contest's organizer-defined registrationFields, keyed by field id.
   // Kept outside react-hook-form since the set of fields is dynamic per contest.
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  // College/Department catalog (see backend/src/common/colleges.ts) — the Combobox's
+  // selected value is either a real catalog id or OTHER_VALUE, which reveals a
+  // free-text fallback input. Kept outside react-hook-form (like customFieldValues)
+  // since it drives which UI is shown, not just a submitted value.
+  const [colleges, setColleges] = useState<CollegeOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [selectedCollegeId, setSelectedCollegeId] = useState<string>("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  // City has no separate id — the catalog is India's own city/town list (country-state-city),
+  // so the selected value IS the submitted "city" string, unlike college/department above.
+  const [selectedCityValue, setSelectedCityValue] = useState<string>("");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [registrationRef, setRegistrationRef] = useState("");
@@ -182,6 +215,87 @@ function RegisterPageInner() {
     loadContest();
   }, [slug]);
 
+  useEffect(() => {
+    referenceDataService.getColleges().then(setColleges).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCollegeId || selectedCollegeId === OTHER_VALUE) {
+      setDepartments([]);
+      return;
+    }
+    referenceDataService.getDepartments(selectedCollegeId).then(setDepartments).catch(() => setDepartments([]));
+  }, [selectedCollegeId]);
+
+  const collegeOptions: ComboboxOption[] = [
+    ...colleges.map((c) => ({ value: c.id, label: c.name })),
+    { value: OTHER_VALUE, label: "Other (not listed)" },
+  ];
+  const departmentOptions: ComboboxOption[] = [
+    ...departments.map((d) => ({ value: d.id, label: d.name })),
+    { value: OTHER_VALUE, label: "Other (not listed)" },
+  ];
+
+  const stateValue = detailsForm.watch("state") ?? "";
+  const cityOptions: ComboboxOption[] = [
+    ...getCityOptionsForState(stateValue),
+    { value: OTHER_VALUE, label: "Other (not listed)" },
+  ];
+
+  const handleStateSelect = (value: string) => {
+    detailsForm.setValue("state", value);
+    setSelectedCityValue("");
+    detailsForm.setValue("city", "");
+  };
+
+  const handleCitySelect = (value: string) => {
+    setSelectedCityValue(value);
+    detailsForm.setValue("city", value === OTHER_VALUE ? "" : value);
+  };
+
+  const handleCollegeSelect = (value: string) => {
+    setSelectedCollegeId(value);
+    setSelectedDepartmentId("");
+    detailsForm.setValue("department", "");
+    detailsForm.setValue("departmentId", undefined);
+    if (value === OTHER_VALUE) {
+      detailsForm.setValue("college", "");
+      detailsForm.setValue("collegeId", undefined);
+    } else {
+      const college = colleges.find((c) => c.id === value);
+      detailsForm.setValue("college", college?.name ?? "");
+      detailsForm.setValue("collegeId", value);
+    }
+  };
+
+  const handleDepartmentSelect = (value: string) => {
+    setSelectedDepartmentId(value);
+    if (value === OTHER_VALUE) {
+      detailsForm.setValue("department", "");
+      detailsForm.setValue("departmentId", undefined);
+    } else {
+      const department = departments.find((d) => d.id === value);
+      detailsForm.setValue("department", department?.name ?? "");
+      detailsForm.setValue("departmentId", value);
+    }
+  };
+
+  // Applies a known contact's college/department onto the selection state: a real
+  // catalog id selects that entry (departments load via the effect above), a
+  // free-text name with no id falls back to "Other" so the name isn't lost, and
+  // no data at all leaves nothing selected.
+  const applyKnownCollegeSelection = (collegeId: string | null | undefined, college: string | null | undefined) =>
+    collegeId || (college ? OTHER_VALUE : "");
+
+  // Same idea for city: no id to match on, so look the known city up in its known state's
+  // city list — an exact match selects that entry, otherwise (or with no matching state)
+  // it falls back to "Other" so the name is still shown, editable, in the fallback input.
+  const applyKnownCitySelection = (state: string | null | undefined, city: string | null | undefined) => {
+    if (!city) return "";
+    const match = getCityOptionsForState(state || "").find((c) => c.value.toLowerCase() === city.toLowerCase());
+    return match ? match.value : OTHER_VALUE;
+  };
+
   // ─── Step Handlers ──────────────────────────────────────────────────────────
 
   const handleRequestOtp = async (data: EmailFormData) => {
@@ -230,17 +344,23 @@ function RegisterPageInner() {
         // from that known contact instead of leaving it blank. Fields
         // stay editable, so a stale phone/college can still be corrected.
         if (statusRes.knownContact) {
+          const known = statusRes.knownContact;
           detailsForm.reset({
-            firstName: statusRes.knownContact.firstName || "",
-            lastName: statusRes.knownContact.lastName || "",
-            phone: statusRes.knownContact.phone || "",
-            college: statusRes.knownContact.college || "",
-            department: statusRes.knownContact.department || "",
-            city: statusRes.knownContact.city || "",
-            state: statusRes.knownContact.state || "",
+            firstName: known.firstName || "",
+            lastName: known.lastName || "",
+            phone: known.phone || "",
+            college: known.college || "",
+            department: known.department || "",
+            collegeId: known.collegeId || undefined,
+            departmentId: known.departmentId || undefined,
+            city: known.city || "",
+            state: known.state || "",
             referralCode: detailsForm.getValues("referralCode"),
             termsAccepted: false,
           });
+          setSelectedCollegeId(applyKnownCollegeSelection(known.collegeId, known.college));
+          setSelectedDepartmentId(applyKnownCollegeSelection(known.departmentId, known.department));
+          setSelectedCityValue(applyKnownCitySelection(known.state, known.city));
         }
         setStep("details");
       }
@@ -267,18 +387,32 @@ function RegisterPageInner() {
     try {
       const statusRes = await registrationService.checkRegistrationStatus(slug, contactToken, digits);
       if (statusRes.knownContact) {
+        const known = statusRes.knownContact;
         const current = detailsForm.getValues();
+        const nextCollege = current.college || known.college || "";
+        const nextCollegeId = current.college ? current.collegeId : known.collegeId || undefined;
+        const nextDepartment = current.department || known.department || "";
+        const nextDepartmentId = current.department ? current.departmentId : known.departmentId || undefined;
+        const nextState = current.state || known.state || "";
+        const nextCity = current.city || known.city || "";
         detailsForm.reset({
-          firstName: current.firstName || statusRes.knownContact.firstName || "",
-          lastName: current.lastName || statusRes.knownContact.lastName || "",
+          firstName: current.firstName || known.firstName || "",
+          lastName: current.lastName || known.lastName || "",
           phone: current.phone,
-          college: current.college || statusRes.knownContact.college || "",
-          department: current.department || statusRes.knownContact.department || "",
-          city: current.city || statusRes.knownContact.city || "",
-          state: current.state || statusRes.knownContact.state || "",
+          college: nextCollege,
+          department: nextDepartment,
+          collegeId: nextCollegeId,
+          departmentId: nextDepartmentId,
+          city: nextCity,
+          state: nextState,
           referralCode: current.referralCode,
           termsAccepted: current.termsAccepted,
         });
+        // Only override the dropdown selection if the participant hadn't already
+        // picked something on this form — never clobber an in-progress choice.
+        if (!current.college) setSelectedCollegeId(applyKnownCollegeSelection(known.collegeId, known.college));
+        if (!current.department) setSelectedDepartmentId(applyKnownCollegeSelection(known.departmentId, known.department));
+        if (!current.city) setSelectedCityValue(applyKnownCitySelection(nextState, nextCity));
       }
     } catch {
       // Best-effort — a failed lookup should never block filling in the form.
@@ -308,6 +442,8 @@ function RegisterPageInner() {
         phone: formData.phone || undefined,
         college: formData.college || undefined,
         department: formData.department || undefined,
+        collegeId: formData.collegeId || undefined,
+        departmentId: formData.departmentId || undefined,
         city: formData.city || undefined,
         state: formData.state || undefined,
         referralCode: formData.referralCode?.trim() || undefined,
@@ -754,48 +890,89 @@ function RegisterPageInner() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="college">College / Institution</Label>
-                        <Input
-                          id="college"
-                          placeholder="XYZ University"
-                          {...detailsForm.register("college")}
+                        <Combobox
+                          options={collegeOptions}
+                          value={selectedCollegeId}
+                          onChange={handleCollegeSelect}
+                          placeholder="Select your college"
+                          searchPlaceholder="Search colleges..."
                         />
+                        {selectedCollegeId === OTHER_VALUE && (
+                          <Input
+                            placeholder="Enter your college name"
+                            {...detailsForm.register("college")}
+                          />
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="department">Department</Label>
-                        <Input
-                          id="department"
-                          placeholder="Computer Science"
-                          {...detailsForm.register("department")}
-                        />
+                        {selectedCollegeId && selectedCollegeId !== OTHER_VALUE ? (
+                          <>
+                            <Combobox
+                              options={departmentOptions}
+                              value={selectedDepartmentId}
+                              onChange={handleDepartmentSelect}
+                              placeholder="Select your department"
+                              searchPlaceholder="Search departments..."
+                            />
+                            {selectedDepartmentId === OTHER_VALUE && (
+                              <Input
+                                placeholder="Enter your department"
+                                {...detailsForm.register("department")}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <Input
+                            id="department"
+                            placeholder="Computer Science"
+                            {...detailsForm.register("department")}
+                          />
+                        )}
                       </div>
                     </div>
 
-                    {/* City & State */}
+                    {/* State & City */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          placeholder="Mumbai"
-                          {...detailsForm.register("city")}
+                        <Label htmlFor="state">State</Label>
+                        <Combobox
+                          options={STATE_OPTIONS}
+                          value={stateValue}
+                          onChange={handleStateSelect}
+                          placeholder="Select your state"
+                          searchPlaceholder="Search states..."
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Input
-                          id="state"
-                          placeholder="Maharashtra"
-                          {...detailsForm.register("state")}
+                        <Label htmlFor="city">City</Label>
+                        <Combobox
+                          options={cityOptions}
+                          value={selectedCityValue}
+                          onChange={handleCitySelect}
+                          placeholder={stateValue ? "Select your city" : "Select a state first"}
+                          searchPlaceholder="Search cities..."
+                          disabled={!stateValue}
                         />
+                        {selectedCityValue === OTHER_VALUE && (
+                          <Input
+                            placeholder="Enter your city"
+                            {...detailsForm.register("city")}
+                          />
+                        )}
                       </div>
                     </div>
 
-                    {/* Referral Code */}
+                    {/* Referral Code — locked once it arrives via ?ref= on the link; only
+                        editable when nobody's link supplied one, so someone who clicked
+                        an ambassador's link can't accidentally overwrite their attribution. */}
                     <div className="space-y-2">
                       <Label htmlFor="referralCode">Referral Code (optional)</Label>
                       <Input
                         id="referralCode"
                         placeholder="Have an ambassador's code? Enter it here"
+                        disabled={!!referralCodeFromLink}
+                        className={referralCodeFromLink ? "bg-muted" : undefined}
                         {...detailsForm.register("referralCode")}
                       />
                     </div>

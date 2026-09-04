@@ -16,6 +16,8 @@ import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
 import { LeaderboardTable } from '@/components/features/ambassador/LeaderboardTable';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import { Rupees } from '@/components/features/ambassador/Rupees';
+import { ReferralListDialog } from '@/components/features/ambassador/ReferralListDialog';
+import { cn } from '@/lib/utils';
 
 export default function AmbassadorCampaignReportPage() {
   const params = useParams();
@@ -25,6 +27,7 @@ export default function AmbassadorCampaignReportPage() {
   const [page, setPage] = useState(1);
   const { campaign } = useOrgAmbassadorCampaign(campaignId);
   const { rows, pagination, isLoading, exportUrl } = useOrgAmbassadorReport(campaignId, { page, limit: 20 });
+  const [referralsFor, setReferralsFor] = useState<{ enrollmentId: string; name: string } | null>(null);
 
   const cuts = useMemo(() => campaign?.rewardConfig.leaderboardPrizes ?? [], [campaign]);
   const [activeCutKey, setActiveCutKey] = useState<string | null>(null);
@@ -79,17 +82,26 @@ export default function AmbassadorCampaignReportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.ambassadorId}>
-                  <TableCell className="font-medium">
-                    {row.firstName} {row.lastName}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{row.email}</TableCell>
-                  <TableCell className="text-right">{row.registrationCount}</TableCell>
-                  <TableCell>{row.currentTierLabel ?? '—'}</TableCell>
-                  <TableCell className="text-right font-semibold"><Rupees amount={row.accruedAmount} /></TableCell>
-                </TableRow>
-              ))}
+              {rows.map((row) => {
+                const clickable = row.registrationCount > 0;
+                return (
+                  <TableRow
+                    key={row.ambassadorId}
+                    className={clickable ? 'cursor-pointer hover:bg-muted/40' : undefined}
+                    onClick={clickable ? () => setReferralsFor({ enrollmentId: row.enrollmentId, name: `${row.firstName} ${row.lastName ?? ''}`.trim() }) : undefined}
+                  >
+                    <TableCell className="font-medium">
+                      {row.firstName} {row.lastName}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{row.email}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={cn('tabular-nums', clickable && 'underline-offset-2 hover:underline')}>{row.registrationCount}</span>
+                    </TableCell>
+                    <TableCell>{row.currentTierLabel ?? '—'}</TableCell>
+                    <TableCell className="text-right font-semibold"><Rupees amount={row.accruedAmount} /></TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -97,6 +109,15 @@ export default function AmbassadorCampaignReportPage() {
 
       {pagination && pagination.totalPages > 1 && (
         <PaginationBar page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.limit} onPageChange={setPage} />
+      )}
+
+      {referralsFor && (
+        <ReferralListDialog
+          campaignId={campaignId}
+          enrollmentId={referralsFor.enrollmentId}
+          ambassadorName={referralsFor.name}
+          onOpenChange={(open) => { if (!open) setReferralsFor(null); }}
+        />
       )}
 
       {cuts.length > 0 && activeCut && (

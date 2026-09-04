@@ -115,7 +115,7 @@ export const quizSchedulerService = new QuizSchedulerService();
 export const payoutService = new PayoutService(payoutRepository, razorpay, messagingService);
 export const contestService = new ContestService(organizationRepository, contestRepository, participantService, leaderboardRepository, contactService, messagingService, submissionService, quizSchedulerService, participantRepository, paymentRepository, ambassadorCampaignRepository);
 export const questionService = new QuestionService(questionRepository, contestService);
-export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService, payoutService);
+export const paymentService = new PaymentService(paymentRepository, razorpay, contestService, participantService, messagingService, payoutService, organizationRepository);
 export const adminProctoringService = new AdminProctoringService(proctoringRepository);
 export const quizSession = new QuizSession();
 

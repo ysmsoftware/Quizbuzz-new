@@ -413,12 +413,37 @@ export interface CampaignStatsDetail extends CampaignStats {
 
 export interface ApplicationReportRow {
     ambassadorId: string;
+    enrollmentId: string;
     firstName: string;
     lastName: string | null;
     email: string;
     registrationCount: number;
     currentTierLabel: string | null;
     accruedAmount: number;
+    createdAt: Date;
+}
+
+/** One registration referred by an ambassador — the drill-down behind registrationCount.
+ *  Admin gets the full contact detail below; the ambassador-facing endpoint (AmbassadorService)
+ *  strips this down to first/last name only before returning it. */
+export interface ReferralListItem {
+    participantId: string;
+    registrationRef: string;
+    status: string;
+    createdAt: Date;
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    college: string | null;
+}
+
+/** Ambassador-facing referral list — name + college only, no other contact detail (see
+ *  ReferralListItem for the admin equivalent this is a stripped-down projection of). */
+export interface MyReferralItem {
+    firstName: string;
+    lastName: string | null;
+    email: string | null;
     createdAt: Date;
 }
 

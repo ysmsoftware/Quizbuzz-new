@@ -43,6 +43,8 @@ export const CreateContactSchema = z.object({
   lastName:   optionalStringField(100),
   college:    optionalStringField(200),
   department: optionalStringField(150),
+  collegeId:    z.string().trim().optional(),
+  departmentId: z.string().trim().optional(),
   city:       optionalStringField(100),
   state:      optionalStringField(100),
 });
@@ -53,6 +55,10 @@ export const UpdateContactSchema = z.object({
   lastName:   optionalStringField(100),
   college:    optionalStringField(200),
   department: optionalStringField(150),
+  // Set when college/department were picked from the catalog (src/common/colleges.ts)
+  // rather than typed as free text. Pass an empty string to clear a previously-set id.
+  collegeId:    z.string().trim().nullable().optional(),
+  departmentId: z.string().trim().nullable().optional(),
   city:       optionalStringField(100),
   state:      optionalStringField(100),
 }).refine(

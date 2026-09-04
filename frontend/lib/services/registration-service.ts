@@ -52,6 +52,8 @@ export interface KnownContactInfo {
   phone: string | null;
   college: string | null;
   department: string | null;
+  collegeId: string | null;
+  departmentId: string | null;
   city: string | null;
   state: string | null;
 }
@@ -120,6 +122,8 @@ class RegistrationService {
       lastName?: string;
       college?: string;
       department?: string;
+      collegeId?: string;
+      departmentId?: string;
       city?: string;
       state?: string;
       /** Ambassador Program referral code, from the `?ref=` query param on the register link. */

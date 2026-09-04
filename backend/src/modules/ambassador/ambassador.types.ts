@@ -58,3 +58,27 @@ export interface CreateAmbassadorInput {
     proofStorageKey: string;
     proofUrl: string;
 }
+
+// ─── Auth (session refresh, §7.1) ───────────────────────────────────────────────
+// Mirrors admin-auth.types.ts's TokenPair/DeviceInfo/CreateRefreshTokenInput —
+// same short-lived-access + rotating-refresh-token pattern, just keyed by
+// ambassadorId instead of adminId.
+
+export interface DeviceInfo {
+    ipAddress: string;
+    userAgent: string;
+}
+
+export interface TokenPair {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+}
+
+export interface CreateRefreshTokenInput {
+    ambassadorId: string;
+    tokenHash: string;
+    deviceInfo: string;
+    ipAddress: string;
+    expiresAt: Date;
+}

@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { Check, Trophy } from 'lucide-react';
+import { Check, Trophy, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import type {
   LeaderboardEntryResult,
   RecentlyJoinedAmbassador,
   ShareTemplates,
+  SpeedBonusConfig,
 } from '@/lib/types/ambassador';
 
 // shadcn's Card defaults to py-6/gap-6 — generous enough for a hero card, too generous once
@@ -231,10 +232,14 @@ export function TopAmbassadorsCard({
   rows,
   reportHref,
   variant,
+  onSelectAmbassador,
 }: {
   rows: ApplicationReportRow[];
   reportHref: string;
   variant: 'table' | 'list';
+  /** Opens the referral drill-down (ReferralListDialog) for one row — omit to leave rows
+   *  non-interactive (registrationCount is display-only without it). */
+  onSelectAmbassador?: (row: ApplicationReportRow) => void;
 }) {
   return (
     <Card className={CARD}>
@@ -265,7 +270,11 @@ export function TopAmbassadorsCard({
             </TableHeader>
             <TableBody>
               {rows.map((row, i) => (
-                <TableRow key={row.ambassadorId}>
+                <TableRow
+                  key={row.ambassadorId}
+                  className={onSelectAmbassador ? 'cursor-pointer hover:bg-muted/40' : undefined}
+                  onClick={onSelectAmbassador ? () => onSelectAmbassador(row) : undefined}
+                >
                   <TableCell className="text-xs font-semibold text-muted-foreground">{i + 1}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -285,7 +294,9 @@ export function TopAmbassadorsCard({
                       <span className="text-xs text-muted-foreground">No tier yet</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{row.registrationCount}</TableCell>
+                  <TableCell className={cn('text-right tabular-nums', onSelectAmbassador && 'underline-offset-2 hover:underline')}>
+                    {row.registrationCount}
+                  </TableCell>
                   <TableCell className="text-right font-medium tabular-nums"><Rupees amount={row.accruedAmount} /></TableCell>
                 </TableRow>
               ))}
@@ -294,7 +305,17 @@ export function TopAmbassadorsCard({
         ) : (
           <div>
             {rows.map((row, i) => (
-              <div key={row.ambassadorId} className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0 last:pb-0 first:pt-0">
+              <div
+                key={row.ambassadorId}
+                role={onSelectAmbassador ? 'button' : undefined}
+                tabIndex={onSelectAmbassador ? 0 : undefined}
+                onClick={onSelectAmbassador ? () => onSelectAmbassador(row) : undefined}
+                onKeyDown={onSelectAmbassador ? (e) => (e.key === 'Enter' || e.key === ' ') && onSelectAmbassador(row) : undefined}
+                className={cn(
+                  'flex items-center gap-3 py-3 border-b border-border/40 last:border-0 last:pb-0 first:pt-0',
+                  onSelectAmbassador && 'cursor-pointer -mx-2 px-2 rounded-lg hover:bg-muted/40',
+                )}
+              >
                 <span
                   className={cn(
                     'h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0',
@@ -563,6 +584,55 @@ export function RewardBudgetCard({
           <span className="text-xs text-muted-foreground">Estimated total</span>
           <span className="text-lg font-bold tabular-nums"><Rupees amount={totalBudget} /></span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Speed Bonus config (read-only) ──────────────────────────────────────────────────────
+// RewardBudgetCard above only ever surfaces the lump speedBonusBudget rupee total (and
+// disappears entirely if that total is 0) — this shows the actual configuration an admin set
+// at creation time (enabled state, qualifying window, per-tier breakdown), which was
+// previously visible only by opening the Rewards edit panel.
+
+export function SpeedBonusConfigCard({ speedBonus }: { speedBonus: SpeedBonusConfig | undefined }) {
+  if (!speedBonus) return null;
+
+  return (
+    <Card className={CARD}>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Zap className="h-4 w-4 text-warning" />
+          Speed Bonus
+        </CardTitle>
+        <CardAction>
+          <Badge variant={speedBonus.enabled ? 'default' : 'outline'}>{speedBonus.enabled ? 'Enabled' : 'Disabled'}</Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex items-center justify-between text-muted-foreground">
+          <span>Qualifying window starts</span>
+          <span className="font-medium text-foreground">{speedBonus.campaignStartAt ? formatDate(speedBonus.campaignStartAt) : '—'}</span>
+        </div>
+        {speedBonus.milestoneThreshold !== undefined && (
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span>Registrations needed</span>
+            <span className="font-medium text-foreground">{speedBonus.milestoneThreshold}</span>
+          </div>
+        )}
+        {speedBonus.tiers.length > 0 && (
+          <div className="pt-2 border-t border-border/40 space-y-2">
+            {speedBonus.tiers.map((t, i) => (
+              <div key={i} className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground truncate">
+                  {t.label} · within {t.withinDays} {t.withinDays === 1 ? 'day' : 'days'}
+                  {t.maxWinners ? ` · up to ${t.maxWinners} winners` : ''}
+                </span>
+                <span className="font-medium tabular-nums shrink-0"><Rupees amount={t.bonusAmount} /></span>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

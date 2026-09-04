@@ -43,6 +43,11 @@ import Link from 'next/link';
 
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Combobox, type ComboboxOption } from '@/components/shared/Combobox';
+import { referenceDataService, type CollegeOption, type DepartmentOption } from '@/lib/services/reference-data-service';
+
+// Sentinel Combobox value meaning "not in the catalog" — reveals a free-text fallback input.
+const OTHER_VALUE = '__OTHER__';
 
 export default function ContactsListPage() {
   const [page, setPage] = useState(1);
@@ -55,10 +60,62 @@ export default function ContactsListPage() {
     email: '',
     phone: '',
     college: '',
+    department: '',
+    collegeId: null as string | null,
+    departmentId: null as string | null,
     city: '',
   });
 
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // College/Department catalog (see backend/src/common/colleges.ts) — same
+  // Combobox + "Other" fallback pattern used on the contact detail/edit page.
+  const [createColleges, setCreateColleges] = useState<CollegeOption[]>([]);
+  const [createDepartments, setCreateDepartments] = useState<DepartmentOption[]>([]);
+  const [selectedCreateCollegeId, setSelectedCreateCollegeId] = useState('');
+  const [selectedCreateDepartmentId, setSelectedCreateDepartmentId] = useState('');
+
+  useEffect(() => {
+    referenceDataService.getColleges().then(setCreateColleges).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCreateCollegeId || selectedCreateCollegeId === OTHER_VALUE) {
+      setCreateDepartments([]);
+      return;
+    }
+    referenceDataService.getDepartments(selectedCreateCollegeId).then(setCreateDepartments).catch(() => setCreateDepartments([]));
+  }, [selectedCreateCollegeId]);
+
+  const createCollegeOptions: ComboboxOption[] = [
+    ...createColleges.map((c) => ({ value: c.id, label: c.name })),
+    { value: OTHER_VALUE, label: 'Other (not listed)' },
+  ];
+  const createDepartmentOptions: ComboboxOption[] = [
+    ...createDepartments.map((d) => ({ value: d.id, label: d.name })),
+    { value: OTHER_VALUE, label: 'Other (not listed)' },
+  ];
+
+  const handleCreateCollegeSelect = (value: string) => {
+    setSelectedCreateCollegeId(value);
+    setSelectedCreateDepartmentId('');
+    if (value === OTHER_VALUE) {
+      setContactForm((prev) => ({ ...prev, college: '', collegeId: null, department: '', departmentId: null }));
+    } else {
+      const college = createColleges.find((c) => c.id === value);
+      setContactForm((prev) => ({ ...prev, college: college?.name ?? '', collegeId: value, department: '', departmentId: null }));
+    }
+  };
+
+  const handleCreateDepartmentSelect = (value: string) => {
+    setSelectedCreateDepartmentId(value);
+    if (value === OTHER_VALUE) {
+      setContactForm((prev) => ({ ...prev, department: '', departmentId: null }));
+    } else {
+      const department = createDepartments.find((d) => d.id === value);
+      setContactForm((prev) => ({ ...prev, department: department?.name ?? '', departmentId: value }));
+    }
+  };
 
   const {
     contacts,
@@ -78,7 +135,9 @@ export default function ContactsListPage() {
     try {
       await createContact(contactForm);
       setIsCreateOpen(false);
-      setContactForm({ firstName: '', lastName: '', email: '', phone: '', college: '', city: '' });
+      setContactForm({ firstName: '', lastName: '', email: '', phone: '', college: '', department: '', collegeId: null, departmentId: null, city: '' });
+      setSelectedCreateCollegeId('');
+      setSelectedCreateDepartmentId('');
       setCreateError(null);
     } catch (err: any) {
       setCreateError(err?.message || 'Failed to create contact');
@@ -297,17 +356,52 @@ export default function ContactsListPage() {
             onChange={(e) => setContactForm((prev) => ({ ...prev, phone: e.target.value }))}
           />
           <div className="grid grid-cols-2 gap-2">
-            <Input
-              placeholder="College"
-              value={contactForm.college}
-              onChange={(e) => setContactForm((prev) => ({ ...prev, college: e.target.value }))}
-            />
-            <Input
-              placeholder="City"
-              value={contactForm.city}
-              onChange={(e) => setContactForm((prev) => ({ ...prev, city: e.target.value }))}
-            />
+            <div className="space-y-2">
+              <Combobox
+                options={createCollegeOptions}
+                value={selectedCreateCollegeId}
+                onChange={handleCreateCollegeSelect}
+                placeholder="Select college"
+                searchPlaceholder="Search colleges..."
+              />
+              {selectedCreateCollegeId === OTHER_VALUE && (
+                <Input
+                  placeholder="Enter college name"
+                  value={contactForm.college}
+                  onChange={(e) => setContactForm((prev) => ({ ...prev, college: e.target.value }))}
+                />
+              )}
+            </div>
+            {selectedCreateCollegeId && selectedCreateCollegeId !== OTHER_VALUE ? (
+              <div className="space-y-2">
+                <Combobox
+                  options={createDepartmentOptions}
+                  value={selectedCreateDepartmentId}
+                  onChange={handleCreateDepartmentSelect}
+                  placeholder="Select department"
+                  searchPlaceholder="Search departments..."
+                />
+                {selectedCreateDepartmentId === OTHER_VALUE && (
+                  <Input
+                    placeholder="Enter department"
+                    value={contactForm.department}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, department: e.target.value }))}
+                  />
+                )}
+              </div>
+            ) : (
+              <Input
+                placeholder="Department"
+                value={contactForm.department}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, department: e.target.value }))}
+              />
+            )}
           </div>
+          <Input
+            placeholder="City"
+            value={contactForm.city}
+            onChange={(e) => setContactForm((prev) => ({ ...prev, city: e.target.value }))}
+          />
         </div>
 
         <DialogFooter className="mt-6">

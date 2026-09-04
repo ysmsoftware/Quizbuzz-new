@@ -23,6 +23,7 @@ import { CAMPAIGN_STATUS_BADGE_VARIANT } from '@/components/features/ambassador/
 import { calculateCampaignCapacity } from '@/components/features/ambassador/campaign-capacity';
 import { CampaignManagePanel, type ManageTabKey } from '@/components/features/ambassador/admin/CampaignManagePanel';
 import { SaveAsTemplateModal } from '@/components/features/ambassador/SaveAsTemplateModal';
+import { ReferralListDialog } from '@/components/features/ambassador/ReferralListDialog';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
@@ -37,6 +38,7 @@ import {
   AmbassadorKitCard,
   RecentlyJoinedCard,
   RewardBudgetCard,
+  SpeedBonusConfigCard,
   AmbassadorStructureCard,
   RecordCard,
   formatDate,
@@ -190,6 +192,11 @@ export default function CampaignOverviewPage() {
   // Top Ambassadors only ever needs the first page, ranked server-side — campaign-wide totals
   // above come from the stats aggregate instead, not from summing this (possibly partial) list.
   const { rows: topAmbassadors } = useOrgAmbassadorReport(id, { limit: TOP_AMBASSADOR_COUNT, sortBy: 'registrationCount', sortOrder: 'desc' });
+  const [referralsFor, setReferralsFor] = useState<{ enrollmentId: string; name: string } | null>(null);
+  const openReferrals = (row: { enrollmentId: string; firstName: string; lastName: string | null; registrationCount: number }) => {
+    if (row.registrationCount === 0) return;
+    setReferralsFor({ enrollmentId: row.enrollmentId, name: `${row.firstName} ${row.lastName ?? ''}`.trim() });
+  };
 
   const rewardConfig = campaign?.rewardConfig;
   const milestoneTiers = rewardConfig?.milestoneTiers ?? [];
@@ -368,7 +375,7 @@ export default function CampaignOverviewPage() {
 
           <TabsContent value="ambassadors" className="space-y-3 mt-0">
             <WidgetErrorBoundary name="Top Ambassadors">
-              <TopAmbassadorsCard rows={topAmbassadors} reportHref={reportHref} variant="list" />
+              <TopAmbassadorsCard rows={topAmbassadors} reportHref={reportHref} variant="list" onSelectAmbassador={openReferrals} />
             </WidgetErrorBoundary>
 
             {leaderboardCuts.length > 0 && (
@@ -387,6 +394,9 @@ export default function CampaignOverviewPage() {
           <TabsContent value="rewards" className="space-y-3 mt-0">
             <WidgetErrorBoundary name="Reward Budget">
               <RewardBudgetCard leaderboardBudget={leaderboardBudget} speedBonusBudget={speedBonusBudget} totalBudget={totalBudget} />
+            </WidgetErrorBoundary>
+            <WidgetErrorBoundary name="Speed Bonus">
+              <SpeedBonusConfigCard speedBonus={rewardConfig?.speedBonus} />
             </WidgetErrorBoundary>
             <WidgetErrorBoundary name="Ambassador Kit">
               <AmbassadorKitCard
@@ -486,7 +496,7 @@ export default function CampaignOverviewPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[13fr_7fr] gap-3 items-start">
           <div className="space-y-3 min-w-0">
             <WidgetErrorBoundary name="Top Ambassadors">
-              <TopAmbassadorsCard rows={topAmbassadors} reportHref={reportHref} variant="table" />
+              <TopAmbassadorsCard rows={topAmbassadors} reportHref={reportHref} variant="table" onSelectAmbassador={openReferrals} />
             </WidgetErrorBoundary>
 
             {milestoneTiers.length > 0 && (
@@ -526,6 +536,9 @@ export default function CampaignOverviewPage() {
             <WidgetErrorBoundary name="Reward Budget">
               <RewardBudgetCard leaderboardBudget={leaderboardBudget} speedBonusBudget={speedBonusBudget} totalBudget={totalBudget} />
             </WidgetErrorBoundary>
+            <WidgetErrorBoundary name="Speed Bonus">
+              <SpeedBonusConfigCard speedBonus={rewardConfig?.speedBonus} />
+            </WidgetErrorBoundary>
 
             <WidgetErrorBoundary name="Ambassador Structure">
               <AmbassadorStructureCard capacity={capacity} ambassadorCount={ambassadorCount} />
@@ -560,6 +573,15 @@ export default function CampaignOverviewPage() {
         open={saveTemplateOpen}
         onOpenChange={setSaveTemplateOpen}
       />
+
+      {referralsFor && (
+        <ReferralListDialog
+          campaignId={id}
+          enrollmentId={referralsFor.enrollmentId}
+          ambassadorName={referralsFor.name}
+          onOpenChange={(open) => { if (!open) setReferralsFor(null); }}
+        />
+      )}
     </div>
   );
 }

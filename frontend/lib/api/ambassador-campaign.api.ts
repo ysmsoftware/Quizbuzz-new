@@ -25,6 +25,7 @@ import type {
   LeaderboardScope,
   LeaderboardEntryResult,
   ApplicationReportRow,
+  ReferralListItem,
   CampaignStatsSummary,
   OrgAmbassadorListItem,
   OrgAmbassadorProfile,
@@ -183,6 +184,14 @@ export const ambassadorCampaignApi = {
 
   getReport: (id: string, params?: ReportFilters) =>
     get<PaginatedResult<ApplicationReportRow>>(`/org/campaigns/${id}/report`, { params: params as Record<string, string | number | boolean | undefined> }),
+
+  // Drill-down behind one ambassador's registrationCount on the report — the individual
+  // registrations that referral link brought in, full contact detail (admin-only; see
+  // ambassador-service.ts's getMyReferrals for the ambassador-facing name-only equivalent).
+  getReferrals: (campaignId: string, enrollmentId: string, params?: { page?: number; limit?: number }) =>
+    get<PaginatedResult<ReferralListItem>>(`/org/campaigns/${campaignId}/enrollments/${enrollmentId}/referrals`, {
+      params: params as Record<string, string | number | boolean | undefined>,
+    }),
 
   // Dashboard aggregate — totals/tier-counts/recently-joined computed over every approved
   // enrollment, not a paginated report page. Use this for campaign-wide sums; use getReport

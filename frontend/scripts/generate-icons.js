@@ -23,7 +23,10 @@ const ICONS_DIR = path.join(PUBLIC_DIR, 'icons');
 const FAVICON_SOURCE = path.join(PUBLIC_DIR, 'qbfavicon.png');
 const LOGO_SOURCE = path.join(PUBLIC_DIR, 'quizBuzz-logo.png');
 
-const MASKABLE_BG = '#0d9488'; // matches the app's --primary teal
+// White (matches the badge's own baked-in background) so that on Android/OEM
+// launchers whose mask shape doesn't fully crop into the safe zone, any
+// visible margin blends into the icon instead of showing as a teal ring.
+const MASKABLE_BG = '#fafafa';
 const OG_BG = '#f0fdfa';
 
 async function generate() {

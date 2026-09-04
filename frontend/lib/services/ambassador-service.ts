@@ -2,9 +2,10 @@
 // ────────────────────────────────────────────────────────────────
 // Ambassador Program — public + ambassador-authenticated data layer.
 // Mirrors registration-service.ts's shape: raw fetch, credentials:'include'
-// (the ambassador session is an httpOnly `ambassadorToken` cookie, a
-// different token from the org-admin session apiClient.ts manages, so this
-// intentionally does not go through apiClient's 401/admin-refresh logic).
+// (the ambassador session is a pair of httpOnly cookies — `ambassadorToken` +
+// `ambassadorRefreshToken` — separate from the org-admin session apiClient.ts
+// manages, so this has its own 401-refresh-retry logic below rather than
+// going through apiClient's).
 //
 // Platform-level identity: an ambassador signs up once (no organizationId
 // anywhere in this file) and browses/applies to campaigns across every
@@ -16,6 +17,7 @@ import type {
   Ambassador,
   AvailableCampaignItem,
   MyCampaignItem,
+  MyReferralItem,
   CampaignStatsDetail,
   CampaignStatsSummary,
   AmbassadorActivity,
@@ -48,12 +50,39 @@ export class AmbassadorApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+/**
+ * The ambassador access token is short-lived (30 min) by design — the missing piece was ever
+ * renewing it. On a 401, try the refresh-token cookie once and retry the original request;
+ * only fall through to the caller's normal error handling (which the dashboard guard treats
+ * as "log out") if that refresh itself fails. Concurrent 401s share one in-flight refresh
+ * instead of each firing their own.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshAmbassadorSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${BASE}/public/ambassador/auth/refresh`, { method: 'POST', credentials: 'include' })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   });
+
+  if (res.status === 401 && !isRetry && path !== '/public/ambassador/auth/refresh') {
+    const refreshed = await refreshAmbassadorSession();
+    if (refreshed) return request<T>(path, options, true);
+  }
+
   const data = await res.json();
   if (!res.ok || data.success === false) {
     throw new AmbassadorApiError(
@@ -201,6 +230,12 @@ class AmbassadorService {
    *  org-admin dashboard shows, gated to ambassadors approved on that campaign. */
   getCampaignSocialProof(campaignId: string) {
     return request<CampaignStatsSummary>(`/ambassador/campaigns/${campaignId}/social-proof`, { method: 'GET' });
+  }
+
+  /** Name-only list of who this ambassador's referral link brought in — the admin equivalent
+   *  (full contact detail) lives in ambassador-campaign.api.ts's getReferrals. */
+  getMyReferrals(campaignId: string, params?: { page?: number; limit?: number }) {
+    return publicGet<PaginatedResult<MyReferralItem>>(`/ambassador/campaigns/${campaignId}/referrals`, params);
   }
 
   /** Daily registration counts across every approved campaign — the dashboard's earnings
