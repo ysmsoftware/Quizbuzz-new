@@ -2,6 +2,7 @@ import { Ambassador, AmbassadorStatus } from "@prisma/client";
 import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
 import { computeFullReward, computeMilestoneReward } from "./reward-calculator";
 import { paisaToRupees } from "../../utils/currency";
+import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
 import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult } from "./ambassador-campaign.types";
 
 // Same row count as "Top 5 Ambassadors" — a dashboard widget, not a paginated list.
@@ -59,6 +60,37 @@ export interface LeaderboardGroup {
     ambassadorIds: string[];
 }
 
+/** Restricts computeLeaderboardGroups to enrollments whose applicationData[fieldKey] matches
+ *  value — e.g. a Department cut viewed within one specific College. */
+export interface LeaderboardFilter {
+    fieldKey: string;
+    value: string;
+}
+
+/**
+ * For a single-field APPLICATION_FIELD_GROUP scope (e.g. groupByFieldKeys: ["department"]),
+ * finds the key of the field it depends on — reusing the same `dependsOnKey` metadata that
+ * already cascades the Department dropdown off the selected College at ambassador signup (see
+ * ApplicationFieldDef in common/ambassador-types.ts). Returns null for an independent field
+ * (no scoping needed — today's flat/unscoped behavior) or for any scope that isn't a single
+ * field group. Nothing here is specific to "college"/"department" — it's whatever the org
+ * configured that field to depend on, for whichever of these ambassador types defines it.
+ */
+export async function findLeaderboardScopeParentKey(
+    organizationId: string,
+    ambassadorTypeKeys: string[],
+    scope: LeaderboardScope,
+): Promise<string | null> {
+    if (scope.kind !== "APPLICATION_FIELD_GROUP" || (scope.groupByFieldKeys?.length ?? 0) !== 1) return null;
+    const fieldKey = scope.groupByFieldKeys![0];
+    for (const typeKey of ambassadorTypeKeys) {
+        const type = await getAmbassadorTypeByKey(typeKey, organizationId);
+        const field = type?.applicationFields.find((f) => f.key === fieldKey);
+        if (field?.dependsOnKey) return field.dependsOnKey;
+    }
+    return null;
+}
+
 /**
  * ponytail: rankedBy: "REGISTRATION_RATE_PERCENT" is not computed (no
  * denominator exists anywhere in the schema, e.g. audience size) — every
@@ -77,19 +109,44 @@ function groupKeyAndLabel(scope: LeaderboardScope, ambassador: Ambassador): { ke
     return { key: values.join("::"), label: values.join(" / ") };
 }
 
-/** Ranked groups for a campaign + scope, highest registrationCount first. */
+// ponytail: in-memory per-process cache — fine at current scale (one backend instance).
+// If this ever runs behind multiple instances, TTLs won't agree across them; move to Redis
+// then. Same shape as the existing common/colleges.ts cache.
+const GROUPS_CACHE_TTL_MS = 20_000;
+const groupsCache = new Map<string, { value: LeaderboardGroup[]; expires: number }>();
+
+function groupsCacheKey(campaignId: string, scope: LeaderboardScope, filter?: LeaderboardFilter): string {
+    const scopeKey = `${scope.kind}:${(scope.groupByFieldKeys ?? []).join(",")}`;
+    const filterKey = filter ? `${filter.fieldKey}=${filter.value}` : "";
+    return `${campaignId}::${scopeKey}::${filterKey}`;
+}
+
+/** Ranked groups for a campaign + scope, highest registrationCount first. `filter`, when
+ *  given, restricts to enrollments whose applicationData[filter.fieldKey] === filter.value
+ *  before grouping — e.g. a Department cut scoped to one College. */
 export async function computeLeaderboardGroups(
     campaignRepo: AmbassadorCampaignRepository,
     campaignId: string,
     scope: LeaderboardScope,
     rankedBy?: "REGISTRATION_COUNT" | "REGISTRATION_RATE_PERCENT",
+    filter?: LeaderboardFilter,
 ): Promise<LeaderboardGroup[]> {
+    const cacheKey = groupsCacheKey(campaignId, scope, filter);
+    const cached = groupsCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) return cached.value;
+
     // Only APPROVED applications have a live referral link (see
     // findEnrollmentByReferralCodeForContest) — PENDING/REJECTED ones would just be
     // permanent 0-count noise at the bottom of every leaderboard.
-    const enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
+    let enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
         (e) => e.status === AmbassadorStatus.APPROVED,
     );
+    if (filter) {
+        enrollments = enrollments.filter((e) => {
+            const data = (e.ambassador.applicationData ?? {}) as Record<string, unknown>;
+            return String(data[filter.fieldKey] ?? "") === filter.value;
+        });
+    }
     const counts = await campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
 
     const groups = new Map<string, LeaderboardGroup>();
@@ -105,20 +162,18 @@ export async function computeLeaderboardGroups(
         }
     }
 
-    const sortedGroups = [...groups.values()];
+    const sortedGroups =
+        rankedBy === "REGISTRATION_RATE_PERCENT"
+            ? [...groups.values()].sort((a, b) => {
+                  const rateA = a.registrationCount / Math.max(1, a.ambassadorIds.length);
+                  const rateB = b.registrationCount / Math.max(1, b.ambassadorIds.length);
+                  if (rateB !== rateA) return rateB - rateA;
+                  return b.registrationCount - a.registrationCount;
+              })
+            : [...groups.values()].sort((a, b) => b.registrationCount - a.registrationCount);
 
-    if (rankedBy === "REGISTRATION_RATE_PERCENT") {
-        return sortedGroups.sort((a, b) => {
-            const rateA = a.registrationCount / Math.max(1, a.ambassadorIds.length);
-            const rateB = b.registrationCount / Math.max(1, b.ambassadorIds.length);
-            if (rateB !== rateA) {
-                return rateB - rateA;
-            }
-            return b.registrationCount - a.registrationCount;
-        });
-    }
-
-    return sortedGroups.sort((a, b) => b.registrationCount - a.registrationCount);
+    groupsCache.set(cacheKey, { value: sortedGroups, expires: Date.now() + GROUPS_CACHE_TTL_MS });
+    return sortedGroups;
 }
 
 /**

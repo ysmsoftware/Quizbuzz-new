@@ -13,7 +13,7 @@ import { MessageTemplate } from "../../types/message-template.enum";
 import { config } from "../../config";
 import logger from "../../config/logger";
 import { BadRequestError, ConflictError, NotFoundError } from "../../error/http-errors";
-import { computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
+import { computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, findLeaderboardScopeParentKey, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
 import { calculateCampaignCapacity } from "./campaign-capacity";
 import { generateCampaignPhases } from "./campaign-timeline";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
@@ -814,6 +814,7 @@ export class AmbassadorCampaignService {
         scope: LeaderboardScope,
         page: number,
         limit: number,
+        parentValue?: string,
     ): Promise<PaginatedResult<LeaderboardEntryResult>> {
         const campaign = await this.campaignRepo.findById(campaignId, organizationId);
         if (!campaign) throw new NotFoundError("Campaign not found.");
@@ -821,7 +822,13 @@ export class AmbassadorCampaignService {
         const rewardConfig = campaign.rewardConfig as unknown as DraftRewardConfig;
         const cut = (rewardConfig.leaderboardPrizes ?? []).find((c) => leaderboardScopeEquals(c.scope, scope));
 
-        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy);
+        const parentKey = await findLeaderboardScopeParentKey(organizationId, campaign.ambassadorTypesAllowed, scope);
+        if (parentKey && !parentValue) {
+            throw new BadRequestError(`This leaderboard is scoped by "${parentKey}" — pass parentValue to view it.`);
+        }
+        const filter = parentKey ? { fieldKey: parentKey, value: parentValue! } : undefined;
+
+        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy, filter);
         const total = groups.length;
         const skip = (page - 1) * limit;
         const paged = groups.slice(skip, skip + limit);

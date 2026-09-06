@@ -409,6 +409,9 @@ export const ListReferralsQuerySchema = z.object({
 export const LeaderboardQuerySchema = z.object({
     scope: z.enum(["INDIVIDUAL_AMBASSADOR", "APPLICATION_FIELD_GROUP"]),
     groupByFieldKeys: z.string().transform((val) => val.split(",").map((s) => s.trim()).filter(Boolean)).optional(),
+    // Org-admin route only — see LeaderboardQueryDTO. The ambassador-facing route ignores this
+    // even if present in the query string; it never accepts the scoping value from the client.
+    parentValue: z.string().trim().min(1).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
 }).transform((q, ctx) => {
@@ -419,7 +422,7 @@ export const LeaderboardQuerySchema = z.object({
         }
         return z.NEVER;
     }
-    return { scope: scope.data, page: q.page, limit: q.limit };
+    return { scope: scope.data, page: q.page, limit: q.limit, parentValue: q.parentValue };
 });
 
 export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>;

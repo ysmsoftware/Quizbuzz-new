@@ -334,8 +334,8 @@ export class AmbassadorCampaignController {
     getCampaignLeaderboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const organizationId = req.user!.organizationId;
-            const { scope, page, limit } = LeaderboardQuerySchema.parse(req.query);
-            const result = await this.service.getCampaignLeaderboard(organizationId, req.params.id as string, scope, page, limit);
+            const { scope, page, limit, parentValue } = LeaderboardQuerySchema.parse(req.query);
+            const result = await this.service.getCampaignLeaderboard(organizationId, req.params.id as string, scope, page, limit, parentValue);
             res.status(200).json({ success: true, data: result, requestId: req.id });
         } catch (err) {
             next(err);

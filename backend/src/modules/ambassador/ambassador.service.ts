@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { Ambassador, AmbassadorCampaignStatus, AmbassadorStatus, Prisma } from "@prisma/client";
 import { AmbassadorRepository } from "./ambassador.repository";
 import { AmbassadorCampaignRepository } from "../ambassador-campaign/ambassador-campaign.repository";
-import { bucketDailyRegistrations, computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, DailyActivityPoint, findPrizeForRank, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
+import { bucketDailyRegistrations, computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, DailyActivityPoint, findLeaderboardScopeParentKey, findPrizeForRank, LeaderboardFilter, leaderboardScopeEquals } from "../ambassador-campaign/campaign-stats";
 import { campaignStatsPaiseToRupees, leaderboardEntryPaiseToRupees, rewardConfigPaiseToRupees } from "../ambassador-campaign/reward-config-currency";
 import { RewardConfig, ShareTemplates, LeaderboardScope, AvailableCampaignItem, MyCampaignItem, MyReferralItem, CampaignStats, CampaignStatsDetail, CampaignStatsSummary, CampaignPhase, DraftRewardConfig, EnrollmentResult, LeaderboardEntryResult, PaginatedResult } from "../ambassador-campaign/ambassador-campaign.types";
 import { OrganizationRepository } from "../organization/organization.repository";
@@ -616,6 +616,28 @@ export class AmbassadorService {
         return this._toEnrollmentResult(enrollment);
     }
 
+    /**
+     * For a scope whose single group-by field depends on another (e.g. "department" depends
+     * on "college"), resolves the filter from THIS ambassador's own applicationData — never
+     * from client input, unlike the org-admin equivalent in ambassador-campaign.service.ts
+     * which lets an admin pick any value. Returns undefined when the scope isn't dependent
+     * (unchanged, unscoped behavior) or the literal "NO_VALUE_ON_FILE" when it is dependent
+     * but this ambassador never answered the parent field — callers should treat that as an
+     * empty/no-rank result rather than querying with an empty-string filter.
+     */
+    private async _resolveOwnScopeFilter(
+        ambassador: Ambassador,
+        organizationId: string,
+        scope: LeaderboardScope,
+    ): Promise<LeaderboardFilter | "NO_VALUE_ON_FILE" | undefined> {
+        const parentKey = await findLeaderboardScopeParentKey(organizationId, [ambassador.ambassadorType], scope);
+        if (!parentKey) return undefined;
+        const data = (ambassador.applicationData ?? {}) as Record<string, unknown>;
+        const value = data[parentKey];
+        if (typeof value !== "string" || !value) return "NO_VALUE_ON_FILE";
+        return { fieldKey: parentKey, value };
+    }
+
     async getCampaignStats(ambassadorId: string, campaignId: string): Promise<CampaignStatsDetail> {
         const ambassador = await this.ambassadorRepo.findById(ambassadorId);
         if (!ambassador) throw new NotFoundError("Ambassador not found.");
@@ -638,7 +660,9 @@ export class AmbassadorService {
 
         const leaderboardRanks = await Promise.all(
             (rewardConfig.leaderboardPrizes ?? []).map(async (cut) => {
-                const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, cut.scope, cut.rankedBy);
+                const filter = await this._resolveOwnScopeFilter(ambassador, campaign.organizationId, cut.scope);
+                if (filter === "NO_VALUE_ON_FILE") return { scope: cut.scope, label: cut.label, rank: null };
+                const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, cut.scope, cut.rankedBy, filter);
                 const rank = groups.findIndex((g) => g.ambassadorIds.includes(ambassadorId));
                 return { scope: cut.scope, label: cut.label, rank: rank === -1 ? null : rank + 1 };
             }),
@@ -671,18 +695,27 @@ export class AmbassadorService {
     }
 
     async getCampaignLeaderboard(
+        ambassadorId: string,
         campaignId: string,
         scope: LeaderboardScope,
         page: number,
         limit: number,
     ): Promise<PaginatedResult<LeaderboardEntryResult>> {
+        const ambassador = await this.ambassadorRepo.findById(ambassadorId);
+        if (!ambassador) throw new NotFoundError("Ambassador not found.");
+
         const campaign = await this.campaignRepo.findByIdGlobal(campaignId);
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
         const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
         const cut = rewardConfig.leaderboardPrizes.find((c) => leaderboardScopeEquals(c.scope, scope));
 
-        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy);
+        const filter = await this._resolveOwnScopeFilter(ambassador, campaign.organizationId, scope);
+        if (filter === "NO_VALUE_ON_FILE") {
+            return { data: [], total: 0, page, limit, totalPages: 0 };
+        }
+
+        const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, scope, cut?.rankedBy, filter);
         const total = groups.length;
         const skip = (page - 1) * limit;
         const page_ = groups.slice(skip, skip + limit);

@@ -204,7 +204,9 @@ export const ambassadorCampaignApi = {
   getReportExportUrl: (id: string) =>
     `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'}/org/campaigns/${id}/report/export`,
 
-  getLeaderboard: (id: string, scope: LeaderboardScope, params?: { page?: number; limit?: number }) =>
+  // `parentValue` is required when the cut's field depends on another (e.g. a Department cut
+  // depends on College) — see the Report page's use of `useAmbassadorTypes` to detect that.
+  getLeaderboard: (id: string, scope: LeaderboardScope, params?: { page?: number; limit?: number; parentValue?: string }) =>
     get<PaginatedResult<LeaderboardEntryResult>>(`/org/campaigns/${id}/leaderboard`, {
       params: { ...leaderboardScopeQueryParams(scope), ...params },
     }),

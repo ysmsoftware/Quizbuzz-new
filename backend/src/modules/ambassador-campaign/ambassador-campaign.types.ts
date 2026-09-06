@@ -241,6 +241,10 @@ export interface LeaderboardQueryDTO {
     scope: LeaderboardScope;
     page: number;
     limit: number;
+    /** Required when the scope's single group-by field depends on another field (e.g.
+     *  "department" depends on "college") — the resolved value of that parent field. Org-admin
+     *  route only; the ambassador-facing route always derives this server-side instead. */
+    parentValue?: string | undefined;
 }
 
 // ─── Result shapes (service → controller) ──────────────────────────────────────
