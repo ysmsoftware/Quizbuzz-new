@@ -3,6 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import pluginReact from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
+import nextPlugin from "@next/eslint-plugin-next";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig([
@@ -10,6 +11,10 @@ export default defineConfig([
   { files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"], plugins: { js }, extends: ["js/recommended"], languageOptions: { globals: {...globals.browser, ...globals.node} } },
   tseslint.configs.recommended,
   pluginReact.configs.flat.recommended,
+  // Registers the @next/next rule set (just this plugin, not the full eslint-config-next
+  // bundle) so `no-img-element` resolves — two header components disable it inline for a
+  // legitimate dynamic-upload-URL case, but the rule wasn't wired up for ESLint to find.
+  nextPlugin.configs.recommended,
   {
     plugins: {
       "react-hooks": reactHooks

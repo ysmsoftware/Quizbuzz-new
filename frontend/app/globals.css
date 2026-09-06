@@ -170,6 +170,28 @@
     }
 }
 
+@keyframes scroll-marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+@keyframes pulse-subtle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+@keyframes pulse-gentle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+@keyframes flow-across {
+    0% { transform: translateX(0); opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translateX(100%); opacity: 0; }
+}
+
 @keyframes glow-pulse {
     0%, 100% {
         box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 45%, transparent);
@@ -181,6 +203,15 @@
     }
 }
 
+@keyframes glow-pulse-amber {
+    0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent) 55%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 6px color-mix(in oklch, var(--accent) 0%, transparent);
+    }
+}
+
 @layer components {
     /* Draws the eye to a CTA that's easy to miss on first load — used on the
        public contest page's sticky "Register Now" bar so new visitors don't
@@ -189,6 +220,12 @@
        rule above. */
     .animate-glow-pulse {
         animation: glow-pulse 2.2s ease-in-out infinite;
+    }
+
+    /* Ambassador top bar's "Log in" pill — subtle amber glow inside a green border,
+       drawing the eye without competing with the primary CTA. */
+    .animate-glow-amber {
+        animation: glow-pulse-amber 2.2s ease-in-out infinite;
     }
 
     .animate-skeleton {
@@ -211,5 +248,46 @@
 
     .safe-area-inset-top {
         padding-top: max(0.5rem, env(safe-area-inset-top));
+    }
+
+    /* Landing page v2 (components/LandingPage.tsx) */
+    .mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .grain {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 99;
+        opacity: 0.035;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    }
+
+    .dark .grain {
+        opacity: 0.05;
+    }
+
+    .animate-marquee {
+        animation: scroll-marquee 32s linear infinite;
+    }
+
+    .animate-marquee:hover {
+        animation-play-state: paused;
+    }
+
+    .animate-pulse-subtle {
+        animation: pulse-subtle 1.8s ease-in-out infinite;
+    }
+
+    /* Ambassador landing page (components/AmbassadorLandingPage.tsx) */
+    .animate-pulse-gentle {
+        animation: pulse-gentle 3s ease-in-out infinite;
+    }
+
+    .animate-flow {
+        animation: flow-across 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
 }
