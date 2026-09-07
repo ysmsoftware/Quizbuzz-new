@@ -664,7 +664,7 @@ export class AmbassadorService {
                 if (filter === "NO_VALUE_ON_FILE") return { scope: cut.scope, label: cut.label, rank: null };
                 const groups = await computeLeaderboardGroups(this.campaignRepo, campaignId, cut.scope, cut.rankedBy, filter);
                 const rank = groups.findIndex((g) => g.ambassadorIds.includes(ambassadorId));
-                return { scope: cut.scope, label: cut.label, rank: rank === -1 ? null : rank + 1 };
+                return { scope: cut.scope, label: cut.label, rank: rank === -1 ? null : rank + 1, scopedTo: filter };
             }),
         );
 

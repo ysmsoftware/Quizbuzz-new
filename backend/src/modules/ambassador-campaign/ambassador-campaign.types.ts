@@ -309,7 +309,11 @@ export interface CampaignStats {
     progressToNextTier: { current: number; required: number } | null;
     accruedAmount: number;
     speedBonus: SpeedBonusResult | null;
-    leaderboardRanks: { scope: LeaderboardScope; label: string; rank: number | null }[];
+    // scopedTo is set only for a cut whose field depends on another (e.g. Department depends
+    // on College) — the value that dependency resolved to for THIS ambassador, so the
+    // frontend can nest the dependent cut's card under its parent cut's card instead of
+    // showing every cut flat in one grid. Absent for an independent/unscoped cut.
+    leaderboardRanks: { scope: LeaderboardScope; label: string; rank: number | null; scopedTo?: { fieldKey: string; value: string } | undefined }[];
 }
 
 export interface SpeedBonusResult {

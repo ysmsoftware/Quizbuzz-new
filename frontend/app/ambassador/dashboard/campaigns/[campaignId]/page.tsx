@@ -60,10 +60,39 @@ export default function AmbassadorCampaignDetailPage() {
   }, [availableCampaign, previewSnapshot]);
   const preview = previewSnapshot ?? availableCampaign;
 
-  // Every configured leaderboard cut renders as its own card, side by side on desktop — no
-  // tab switcher.
+  // Every top-level leaderboard cut renders as its own card, side by side on desktop — no
+  // tab switcher. A cut scoped to another (e.g. Department scoped to College — see
+  // scopedTo on LeaderboardRankEntry) nests under its parent's card instead, behind a
+  // "View X" toggle, since an ambassador only ever has the one value there to drill into.
   const ranks = useMemo(() => stats?.leaderboardRanks ?? [], [stats]);
   const ownRankByScope = useMemo(() => new Map(ranks.map((r) => [leaderboardScopeKey(r.scope), r.rank])), [ranks]);
+  const scopedToByScope = useMemo(() => new Map(ranks.map((r) => [leaderboardScopeKey(r.scope), r.scopedTo])), [ranks]);
+
+  const { topLevelCuts, nestedCutsByParentKey } = useMemo(() => {
+    const cuts = stats?.campaign.leaderboardPrizes ?? [];
+    const byFieldKey = new Map(
+      cuts
+        .filter((c) => c.scope.kind === 'APPLICATION_FIELD_GROUP' && c.scope.groupByFieldKeys?.length === 1)
+        .map((c) => [c.scope.groupByFieldKeys![0]!, leaderboardScopeKey(c.scope)]),
+    );
+
+    const nestedByParent = new Map<string, { cut: (typeof cuts)[number]; ownRank: number | null }[]>();
+    const top: typeof cuts = [];
+
+    for (const cut of cuts) {
+      const scopedTo = scopedToByScope.get(leaderboardScopeKey(cut.scope));
+      const parentKey = scopedTo ? byFieldKey.get(scopedTo.fieldKey) : undefined;
+      if (parentKey) {
+        const list = nestedByParent.get(parentKey) ?? [];
+        list.push({ cut, ownRank: ownRankByScope.get(leaderboardScopeKey(cut.scope)) ?? null });
+        nestedByParent.set(parentKey, list);
+      } else {
+        top.push(cut);
+      }
+    }
+
+    return { topLevelCuts: top, nestedCutsByParentKey: nestedByParent };
+  }, [stats, scopedToByScope, ownRankByScope]);
 
   const loading = joinedLoading || (isApproved ? statsLoading : availableLoading && !previewSnapshot);
 
@@ -230,7 +259,7 @@ export default function AmbassadorCampaignDetailPage() {
               </div>
               {campaign.leaderboardPrizes.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {campaign.leaderboardPrizes.map((cut) => (
+                  {topLevelCuts.map((cut) => (
                     <CampaignLeaderboardCard
                       key={leaderboardScopeKey(cut.scope)}
                       campaignId={campaignId}
@@ -240,6 +269,7 @@ export default function AmbassadorCampaignDetailPage() {
                       // Milestone tiers pay individual ambassadors, not groups — the y-axis
                       // only shows tier thresholds on the individual-ambassador cut.
                       tierTicks={cut.scope.kind === 'INDIVIDUAL_AMBASSADOR' ? campaign.milestoneTiers : undefined}
+                      nestedCuts={nestedCutsByParentKey.get(leaderboardScopeKey(cut.scope))}
                     />
                   ))}
                 </div>

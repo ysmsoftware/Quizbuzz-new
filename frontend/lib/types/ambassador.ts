@@ -245,6 +245,10 @@ export interface LeaderboardRankEntry {
   scope: LeaderboardScope;
   label: string;
   rank: number | null;
+  // Present only for a cut whose field depends on another (e.g. Department depends on
+  // College) — what that dependency resolved to for this ambassador. Used to nest the
+  // dependent cut's card under its parent's instead of showing every cut flat.
+  scopedTo?: { fieldKey: string; value: string };
 }
 
 export interface CampaignStats {

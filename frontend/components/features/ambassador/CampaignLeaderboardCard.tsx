@@ -1,6 +1,7 @@
 'use client';
 
-import { Trophy } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Trophy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,7 +10,7 @@ import { useAmbassadorCampaignLeaderboard } from '@/lib/hooks/useAmbassadorCampa
 import { LeaderboardChart } from './LeaderboardChart';
 import { LeaderboardTable } from './LeaderboardTable';
 import { Rupees } from './Rupees';
-import type { LeaderboardCut, LeaderboardRankReward, MilestoneTier } from '@/lib/types/ambassador';
+import { leaderboardScopeKey, type LeaderboardCut, type LeaderboardRankReward, type MilestoneTier } from '@/lib/types/ambassador';
 
 function rankLabel(r: LeaderboardRankReward): string {
   if (r.rankRange) return `Rank ${r.rankRange[0]}–${r.rankRange[1]}`;
@@ -53,6 +54,13 @@ function PrizePreviewChart({ cut }: { cut: LeaderboardCut }) {
   );
 }
 
+/** A cut that's scoped to (depends on) another cut's own field — e.g. Department, scoped to
+ *  this ambassador's College. Nested under its parent's card instead of shown separately. */
+export interface NestedLeaderboardCut {
+  cut: LeaderboardCut;
+  ownRank: number | null;
+}
+
 interface CampaignLeaderboardCardProps {
   campaignId: string;
   /** The full cut config (scope + label + its rank→prize schedule), not just what to fetch
@@ -65,64 +73,110 @@ interface CampaignLeaderboardCardProps {
   currentAmbassadorId?: string;
   /** See LeaderboardChart — pass only for the individual-ambassador scope. */
   tierTicks?: MilestoneTier[];
+  /** Cuts scoped to this one's field (e.g. Department scoped to this College cut) — rendered
+   *  collapsed behind a "View X" toggle instead of as their own top-level card, since an
+   *  ambassador only ever has the one value here to drill into. Omit for a nested card itself
+   *  (one level of nesting only). */
+  nestedCuts?: NestedLeaderboardCut[];
+  /** True when this card is being rendered inside another card's expand panel — swaps the
+   *  bordered Card shell for a flatter inline block so cards don't nest visually inside cards. */
+  nested?: boolean;
 }
 
 /** One leaderboard cut, as its own card: what it pays, then a bar chart plus a short ranked
  *  list underneath. Fetches its own rows (a component per scope, not a loop of hook calls in
  *  the parent) so a campaign with any number of configured leaderboard cuts can render all of
  *  them at once, side by side, instead of one at a time behind a tab switcher. */
-export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbassadorId, tierTicks }: CampaignLeaderboardCardProps) {
+export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbassadorId, tierTicks, nestedCuts, nested }: CampaignLeaderboardCardProps) {
   const { scope, label } = cut;
   const { rows, pagination, isLoading } = useAmbassadorCampaignLeaderboard(campaignId, scope, { limit: 10 });
   const hasPrizes = cut.ranks.length > 0 || !!cut.consolation;
+  const [expanded, setExpanded] = useState(false);
+
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div>
+          <h3 className="text-[13px] font-bold text-foreground leading-snug">{label}</h3>
+          {ownRank !== null && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Your rank: <span className="font-semibold text-primary">#{ownRank}</span>
+              {pagination?.total ? ` of ${pagination.total}` : ''}
+            </p>
+          )}
+        </div>
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-1 shrink-0 whitespace-nowrap">
+          <Trophy className="h-3 w-3" />
+          Top 5
+        </span>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-[180px] w-full rounded-lg mt-4" />
+      ) : rows.length === 0 ? (
+        hasPrizes ? (
+          <div className="pt-1">
+            <PrizePreviewChart cut={cut} />
+            <p className="mt-3 border-t border-border/60 pt-3 text-center text-xs text-muted-foreground">
+              No one&apos;s ranked yet — registrations will fill in {populateNoun(label)}.
+            </p>
+          </div>
+        ) : (
+          <Empty className="py-8">
+            <EmptyMedia variant="icon">
+              <Trophy className="h-5 w-5" />
+            </EmptyMedia>
+            <EmptyTitle className="text-sm">No rankings yet</EmptyTitle>
+            <EmptyDescription className="text-xs">Registrations will populate {populateNoun(label)}.</EmptyDescription>
+          </Empty>
+        )
+      ) : (
+        <>
+          <LeaderboardChart rows={rows} ownRank={ownRank} tierTicks={tierTicks} />
+          <div className="mt-3 pt-3.5 border-t border-border/60">
+            <LeaderboardTable scope={scope} label={label} rows={rows.slice(0, 5)} currentAmbassadorId={currentAmbassadorId} isLoading={false} />
+          </div>
+        </>
+      )}
+
+      {nestedCuts && nestedCuts.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border/60">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          >
+            <span className="text-[12px] font-semibold text-primary">
+              {expanded ? 'Hide' : 'View'} {nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${nestedCuts.length} more leaderboards`}
+            </span>
+            <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', expanded && 'rotate-180')} />
+          </button>
+          {expanded && (
+            <div className="mt-3 flex flex-col gap-3">
+              {nestedCuts.map((child) => (
+                <CampaignLeaderboardCard
+                  key={leaderboardScopeKey(child.cut.scope)}
+                  campaignId={campaignId}
+                  cut={child.cut}
+                  ownRank={child.ownRank}
+                  currentAmbassadorId={currentAmbassadorId}
+                  nested
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  if (nested) {
+    return <div className="rounded-lg bg-secondary/60 p-3">{body}</div>;
+  }
 
   return (
     <Card className="border-border/50">
-      <CardContent className="pt-1">
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div>
-            <h3 className="text-[13px] font-bold text-foreground leading-snug">{label}</h3>
-            {ownRank !== null && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Your rank: <span className="font-semibold text-primary">#{ownRank}</span>
-                {pagination?.total ? ` of ${pagination.total}` : ''}
-              </p>
-            )}
-          </div>
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-1 shrink-0 whitespace-nowrap">
-            <Trophy className="h-3 w-3" />
-            Top 5
-          </span>
-        </div>
-
-        {isLoading ? (
-          <Skeleton className="h-[180px] w-full rounded-lg mt-4" />
-        ) : rows.length === 0 ? (
-          hasPrizes ? (
-            <div className="pt-1">
-              <PrizePreviewChart cut={cut} />
-              <p className="mt-3 border-t border-border/60 pt-3 text-center text-xs text-muted-foreground">
-                No one&apos;s ranked yet — registrations will fill in {populateNoun(label)}.
-              </p>
-            </div>
-          ) : (
-            <Empty className="py-8">
-              <EmptyMedia variant="icon">
-                <Trophy className="h-5 w-5" />
-              </EmptyMedia>
-              <EmptyTitle className="text-sm">No rankings yet</EmptyTitle>
-              <EmptyDescription className="text-xs">Registrations will populate {populateNoun(label)}.</EmptyDescription>
-            </Empty>
-          )
-        ) : (
-          <>
-            <LeaderboardChart rows={rows} ownRank={ownRank} tierTicks={tierTicks} />
-            <div className="mt-3 pt-3.5 border-t border-border/60">
-              <LeaderboardTable scope={scope} label={label} rows={rows.slice(0, 5)} currentAmbassadorId={currentAmbassadorId} isLoading={false} />
-            </div>
-          </>
-        )}
-      </CardContent>
+      <CardContent className="pt-1">{body}</CardContent>
     </Card>
   );
 }
