@@ -36,7 +36,7 @@ export class OrganizationController {
                     success: false,
                     error: {
                         code: "VALIDATION_ERROR",
-                        message: (parsed.error as any).errors[0].message,
+                        message: parsed.error.issues[0]?.message || "Validation failed",
                     },
                 });
                 return;
@@ -95,7 +95,7 @@ export class OrganizationController {
                     success: false,
                     error: {
                         code: "VALIDATION_ERROR",
-                        message: (parsed.error as any).errors[0].message,
+                        message: parsed.error.issues[0]?.message || "Validation failed",
                     },
                 });
                 return;
@@ -216,7 +216,7 @@ export class OrganizationController {
                     success: false,
                     error: {
                         code: "VALIDATION_ERROR",
-                        message: (parsed.error as any).errors[0].message,
+                        message: parsed.error.issues[0]?.message || "Validation failed",
                     },
                 });
                 return;
@@ -274,7 +274,7 @@ export class OrganizationController {
                     success: false,
                     error: {
                         code: "VALIDATION_ERROR",
-                        message: (parsed.error as any).errors[0].message,
+                        message: parsed.error.issues[0]?.message || "Validation failed",
                     },
                 });
                 return;
@@ -315,7 +315,7 @@ export class OrganizationController {
                     success: false,
                     error: {
                         code: "VALIDATION_ERROR",
-                        message: (parsed.error as any).errors[0].message,
+                        message: parsed.error.issues[0]?.message || "Validation failed",
                     },
                 });
                 return;
