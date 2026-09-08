@@ -3,7 +3,7 @@ import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
 import { computeFullReward, computeMilestoneReward } from "./reward-calculator";
 import { paisaToRupees } from "../../utils/currency";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
-import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult } from "./ambassador-campaign.types";
+import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult, TierBracketBreakdown } from "./ambassador-campaign.types";
 
 // Same row count as "Top 5 Ambassadors" — a dashboard widget, not a paginated list.
 const RECENTLY_JOINED_LIMIT = 5;
@@ -22,6 +22,8 @@ export interface EnrollmentStats {
     nextTier: RewardConfig["milestoneTiers"][number] | null;
     progressToNextTier: { current: number; required: number } | null;
     accruedAmount: number;
+    milestoneAmount: number;
+    tierBreakdown: TierBracketBreakdown[];
     speedBonus: SpeedBonusResult | null;
 }
 
@@ -49,6 +51,8 @@ export async function computeEnrollmentStats(
         nextTier: reward.nextTier,
         progressToNextTier: reward.progressToNextTier,
         accruedAmount: reward.totalAccrued,
+        milestoneAmount: reward.accruedAmount,
+        tierBreakdown: reward.tierBreakdown,
         speedBonus: reward.speedBonus,
     };
 }

@@ -21,6 +21,8 @@ import { AmbassadorKitCard } from '@/components/features/ambassador/AmbassadorKi
 import { MyReferralsCard } from '@/components/features/ambassador/MyReferralsCard';
 import { CampaignPreview } from '@/components/features/ambassador/CampaignPreview';
 import { ReferralQrModal } from '@/components/features/ambassador/ReferralQrModal';
+import { EarningsBreakdownModal } from '@/components/features/ambassador/EarningsBreakdownModal';
+import { SpeedBonusConfigCard } from '@/app/org/campaigns/[id]/overview-cards';
 import { fillShareTemplate } from '@/lib/utils/share-template';
 import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
@@ -49,6 +51,7 @@ export default function AmbassadorCampaignDetailPage() {
   const [applying, setApplying] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [earningsModalOpen, setEarningsModalOpen] = useState(false);
 
   // The "available" list this preview's data comes from excludes anything already applied
   // to — so the moment Apply succeeds and that list refetches, this campaign drops out of
@@ -235,7 +238,8 @@ export default function AmbassadorCampaignDetailPage() {
               currentTier={stats.currentTier}
               nextTier={stats.nextTier}
               registrationCount={stats.registrationCount}
-              accruedAmount={stats.accruedAmount}
+              milestoneAmount={stats.milestoneAmount}
+              onOpenEarnings={() => setEarningsModalOpen(true)}
             />
 
             <SpeedBonusStrip speedBonus={stats.speedBonus} />
@@ -298,6 +302,11 @@ export default function AmbassadorCampaignDetailPage() {
           <div className="space-y-4 lg:sticky lg:top-8">
             <RankRewardCards stats={stats} referralLink={referralLink} onOpenQr={() => setQrModalOpen(true)} />
 
+            <SpeedBonusConfigCard
+              speedBonus={campaign.speedBonus}
+              earnedTierWithinDays={stats.speedBonus?.earned ? (stats.speedBonus.tier?.withinDays ?? undefined) : undefined}
+            />
+
             <ShareCampaignCard
               campaignName={campaign.name}
               organizationName={joinedCampaign?.organizationName}
@@ -318,6 +327,18 @@ export default function AmbassadorCampaignDetailPage() {
         organizationName={joinedCampaign?.organizationName ?? undefined}
         ambassadorName={ambassador ? [ambassador.firstName, ambassador.lastName].filter(Boolean).join(' ') : undefined}
         referralLink={referralLink}
+      />
+
+      <EarningsBreakdownModal
+        open={earningsModalOpen}
+        onOpenChange={setEarningsModalOpen}
+        registrationCount={stats.registrationCount}
+        milestoneAmount={stats.milestoneAmount}
+        tierBreakdown={stats.tierBreakdown}
+        speedBonus={stats.speedBonus}
+        campaignStatus={campaign.status}
+        leaderboardRanks={stats.leaderboardRanks}
+        leaderboardPrizes={campaign.leaderboardPrizes}
       />
     </div>
   );

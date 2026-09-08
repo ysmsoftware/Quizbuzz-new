@@ -2,6 +2,7 @@
 
 import { Check, Lock, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Rupees } from './Rupees';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
@@ -11,7 +12,10 @@ interface TierLadderProps {
   currentTier: CampaignStats['currentTier'];
   nextTier: CampaignStats['nextTier'];
   registrationCount: number;
-  accruedAmount: number;
+  /** Milestone brackets only (registrations x tier rate) — no speed bonus or leaderboard
+   *  prize folded in. Those show up in the earnings breakdown modal instead. */
+  milestoneAmount: number;
+  onOpenEarnings: () => void;
 }
 
 /** The reward path as a physical ladder — done/current/locked nodes on a connecting track,
@@ -19,7 +23,7 @@ interface TierLadderProps {
  *  card above it (ProgressCard) duplicating the same tier/registration numbers.
  *  RewardTiersCard (further down the page) still carries the full rate table; this is the
  *  at-a-glance version of the same data. */
-export function TierLadder({ milestoneTiers, currentTier, nextTier, registrationCount, accruedAmount }: TierLadderProps) {
+export function TierLadder({ milestoneTiers, currentTier, nextTier, registrationCount, milestoneAmount, onOpenEarnings }: TierLadderProps) {
   if (milestoneTiers.length === 0) return null;
 
   const ceiling = milestoneTiers.at(-1)?.maxRegistrations ?? milestoneTiers.at(-1)?.minRegistrations ?? 1;
@@ -151,9 +155,11 @@ export function TierLadder({ milestoneTiers, currentTier, nextTier, registration
           )}
           <div className="text-right ml-auto">
             <p className="text-2xl font-bold text-foreground tabular-nums">
-              <Rupees amount={accruedAmount} />
+              <Rupees amount={milestoneAmount} />
             </p>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Accrued reward</p>
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs font-semibold" onClick={onOpenEarnings}>
+              See your total earnings
+            </Button>
           </div>
         </div>
       </CardContent>

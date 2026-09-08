@@ -307,13 +307,33 @@ export interface CampaignStats {
     currentTier: MilestoneTier | null;
     nextTier: MilestoneTier | null;
     progressToNextTier: { current: number; required: number } | null;
+    // Grand total (milestone brackets + earned speed bonus) — the figure used everywhere this
+    // ambassador's earnings are summed across campaigns (dashboard/profile totals, org reports).
     accruedAmount: number;
+    // Milestone brackets only, no speed bonus — what the campaign-detail page's tier ladder
+    // headline shows, so it reads as "registrations × this tier's rate" and nothing else.
+    milestoneAmount: number;
+    tierBreakdown: TierBracketBreakdown[];
     speedBonus: SpeedBonusResult | null;
     // scopedTo is set only for a cut whose field depends on another (e.g. Department depends
     // on College) — the value that dependency resolved to for THIS ambassador, so the
     // frontend can nest the dependent cut's card under its parent cut's card instead of
     // showing every cut flat in one grid. Absent for an independent/unscoped cut.
     leaderboardRanks: { scope: LeaderboardScope; label: string; rank: number | null; scopedTo?: { fieldKey: string; value: string } | undefined }[];
+}
+
+/** One milestone tier's contribution to the accrued total — how many of this ambassador's
+ *  registrations fell in this tier's bracket, and at what rate. Powers the "your total
+ *  earnings" breakdown on the ambassador-facing campaign detail page. */
+export interface TierBracketBreakdown {
+    tierLabel: string;
+    minRegistrations: number;
+    maxRegistrations: number | null;
+    registrationsInBracket: number;
+    amountPerRegistration: number;
+    subtotal: number; // registrationsInBracket * amountPerRegistration (+ goodie cash equivalent, if any)
+    goodieLabel?: string | undefined;
+    goodieCashEquivalent?: number | undefined;
 }
 
 export interface SpeedBonusResult {
@@ -434,6 +454,10 @@ export interface CampaignStatsDetail extends CampaignStats {
         phases: CampaignPhase[];
         milestoneTiers: MilestoneTier[];
         leaderboardPrizes: LeaderboardCut[];
+        // Full tier schedule (not just this ambassador's earned tier, in stats.speedBonus) —
+        // the breakdown modal shows what's available, the same way it shows the full
+        // milestone-tier ladder rather than only the reached tier.
+        speedBonus: SpeedBonusConfig | undefined;
     };
 }
 

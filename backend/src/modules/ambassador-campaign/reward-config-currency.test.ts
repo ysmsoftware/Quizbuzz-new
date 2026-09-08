@@ -48,11 +48,15 @@ describe("reward-config-currency", () => {
             nextTier: null,
             progressToNextTier: null,
             accruedAmount: 12345,
+            milestoneAmount: 11845,
+            tierBreakdown: [{ tierLabel: "Level 1", minRegistrations: 0, maxRegistrations: null, registrationsInBracket: 5, amountPerRegistration: 2369, subtotal: 11845 }],
             speedBonus: { earned: true, tier: { withinDays: 7, bonusAmount: 500, label: "Fast" }, daysToMilestone: null },
             leaderboardRanks: [],
         };
         const result = campaignStatsPaiseToRupees(stats);
         expect(result.accruedAmount).toBe(123.45);
+        expect(result.milestoneAmount).toBe(118.45);
+        expect(result.tierBreakdown[0]!.subtotal).toBe(118.45);
         expect(result.speedBonus!.tier!.bonusAmount).toBe(5);
         expect(result.registrationCount).toBe(5);
     });
@@ -64,6 +68,8 @@ describe("reward-config-currency", () => {
             nextTier: { minRegistrations: 71, maxRegistrations: 100, rewardType: "PER_REGISTRATION", amountPerRegistration: 1800 },
             progressToNextTier: { current: 45, required: 71 },
             accruedAmount: 67500,
+            milestoneAmount: 67500,
+            tierBreakdown: [],
             speedBonus: null,
             leaderboardRanks: [],
         };

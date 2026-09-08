@@ -256,9 +256,28 @@ export interface CampaignStats {
   currentTier: MilestoneTier | null;
   nextTier: MilestoneTier | null;
   progressToNextTier: CampaignStatsProgress | null;
+  // Grand total (milestone brackets + earned speed bonus) — used wherever this ambassador's
+  // earnings are summed across campaigns (dashboard/profile totals).
   accruedAmount: number; // rupees
+  // Milestone brackets only, no speed bonus — the tier-ladder headline on the campaign detail
+  // page reads as "registrations x this tier's rate" and nothing else.
+  milestoneAmount: number; // rupees
+  tierBreakdown: TierBracketBreakdown[];
   speedBonus: CampaignSpeedBonusStatus | null;
   leaderboardRanks: LeaderboardRankEntry[];
+}
+
+/** One milestone tier's contribution to the accrued total — powers the "your total earnings"
+ *  breakdown modal on the campaign detail page. */
+export interface TierBracketBreakdown {
+  tierLabel: string;
+  minRegistrations: number;
+  maxRegistrations: number | null;
+  registrationsInBracket: number;
+  amountPerRegistration: number; // rupees
+  subtotal: number; // rupees
+  goodieLabel?: string;
+  goodieCashEquivalent?: number; // rupees
 }
 
 export interface MyCampaignItem {
@@ -293,6 +312,9 @@ export interface StatsCampaignSummary {
   phases: CampaignPhase[];
   milestoneTiers: MilestoneTier[];
   leaderboardPrizes: LeaderboardCut[];
+  // Full tier schedule (not just the tier this ambassador already earned, in stats.speedBonus)
+  // — the breakdown modal shows what's available, same as it does for milestone tiers.
+  speedBonus?: SpeedBonusConfig;
 }
 
 export interface CampaignStatsDetail extends CampaignStats {

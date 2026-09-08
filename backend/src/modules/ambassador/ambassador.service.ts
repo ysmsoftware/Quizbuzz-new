@@ -554,6 +554,8 @@ export class AmbassadorService {
             nextTier: null,
             progressToNextTier: null,
             accruedAmount: 0,
+            milestoneAmount: 0,
+            tierBreakdown: [],
             speedBonus: null,
             leaderboardRanks: [],
         };
@@ -690,6 +692,10 @@ export class AmbassadorService {
                 // detail page needs it to show "what each leaderboard cut pays" up front,
                 // not only once someone actually occupies a paid rank.
                 leaderboardPrizes: convertedRewardConfig.leaderboardPrizes,
+                // Full speed-bonus schedule (not just the tier this ambassador already earned,
+                // in stats.speedBonus) — the earnings breakdown shows what's available same as
+                // the milestone ladder does.
+                speedBonus: convertedRewardConfig.speedBonus,
             },
         };
     }

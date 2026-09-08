@@ -7,6 +7,7 @@ import {
     MilestoneTier,
     SpeedBonusConfig,
     SpeedBonusResult,
+    TierBracketBreakdown,
 } from "./ambassador-campaign.types";
 
 /**
@@ -76,7 +77,18 @@ export function campaignStatsPaiseToRupees(stats: CampaignStats): CampaignStats 
         currentTier: stats.currentTier ? convertTier(stats.currentTier, paisaToRupees) : null,
         nextTier: stats.nextTier ? convertTier(stats.nextTier, paisaToRupees) : null,
         accruedAmount: paisaToRupees(stats.accruedAmount),
+        milestoneAmount: paisaToRupees(stats.milestoneAmount),
+        tierBreakdown: stats.tierBreakdown.map((b) => tierBreakdownPaiseToRupees(b, paisaToRupees)),
         speedBonus: stats.speedBonus ? speedBonusResultPaiseToRupees(stats.speedBonus) : null,
+    };
+}
+
+function tierBreakdownPaiseToRupees(breakdown: TierBracketBreakdown, convert: (n: number) => number): TierBracketBreakdown {
+    return {
+        ...breakdown,
+        amountPerRegistration: convert(breakdown.amountPerRegistration),
+        subtotal: convert(breakdown.subtotal),
+        ...(breakdown.goodieCashEquivalent !== undefined && { goodieCashEquivalent: convert(breakdown.goodieCashEquivalent) }),
     };
 }
 

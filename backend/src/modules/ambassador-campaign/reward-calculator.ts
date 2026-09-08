@@ -1,4 +1,4 @@
-import { MilestoneTier, RewardConfig, SpeedBonusConfig } from "./ambassador-campaign.types";
+import { MilestoneTier, RewardConfig, SpeedBonusConfig, TierBracketBreakdown } from "./ambassador-campaign.types";
 import { SpeedBonusResult } from "./ambassador-campaign.types";
 
 /**
@@ -16,6 +16,7 @@ export interface MilestoneRewardResult {
     nextTier: MilestoneTier | null;
     progressToNextTier: { current: number; required: number } | null;
     accruedAmount: number;
+    tierBreakdown: TierBracketBreakdown[];
 }
 
 export function computeMilestoneReward(
@@ -37,21 +38,30 @@ export function computeMilestoneReward(
         : null;
 
     let accruedAmount = 0;
-    for (const tier of sorted) {
+    const tierBreakdown: TierBracketBreakdown[] = [];
+    sorted.forEach((tier, i) => {
         if (registrationCount >= tier.minRegistrations) {
             const limit = tier.maxRegistrations === null ? registrationCount : Math.min(registrationCount, tier.maxRegistrations);
             const registrationsInBracket = limit - tier.minRegistrations + 1;
-            
+
             if (registrationsInBracket > 0) {
-                accruedAmount += registrationsInBracket * tier.amountPerRegistration;
-                if (tier.goodie?.cashEquivalent) {
-                    accruedAmount += tier.goodie.cashEquivalent;
-                }
+                const bracketAmount = registrationsInBracket * tier.amountPerRegistration;
+                const goodieCash = tier.goodie?.cashEquivalent ?? 0;
+                accruedAmount += bracketAmount + goodieCash;
+                tierBreakdown.push({
+                    tierLabel: tier.label ?? `Level ${i + 1}`,
+                    minRegistrations: tier.minRegistrations,
+                    maxRegistrations: tier.maxRegistrations,
+                    registrationsInBracket,
+                    amountPerRegistration: tier.amountPerRegistration,
+                    subtotal: bracketAmount + goodieCash,
+                    ...(tier.goodie?.cashEquivalent && { goodieLabel: tier.goodie.label, goodieCashEquivalent: tier.goodie.cashEquivalent }),
+                });
             }
         }
-    }
+    });
 
-    return { currentTier, nextTier, progressToNextTier, accruedAmount };
+    return { currentTier, nextTier, progressToNextTier, accruedAmount, tierBreakdown };
 }
 
 /**

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Trophy } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -143,16 +144,36 @@ export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbas
         <div className="mt-3 pt-3 border-t border-border/60">
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setExpanded(true)}
             className="flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
           >
             <span className="text-[12px] font-semibold text-primary">
-              {expanded ? 'Hide' : 'View'} {nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${nestedCuts.length} more leaderboards`}
+              View {nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${nestedCuts.length} more leaderboards`}
             </span>
-            <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', expanded && 'rotate-180')} />
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
-          {expanded && (
-            <div className="mt-3 flex flex-col gap-3">
+        </div>
+      )}
+    </>
+  );
+
+  if (nested) {
+    return <div className="rounded-lg bg-secondary/60 p-3">{body}</div>;
+  }
+
+  return (
+    <>
+      <Card className="border-border/50">
+        <CardContent className="pt-1">{body}</CardContent>
+      </Card>
+
+      {nestedCuts && nestedCuts.length > 0 && (
+        <Dialog open={expanded} onOpenChange={setExpanded}>
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${label} — more leaderboards`}</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
               {nestedCuts.map((child) => (
                 <CampaignLeaderboardCard
                   key={leaderboardScopeKey(child.cut.scope)}
@@ -164,19 +185,9 @@ export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbas
                 />
               ))}
             </div>
-          )}
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </>
-  );
-
-  if (nested) {
-    return <div className="rounded-lg bg-secondary/60 p-3">{body}</div>;
-  }
-
-  return (
-    <Card className="border-border/50">
-      <CardContent className="pt-1">{body}</CardContent>
-    </Card>
   );
 }

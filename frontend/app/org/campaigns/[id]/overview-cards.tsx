@@ -693,7 +693,15 @@ export function RewardBudgetCard({
 // at creation time (enabled state, qualifying window, per-tier breakdown), which was
 // previously visible only by opening the Rewards edit panel.
 
-export function SpeedBonusConfigCard({ speedBonus }: { speedBonus: SpeedBonusConfig | undefined }) {
+export function SpeedBonusConfigCard({
+  speedBonus,
+  earnedTierWithinDays,
+}: {
+  speedBonus: SpeedBonusConfig | undefined;
+  /** Ambassador-side only — highlights the tier this viewer already earned (stats.speedBonus.tier.withinDays).
+   *  Undefined on the org-admin read of this same card, where there's no single viewer to earn anything. */
+  earnedTierWithinDays?: number;
+}) {
   if (!speedBonus) return null;
 
   return (
@@ -720,15 +728,19 @@ export function SpeedBonusConfigCard({ speedBonus }: { speedBonus: SpeedBonusCon
         )}
         {speedBonus.tiers.length > 0 && (
           <div className="pt-2 border-t border-border/40 space-y-2">
-            {speedBonus.tiers.map((t, i) => (
-              <div key={i} className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground truncate">
-                  {t.label} · within {t.withinDays} {t.withinDays === 1 ? 'day' : 'days'}
-                  {t.maxWinners ? ` · up to ${t.maxWinners} winners` : ''}
-                </span>
-                <span className="font-medium tabular-nums shrink-0"><Rupees amount={t.bonusAmount} /></span>
-              </div>
-            ))}
+            {speedBonus.tiers.map((t, i) => {
+              const earned = earnedTierWithinDays === t.withinDays;
+              return (
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span className={cn('truncate', earned ? 'font-semibold text-warning' : 'text-muted-foreground')}>
+                    {t.label} · within {t.withinDays} {t.withinDays === 1 ? 'day' : 'days'}
+                    {t.maxWinners ? ` · up to ${t.maxWinners} winners` : ''}
+                    {earned ? ' · Earned' : ''}
+                  </span>
+                  <span className={cn('font-medium tabular-nums shrink-0', earned && 'text-warning')}><Rupees amount={t.bonusAmount} /></span>
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
