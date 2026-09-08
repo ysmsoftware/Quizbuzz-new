@@ -25,7 +25,7 @@ variable "mode" {
 
 variable "expected_participants" {
   type        = number
-  default     = 1000
+  default     = 7000
   description = <<-EOT
     How many concurrent users you expect for the upcoming contest.
     Used to calculate how many t3.medium quiz instances to spin up in live mode.

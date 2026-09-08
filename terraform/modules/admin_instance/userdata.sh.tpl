@@ -105,7 +105,7 @@ OPS_BASE_URL=$(get_ssm_optional "/quizbuzz/prod/OPS_BASE_URL")
 # that never create it, still get the expected default instead of silently
 # going dark.
 ENABLE_PROCTORING=$(get_ssm_optional "/quizbuzz/prod/ENABLE_PROCTORING")
-ENABLE_PROCTORING="${ENABLE_PROCTORING:-true}"
+ENABLE_PROCTORING="$${ENABLE_PROCTORING:-true}"
 
 if [ -z "$POSTHOG_HOST" ]; then
   POSTHOG_HOST="https://us.i.posthog.com"
@@ -794,7 +794,7 @@ SENTRY_DSN=$(get_ssm_optional /quizbuzz/prod/SENTRY_DSN)
 OPS_BASE_URL=$(get_ssm_optional /quizbuzz/prod/OPS_BASE_URL)
 IMAGE_TAG=$(get_ssm /quizbuzz/prod/image-tag)
 ENABLE_PROCTORING=$(get_ssm_optional /quizbuzz/prod/ENABLE_PROCTORING)
-ENABLE_PROCTORING="${ENABLE_PROCTORING:-true}"
+ENABLE_PROCTORING="$${ENABLE_PROCTORING:-true}"
 
 # Patch all SSM-sourced values in .env
 sed -i "s|^DATABASE_URL=.*|DATABASE_URL=$DATABASE_URL|" /app/.env
