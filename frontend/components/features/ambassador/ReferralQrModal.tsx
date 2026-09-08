@@ -59,10 +59,14 @@ export function ReferralQrModal({
       const URL = window.URL || window.webkitURL || window;
       const blobURL = URL.createObjectURL(svgBlob);
 
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      logoImg.src = '/qbfavicon.png';
+
       const image = new Image();
       image.onload = () => {
-        const width = 640;
-        const height = 860;
+        const width = 660;
+        const height = 880;
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -129,13 +133,26 @@ export function ReferralQrModal({
 
         // 3. Draw QR Code inside white plate
         const qrPadding = 30;
+        const qrDrawSize = qrBoxSize - qrPadding * 2;
+        const qrDrawX = qrBoxX + qrPadding;
+        const qrDrawY = qrBoxY + qrPadding;
+
         ctx.drawImage(
           image,
-          qrBoxX + qrPadding,
-          qrBoxY + qrPadding,
-          qrBoxSize - qrPadding * 2,
-          qrBoxSize - qrPadding * 2
+          qrDrawX,
+          qrDrawY,
+          qrDrawSize,
+          qrDrawSize
         );
+
+        // Draw centered logo on canvas naturally matching its native shape
+        if (logoImg.complete && logoImg.naturalWidth !== 0) {
+          const logoSize = 64;
+          const logoX = qrDrawX + (qrDrawSize - logoSize) / 2;
+          const logoY = qrDrawY + (qrDrawSize - logoSize) / 2;
+
+          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+        }
 
         // 4. Instruction text below QR box (No emojis)
         ctx.font = '500 14px Inter, sans-serif';
@@ -181,16 +198,16 @@ export function ReferralQrModal({
           ctx.fillText(`Ambassador: ${ambassadorName}`, width / 2, nextY);
         }
 
-        // 7. Footer Watermark: QuizBuzz / Powered by YSM Info Solutions
-        ctx.font = 'bold 16px Inter, sans-serif';
+        // 7. Footer Watermark: QuizBuzz / by YSM Info Solution
+        ctx.font = 'bold 18px Inter, sans-serif';
         ctx.fillStyle = '#10b981';
         ctx.textAlign = 'center';
         ctx.fillText('QuizBuzz', width / 2, height - 34);
 
-        ctx.font = '400 11px Inter, sans-serif';
-        ctx.fillStyle = '#64748b';
+        ctx.font = '500 12px Inter, sans-serif';
+        ctx.fillStyle = '#94a3b8';
         ctx.textAlign = 'center';
-        ctx.fillText('Powered by YSM Info Solutions', width / 2, height - 16);
+        ctx.fillText('by YSM Info Solution', width / 2, height - 16);
 
         // Export PNG file download
         const png = canvas.toDataURL('image/png');
@@ -216,13 +233,10 @@ export function ReferralQrModal({
         {/* Emerald & Amber Dual Accent Bar */}
         <div className="h-2 bg-gradient-to-r from-emerald-500 via-primary to-amber-500" />
 
-        <div className="p-6 space-y-5 text-center">
-          {/* Centered Header */}
-          <DialogHeader className="text-center space-y-1.5 flex flex-col items-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
-              <QrCode className="h-6 w-6" />
-            </div>
-            <DialogTitle className="text-xl font-bold tracking-tight text-foreground pt-1 text-center">
+        <div className="p-6 space-y-4 text-center">
+          {/* Centered Header (Top icon removed for better vertical space) */}
+          <DialogHeader className="text-center space-y-1 flex flex-col items-center">
+            <DialogTitle className="text-xl font-bold tracking-tight text-foreground text-center">
               Ambassador Referral QR Code
             </DialogTitle>
             <p className="text-xs text-muted-foreground text-center">
@@ -244,6 +258,12 @@ export function ReferralQrModal({
                 fgColor="#09090b"
                 level="H"
                 includeMargin={false}
+                imageSettings={{
+                  src: '/qbfavicon.png',
+                  height: 46,
+                  width: 46,
+                  excavate: false,
+                }}
               />
             </div>
             <p className="text-xs font-medium text-muted-foreground flex items-center justify-center gap-1.5 text-center pt-1">
@@ -300,9 +320,9 @@ export function ReferralQrModal({
           </div>
 
           {/* Footer Branding Watermark */}
-          <div className="pt-1 text-center">
-            <p className="text-sm font-bold text-primary">QuizBuzz</p>
-            <p className="text-[10px] text-muted-foreground font-normal">YSM Info Solution</p>
+          <div className="pt-1 text-center flex flex-col items-center">
+            <p className="text-base font-extrabold text-primary tracking-tight">QuizBuzz</p>
+            <p className="text-xs text-muted-foreground font-medium">by YSM Info Solution</p>
           </div>
         </div>
       </DialogContent>

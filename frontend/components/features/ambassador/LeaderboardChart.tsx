@@ -45,7 +45,10 @@ interface LeaderboardChartProps {
 export function LeaderboardChart({ rows, ownRank, tierTicks }: LeaderboardChartProps) {
   if (rows.length === 0) return null;
 
-  const data: ChartRow[] = rows.map((r) => ({
+  // Chart top 10 entries for a clean visual representation
+  const chartRows = rows.slice(0, 10);
+
+  const data: ChartRow[] = chartRows.map((r) => ({
     rank: r.rank,
     label: r.label,
     registrationCount: r.registrationCount,
@@ -59,9 +62,9 @@ export function LeaderboardChart({ rows, ownRank, tierTicks }: LeaderboardChartP
   const yTickFormatter = (value: number) => tierLabelByThreshold.get(value) ?? String(value);
 
   return (
-    <div className="h-[180px] w-full">
+    <div className="h-[180px] w-full min-w-0 overflow-hidden">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 16, right: 6, left: 0, bottom: 0 }} barCategoryGap="24%">
+        <BarChart data={data} margin={{ top: 16, right: 12, left: -10, bottom: 0 }} barCategoryGap="20%">
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="rank"

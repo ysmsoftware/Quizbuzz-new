@@ -90,7 +90,7 @@ interface CampaignLeaderboardCardProps {
  *  them at once, side by side, instead of one at a time behind a tab switcher. */
 export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbassadorId, tierTicks, nestedCuts, nested }: CampaignLeaderboardCardProps) {
   const { scope, label } = cut;
-  const { rows, pagination, isLoading } = useAmbassadorCampaignLeaderboard(campaignId, scope, { limit: 10 });
+  const { rows, pagination, isLoading } = useAmbassadorCampaignLeaderboard(campaignId, scope, { limit: 20 });
   const hasPrizes = cut.ranks.length > 0 || !!cut.consolation;
   const [expanded, setExpanded] = useState(false);
 
@@ -108,7 +108,7 @@ export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbas
         </div>
         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-1 shrink-0 whitespace-nowrap">
           <Trophy className="h-3 w-3" />
-          Top 5
+          Standings
         </span>
       </div>
 
@@ -134,8 +134,8 @@ export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbas
       ) : (
         <>
           <LeaderboardChart rows={rows} ownRank={ownRank} tierTicks={tierTicks} />
-          <div className="mt-3 pt-3.5 border-t border-border/60">
-            <LeaderboardTable scope={scope} label={label} rows={rows.slice(0, 5)} currentAmbassadorId={currentAmbassadorId} isLoading={false} />
+          <div className="mt-3 pt-3.5 border-t border-border/60 min-w-0">
+            <LeaderboardTable scope={scope} label={label} rows={rows} currentAmbassadorId={currentAmbassadorId} isLoading={false} />
           </div>
         </>
       )}
@@ -158,22 +158,22 @@ export function CampaignLeaderboardCard({ campaignId, cut, ownRank, currentAmbas
   );
 
   if (nested) {
-    return <div className="rounded-lg bg-secondary/60 p-3">{body}</div>;
+    return <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5 sm:p-4 min-w-0 overflow-hidden">{body}</div>;
   }
 
   return (
     <>
-      <Card className="border-border/50">
+      <Card className="border-border/50 overflow-hidden">
         <CardContent className="pt-1">{body}</CardContent>
       </Card>
 
       {nestedCuts && nestedCuts.length > 0 && (
         <Dialog open={expanded} onOpenChange={setExpanded}>
-          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${label} — more leaderboards`}</DialogTitle>
+          <DialogContent className="sm:max-w-xl md:max-w-2xl w-full max-w-[calc(100vw-1.5rem)] max-h-[88vh] overflow-y-auto p-4 sm:p-6 min-w-0">
+            <DialogHeader className="pb-1">
+              <DialogTitle className="text-base sm:text-lg font-bold">{nestedCuts.length === 1 ? nestedCuts[0]!.cut.label : `${label} — Leaderboards`}</DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {nestedCuts.map((child) => (
                 <CampaignLeaderboardCard
                   key={leaderboardScopeKey(child.cut.scope)}

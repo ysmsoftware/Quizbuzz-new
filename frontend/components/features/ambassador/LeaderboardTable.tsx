@@ -47,35 +47,39 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
   }
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">Rank</TableHead>
-            <TableHead>{label}</TableHead>
-            <TableHead className="text-right">Registrations</TableHead>
-            <TableHead className="text-right">Prize</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => {
-            const isYou = scope.kind === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
-            return (
-              <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/5 font-medium')}>
-                <TableCell className={cn('font-bold', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>
-                <TableCell className="truncate max-w-[180px]">
-                  {row.label}
-                  {isYou && <span className="ml-2 text-xs text-primary font-semibold">You</span>}
-                </TableCell>
-                <TableCell className="text-right">{row.registrationCount}</TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {row.prize ? (row.prize.cashAmount ? <Rupees amount={row.prize.cashAmount} /> : row.prize.label ?? row.prize.goodie?.label) : '—'}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <div className="w-full min-w-0 rounded-lg border border-border/60 overflow-hidden bg-card">
+      <div className="max-h-[235px] overflow-y-auto overflow-x-hidden scrollbar-thin">
+        <Table className="w-full text-xs sm:text-sm">
+          <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-xs z-10 border-b border-border/60">
+            <TableRow className="hover:bg-transparent border-b-border/60">
+              <TableHead className="w-12 sm:w-14 px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm">Rank</TableHead>
+              <TableHead className="px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm min-w-0">{label}</TableHead>
+              <TableHead className="w-24 sm:w-28 px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">Registrations</TableHead>
+              <TableHead className="w-24 sm:w-28 px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">Prize</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => {
+              const isYou = scope.kind === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
+              return (
+                <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/10 font-semibold')}>
+                  <TableCell className={cn('px-2.5 py-2 font-bold text-xs sm:text-sm', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>
+                  <TableCell className="px-2.5 py-2 text-xs sm:text-sm font-medium min-w-0 truncate max-w-[120px] sm:max-w-[220px]">
+                    <span className="truncate block" title={row.label}>
+                      {row.label}
+                      {isYou && <span className="ml-1.5 inline-block text-xs text-primary font-bold">(You)</span>}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-2.5 py-2 text-right text-xs sm:text-sm font-medium whitespace-nowrap">{row.registrationCount}</TableCell>
+                  <TableCell className="px-2.5 py-2 text-right text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">
+                    {row.prize ? (row.prize.cashAmount ? <Rupees amount={row.prize.cashAmount} /> : row.prize.label ?? row.prize.goodie?.label) : '—'}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
