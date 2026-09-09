@@ -76,6 +76,15 @@ export const AdminSubscribeSchema = z.object({
     contestId: z.string().min(1),
 });
 
+export const AdminFetchParticipantsPageSchema = z.object({
+    contestId: z.string().min(1),
+    offset: z.number().int().min(0).default(0),
+    limit: z.number().int().min(1).max(200).default(50),
+    search: z.string().max(200).optional(),
+    sortField: z.enum(["name", "progress", "answered", "status"]).optional(),
+    sortOrder: z.enum(["asc", "desc"]).optional(),
+});
+
 export const AdminBroadcastSchema = z.object({
     contestId: z.string().min(1),
     message: z.string().min(1).max(1000),
@@ -94,3 +103,4 @@ export type ViolationInput = z.infer<typeof ViolationSchema>;
 export type SnapshotInput = z.infer<typeof SnapshotSchema>;
 export type AdminSubscribeInput = z.infer<typeof AdminSubscribeSchema>;
 export type AdminBroadcastInput = z.infer<typeof AdminBroadcastSchema>;
+export type AdminFetchParticipantsPageInput = z.infer<typeof AdminFetchParticipantsPageSchema>;

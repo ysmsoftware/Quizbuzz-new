@@ -89,7 +89,7 @@ COMMAND_ID=$(aws ssm send-command \
   --instance-ids "$ADMIN_INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
   --parameters commands='[
-    "REDIS_PASS=$(aws ssm get-parameter --name /quizbuzz/prod/REDIS_PASSWORD --with-decryption --query Parameter.Value --output text --region ap-south-1) && sed -i \"s|^REDIS_HOST=.*|REDIS_HOST=redis|\" /app/.env && sed -i \"s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$REDIS_PASS|\" /app/.env",
+    "REDIS_PASS=$(aws ssm get-parameter --name /quizbuzz/prod/REDIS_PASSWORD --with-decryption --query Parameter.Value --output text --region ap-south-1) && sed -i \"s|^REDIS_HOST=.*|REDIS_HOST=redis|\" /app/.env && (grep -q \"^REDIS_READER_HOST=\" /app/.env && sed -i \"s|^REDIS_READER_HOST=.*|REDIS_READER_HOST=redis|\" /app/.env || echo \"REDIS_READER_HOST=redis\" >> /app/.env) && sed -i \"s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$REDIS_PASS|\" /app/.env",
     "cd /app && docker compose up -d --force-recreate backend worker",
     "sleep 15",
     "docker ps",

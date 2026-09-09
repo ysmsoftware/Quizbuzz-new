@@ -141,11 +141,12 @@ data "cloudinit_config" "quiz_config" {
   part {
     content_type = "text/x-shellscript"
     content = templatefile("${path.module}/userdata.sh.tpl", {
-      aws_region = var.aws_region
-      s3_bucket  = var.s3_bucket
-      github_org = var.github_org
-      domain     = var.domain
-      redis_host = aws_elasticache_replication_group.redis.primary_endpoint_address
+      aws_region        = var.aws_region
+      s3_bucket         = var.s3_bucket
+      github_org        = var.github_org
+      domain            = var.domain
+      redis_host        = aws_elasticache_replication_group.redis.primary_endpoint_address
+      redis_reader_host = aws_elasticache_replication_group.redis.reader_endpoint_address
     })
   }
 }

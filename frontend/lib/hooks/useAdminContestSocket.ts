@@ -57,6 +57,18 @@ export function useAdminContestSocket(
   onViolation?: (violation: any) => void
 ) {
   const [connected, setConnected] = useState(false);
+  // 'connecting': normal first-attempt state, no UI change from before.
+  // 'slow': socket.io itself reported a connect_error (commonly a handshake timeout
+  //   under backend load) and is now auto-retrying — surface this instead of leaving
+  //   the user staring at an identical spinner with no idea anything is wrong.
+  // 'failed': socket.io exhausted its built-in reconnection attempts; needs a manual
+  //   retry rather than continuing to spin forever.
+  const [connectionState, setConnectionState] = useState<'connecting' | 'slow' | 'failed'>('connecting');
+  const [reconnectKey, setReconnectKey] = useState(0);
+  const retry = useCallback(() => {
+    setConnectionState('connecting');
+    setReconnectKey((k) => k + 1);
+  }, []);
   const [participants, setParticipants] = useState<LiveParticipant[]>([]);
   const [messages, setMessages] = useState<BroadcastMessage[]>([]);
   const [stats, setStats] = useState({
@@ -68,6 +80,11 @@ export function useAdminContestSocket(
     totalViolations: 0,
   });
   const [violations, setViolations] = useState<ProctorAlert[]>([]);
+  // Server-side pagination/search/sort state — the participant table used to hold
+  // the FULL roster client-side; now it holds only the current page, and the total
+  // (post-search-filter) count the server reports so "showing X of Y" stays correct.
+  const [participantsTotal, setParticipantsTotal] = useState(0);
+  const [pageLoading, setPageLoading] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const onViolationRef = useRef(onViolation);
@@ -134,6 +151,7 @@ export function useAdminContestSocket(
 
       socket.on('connect', () => {
         setConnected(true);
+        setConnectionState('connecting');
         // Subscribe to the contest room — backend event: admin:v1:subscribe
         socket.emit('admin:v1:subscribe', { contestId });
       });
@@ -143,7 +161,17 @@ export function useAdminContestSocket(
       socket.on('connect_error', (err) => {
         if (err.message?.includes('UNAUTHORIZED') || err.message?.includes('Authentication')) {
           toast.error('Admin session expired. Please refresh the page.');
+          return;
         }
+        // Not an auth failure — most likely the handshake timed out because the
+        // backend is under heavy load. socket.io is already auto-retrying
+        // (reconnectionAttempts below); just surface that instead of leaving the
+        // spinner indistinguishable from "still trying" vs "actually stuck".
+        setConnectionState('slow');
+      });
+
+      socket.io.on('reconnect_failed', () => {
+        setConnectionState('failed');
       });
 
       // Initial live stats snapshot
@@ -170,6 +198,7 @@ export function useAdminContestSocket(
 
         // Set state immediately on first snapshot load
         setParticipants(Array.from(participantsRef.current.values()));
+        setParticipantsTotal(data.totalParticipants ?? data.participants?.length ?? 0);
         setStats(nextStats);
 
         if (data.violations) {
@@ -186,6 +215,23 @@ export function useAdminContestSocket(
 
         hasChangesRef.current = false;
       });
+
+      // Response to an on-demand admin:v1:fetch_participants_page request — a page
+      // change, search, or sort. Replaces the current page's rows entirely (this is
+      // "show me this page", not an incremental patch like the events below).
+      socket.on('admin:v1:participants_page', (data: any) => {
+        const map = new Map<string, LiveParticipant>();
+        (data.participants || []).forEach((p: any) => {
+          const mapped = mapBackendParticipant(p);
+          map.set(mapped.participantId, mapped);
+        });
+        participantsRef.current = map;
+        setParticipants(Array.from(map.values()));
+        setParticipantsTotal(data.total ?? 0);
+        setPageLoading(false);
+      });
+
+      socket.on('admin:v1:error', () => setPageLoading(false));
 
       // Participant joined the waiting room
       socket.on('admin:v1:participant_joined', (data: any) => {
@@ -338,7 +384,7 @@ export function useAdminContestSocket(
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [contestId, organizationId]);
+  }, [contestId, organizationId, reconnectKey]);
 
   const updateStats = (data: any) => {
     const nextStats = {
@@ -413,9 +459,27 @@ export function useAdminContestSocket(
 
   const getParticipantStats = useCallback(() => stats, [stats]);
 
+  const fetchParticipantsPage = useCallback((params: {
+    offset: number;
+    limit: number;
+    search?: string;
+    sortField?: 'name' | 'progress' | 'answered' | 'status';
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    if (socketRef.current?.connected) {
+      setPageLoading(true);
+      socketRef.current.emit('admin:v1:fetch_participants_page', { contestId, ...params });
+    }
+  }, [contestId]);
+
   return {
     connected,
+    connectionState,
+    retry,
     participants,
+    participantsTotal,
+    pageLoading,
+    fetchParticipantsPage,
     violations,
     messages,
     stats,

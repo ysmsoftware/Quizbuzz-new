@@ -1,5 +1,5 @@
 import v8 from "v8";
-import { redis } from "../../config/redis";
+import { redis, redisReader } from "../../config/redis";
 import { config } from "../../config";
 import { prisma } from "../../config/db";
 import logger from "../../config/logger";
@@ -89,7 +89,7 @@ export class OpsMetricsService {
         const keys: string[] = [];
         let cursor = "0";
         do {
-            const [nextCursor, batch] = await redis.scan(cursor, "MATCH", `${HEARTBEAT_KEY_PREFIX}*`, "COUNT", 100);
+            const [nextCursor, batch] = await redisReader.scan(cursor, "MATCH", `${HEARTBEAT_KEY_PREFIX}*`, "COUNT", 100);
             cursor = nextCursor;
             keys.push(...batch);
         } while (cursor !== "0");
@@ -98,7 +98,7 @@ export class OpsMetricsService {
             return { reportingInstances: 0, totals: { activeConnections: 0, rssMb: 0, heapUsedMb: 0 }, instances: [] };
         }
 
-        const values = await redis.mget(...keys);
+        const values = await redisReader.mget(...keys);
         const instances: InstanceHeartbeat[] = values
             .map((raw) => {
                 try { return raw ? (JSON.parse(raw) as InstanceHeartbeat) : null; }
@@ -140,11 +140,19 @@ export class OpsMetricsService {
     }
 
     /**
-     * Pure Redis, zero DB — the same getLiveSnapshot() the admin live-stats
+     * Pure Redis, zero DB — the same getParticipantsPage() the admin live-stats
      * socket broadcast already uses (quiz.gateway.ts's emitAdminLiveStats),
-     * just exposed here as a pollable HTTP read instead of a socket push.
+     * just exposed here as a pollable HTTP read instead of a socket push. Paginated
+     * for the same reason as the admin dashboard: this used to fetch full detail
+     * for every participant on every poll, which is exactly the cost that made
+     * both dashboards stall together under load — see quiz.session.ts.
      */
-    async getContestSnapshot(contestId: string) {
-        return this.session.getLiveSnapshot(contestId, config.proctoring.threshold);
+    async getContestSnapshot(contestId: string, page: { offset?: number | undefined; limit?: number | undefined } = {}) {
+        return this.session.getParticipantsPage(
+            contestId,
+            config.proctoring.threshold,
+            { offset: page.offset ?? 0, limit: page.limit ?? config.quiz.adminParticipantsPageSize },
+            redisReader,
+        );
     }
 }

@@ -105,11 +105,17 @@ echo ""
 echo "▶ Switching admin instance to ElastiCache..."
 
 REDIS_HOST=$(terraform output -raw redis_primary_endpoint)
+REDIS_READER_HOST=$(terraform output -raw redis_reader_endpoint)
 ADMIN_INSTANCE_ID=$(terraform output -raw instance_id)
 
 if [ -z "$REDIS_HOST" ] || [ "$REDIS_HOST" = "null" ]; then
   echo "ERROR: Could not read redis_primary_endpoint from Terraform output. Admin instance NOT switched — fix this before sending real traffic."
   exit 1
+fi
+
+if [ -z "$REDIS_READER_HOST" ] || [ "$REDIS_READER_HOST" = "null" ]; then
+  echo "WARNING: Could not read redis_reader_endpoint — falling back REDIS_READER_HOST to the primary endpoint. Admin/ops dashboard reads will share the primary connection instead of using the replica."
+  REDIS_READER_HOST="$REDIS_HOST"
 fi
 
 COMMAND_ID=$(aws ssm send-command \
@@ -118,6 +124,7 @@ COMMAND_ID=$(aws ssm send-command \
   --document-name "AWS-RunShellScript" \
   --parameters commands="[
     \"sed -i 's|^REDIS_HOST=.*|REDIS_HOST=$REDIS_HOST|' /app/.env\",
+    \"grep -q '^REDIS_READER_HOST=' /app/.env && sed -i 's|^REDIS_READER_HOST=.*|REDIS_READER_HOST=$REDIS_READER_HOST|' /app/.env || echo 'REDIS_READER_HOST=$REDIS_READER_HOST' >> /app/.env\",
     \"sed -i 's|^REDIS_PASSWORD=.*|REDIS_PASSWORD=|' /app/.env\",
     \"cd /app && docker compose up -d --force-recreate backend worker\",
     \"sleep 15\",

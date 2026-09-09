@@ -3,6 +3,7 @@ import { QuizService } from "./quiz.service.js";
 import { ProctoringService } from "./proctoring.service.js";
 import logger from "../../config/logger.js";
 import { redis } from "../../config/redis.js";
+import { config } from "../../config/index.js";
 import {
     ViolationPayload,
     AnswerPayload,
@@ -30,6 +31,8 @@ const CAMERA_DEPENDENT_VIOLATION_TYPES = new Set([
 export class QuizGateway {
     server!: Server;
     private subscriberClient?: any;
+    private lastAdminStatsAt = new Map<string, number>();
+    private pendingAdminStatsTimer = new Map<string, NodeJS.Timeout>();
 
     constructor(
         private quizService: QuizService,
@@ -97,6 +100,44 @@ export class QuizGateway {
     private async emitAdminLiveStats(contestId: string, organizationId: string): Promise<void> {
         const snapshot = await this.quizService.getAdminLiveSnapshot(contestId, organizationId);
         this.broadcastAdminEvent(contestId, "admin:v1:live-stats", snapshot);
+    }
+
+    /**
+     * Throttled trigger for emitAdminLiveStats — at most one recompute+broadcast per
+     * config.quiz.adminLiveStatsIntervalMs per contest, no matter how many join/submit/
+     * disconnect/violation events fire in that window. Every one of those events used
+     * to call emitAdminLiveStats directly (one full O(N) Redis pipeline per event) —
+     * during a flash-join burst that's effectively O(N^2) total work funneled through
+     * one shared Redis connection, which is what was actually behind the admin/ops
+     * dashboards going blank under load, not a crash or a bug in either dashboard. A
+     * human watching a dashboard doesn't need per-event precision; a bounded-staleness
+     * periodic refresh is enough, and it decouples cost from event rate.
+     *
+     * Leading + trailing: the first event after a quiet period fires immediately (a
+     * lone late joiner isn't stuck waiting out the full interval), and any events that
+     * land inside the cooldown window collapse into exactly one trailing broadcast at
+     * the boundary instead of one broadcast each.
+     */
+    private scheduleAdminLiveStats(contestId: string, organizationId: string): void {
+        const interval = config.quiz.adminLiveStatsIntervalMs;
+        const now = Date.now();
+        const last = this.lastAdminStatsAt.get(contestId) ?? 0;
+
+        if (now - last >= interval) {
+            this.lastAdminStatsAt.set(contestId, now);
+            this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+            return;
+        }
+
+        if (this.pendingAdminStatsTimer.has(contestId)) return; // trailing call already scheduled
+
+        const wait = interval - (now - last);
+        const timer = setTimeout(() => {
+            this.pendingAdminStatsTimer.delete(contestId);
+            this.lastAdminStatsAt.set(contestId, Date.now());
+            this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+        }, wait);
+        this.pendingAdminStatsTimer.set(contestId, timer);
     }
 
     private async getParticipantName(participantId: string): Promise<string> {
@@ -229,7 +270,7 @@ export class QuizGateway {
 
             await this.quizService.handleDisconnect(contestId, participantId);
             // Push updated counts to admin
-            await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+            this.scheduleAdminLiveStats(contestId, organizationId);
             // Push updated waiting room count to participants
             const waitingCount = await this.quizService.getWaitingCount(contestId).catch(() => 0);
             this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", {
@@ -265,7 +306,7 @@ export class QuizGateway {
                 // without waiting for a CONTEST_START BullMQ job (already fired and gone).
                 logger.info(`[QuizGateway] Contest LIVE on join — starting quiz immediately for ${participantId}`);
                 await this.startQuizForParticipant(participantId, contestId, organizationId, socket.data.contactId ?? "");
-                await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+                this.scheduleAdminLiveStats(contestId, organizationId);
                 return;
             }
             // Participant already has a running session — send quiz data directly
@@ -295,7 +336,7 @@ export class QuizGateway {
                     socket.emit("quiz:v1:waiting_room_status", retryResult);
                 }
             }
-            await this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
+            this.scheduleAdminLiveStats(contestId, organizationId);
             return;
         }
 
@@ -315,7 +356,7 @@ export class QuizGateway {
             timestamp: new Date().toISOString(),
         });
 
-        await this.emitAdminLiveStats(contestId, organizationId);
+        this.scheduleAdminLiveStats(contestId, organizationId);
     }
 
     async handleHeartbeat(socket: Socket) {
@@ -406,7 +447,7 @@ export class QuizGateway {
             occurredAt: new Date().toISOString(),
         });
 
-        await this.emitAdminLiveStats(contestId, organizationId);
+        this.scheduleAdminLiveStats(contestId, organizationId);
     }
 
     async handleSubmit(socket: Socket, payload: SubmitPayload) {
@@ -422,7 +463,7 @@ export class QuizGateway {
             timestamp: new Date().toISOString(),
         });
 
-        await this.emitAdminLiveStats(contestId, organizationId);
+        this.scheduleAdminLiveStats(contestId, organizationId);
     }
 
     // ─── Worker Integration Methods ───────────────────────────────────────────

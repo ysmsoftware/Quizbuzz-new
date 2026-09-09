@@ -169,6 +169,18 @@ export class QuizSchedulerService {
     }
 
     /**
+     * (Re)install just the AUTO_SUBMIT job for a contest — end-of-contest counterpart
+     * to ensureStartJob, used by the reconciliation sweep when a LIVE contest's
+     * auto-submit job should exist (or be on-schedule) but isn't. Evicts any existing
+     * job of the same id first (scheduleJob's usual guarantee), so this is always safe
+     * to call even if the job turns out not to actually need fixing.
+     */
+    async ensureAutoSubmitJob(contestId: string, organizationId: string, endTime: Date): Promise<void> {
+        const delay = Math.max(0, endTime.getTime() - Date.now());
+        await this.scheduleJob({ contestId, organizationId, type: "AUTO_SUBMIT" }, `autosubmit-${contestId}`, delay);
+    }
+
+    /**
      * Remove only the pending CONTEST_START job — used by the manual "Start Now"
      * override so the scheduled job cannot also fire and double-run the start
      * sequence. Deliberately narrower than cancelContestJobs, which also tears down

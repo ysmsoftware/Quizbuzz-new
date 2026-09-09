@@ -2,7 +2,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import logger from "../../config/logger";
 import { QuizService } from "./quiz.service";
 import { ProctoringService } from "./proctoring.service";
-import { AdminSubscribeSchema, AdminBroadcastSchema } from "./quiz.validator";
+import { AdminSubscribeSchema, AdminBroadcastSchema, AdminFetchParticipantsPageSchema } from "./quiz.validator";
 import { AdminSubscribePayload, AdminBroadcastPayload } from "./quiz.types";
 
 /**
@@ -43,6 +43,7 @@ export class AdminGateway {
             socket.on("admin:v1:subscribe", (data) => this.handleSubscribe(socket, data));
             socket.on("admin:v1:request-stats", (data) => this.handleRequestStats(socket, data));
             socket.on("admin:v1:broadcast", (data) => this.handleBroadcast(socket, data));
+            socket.on("admin:v1:fetch_participants_page", (data) => this.handleFetchParticipantsPage(socket, data));
 
             socket.on("disconnect", () => {
                 logger.info(`[AdminGateway] Admin ${userId} disconnected`);
@@ -72,6 +73,46 @@ export class AdminGateway {
         try {
             const parsed = AdminSubscribeSchema.parse(data) as AdminSubscribePayload;
             await this.emitLiveStats(socket, parsed.contestId);
+        } catch (error: any) {
+            this.emitError(socket, error);
+        }
+    }
+
+    /**
+     * On-demand page fetch — scrolling, searching, or sorting the participant table.
+     * Deliberately separate from the periodic admin:v1:live-stats broadcast: this
+     * requests includeExtras:false so it never re-triggers the whole-roster
+     * violation-summary pass or the violations-feed DB query, keeping a search/sort
+     * request as cheap as the single page it's fetching, independent of roster size.
+     * See quiz.session.ts's getParticipantsPage / quiz.service.ts's
+     * getAdminLiveSnapshot for why this replaced sending the full roster on every
+     * broadcast.
+     */
+    private async handleFetchParticipantsPage(socket: Socket, data: unknown): Promise<void> {
+        try {
+            const parsed = AdminFetchParticipantsPageSchema.parse(data);
+            const organizationId = socket.data.organizationId as string;
+
+            const snapshot = await this.quizService.getAdminLiveSnapshot(
+                parsed.contestId,
+                organizationId,
+                {
+                    offset: parsed.offset,
+                    limit: parsed.limit,
+                    search: parsed.search,
+                    sortField: parsed.sortField,
+                    sortOrder: parsed.sortOrder,
+                    includeExtras: false,
+                },
+            );
+
+            socket.emit("admin:v1:participants_page", {
+                contestId: parsed.contestId,
+                offset: snapshot.offset,
+                limit: snapshot.limit,
+                total: snapshot.totalParticipants,
+                participants: snapshot.participants,
+            });
         } catch (error: any) {
             this.emitError(socket, error);
         }

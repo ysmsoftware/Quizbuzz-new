@@ -11,7 +11,7 @@
 
 import { QuizSession } from "./quiz.session";
 import { prisma } from "../../config/db";
-import { redis } from "../../config/redis";
+import { redis, redisReader } from "../../config/redis";
 import logger from "../../config/logger";
 import {
     QuizSessionState,
@@ -799,43 +799,73 @@ export class QuizService {
      *   Total DB queries: 0
      *   Total Redis round-trips: 2 (regardless of N)
      */
-    async getAdminLiveSnapshot(contestId: string, _organizationId: string) {
+    async getAdminLiveSnapshot(
+        contestId: string,
+        _organizationId: string,
+        page: {
+            offset?: number | undefined;
+            limit?: number | undefined;
+            search?: string | undefined;
+            sortField?: "name" | "progress" | "answered" | "status" | undefined;
+            sortOrder?: "asc" | "desc" | undefined;
+            // Whole-roster violation totals + the violation feed DB query — needed
+            // for the top-of-dashboard stat cards, NOT needed for an on-demand page
+            // fetch triggered by scrolling/searching/sorting (that just wants the
+            // page of rows + the filtered total). Defaults true for the periodic
+            // throttled broadcast; the explicit page-fetch handler passes false to
+            // stay as cheap as the pagination it exists to serve.
+            includeExtras?: boolean | undefined;
+        } = {},
+    ) {
         const threshold = config.proctoring.threshold;
+        const includeExtras = page.includeExtras ?? true;
+        const offset = page.offset ?? 0;
+        const limit = page.limit ?? config.quiz.adminParticipantsPageSize;
 
-        const { counts, participants } = await this.session.getLiveSnapshot(
-            contestId,
-            threshold,
-        );
-
-        const totalViolations = participants.reduce((sum, p) => sum + p.violationCount, 0);
-        const totalFlagged = participants.filter(p => p.isFlagged).length;
-
-        // Fetch recent 50 violations (excluding audit snapshots)
-        const recentEvents = await prisma.proctoringEvent.findMany({
-            where: {
+        const { counts, participants, total, totalViolations = 0, totalFlagged = 0 } =
+            await this.session.getParticipantsPage(
                 contestId,
-                type: {
-                    notIn: [
-                        "SNAPSHOT_START",
-                        "SNAPSHOT_MID_POINT",
-                        "SNAPSHOT_RANDOM",
-                        "SNAPSHOT_PRE_SUBMIT",
-                    ] as any[],
+                threshold,
+                {
+                    offset,
+                    limit,
+                    search: page.search,
+                    sortField: page.sortField,
+                    sortOrder: page.sortOrder,
+                    includeViolationSummary: includeExtras,
                 },
-            },
-            take: 50,
-            orderBy: { occurredAt: "desc" },
-            include: {
-                participant: {
-                    select: {
-                        id: true,
-                        contact: {
-                            select: { firstName: true, lastName: true },
+                redisReader,
+            );
+
+        // Fetch recent 50 violations (excluding audit snapshots) — skipped for a
+        // lean on-demand page fetch, same reasoning as includeExtras above.
+        const recentEvents = includeExtras
+            ? await prisma.proctoringEvent.findMany({
+                where: {
+                    contestId,
+                    type: {
+                        notIn: [
+                            "SNAPSHOT_START",
+                            "SNAPSHOT_MID_POINT",
+                            "SNAPSHOT_RANDOM",
+                            "SNAPSHOT_PRE_SUBMIT",
+                        ] as any[],
+                    },
+                },
+                take: 50,
+                orderBy: { occurredAt: "desc" },
+                include: {
+                    participant: {
+                        select: {
+                            id: true,
+                            contact: {
+                                select: { firstName: true, lastName: true },
+                            },
                         },
                     },
                 },
-            },
-        });
+            })
+            : [];
 
         return {
             contestId,
@@ -849,7 +879,13 @@ export class QuizService {
             totalDisconnected: counts.disconnected,
             totalFlagged,
             totalViolations,
-            // Per-participant rows (from pipelined HGETALL)
+            // Pagination — `total` is the count AFTER any search filter is applied,
+            // so "showing X of Y" reflects the current search, not the whole roster.
+            totalParticipants: total,
+            offset,
+            limit,
+            // Per-participant rows (from pipelined HGETALL) — just this page, not
+            // the whole roster. See quiz.session.ts's getParticipantsPage.
             participants: participants.map(p => ({
                 participantId: p.participantId,
                 name: p.name,

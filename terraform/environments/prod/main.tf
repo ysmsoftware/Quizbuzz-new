@@ -229,3 +229,8 @@ output "redis_primary_endpoint" {
   description = "ElastiCache Redis primary endpoint (live mode only)"
 }
 
+output "redis_reader_endpoint" {
+  value       = local.is_live ? module.live_contest[0].redis_reader_endpoint : ""
+  description = "ElastiCache Redis reader endpoint (live mode only) — used as REDIS_READER_HOST for admin/ops dashboard reads, see go-live.sh"
+}
+

@@ -23,7 +23,9 @@ export class OpsMetricsController {
         try {
             const contestId = req.params.contestId as string;
             if (!contestId) throw new BadRequestError("contestId is required");
-            const data = await this.service.getContestSnapshot(contestId);
+            const offset = req.query.offset ? Number(req.query.offset) : undefined;
+            const limit = req.query.limit ? Number(req.query.limit) : undefined;
+            const data = await this.service.getContestSnapshot(contestId, { offset, limit });
             res.json({ success: true, data });
         } catch (err) { next(err); }
     };

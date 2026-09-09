@@ -224,6 +224,11 @@ DB_QUERY_TIMEOUT=15000
 
 # ── REDIS (ElastiCache — shared across the entire quiz fleet) ───────────────
 REDIS_HOST=${redis_host}
+# Read-only replica endpoint — admin/ops dashboard reads (live-monitor snapshot,
+# ops-metrics fan-in) use this instead of REDIS_HOST, so their bulk per-participant
+# pipelines run on a separate connection/node from participant gameplay traffic.
+# See backend/src/config/redis.ts.
+REDIS_READER_HOST=${redis_reader_host}
 REDIS_PORT=6379
 REDIS_PASSWORD=$REDIS_PASSWORD
 REDIS_DB=0

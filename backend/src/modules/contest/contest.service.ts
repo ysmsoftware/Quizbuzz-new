@@ -809,56 +809,112 @@ export class ContestService {
 
     /**
      * Periodic safety net (Phase 2 of docs/contest-start-reliability-spec.md): catches
-     * a CONTEST_START job that is simply gone — Redis mode-switch data loss, a failed
-     * re-schedule, an operator error — which the worker's own staleness self-heal
-     * cannot catch, since that only corrects a job firing at the wrong time, not one
-     * that never fires at all. Manual "Start Now" is the human-triggered fallback for
-     * the same gap; this is the automatic one.
+     * a CONTEST_START or AUTO_SUBMIT job that is either simply gone (Redis mode-switch
+     * data loss, a failed re-schedule, an operator error) OR present but stale — its
+     * stored fire time no longer matches the contest's current startTime/endTime,
+     * which is what actually happens to a job that migrated across a go-live Redis
+     * switch but had no worker connected yet to process it once its time passed. The
+     * worker's own staleness self-heal (isDueOrReschedule) only catches a job firing
+     * too EARLY after a reschedule — it cannot catch one that never fired at all,
+     * which is the actual gap this closes. Manual "Start Now"/"End Contest" are the
+     * human-triggered fallback for the same gap; this is the automatic one.
      *
-     * Queries Contest directly (already indexed on [startTime, status]) rather than a
-     * separate schedule table — see the spec §6.3 for why a second persisted copy of
-     * "when does this start" was rejected as its own source of drift risk.
+     * Originally start-only; extended to also cover AUTO_SUBMIT after a flash-spike
+     * load test where a LIVE contest ran its full duration with no auto-submit and
+     * required a manual "End Contest" — the start-only sweep had nothing watching the
+     * end-side job at all.
+     *
+     * Queries Contest directly (indexed on [startTime, status]) rather than a separate
+     * schedule table — see the spec §6.3 for why a second persisted copy of "when does
+     * this start/end" was rejected as its own source of drift risk.
      */
-    async reconcileMissingStartJobs(): Promise<{ checked: number; fixed: number }> {
+    async reconcileScheduledJobs(): Promise<{ checked: number; fixed: number }> {
         const now = Date.now();
         const windowStart = new Date(now - config.quiz.reconciliationGraceMs);
         const windowEnd = new Date(now + config.quiz.reconciliationLookaheadMs);
 
-        const candidates = await this.contestRepo.findStartReconciliationCandidates(windowStart, windowEnd);
+        const [start, end] = await Promise.all([
+            this.reconcileStartJobs(windowStart, windowEnd),
+            this.reconcileEndJobs(windowStart, windowEnd),
+        ]);
 
-        let fixed = 0;
-        for (const contest of candidates) {
-            try {
-                const existing = await quizTimerQueue.getJob(`start-${contest.id}`);
-                if (existing) continue; // healthy — no action, no log noise
+        const checked = start.checked + end.checked;
+        const fixed = start.fixed + end.fixed;
 
-                await this.schedulerService.ensureStartJob(contest.id, contest.organizationId, contest.startTime);
-                fixed++;
-                logger.warn(
-                    `[contest-reconciliation] Re-enqueued missing CONTEST_START job for contest ${contest.id} ` +
-                    `(scheduled for ${contest.startTime.toISOString()})`,
-                );
-            } catch (err) {
-                logger.error(
-                    `[contest-reconciliation] Failed to check/fix contest ${contest.id}: ${(err as Error).message}`,
-                );
-            }
-        }
-
-        logger.info(`[contest-reconciliation] Sweep complete — checked=${candidates.length}, fixed=${fixed}`);
+        logger.info(
+            `[contest-reconciliation] Sweep complete — checked=${checked}, fixed=${fixed} ` +
+            `(start: ${start.fixed}/${start.checked}, end: ${end.fixed}/${end.checked})`,
+        );
 
         if (fixed > 0) {
             logAudit({
                 action: "system.contest_reconciliation_fired",
                 targetType: "SYSTEM",
                 targetId: "contest-reconciliation",
-                targetLabel: "Contest start reconciliation sweep",
+                targetLabel: "Contest start/end reconciliation sweep",
                 actorType: "SYSTEM",
-                metadata: { checked: candidates.length, fixed },
+                metadata: { checked, fixed },
             });
         }
 
+        return { checked, fixed };
+    }
+
+    private async reconcileStartJobs(windowStart: Date, windowEnd: Date): Promise<{ checked: number; fixed: number }> {
+        const candidates = await this.contestRepo.findStartReconciliationCandidates(windowStart, windowEnd);
+
+        let fixed = 0;
+        for (const contest of candidates) {
+            try {
+                const existing = await quizTimerQueue.getJob(`start-${contest.id}`);
+                if (existing && this.isJobOnTarget(existing, contest.startTime)) continue; // healthy — no action, no log noise
+
+                await this.schedulerService.ensureStartJob(contest.id, contest.organizationId, contest.startTime);
+                fixed++;
+                logger.warn(
+                    `[contest-reconciliation] Re-enqueued ${existing ? "stale" : "missing"} CONTEST_START job for contest ${contest.id} ` +
+                    `(scheduled for ${contest.startTime.toISOString()})`,
+                );
+            } catch (err) {
+                logger.error(
+                    `[contest-reconciliation] Failed to check/fix start job for contest ${contest.id}: ${(err as Error).message}`,
+                );
+            }
+        }
+
         return { checked: candidates.length, fixed };
+    }
+
+    private async reconcileEndJobs(windowStart: Date, windowEnd: Date): Promise<{ checked: number; fixed: number }> {
+        const candidates = await this.contestRepo.findEndReconciliationCandidates(windowStart, windowEnd);
+
+        let fixed = 0;
+        for (const contest of candidates) {
+            try {
+                const existing = await quizTimerQueue.getJob(`autosubmit-${contest.id}`);
+                if (existing && this.isJobOnTarget(existing, contest.endTime)) continue; // healthy — no action, no log noise
+
+                await this.schedulerService.ensureAutoSubmitJob(contest.id, contest.organizationId, contest.endTime);
+                fixed++;
+                logger.warn(
+                    `[contest-reconciliation] Re-enqueued ${existing ? "stale" : "missing"} AUTO_SUBMIT job for contest ${contest.id} ` +
+                    `(scheduled for ${contest.endTime.toISOString()})`,
+                );
+            } catch (err) {
+                logger.error(
+                    `[contest-reconciliation] Failed to check/fix end job for contest ${contest.id}: ${(err as Error).message}`,
+                );
+            }
+        }
+
+        return { checked: candidates.length, fixed };
+    }
+
+    /** True if an existing job's stored fire time still matches the contest's current schedule, within drift tolerance. */
+    private isJobOnTarget(job: { timestamp: number; delay: number }, expected: Date): boolean {
+        const targetAt = job.timestamp + job.delay;
+        const toleranceMs = config.quiz.timerDriftTolerance * 1000;
+        return Math.abs(targetAt - expected.getTime()) <= toleranceMs;
     }
 
     /** Registers the recurring BullMQ job that drives reconcileMissingStartJobs on a schedule. */

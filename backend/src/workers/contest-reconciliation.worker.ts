@@ -1,17 +1,20 @@
 /**
- * Contest Start Reconciliation Worker
+ * Contest Start/End Reconciliation Worker
  *
  * Responsibility:
- *   Periodically scan for contests whose CONTEST_START job should exist but doesn't,
- *   and re-enqueue it — via ContestService.reconcileMissingStartJobs.
+ *   Periodically scan for LIVE-lifecycle contests whose CONTEST_START or AUTO_SUBMIT
+ *   job should exist (and be on-schedule) but isn't, and re-enqueue it — via
+ *   ContestService.reconcileScheduledJobs.
  *
  * Why this exists:
  *   quiz-timer.worker.ts's isDueOrReschedule self-heal only catches a job firing at
  *   the WRONG time (e.g. after a reschedule). It has nothing to check if the job is
- *   simply absent — Redis mode-switch data loss during a go-live/go-idle switch, a
- *   failed re-schedule, an operator error. This sweep is the automatic fallback for
- *   that gap; the admin "Start Now" button (ContestService.startContestNow) is the
- *   human-triggered one. See docs/contest-start-reliability-spec.md.
+ *   simply absent, or present but stale because no worker was connected to process it
+ *   before its due time passed — Redis mode-switch data loss during a go-live/go-idle
+ *   switch, a failed re-schedule, an operator error. This sweep is the automatic
+ *   fallback for that gap; the admin "Start Now"/"End Contest" buttons
+ *   (ContestService.startContestNow / forceEndContest) are the human-triggered ones.
+ *   See docs/contest-start-reliability-spec.md.
  *
  * Standalone process:
  *   node dist/workers/contest-reconciliation.worker.js
@@ -26,8 +29,8 @@ import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
 
 async function processContestReconciliation(job: Job): Promise<void> {
-    logger.info(`[contest-reconciliation-worker] Job ${job.id} started — sweeping for missing CONTEST_START jobs`);
-    const result = await contestService.reconcileMissingStartJobs();
+    logger.info(`[contest-reconciliation-worker] Job ${job.id} started — sweeping for missing/stale CONTEST_START and AUTO_SUBMIT jobs`);
+    const result = await contestService.reconcileScheduledJobs();
     logger.info(`[contest-reconciliation-worker] Job ${job.id} complete — checked=${result.checked}, fixed=${result.fixed}`);
 }
 

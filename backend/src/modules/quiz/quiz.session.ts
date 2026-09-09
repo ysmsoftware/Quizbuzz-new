@@ -18,6 +18,7 @@
  */
 
 import { redis } from "../../config/redis";
+import type Redis from "ioredis";
 import { config } from "../../config";
 import {
     QuizSessionState,
@@ -53,7 +54,7 @@ export interface ParticipantMeta {
     contactId: string;
 }
 
-// ─── Live snapshot shape returned by getLiveSnapshot ─────────────────────────
+// ─── Live snapshot shape returned by getParticipantsPage ─────────────────────
 
 export interface RedisCounts {
     waiting: number;
@@ -335,31 +336,65 @@ export class QuizSession {
         return this.getSetMembers(cid, type);
     }
 
-    // ── Live snapshot — pure Redis, zero DB, O(N) pipelining ─────────────────────
+    // ── Live snapshot — pure Redis, zero DB ───────────────────────────────────────
     //
     // Strategy:
-    //   Round-trip 1 : SCARD×4 + SMEMBERS×3  (all in one pipeline)
-    //   Round-trip 2 : HGETALL session + HLEN answers per participant (one pipeline)
-    //   Zero sequential per-participant calls.
+    //   Round-trip 1 : SCARD×4 + SMEMBERS×3            (counts + all participant IDs)
+    //   Round-trip 2 : ONE lightweight field per participant, only when a search or
+    //                  a sort other than the default ID order is requested — e.g.
+    //                  HGET meta.name for a name sort/search, HLEN answers for a
+    //                  progress/answered sort. ~4x cheaper than the old full-detail
+    //                  fetch, and it now runs once per explicit admin page/search/
+    //                  sort request instead of being recomputed for the entire
+    //                  roster on every single join/submit/disconnect/violation event.
+    //   Round-trip 3 : HGETALL session + HGETALL meta + HLEN answers + EXISTS
+    //                  heartbeat — but ONLY for the page actually being returned
+    //                  (default 50 rows), not the full roster.
+    //
+    // This is what lets the admin/ops dashboards keep true full-roster search and
+    // sort (not just "search within whatever page happened to load") without paying
+    // the full O(N)-detail cost per request — see docs/... flash-spike test debrief.
 
-    async getLiveSnapshot(
+    async getParticipantsPage(
         cid: string,
-        violationThreshold: number
+        violationThreshold: number,
+        opts: {
+            offset: number;
+            limit: number;
+            search?: string | undefined;
+            sortField?: "name" | "progress" | "answered" | "status" | undefined;
+            sortOrder?: "asc" | "desc" | undefined;
+            // Also compute totalViolations/totalFlagged across the WHOLE roster, not
+            // just the returned page — needed for the top-of-dashboard stat cards.
+            // Off by default: the on-demand page-fetch handler (scrolling/searching)
+            // doesn't need it and shouldn't pay for it; the periodic throttled
+            // snapshot broadcast (getAdminLiveSnapshot) always requests it.
+            includeViolationSummary?: boolean | undefined;
+        },
+        // Defaults to the primary connection; admin/ops read paths (quiz.service.ts's
+        // getAdminLiveSnapshot, ops-metrics.service.ts's getContestSnapshot) pass
+        // `redisReader` instead so this bulk pipeline runs on a separate connection/
+        // node from participant gameplay traffic — see config/redis.ts for why.
+        client: Redis = redis,
     ): Promise<{
         counts: RedisCounts;
         participants: LiveParticipantRow[];
+        total: number;
+        totalViolations?: number;
+        totalFlagged?: number;
     }> {
         const s = this.setKeys(cid);
 
-        // ── Round-trip 1: counts + all participant IDs ────────────────────────────
-        const rt1 = redis.pipeline();
-        rt1.scard(s.waiting);        // 0
-        rt1.scard(s.active);         // 1
-        rt1.scard(s.submitted);      // 2
-        rt1.scard(s.disconnected);   // 3
-        rt1.smembers(s.waiting);     // 4
-        rt1.smembers(s.active);      // 5
-        rt1.smembers(s.submitted);   // 6
+        // ── Round-trip 1: counts + all participant IDs (cheap — no per-participant
+        //    fan-out, just set cardinalities and membership lists) ─────────────────
+        const rt1 = client.pipeline();
+        rt1.scard(s.waiting);
+        rt1.scard(s.active);
+        rt1.scard(s.submitted);
+        rt1.scard(s.disconnected);
+        rt1.smembers(s.waiting);
+        rt1.smembers(s.active);
+        rt1.smembers(s.submitted);
         const rt1Results = await rt1.exec();
 
         const counts: RedisCounts = {
@@ -369,40 +404,109 @@ export class QuizSession {
             disconnected: (rt1Results?.[3]?.[1] as number) ?? 0,
         };
 
-        // Merge all participant IDs across all live sets (deduplicated)
         const waitingIds = (rt1Results?.[4]?.[1] as string[]) ?? [];
         const activeIds = (rt1Results?.[5]?.[1] as string[]) ?? [];
         const submittedIds = (rt1Results?.[6]?.[1] as string[]) ?? [];
-
         const allPids = [...new Set([...waitingIds, ...activeIds, ...submittedIds])];
 
         if (allPids.length === 0) {
-            return { counts, participants: [] };
+            return { counts, participants: [], total: 0, ...(opts.includeViolationSummary && { totalViolations: 0, totalFlagged: 0 }) };
         }
 
-        // Build a lookup for which set each pid belongs to
         const phaseMap = new Map<string, QuizPhase>();
         for (const pid of waitingIds) phaseMap.set(pid, "WAITING");
         for (const pid of activeIds) phaseMap.set(pid, "IN_QUIZ");
         for (const pid of submittedIds) phaseMap.set(pid, "SUBMITTED");
 
-        // ── Round-trip 2: batch fetch session + meta + answers length + heartbeat ─
-        const rt2 = redis.pipeline();
-        for (const pid of allPids) {
-            const k = this.keys(cid, pid);
-            rt2.hgetall(k.session);    // session hash  (3N+0)
-            rt2.hgetall(k.meta);       // meta hash     (3N+1)
-            rt2.hlen(k.answers);       // answer count  (3N+2)
-            rt2.exists(k.heartbeat);   // alive?        (3N+3)
+        // Whole-roster violation totals for the stat cards — one lightweight field
+        // per participant (not the full detail fetch), only when actually requested.
+        let violationSummary: { totalViolations: number; totalFlagged: number } | undefined;
+        if (opts.includeViolationSummary) {
+            const violationPipe = client.pipeline();
+            for (const pid of allPids) violationPipe.hget(this.keys(cid, pid).session, "violationCount");
+            const violationResults = await violationPipe.exec();
+            let totalViolations = 0;
+            let totalFlagged = 0;
+            allPids.forEach((_pid, i) => {
+                const count = parseInt((violationResults?.[i]?.[1] as string) ?? "0", 10) || 0;
+                totalViolations += count;
+                if (count >= violationThreshold) totalFlagged++;
+            });
+            violationSummary = { totalViolations, totalFlagged };
         }
-        const rt2Results = await rt2.exec();
 
-        const participants: LiveParticipantRow[] = allPids.map((pid, i) => {
+        const { search, sortField, sortOrder = "asc" } = opts;
+        const dir = sortOrder === "asc" ? 1 : -1;
+
+        // ── Round-trip 2: resolve the full ordered/filtered pid list ──────────────
+        let orderedPids: string[];
+
+        if (search || sortField === "name") {
+            const namePipe = client.pipeline();
+            for (const pid of allPids) namePipe.hget(this.keys(cid, pid).meta, "name");
+            const nameResults = await namePipe.exec();
+            const nameByPid = new Map<string, string>();
+            allPids.forEach((pid, i) => nameByPid.set(pid, (nameResults?.[i]?.[1] as string) ?? ""));
+
+            let candidates = allPids;
+            if (search) {
+                const q = search.toLowerCase();
+                candidates = candidates.filter(
+                    (pid) => nameByPid.get(pid)!.toLowerCase().includes(q) || pid.toLowerCase().includes(q),
+                );
+            }
+            orderedPids = sortField === "name"
+                ? [...candidates].sort((a, b) => dir * (nameByPid.get(a) ?? "").localeCompare(nameByPid.get(b) ?? ""))
+                : candidates;
+        } else if (sortField === "status") {
+            const rank: Record<string, number> = { IN_QUIZ: 0, WAITING: 1, SUBMITTED: 2 };
+            orderedPids = [...allPids].sort((a, b) => {
+                const aRank = rank[phaseMap.get(a) ?? "WAITING"] ?? 9;
+                const bRank = rank[phaseMap.get(b) ?? "WAITING"] ?? 9;
+                return dir * (aRank - bRank);
+            });
+        } else if (sortField === "progress" || sortField === "answered") {
+            // Progress is answeredCount / totalQuestions; totalQuestions is fixed per
+            // contest, so answeredCount alone is an equivalent, cheaper sort key.
+            const answeredPipe = client.pipeline();
+            for (const pid of allPids) answeredPipe.hlen(this.keys(cid, pid).answers);
+            const answeredResults = await answeredPipe.exec();
+            const answeredByPid = new Map<string, number>();
+            allPids.forEach((pid, i) => answeredByPid.set(pid, (answeredResults?.[i]?.[1] as number) ?? 0));
+            orderedPids = [...allPids].sort(
+                (a, b) => dir * ((answeredByPid.get(a) ?? 0) - (answeredByPid.get(b) ?? 0)),
+            );
+        } else {
+            // No sort/search requested — stable lexicographic order by participant ID
+            // so page boundaries don't shift between requests as people move between
+            // waiting/active/submitted sets underneath a paginated admin view.
+            orderedPids = [...allPids].sort();
+        }
+
+        const total = orderedPids.length;
+        const pagePids = orderedPids.slice(opts.offset, opts.offset + opts.limit);
+
+        if (pagePids.length === 0) {
+            return { counts, participants: [], total, ...violationSummary };
+        }
+
+        // ── Round-trip 3: full per-participant detail — only for this page ────────
+        const rt3 = client.pipeline();
+        for (const pid of pagePids) {
+            const k = this.keys(cid, pid);
+            rt3.hgetall(k.session);
+            rt3.hgetall(k.meta);
+            rt3.hlen(k.answers);
+            rt3.exists(k.heartbeat);
+        }
+        const rt3Results = await rt3.exec();
+
+        const participants: LiveParticipantRow[] = pagePids.map((pid, i) => {
             const base = i * 4;
-            const sessionRaw = (rt2Results?.[base]?.[1] as Record<string, string> | null) ?? {};
-            const metaRaw = (rt2Results?.[base + 1]?.[1] as Record<string, string> | null) ?? {};
-            const answeredCount = (rt2Results?.[base + 2]?.[1] as number) ?? 0;
-            const alive = ((rt2Results?.[base + 3]?.[1] as number) ?? 0) === 1;
+            const sessionRaw = (rt3Results?.[base]?.[1] as Record<string, string> | null) ?? {};
+            const metaRaw = (rt3Results?.[base + 1]?.[1] as Record<string, string> | null) ?? {};
+            const answeredCount = (rt3Results?.[base + 2]?.[1] as number) ?? 0;
+            const alive = ((rt3Results?.[base + 3]?.[1] as number) ?? 0) === 1;
 
             const violationCount = parseInt(sessionRaw.violationCount ?? "0", 10);
             const totalQuestions = parseInt(sessionRaw.totalQuestions ?? "0", 10);
@@ -426,7 +530,7 @@ export class QuizSession {
             };
         });
 
-        return { counts, participants };
+        return { counts, participants, total, ...violationSummary };
     }
 
     // ── Readiness ────────────────────────────────────────────────────────────────

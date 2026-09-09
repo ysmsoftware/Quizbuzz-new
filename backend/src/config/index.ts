@@ -79,6 +79,12 @@ const envSchema = z.object({
 
     // REDIS
     REDIS_HOST: z.string(),
+    // Read-only replica endpoint (ElastiCache reader_endpoint_address in live mode) for
+    // admin/ops dashboard reads — keeps their bulk per-participant Redis pipelines off
+    // the primary connection/node that all participant gameplay traffic depends on.
+    // Optional: falls back to REDIS_HOST when unset (idle mode / local dev, where there
+    // is only one Redis container and no replica).
+    REDIS_READER_HOST: z.string().optional(),
     REDIS_PORT: z.coerce.number(),
     REDIS_PASSWORD: z.string().optional(),
     REDIS_DB: z.coerce.number().default(0),
@@ -276,11 +282,28 @@ const envSchema = z.object({
     // How far before startTime the admin "Start Now" override becomes visible.
     QUIZ_MANUAL_START_VISIBILITY_WINDOW: z.coerce.number().default(600), // 10 min
     // Reconciliation sweep (contest-start-reliability spec, Phase 2): how often the
-    // recurring job scans for contests whose CONTEST_START job should exist but
-    // doesn't, and how far ahead it looks when deciding what counts as a candidate.
-    QUIZ_RECONCILIATION_INTERVAL_MS: z.coerce.number().default(15 * 60 * 1000), // 15 min
-    QUIZ_RECONCILIATION_LOOKAHEAD_MS: z.coerce.number().default(30 * 60 * 1000), // 2x interval
+    // recurring job scans for contests whose CONTEST_START/AUTO_SUBMIT job should
+    // exist (and be on-schedule) but isn't, and how far ahead it looks when deciding
+    // what counts as a candidate. Shortened from the spec's original 15/30 min
+    // defaults after a live-fire flash-spike test where a go-live provisioning
+    // window longer than 15 min meant the sweep never got a chance to run before
+    // the contest's startTime had already passed unattended.
+    QUIZ_RECONCILIATION_INTERVAL_MS: z.coerce.number().default(5 * 60 * 1000), // 5 min
+    QUIZ_RECONCILIATION_LOOKAHEAD_MS: z.coerce.number().default(10 * 60 * 1000), // 2x interval
     QUIZ_RECONCILIATION_GRACE_MS: z.coerce.number().default(5 * 60 * 1000), // catch recently-due misses too
+
+    // How often the admin live-monitor / ops-metrics snapshot is allowed to actually
+    // recompute per contest. It used to recompute on every single join/submit/
+    // disconnect/violation event — O(N) Redis work per event, O(N^2)-ish total during a
+    // flash join burst. Throttled to a fixed cadence instead: still feels live to a
+    // human watching a dashboard, but decouples cost from event rate.
+    ADMIN_LIVE_STATS_INTERVAL_MS: z.coerce.number().default(5 * 1000), // 5 sec
+
+    // Default page size for the admin live-monitor / ops-metrics participant list —
+    // matches what's actually visible on screen at once (the table renders ~10-50
+    // rows in view), so the expensive per-participant detail fetch only ever runs
+    // for a bounded page instead of the entire roster.
+    ADMIN_PARTICIPANTS_PAGE_SIZE: z.coerce.number().default(50),
     // Redis lock (`lock:submission:{cid}:{pid}`) TTL guarding submitQuiz() against
     // duplicate/concurrent submissions — safety net if a worker crashes mid-submit
     // without hitting the lock's `finally` release.
@@ -361,6 +384,7 @@ export const config = {
 
     redis: {
         host: env.REDIS_HOST,
+        readerHost: env.REDIS_READER_HOST || env.REDIS_HOST,
         port: env.REDIS_PORT,
         password: env.REDIS_PASSWORD,
         db: env.REDIS_DB,
@@ -598,6 +622,8 @@ export const config = {
         reconciliationIntervalMs: env.QUIZ_RECONCILIATION_INTERVAL_MS,
         reconciliationLookaheadMs: env.QUIZ_RECONCILIATION_LOOKAHEAD_MS,
         reconciliationGraceMs: env.QUIZ_RECONCILIATION_GRACE_MS,
+        adminLiveStatsIntervalMs: env.ADMIN_LIVE_STATS_INTERVAL_MS,
+        adminParticipantsPageSize: env.ADMIN_PARTICIPANTS_PAGE_SIZE,
         submissionLockTtlMs: env.QUIZ_SUBMISSION_LOCK_TTL_MS,
     },
 

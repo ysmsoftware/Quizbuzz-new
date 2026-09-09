@@ -26,6 +26,10 @@ export interface IContestRepository {
         windowStart: Date,
         windowEnd: Date,
     ): Promise<Array<{ id: string; organizationId: string; startTime: Date }>>;
+    findEndReconciliationCandidates(
+        windowStart: Date,
+        windowEnd: Date,
+    ): Promise<Array<{ id: string; organizationId: string; endTime: Date }>>;
 }
 
 export class ContestRepository implements IContestRepository {
@@ -308,6 +312,20 @@ export class ContestRepository implements IContestRepository {
                 isDeleted: false,
             },
             select: { id: true, organizationId: true, startTime: true },
+        });
+    }
+
+    async findEndReconciliationCandidates(
+        windowStart: Date,
+        windowEnd: Date,
+    ): Promise<Array<{ id: string; organizationId: string; endTime: Date }>> {
+        return prisma.contest.findMany({
+            where: {
+                status: ContestStatus.LIVE,
+                endTime: { gt: windowStart, lte: windowEnd },
+                isDeleted: false,
+            },
+            select: { id: true, organizationId: true, endTime: true },
         });
     }
 

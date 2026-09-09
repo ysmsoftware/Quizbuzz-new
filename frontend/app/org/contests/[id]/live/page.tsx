@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Users,
@@ -127,7 +127,12 @@ export default function AdminLiveDashboard() {
 
   const {
     connected,
+    connectionState,
+    retry,
     participants,
+    participantsTotal,
+    pageLoading,
+    fetchParticipantsPage,
     violations,
     stats,
     sendBroadcast,
@@ -150,7 +155,7 @@ export default function AdminLiveDashboard() {
   const [sortField, setSortField] = useState<'name' | 'progress' | 'answered' | 'status'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState<number | 'all'>(50);
+  const [pageSize, setPageSize] = useState(50);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -163,59 +168,26 @@ export default function AdminLiveDashboard() {
     setPageIndex(0);
   }, [debouncedSearchQuery, sortField, sortOrder, pageSize]);
 
-  const filteredParticipants = useMemo(() => {
-    const q = debouncedSearchQuery.toLowerCase();
-    if (!q) return participants;
-    return participants.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.participantId.toLowerCase().includes(q),
-    );
-  }, [participants, debouncedSearchQuery]);
-
-  const STATUS_PRIORITY: Record<string, number> = {
-    flagged: 1,
-    active: 2,
-    waiting: 3,
-    submitted: 4,
-    disconnected: 5,
-  };
-
-  const sortedParticipants = useMemo(() => {
-    const sorted = [...filteredParticipants];
-    sorted.sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'name') {
-        comparison = a.name.localeCompare(b.name);
-      } else if (sortField === 'progress') {
-        const aProg = a.totalQuestions > 0 ? a.answeredCount / a.totalQuestions : 0;
-        const bProg = b.totalQuestions > 0 ? b.answeredCount / b.totalQuestions : 0;
-        comparison = aProg - bProg;
-      } else if (sortField === 'answered') {
-        comparison = a.answeredCount - b.answeredCount;
-      } else if (sortField === 'status') {
-        const aPriority = STATUS_PRIORITY[a.status] ?? 99;
-        const bPriority = STATUS_PRIORITY[b.status] ?? 99;
-        comparison = aPriority - bPriority;
-      }
-      return sortOrder === 'asc' ? comparison : -comparison;
+  // Search/sort/paginate on the server — the table used to hold and filter/sort the
+  // FULL roster client-side, which meant fetching every participant's full detail on
+  // every admin broadcast regardless of what was actually visible. Now `participants`
+  // (from the hook) IS the current page already; this effect just asks the server for
+  // whichever page/search/sort the admin is currently looking at.
+  useEffect(() => {
+    if (!connected) return;
+    fetchParticipantsPage({
+      offset: pageIndex * pageSize,
+      limit: pageSize,
+      search: debouncedSearchQuery || undefined,
+      sortField,
+      sortOrder,
     });
-    return sorted;
-  }, [filteredParticipants, sortField, sortOrder]);
+  }, [connected, pageIndex, pageSize, debouncedSearchQuery, sortField, sortOrder, fetchParticipantsPage]);
 
-  const totalPages = useMemo(() => {
-    if (pageSize === 'all') return 1;
-    return Math.ceil(sortedParticipants.length / pageSize);
-  }, [sortedParticipants.length, pageSize]);
-
-  const paginatedParticipants = useMemo(() => {
-    if (pageSize === 'all') {
-      return sortedParticipants;
-    }
-    const start = pageIndex * pageSize;
-    const end = start + pageSize;
-    return sortedParticipants.slice(start, end);
-  }, [sortedParticipants, pageIndex, pageSize]);
+  // participants is already the server-returned page — no further client-side
+  // filter/sort/slice needed.
+  const paginatedParticipants = participants;
+  const totalPages = Math.max(1, Math.ceil(participantsTotal / pageSize));
 
   const handleSort = (field: 'name' | 'progress' | 'answered' | 'status') => {
     if (sortField === field) {
@@ -356,11 +328,28 @@ export default function AdminLiveDashboard() {
 
   if (!connected) {
     return (
-      <div className="h-[80vh] flex flex-col items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground font-medium">
-          Connecting to live monitoring server...
-        </p>
+      <div className="h-[80vh] flex flex-col items-center justify-center gap-4">
+        {connectionState === 'failed' ? (
+          <>
+            <Loader2 className="h-10 w-10 text-destructive mb-2" />
+            <p className="text-muted-foreground font-medium text-center max-w-sm">
+              Couldn't connect to the live monitoring server after several attempts.
+              This can happen when the server is under very heavy load.
+            </p>
+            <Button variant="outline" className="rounded-xl" onClick={retry}>
+              Try again
+            </Button>
+          </>
+        ) : (
+          <>
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground font-medium text-center max-w-sm">
+              {connectionState === 'slow'
+                ? 'Still connecting — the server may be under heavy load right now. Retrying automatically…'
+                : 'Connecting to live monitoring server...'}
+            </p>
+          </>
+        )}
       </div>
     );
   }
@@ -462,7 +451,8 @@ export default function AdminLiveDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
-                Participants ({sortedParticipants.length === participants.length ? participants.length : `${sortedParticipants.length}/${participants.length}`})
+                Participants ({participantsTotal})
+                {pageLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
               </h2>
               <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -592,25 +582,19 @@ export default function AdminLiveDashboard() {
               {/* Pagination Controls Footer */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-border/50 bg-secondary/15">
                 <div className="text-xs text-muted-foreground font-medium">
-                  {pageSize === 'all' ? (
-                    `Showing all ${sortedParticipants.length} participants`
-                  ) : (
-                    <>
-                      Showing{' '}
-                      <span className="font-semibold text-foreground">
-                        {sortedParticipants.length === 0 ? 0 : pageIndex * pageSize + 1}
-                      </span>{' '}
-                      to{' '}
-                      <span className="font-semibold text-foreground">
-                        {Math.min((pageIndex + 1) * pageSize, sortedParticipants.length)}
-                      </span>{' '}
-                      of{' '}
-                      <span className="font-semibold text-foreground">
-                        {sortedParticipants.length}
-                      </span>{' '}
-                      participants
-                    </>
-                  )}
+                  Showing{' '}
+                  <span className="font-semibold text-foreground">
+                    {participantsTotal === 0 ? 0 : pageIndex * pageSize + 1}
+                  </span>{' '}
+                  to{' '}
+                  <span className="font-semibold text-foreground">
+                    {Math.min((pageIndex + 1) * pageSize, participantsTotal)}
+                  </span>{' '}
+                  of{' '}
+                  <span className="font-semibold text-foreground">
+                    {participantsTotal}
+                  </span>{' '}
+                  participants
                 </div>
                 <div className="flex flex-wrap items-center gap-6">
                   <div className="flex items-center gap-2">
@@ -619,13 +603,7 @@ export default function AdminLiveDashboard() {
                     </span>
                     <Select
                       value={pageSize.toString()}
-                      onValueChange={(val) => {
-                        if (val === 'all') {
-                          setPageSize('all');
-                        } else {
-                          setPageSize(Number(val));
-                        }
-                      }}
+                      onValueChange={(val) => setPageSize(Number(val))}
                     >
                       <SelectTrigger className="h-8 w-[80px] rounded-lg bg-background border-border/50 text-xs">
                         <SelectValue />
@@ -635,12 +613,12 @@ export default function AdminLiveDashboard() {
                         <SelectItem value="25">25</SelectItem>
                         <SelectItem value="50">50</SelectItem>
                         <SelectItem value="100">100</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="200">200</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {pageSize !== 'all' && totalPages > 1 && (
+                  {totalPages > 1 && (
                     <div className="flex items-center gap-1.5">
                       <Button
                         variant="outline"
