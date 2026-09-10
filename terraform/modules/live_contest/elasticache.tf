@@ -70,9 +70,17 @@ resource "aws_elasticache_replication_group" "redis" {
   replication_group_id = "quizbuzz-live-redis"
   description           = "QuizBuzz live contest Redis - shared session state, pub/sub, and BullMQ queues across the quiz EC2 fleet"
 
-  # cache.t4g.micro: 2 vCPUs, 0.5GB memory. Optimized for low-cost live contests.
-  # Re-evaluate if session-state + BullMQ job data approaches the node's memory ceiling.
-  node_type = "cache.t4g.micro"
+  # Was cache.t4g.micro (2 vCPU, 0.5GB memory) — moved off the t4g family entirely,
+  # not just upsized within it. t4g is burstable/credit-based for NETWORK
+  # throughput too, the same way t3 EC2 instances are for CPU. Load testing
+  # found Network Bytes/Packets Out on the primary node climb sharply then
+  # crash right as participant disconnects started — the signature of burst
+  # credits running out under sustained load, not a memory or CPU problem
+  # (both stayed low the whole time; see load-testing/LOAD_TEST_INCIDENT_REPORT.md).
+  # m6g.large is fixed-performance (no credit system to exhaust) — the fix here
+  # is "stop bursting," not just "burst from a bigger allowance." Re-evaluate
+  # size (not family) once a load test confirms this resolves it.
+  node_type = "cache.m6g.large"
 
   num_cache_clusters = 2
 
