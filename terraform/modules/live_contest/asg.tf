@@ -160,6 +160,18 @@ resource "aws_launch_template" "quiz" {
     name = aws_iam_instance_profile.quiz_ec2.name
   }
 
+  # Detailed (1-minute) CloudWatch monitoring instead of the default basic
+  # (5-minute) monitoring. Basic monitoring's 5-minute-averaged datapoints
+  # can completely hide a short, severe CPU spike — e.g. a 30-60s event-loop
+  # stall from thousands of sockets finishing their post-join setup at once
+  # dilutes down to a low-looking average over a 5-minute window. That gap
+  # is exactly what made a load-test failure hard to diagnose: no elevated
+  # CPU showed up anywhere, despite every other cause (ALB, containers,
+  # memory) being ruled out by their own metrics.
+  monitoring {
+    enabled = true
+  }
+
   # No public IP — quiz EC2s are only ever reached via the ALB.
   # Outbound internet (GHCR pulls, AWS API calls) goes through the NAT
   # Gateway in nat.tf via the quiz_private subnets' route table.

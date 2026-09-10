@@ -53,7 +53,7 @@ export class QuizGateway {
             socket.on("quiz:v1:violation", (payload) => this.handleViolation(socket, payload));
             socket.on("quiz:v1:submit", (payload) => this.handleSubmit(socket, payload));
 
-            socket.on("disconnect", () => this.handleDisconnect(socket));
+            socket.on("disconnect", (reason) => this.handleDisconnect(socket, reason));
         });
 
         // Initialize Redis pub/sub listener for cross-process WebSocket events
@@ -259,9 +259,17 @@ export class QuizGateway {
         return contest?.proctoringEnabled ?? true;
     }
 
-    async handleDisconnect(socket: Socket) {
+    async handleDisconnect(socket: Socket, reason?: string) {
         const { participantId, contestId, organizationId } = socket.data;
-        logger.info(`[QuizGateway] Participant ${participantId} disconnected (socket: ${socket.id})`);
+        // reason is one of Socket.IO's own disconnect codes — "ping timeout",
+        // "transport close", "transport error", "client namespace disconnect",
+        // "server namespace disconnect", etc. Logged at info (not error) since a
+        // disconnect on its own isn't a failure — but distinguishing "ping timeout"
+        // (server gave up on an unresponsive client, worth investigating under
+        // load) from "transport close" (client left normally) is exactly the
+        // signal that was missing when diagnosing the flash-spike/full-duration
+        // load tests — every disconnect looked identical in the logs before this.
+        logger.info(`[QuizGateway] Participant ${participantId} disconnected (socket: ${socket.id}, reason: ${reason ?? "unknown"})`);
 
         if (participantId && contestId) {
             // Only clear device registration if THIS socket is still the active one.
