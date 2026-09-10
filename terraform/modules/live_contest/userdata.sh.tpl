@@ -250,11 +250,19 @@ WS_NAMESPACE=/quiz
 WS_PATH=/socket.io
 WS_HEARTBEAT_INTERVAL=15000
 WS_CONNECTION_TIMEOUT=30000
-# Conservative limit: each WS session holds ~1.8MB heap (20 questions + answers
-# + socket refs + event listeners). At 1536MB heap: 1536/1.8 ≈ 853 max.
-# Set to 700 to leave 20% GC headroom. Health check returns 503 at this
-# threshold, telling ALB to stop routing new connections here.
-WS_MAX_CONNECTIONS_PER_INSTANCE=700
+# Health check returns 503 at this threshold, telling ALB to stop routing new
+# connections here (app.ts's drain-mode check) — this only gates NEW joins,
+# it has no bearing on why an already-connected socket might get dropped
+# (that's Socket.IO's own pingTimeout, a separate, count-independent
+# mechanism — see quiz.gateway.ts's handleDisconnect).
+#
+# This was previously 700, computed against a since-outdated 1536MB heap
+# figure at an assumed ~1.8MB/session. Heap is now 2048MB (NODE_OPTIONS
+# above), and full-duration load tests show actual usage is far below that
+# estimate — ~500 connections/instance used only 5-8% of a 2096MB heap
+# (~0.2-0.3MB/session, not 1.8MB). 1000 is still conservative against
+# observed real usage.
+WS_MAX_CONNECTIONS_PER_INSTANCE=1000
 WS_RECONNECT_ATTEMPTS=5
 WS_RECONNECT_DELAY=2000
 

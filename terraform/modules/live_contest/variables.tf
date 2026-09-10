@@ -55,8 +55,8 @@ variable "instance_type" {
 
 variable "min_size" {
   type        = number
-  default     = 2
-  description = "ASG minimum instances. Never below 2 — single instance = single point of failure during a live quiz."
+  default     = 3
+  description = "ASG minimum instances. Raised from 2: load testing found each t3.medium hits its EC2 network packets-per-second allowance (confirmed via `ethtool -S <iface>` showing nonzero pps_allowance_exceeded, not CPU/memory/conntrack) at ~450-500 concurrent real-time WebSocket connections — a 2-instance floor puts 1,000 total participants right at that ceiling. See load-testing/LOAD_TEST_INCIDENT_REPORT.md. Never below 2 regardless — single instance = single point of failure during a live quiz."
 }
 
 variable "max_size" {

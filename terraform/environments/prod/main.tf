@@ -172,8 +172,16 @@ module "live_contest" {
   elasticache_sg_id    = module.networking.elasticache_sg_id
 
   # Calculate initial/desired instances: ~1 instance per 1000 users.
-  # Clamp between 2 and 10 to ensure high availability while capping cost.
-  desired_capacity     = ceil(var.expected_participants / 1000) > 10 ? 10 : (ceil(var.expected_participants / 1000) < 2 ? 2 : ceil(var.expected_participants / 1000))
+  # Clamp between 3 and 10 — floor matches live_contest's own min_size default
+  # (terraform/modules/live_contest/variables.tf). AWS requires
+  # desired_capacity >= min_size; these two numbers are independently
+  # maintained (this floor isn't derived from var.min_size, since that's the
+  # module's own input, not visible here), so if min_size ever changes again,
+  # update this floor to match. Raised from 2 after load testing found
+  # t3.medium hits its EC2 network packets-per-second allowance around
+  # ~450-500 concurrent WebSocket connections/instance — see
+  # load-testing/LOAD_TEST_INCIDENT_REPORT.md.
+  desired_capacity     = ceil(var.expected_participants / 1000) > 10 ? 10 : (ceil(var.expected_participants / 1000) < 3 ? 3 : ceil(var.expected_participants / 1000))
 
   aws_region        = var.aws_region
   s3_bucket         = module.storage.bucket_name
