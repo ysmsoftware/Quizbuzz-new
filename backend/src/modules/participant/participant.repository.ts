@@ -223,12 +223,35 @@ export class ParticipantRepository implements IParticipantRepository {
         return participant?.organizationId ?? null;
     }
 
+    /**
+     * DB-fallback recovery set for contest start — participants whose Redis
+     * waiting-room presence may have been lost (the live source of truth;
+     * anyone CURRENTLY there is already caught by transitionToQuiz's own
+     * Redis read, not this query) but who genuinely reached the waiting room
+     * at some point, per DB status.
+     *
+     * Deliberately does NOT include REGISTERED or CHECKED_IN — those are
+     * pre-socket states (signed up / verified a join code via HTTP) that
+     * don't imply the participant ever opened a WebSocket connection at all.
+     * Including them force-started every registrant regardless of whether
+     * they showed up, which is exactly why a participant who never touched
+     * the app could appear in Live Monitor with a placeholder name and 0%
+     * progress — and at load-test scale, meant this loop iterated the full
+     * registered-participant count (hundreds to low thousands) on every
+     * contest start, synchronously, right as real participants were also
+     * connecting. IN_WAITING itself is DB-lagging by design (see
+     * analytics.worker.ts's flushParticipantStatuses — it's the only place
+     * participant.status is written during a live quiz, on a periodic
+     * snapshot cycle), so this only ever catches participants who were
+     * confirmed in the waiting room as of the last flush before the contest
+     * started — never someone who merely registered or checked in.
+     */
     async findAwaitingStart(contestId: string, organizationId: string): Promise<Array<{ id: string; contactId: string }>> {
         return prisma.participant.findMany({
             where: {
                 contestId,
                 organizationId,
-                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING"] },
+                status: "IN_WAITING",
             },
             select: { id: true, contactId: true },
         });

@@ -736,30 +736,55 @@ export class ContestService {
         const { transitioned, blocked } = await this.quizStarter.transitionToQuiz(contestId);
 
         const startedPids = new Set<string>();
-        for (const pid of transitioned) {
-            try {
-                const session = await this.quizStarter.handleRejoin(contestId, pid);
-                const contactId = session?.contactId ?? "";
-                await this.quizStarter.startQuizForParticipant(pid, contestId, organizationId, contactId);
-                startedPids.add(pid);
-            } catch (err) {
-                logger.error(`[contest] Failed to start quiz for ${pid}: ${(err as Error).message}`);
-            }
+        // Process concurrently in batches of 50 to avoid a synchronous, unbounded
+        // per-participant loop overwhelming Redis right at contest start — the exact
+        // moment real participant connections are also landing. Same pattern as
+        // handleTimeExpiry in quiz.service.ts.
+        const START_BATCH = 50;
+        for (let i = 0; i < transitioned.length; i += START_BATCH) {
+            const batch = transitioned.slice(i, i + START_BATCH);
+            await Promise.allSettled(
+                batch.map(async (pid) => {
+                    try {
+                        const session = await this.quizStarter!.handleRejoin(contestId, pid);
+                        const contactId = session?.contactId ?? "";
+                        await this.quizStarter!.startQuizForParticipant(pid, contestId, organizationId, contactId);
+                        startedPids.add(pid);
+                    } catch (err) {
+                        logger.error(`[contest] Failed to start quiz for ${pid}: ${(err as Error).message}`);
+                    }
+                })
+            );
         }
 
-        // DB-level fallback: participants still REGISTERED/CHECKED_IN/IN_WAITING whose
-        // socket never emitted quiz:v1:join (network blip, page refresh, slow connection).
+        // DB-level fallback: participants who reached IN_WAITING (per the last
+        // analytics-worker flush — the only place DB status is written during a live
+        // quiz, see analytics.worker.ts) but whose Redis waiting-room state may have
+        // been lost (network blip, Redis mode-switch data loss — the same class of
+        // gap the "Two-Redis Trap" contest-start-reliability-spec closed for
+        // CONTEST_START itself). Deliberately NOT REGISTERED/CHECKED_IN — those are
+        // pre-socket states that don't imply the participant ever opened a WebSocket
+        // connection, and including them here used to force-start every registrant
+        // regardless of whether they ever showed up (a participant who never touched
+        // the app would appear in Live Monitor with a placeholder name and 0%
+        // progress), and at load-test scale meant this loop synchronously iterated
+        // the full registered-participant count on every contest start.
         if (this.participantRepo) {
             try {
                 const dbParticipants = await this.participantRepo.findAwaitingStart(contestId, organizationId);
-                for (const p of dbParticipants) {
-                    if (startedPids.has(p.id)) continue;
-                    try {
-                        await this.quizStarter.startQuizForParticipant(p.id, contestId, organizationId, p.contactId);
-                        logger.info(`[contest] DB-fallback: started quiz for ${p.id}`);
-                    } catch (err) {
-                        logger.error(`[contest] DB-fallback failed for ${p.id}: ${(err as Error).message}`);
-                    }
+                const toStart = dbParticipants.filter((p) => !startedPids.has(p.id));
+                for (let i = 0; i < toStart.length; i += START_BATCH) {
+                    const batch = toStart.slice(i, i + START_BATCH);
+                    await Promise.allSettled(
+                        batch.map(async (p) => {
+                            try {
+                                await this.quizStarter!.startQuizForParticipant(p.id, contestId, organizationId, p.contactId);
+                                logger.info(`[contest] DB-fallback: started quiz for ${p.id}`);
+                            } catch (err) {
+                                logger.error(`[contest] DB-fallback failed for ${p.id}: ${(err as Error).message}`);
+                            }
+                        })
+                    );
                 }
             } catch (err) {
                 logger.error(`[contest] DB-fallback query failed: ${(err as Error).message}`);
