@@ -51,7 +51,7 @@ export function Combobox({
   }, [options, value]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -68,7 +68,7 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} className="h-9" />
           <CommandList className="max-h-60 overflow-y-auto">
@@ -84,12 +84,12 @@ export function Combobox({
                       onChange(option.value);
                       setOpen(false);
                     }}
-                    className="flex items-center justify-between cursor-pointer"
+                    className="flex items-start justify-between gap-2 cursor-pointer"
                   >
-                    <span className="truncate">{option.label}</span>
+                    <span className="line-clamp-2 min-w-0 flex-1">{option.label}</span>
                     <Check
                       className={cn(
-                        'ml-2 h-4 w-4 shrink-0',
+                        'mt-0.5 h-4 w-4 shrink-0',
                         isSelected ? 'opacity-100 text-primary' : 'opacity-0'
                       )}
                     />

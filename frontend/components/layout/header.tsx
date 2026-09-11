@@ -20,6 +20,7 @@ export function Header() {
     const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
     const [showInstallBtn, setShowInstallBtn] = useState(false);
     const appLogoUrl = useAppLogo();
+    const [logoFailed, setLogoFailed] = useState(false);
 
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
@@ -41,9 +42,14 @@ export function Header() {
             <nav className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Logo */}
                 <Link href="/" className="flex items-center">
-                    {appLogoUrl ? (
+                    {appLogoUrl && !logoFailed ? (
                         // eslint-disable-next-line @next/next/no-img-element -- dynamic upload URL, not a known static/remote-pattern domain
-                        <img src={appLogoUrl} alt="QuizBuzz" className="h-8 w-auto sm:h-9" />
+                        <img
+                            src={appLogoUrl}
+                            alt="QuizBuzz"
+                            className="h-8 w-auto sm:h-9"
+                            onError={() => setLogoFailed(true)}
+                        />
                     ) : (
                         <Image
                             src="/quizBuzz-logo.png"

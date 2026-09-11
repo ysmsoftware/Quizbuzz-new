@@ -6,6 +6,7 @@ import { Controller, useWatch, type Control, type FieldErrors, type UseFormRegis
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/shared/Combobox';
 import { referenceDataService, type CollegeOption } from '@/lib/services/reference-data-service';
 import type { ApplicationFieldDef } from '@/lib/types/ambassador';
 
@@ -105,9 +106,10 @@ function LiveSelectField({
             placeholder={`Enter ${field.label.toLowerCase()}`}
           />
         ) : (
-          <Select
+          <Combobox
+            options={[...options, { value: OTHER_VALUE, label: 'Other (not listed)' }]}
             value={controllerField.value}
-            onValueChange={(value) => {
+            onChange={(value) => {
               if (value === OTHER_VALUE) {
                 setIsOther(true);
                 controllerField.onChange('');
@@ -115,19 +117,9 @@ function LiveSelectField({
                 controllerField.onChange(value);
               }
             }}
-          >
-            <SelectTrigger id={field.key} className="w-full">
-              <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-              <SelectItem value={OTHER_VALUE}>Other (not listed)</SelectItem>
-            </SelectContent>
-          </Select>
+            placeholder={`Select ${field.label.toLowerCase()}`}
+            searchPlaceholder={`Search ${field.label.toLowerCase()}...`}
+          />
         )
       }
     />
