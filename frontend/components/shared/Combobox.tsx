@@ -81,8 +81,9 @@ export function Combobox({
                     key={option.value}
                     value={option.label}
                     onSelect={() => {
-                      onChange(option.value);
                       setOpen(false);
+                      if (isSelected) return;
+                      onChange(option.value);
                     }}
                     className="flex items-start justify-between gap-2 cursor-pointer"
                   >
