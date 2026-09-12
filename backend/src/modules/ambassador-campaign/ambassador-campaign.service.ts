@@ -683,7 +683,12 @@ export class AmbassadorCampaignService {
             contestId: dto.contestId ?? null,
             name: dto.name ?? template.name,
             ambassadorTypesAllowed: template.ambassadorTypesAllowed,
-            rewardConfig: template.rewardConfig as unknown as Prisma.InputJsonValue,
+            // Storage stays paise (§ DECISIONS.md) — template.rewardConfig has already been
+            // through _toTemplateResult's paise→rupees response conversion, so the raw,
+            // still-in-paise value straight off the found row is what belongs in a new
+            // campaign row, not the display-converted one (which would get divided by 100
+            // a second time the next time this campaign is fetched normally).
+            rewardConfig: found.rewardConfig as unknown as Prisma.InputJsonValue,
             shareTemplates: template.shareTemplates as unknown as Prisma.InputJsonValue,
             sourceTemplateId: template.id,
             createdById,

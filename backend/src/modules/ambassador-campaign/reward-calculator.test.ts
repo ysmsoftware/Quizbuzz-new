@@ -41,15 +41,12 @@ describe("reward-calculator milestone reward progression", () => {
         expect(res.nextTier!.label).toBe("Level 2");
     });
 
-    it("calculates progressive amount + goodie at the start of Level 2 (41 registrations)", () => {
+    it("withholds the Level 2 goodie at the start of Level 2 (41 registrations) — not cleared yet", () => {
         const res = computeMilestoneReward(tiers, 41);
-        // Progressive check:
         // Level 1: 40 * ₹15 = ₹600
-        // Level 2: 1 * ₹15 = ₹15
-        // Level 2 goodie: ₹800
-        // Total: ₹1415 (141,500 paise)
-        // If it were bracket-only, it would be 1 * ₹15 + ₹800 = ₹815 (81,500 paise)
-        expect(res.accruedAmount).toBe(40 * 1500 + 1 * 1500 + 80000); // 141,500 paise
+        // Level 2: 1 * ₹15 = ₹15 (no goodie — Level 2's ceiling of 70 hasn't been reached)
+        expect(res.accruedAmount).toBe(40 * 1500 + 1 * 1500); // 61,500 paise
+        expect(res.tierBreakdown.find((b) => b.tierLabel === "Level 2")?.goodieCashEquivalent).toBeUndefined();
         expect(res.currentTier!.label).toBe("Level 2");
         expect(res.nextTier!.label).toBe("Level 3");
     });

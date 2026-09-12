@@ -46,7 +46,11 @@ export function computeMilestoneReward(
 
             if (registrationsInBracket > 0) {
                 const bracketAmount = registrationsInBracket * tier.amountPerRegistration;
-                const goodieCash = tier.goodie?.cashEquivalent ?? 0;
+                // A tier's goodie is a "finish this level" reward, not a "you're in range" one —
+                // it only pays out once the tier's own ceiling is reached (or, for the uncapped
+                // top tier, once its floor is reached, since there's no further ceiling to clear).
+                const tierCleared = tier.maxRegistrations === null || registrationCount >= tier.maxRegistrations;
+                const goodieCash = tierCleared ? (tier.goodie?.cashEquivalent ?? 0) : 0;
                 accruedAmount += bracketAmount + goodieCash;
                 tierBreakdown.push({
                     tierLabel: tier.label ?? `Level ${i + 1}`,
@@ -55,7 +59,7 @@ export function computeMilestoneReward(
                     registrationsInBracket,
                     amountPerRegistration: tier.amountPerRegistration,
                     subtotal: bracketAmount + goodieCash,
-                    ...(tier.goodie?.cashEquivalent && { goodieLabel: tier.goodie.label, goodieCashEquivalent: tier.goodie.cashEquivalent }),
+                    ...(goodieCash > 0 && { goodieLabel: tier.goodie!.label, goodieCashEquivalent: goodieCash }),
                 });
             }
         }
