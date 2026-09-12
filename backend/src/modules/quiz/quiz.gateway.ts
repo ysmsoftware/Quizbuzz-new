@@ -33,6 +33,8 @@ export class QuizGateway {
     private subscriberClient?: any;
     private lastAdminStatsAt = new Map<string, number>();
     private pendingAdminStatsTimer = new Map<string, NodeJS.Timeout>();
+    private lastWaitingRoomStatusAt = new Map<string, number>();
+    private pendingWaitingRoomStatusTimer = new Map<string, NodeJS.Timeout>();
 
     constructor(
         private quizService: QuizService,
@@ -138,6 +140,43 @@ export class QuizGateway {
             this.emitAdminLiveStats(contestId, organizationId).catch(() => { });
         }, wait);
         this.pendingAdminStatsTimer.set(contestId, timer);
+    }
+
+    private async emitWaitingRoomStatus(contestId: string): Promise<void> {
+        const participantCount = await this.quizService.getWaitingCount(contestId).catch(() => 0);
+        this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", { participantCount });
+    }
+
+    /**
+     * Throttled trigger for the participant-facing waiting-room count broadcast —
+     * same leading+trailing collapse as scheduleAdminLiveStats, and for the same
+     * reason: handleJoin/handleDisconnect used to call emitSocket directly on every
+     * single join and disconnect, broadcasting to the entire (growing) contest
+     * room each time. That's O(N) fanout per event, so O(N^2) total socket writes
+     * across a join ramp of N participants — and every disconnect re-triggers
+     * another full-room broadcast, so once any disconnects start, they generate
+     * more broadcast load on the room that's already struggling, not less.
+     */
+    private scheduleWaitingRoomStatus(contestId: string): void {
+        const interval = config.quiz.adminLiveStatsIntervalMs;
+        const now = Date.now();
+        const last = this.lastWaitingRoomStatusAt.get(contestId) ?? 0;
+
+        if (now - last >= interval) {
+            this.lastWaitingRoomStatusAt.set(contestId, now);
+            this.emitWaitingRoomStatus(contestId).catch(() => { });
+            return;
+        }
+
+        if (this.pendingWaitingRoomStatusTimer.has(contestId)) return;
+
+        const wait = interval - (now - last);
+        const timer = setTimeout(() => {
+            this.pendingWaitingRoomStatusTimer.delete(contestId);
+            this.lastWaitingRoomStatusAt.set(contestId, Date.now());
+            this.emitWaitingRoomStatus(contestId).catch(() => { });
+        }, wait);
+        this.pendingWaitingRoomStatusTimer.set(contestId, timer);
     }
 
     private async getParticipantName(participantId: string): Promise<string> {
@@ -280,10 +319,7 @@ export class QuizGateway {
             // Push updated counts to admin
             this.scheduleAdminLiveStats(contestId, organizationId);
             // Push updated waiting room count to participants
-            const waitingCount = await this.quizService.getWaitingCount(contestId).catch(() => 0);
-            this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", {
-                participantCount: waitingCount,
-            });
+            this.scheduleWaitingRoomStatus(contestId);
         }
     }
 
@@ -352,9 +388,7 @@ export class QuizGateway {
         socket.emit("quiz:v1:waiting_room_status", result);
 
         // Broadcast updated participant count to all waiting participants
-        this.emitSocket("participant", `contest:${contestId}`, "quiz:v1:waiting_room_status", {
-            participantCount: result.participantCount,
-        });
+        this.scheduleWaitingRoomStatus(contestId);
 
         this.server.of("/quiz-admin").to(`admin:${contestId}`).emit("admin:v1:participant_joined", {
             participantId,

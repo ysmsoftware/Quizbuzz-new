@@ -327,6 +327,13 @@ ENABLE_NOTIFICATIONS=true
 ANALYTICS_SNAPSHOT_INTERVAL=900
 ANALYTICS_RETENTION_DAYS=30
 
+# ── DURABILITY (Redis→Postgres progress snapshots) ────────────────────────────
+# Load-test A/B: set to 90 (> test duration) so the periodic sweep can't fire
+# during a ~60min contest run, isolating whether it's a factor in the mass
+# ping-timeout disconnects. See LOAD_TEST_INCIDENT_REPORT.md. Revert to the
+# 5min default (just remove this line) once the A/B result is in.
+DURABILITY_SNAPSHOT_INTERVAL_MINUTES=90
+
 # ── PUB/SUB ───────────────────────────────────────────────────────────────────
 REDIS_PUBSUB_ENABLED=true
 REDIS_PUBSUB_PREFIX=quizbuzz
