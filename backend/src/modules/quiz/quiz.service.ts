@@ -404,9 +404,16 @@ export class QuizService {
         selectedOptionId: string | null,
         selectedOptionText: string | null,
         answeredAt: string,
-    ): Promise<boolean> {
+    ): Promise<{ success: boolean; actualPhase: string | null }> {
         const state = await this.session.getSession(contestId, participantId);
-        if (state?.phase !== "IN_QUIZ") return false;
+        // actualPhase distinguishes "session hash missing entirely" (null) from a
+        // real phase value like SUBMITTED/WAITING/DISCONNECTED — collapsing both
+        // into one rejection reason made it impossible to tell, from the log alone,
+        // whether a rejection is a late/duplicate answer after legitimate submission
+        // (benign, expected under reconnect churn) or an actually-missing session
+        // (a real bug) — see load-testing/LOAD_TEST_INCIDENT_REPORT.md.
+        const actualPhase = state?.phase ?? null;
+        if (actualPhase !== "IN_QUIZ") return { success: false, actualPhase };
 
         const normalizedOptionId = (selectedOptionId === "" || selectedOptionId === null || selectedOptionId === undefined) ? null : selectedOptionId;
         const normalizedOptionText = (normalizedOptionId === null) ? null : selectedOptionText;
@@ -416,7 +423,7 @@ export class QuizService {
             selectedOptionText: normalizedOptionText,
             answeredAt,
         });
-        return true;
+        return { success: true, actualPhase };
     }
 
     // ─────────────────────────────────────────────────────────────────────────

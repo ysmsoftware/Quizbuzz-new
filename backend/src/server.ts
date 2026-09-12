@@ -10,6 +10,7 @@ import "./instrument";
 import * as Sentry from "@sentry/node";
 import logger from "./config/logger";
 import dotenv from "dotenv";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { analyticsTracker } from "./services/analytics.service";
 dotenv.config();
 
@@ -26,6 +27,7 @@ import { opsMetricsService } from "./container.js";
 let server: Server;
 let isShuttingDown = false;
 let opsMetricsHeartbeatTimer: ReturnType<typeof setInterval> | undefined;
+let eventLoopLagTimer: ReturnType<typeof setInterval> | undefined;
 
 async function bootstrap() {
     try {
@@ -64,6 +66,29 @@ async function bootstrap() {
         );
         opsMetricsHeartbeatTimer.unref();
 
+        // Event-loop lag monitor — every application-level hot path (join, answer,
+        // disconnect, heartbeat, admin broadcasts) has been individually audited and
+        // is either O(1) or already throttled, yet the mass ping-timeout cascade
+        // persists at load. This is the one thing never directly measured: whether
+        // the backend Node process itself is stalling at the moment of failure. If
+        // p99/max spikes line up with the disconnect wave, that's decisive evidence
+        // of CPU-bound/GC/blocking work; if it stays flat through the cascade, the
+        // bottleneck is external (network path, ALB, Redis, or the test client).
+        // See load-testing/LOAD_TEST_INCIDENT_REPORT.md.
+        const eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+        eventLoopHistogram.enable();
+        eventLoopLagTimer = setInterval(() => {
+            logger.info(
+                `[event-loop-lag] min=${(eventLoopHistogram.min / 1e6).toFixed(1)}ms ` +
+                `mean=${(eventLoopHistogram.mean / 1e6).toFixed(1)}ms ` +
+                `p95=${(eventLoopHistogram.percentile(95) / 1e6).toFixed(1)}ms ` +
+                `p99=${(eventLoopHistogram.percentile(99) / 1e6).toFixed(1)}ms ` +
+                `max=${(eventLoopHistogram.max / 1e6).toFixed(1)}ms`
+            );
+            eventLoopHistogram.reset();
+        }, 5000);
+        eventLoopLagTimer.unref();
+
         process.on("SIGTERM", shutdown);
         process.on("SIGINT", shutdown);
 
@@ -89,6 +114,7 @@ async function shutdown() {
     forceExit.unref();
 
     if (opsMetricsHeartbeatTimer) clearInterval(opsMetricsHeartbeatTimer);
+    if (eventLoopLagTimer) clearInterval(eventLoopLagTimer);
 
     // 1. Shut down Socket.IO (stops accepting new WS connections)
     try {

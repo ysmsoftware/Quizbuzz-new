@@ -417,7 +417,7 @@ export class QuizGateway {
             `selectedOptionText=${payload.selectedOptionText}`
         );
 
-        const success = await this.quizService.saveAnswer(
+        const { success, actualPhase } = await this.quizService.saveAnswer(
             contestId,
             participantId,
             payload.questionId,
@@ -441,10 +441,13 @@ export class QuizGateway {
                 ...progress,
             });
         } else {
-            // ── Debug log: answer rejected (phase guard or missing session) ──
+            // ── Debug log: answer rejected — actualPhase tells us why ──
+            // null = session hash missing entirely (real bug); "SUBMITTED" = a late/
+            // duplicate answer after legitimate submission (expected under reconnect
+            // churn); anything else = worth investigating on its own.
             logger.warn(
                 `[QuizGateway:answer] REJECTED ✗ | contestId=${contestId} | participantId=${participantId} | ` +
-                `questionId=${payload.questionId} | reason=phase_not_IN_QUIZ_or_session_missing`
+                `questionId=${payload.questionId} | actualPhase=${actualPhase ?? "MISSING"}`
             );
             socket.emit("quiz:v1:answer_saved", { questionId: payload.questionId, rejected: true });
         }
