@@ -30,6 +30,32 @@ const regOtpKey = (email: string) => `auth:reg:otp:${email.toLowerCase()}`;
 const OTP_TTL = config.redis.ttl.otp;            // 300s
 const MAX_OTP_ATTEMPTS = config.auth.otp.maxAttempts;   // 5
 
+// ── TEMPORARY diagnostic cache for participantLogin (load-test investigation,
+// see load-testing/LOAD_TEST_INCIDENT_REPORT.md §1e) ────────────────────────
+// Database Insights showed participantLogin's participant+contact lookup
+// dominating DB CPU (99% of a 17-AAS spike, ~2vCPU instance) during a join
+// burst — not because the query is slow (it's index-covered, sub-ms in
+// isolation) but because ~100-150 near-simultaneous logins each fire it at
+// once. This bulk-prefetches the whole contest roster into one Redis hash on
+// the first login request, so every login after that is a Redis HGET instead
+// of a Postgres round-trip — trading N concurrent queries for 1.
+//
+// CORRECTNESS CAVEAT: this snapshots status at warm time. A participant
+// disqualified (or otherwise transitioned) AFTER the cache warms will still
+// read their pre-disqualification status until the entry expires. Acceptable
+// for this load-test experiment; NOT safe to leave running against a real
+// contest without also invalidating/refreshing the cached entry wherever
+// participant status is written (participant.repository.ts's updateStatus/
+// disqualify) — not done here since this is meant to be reverted once the
+// experiment answers whether this endpoint is the bottleneck.
+const LOGIN_CACHE_TTL_SEC = 4 * 60 * 60; // 4h — comfortably covers pre-join window + a ~1h quiz
+
+type LoginCacheEntry = { participantId: string; status: string; firstName: string | null };
+
+function loginCacheKey(contestId: string): string {
+    return `quiz:${contestId}:login-cache`;
+}
+
 export class QuizAuthService {
     constructor(
         private prisma: PrismaClient,
@@ -366,24 +392,45 @@ export class QuizAuthService {
             throw new QuizAuthError("CONTEST_ENDED", "This contest has already ended");
         }
 
-        // 3. Resolve contact + participant in ONE query instead of two
-        // sequential ones (was contact.findFirst then participant.findFirst).
-        // Under a join burst this cuts DB round-trips — and pool checkouts —
-        // per participant from 3 to 2 on the common/success path. The null
-        // branch below can't distinguish "no contact for this email" from
-        // "contact exists but isn't registered for this contest" on its own,
-        // so — only on that rare failure path, not on every request — it
-        // does one extra lookup to keep the CONTACT_NOT_FOUND vs
-        // NOT_REGISTERED distinction the frontend already relies on.
-        const participant = await this.prisma.participant.findFirst({
-            where: {
-                contestId: contest.id,
-                organizationId: contest.organizationId,
-                contact: { email: normalizedEmail, organizationId: contest.organizationId },
-                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
-            },
-            select: { id: true, status: true, contact: { select: { firstName: true } } },
-        });
+        // 3. Resolve contact + participant — Redis-first (see LOGIN_CACHE_TTL_SEC
+        // comment above), falling back to the original combined-query DB path on
+        // any cache miss so correctness never depends on the cache being warm.
+        let participant: { id: string; status: string; contact: { firstName: string | null } } | null = null;
+
+        const cacheKey = loginCacheKey(contest.id);
+        const cached = await redis.hget(cacheKey, normalizedEmail);
+        if (cached) {
+            const entry: LoginCacheEntry = JSON.parse(cached);
+            participant = { id: entry.participantId, status: entry.status, contact: { firstName: entry.firstName } };
+        } else {
+            // Cache not warm (or this email isn't in it) — warm it once per
+            // contest so the NEXT ~150 concurrent logins hit Redis instead of
+            // Postgres. A brief race where a few concurrent requests all miss
+            // and each trigger a warm is fine here (bulk query, cheap) — the
+            // whole point is avoiding N individual per-participant queries.
+            const warmed = await redis.set(`${cacheKey}:warming`, "1", "EX", 20, "NX");
+            if (warmed) {
+                await this.warmLoginCache(contest.id, contest.organizationId);
+            }
+            const cachedAfterWarm = await redis.hget(cacheKey, normalizedEmail);
+            if (cachedAfterWarm) {
+                const entry: LoginCacheEntry = JSON.parse(cachedAfterWarm);
+                participant = { id: entry.participantId, status: entry.status, contact: { firstName: entry.firstName } };
+            } else {
+                // Genuine miss (not registered, or lost a warm-lock race and the
+                // warming request hasn't finished yet) — fall back to the DB,
+                // exactly as before this cache existed.
+                participant = await this.prisma.participant.findFirst({
+                    where: {
+                        contestId: contest.id,
+                        organizationId: contest.organizationId,
+                        contact: { email: normalizedEmail, organizationId: contest.organizationId },
+                        status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
+                    },
+                    select: { id: true, status: true, contact: { select: { firstName: true } } },
+                });
+            }
+        }
 
         if (!participant) {
             const contact = await this.prisma.contact.findFirst({
@@ -428,6 +475,37 @@ export class QuizAuthService {
             // instead of showing the long, non-human-readable participant ID.
             firstName: participant.contact?.firstName ?? null,
         };
+    }
+
+    // See LOGIN_CACHE_TTL_SEC comment at the top of this file — TEMPORARY
+    // diagnostic cache, one bulk query replacing N concurrent per-login ones.
+    private async warmLoginCache(contestId: string, organizationId: string): Promise<void> {
+        const participants = await this.prisma.participant.findMany({
+            where: {
+                contestId,
+                organizationId,
+                status: { in: ["REGISTERED", "CHECKED_IN", "IN_WAITING", "IN_QUIZ", "SUBMITTED"] },
+            },
+            select: {
+                id: true,
+                status: true,
+                contact: { select: { email: true, firstName: true } },
+            },
+        });
+
+        if (participants.length === 0) return;
+
+        const cacheKey = loginCacheKey(contestId);
+        const pipeline = redis.pipeline();
+        for (const p of participants) {
+            if (!p.contact?.email) continue;
+            const entry: LoginCacheEntry = { participantId: p.id, status: p.status, firstName: p.contact.firstName };
+            pipeline.hset(cacheKey, p.contact.email.toLowerCase(), JSON.stringify(entry));
+        }
+        pipeline.expire(cacheKey, LOGIN_CACHE_TTL_SEC);
+        await pipeline.exec();
+
+        logger.info(`[quiz-auth] Warmed login cache for contest ${contestId}: ${participants.length} participants`);
     }
 }
 

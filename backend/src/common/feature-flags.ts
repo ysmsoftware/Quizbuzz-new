@@ -67,7 +67,16 @@ export async function isFeatureEnabled(
         // Serve stale cache if we have it, else fail closed (favor
         // availability — an unrelated DB hiccup should never accidentally
         // maintenance-lock the whole platform or strip a paid org add-on).
-        return cached?.value ?? false;
+        const value = cached?.value ?? false;
+        // Re-arm the cache on failure too, not just success. maintenanceGate
+        // runs on every /api/v1/* request — without this, an expired entry
+        // stays expired through a DB outage, so EVERY concurrent request
+        // (hundreds, under load) makes its own fresh DB attempt instead of
+        // the cache shielding the DB to one check per TTL window. That
+        // turns a struggling DB into an amplifying thundering herd instead
+        // of giving it a moment to recover. See LOAD_TEST_INCIDENT_REPORT.md.
+        flagCache.set(cacheKey, { value, expires: Date.now() + (TTL_MS[key] ?? DEFAULT_TTL_MS) });
+        return value;
     }
 }
 

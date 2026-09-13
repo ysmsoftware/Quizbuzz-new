@@ -86,7 +86,7 @@ async function bootstrap() {
                 `max=${(eventLoopHistogram.max / 1e6).toFixed(1)}ms`
             );
             eventLoopHistogram.reset();
-        }, 5000);
+        }, 30000);
         eventLoopLagTimer.unref();
 
         process.on("SIGTERM", shutdown);
