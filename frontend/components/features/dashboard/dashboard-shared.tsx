@@ -32,16 +32,6 @@ export function ContestStatusBadge({ status, className }: { status: ContestStatu
   );
 }
 
-export const CONTEST_STATUS_ORDER: ContestStatus[] = [
-  'DRAFT',
-  'PUBLISHED',
-  'REGISTRATION_CLOSED',
-  'LIVE',
-  'EVALUATION',
-  'RESULTS_OUT',
-  'COMPLETED',
-  'CANCELLED',
-];
 
 /**
  * Inline error state for a single widget's query — distinct from

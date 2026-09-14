@@ -36,15 +36,23 @@ import { cn } from '@/lib/utils';
 import { OnboardingModal } from '@/components/features/organization/OnboardingModal';
 import { UpgradePromptModal } from '@/components/features/organization/UpgradePromptModal';
 
-const baseNavItems = [
+interface NavItem {
+    label: string;
+    href: string;
+    icon: typeof LayoutDashboard;
+}
+
+const OVERVIEW_ITEMS: NavItem[] = [
     { label: 'Dashboard', href: '/org', icon: LayoutDashboard },
+];
+
+const CONTEST_ITEMS: NavItem[] = [
     { label: 'Contests', href: '/org/contests', icon: Trophy },
     { label: 'Questions', href: '/org/questions', icon: HelpCircle },
-    { label: 'Contacts', href: '/org/contacts', icon: Users },
-    { label: 'Messages', href: '/org/messages', icon: BarChart3 },
     { label: 'Certificates', href: '/org/certificates', icon: Award },
-    { label: 'Settings', href: '/org/settings', icon: Settings },
 ];
+
+const SETTINGS_ITEM: NavItem = { label: 'Settings', href: '/org/settings', icon: Settings };
 
 export function OrgLayoutClient({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -58,14 +66,21 @@ export function OrgLayoutClient({ children }: { children: React.ReactNode }) {
     // section's own layout.tsx. Two separate nav items, not one toggle page: applications/directory
     // (people) and campaign management are different jobs even though they're related.
     const { enabled: ambassadorProgramEnabled } = useAmbassadorProgramEnabled(activeOrg?.id ?? '');
-    const navItems = ambassadorProgramEnabled
-        ? [
-            ...baseNavItems.slice(0, 4),
-            { label: 'Ambassadors', href: '/org/ambassadors', icon: Megaphone },
-            { label: 'Campaigns', href: '/org/campaigns', icon: Target },
-            ...baseNavItems.slice(4),
-          ]
-        : baseNavItems;
+    const audienceItems: NavItem[] = [
+        { label: 'Contacts', href: '/org/contacts', icon: Users },
+        ...(ambassadorProgramEnabled
+            ? [
+                { label: 'Ambassadors', href: '/org/ambassadors', icon: Megaphone },
+                { label: 'Campaigns', href: '/org/campaigns', icon: Target },
+              ]
+            : []),
+        { label: 'Messages', href: '/org/messages', icon: BarChart3 },
+    ];
+    const navGroups: { label: string; items: NavItem[] }[] = [
+        { label: 'Overview', items: OVERVIEW_ITEMS },
+        { label: 'Contests', items: CONTEST_ITEMS },
+        { label: 'Audience', items: audienceItems },
+    ];
 
     // Only query onboarding status once the user is fully logged-in + verified
     const readyForOnboarding = !meQuery.isLoading && isLoggedIn && isEmailVerified;
@@ -141,6 +156,70 @@ export function OrgLayoutClient({ children }: { children: React.ReactNode }) {
     // Final check to prevent layout flash before redirect
     if (!isLoggedIn) return null;
 
+    const renderNavItem = (item: NavItem) => {
+        const Icon = item.icon;
+        const isActive = pathname === item.href;
+
+        return (
+            <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                    <Link href={item.href} className="relative block w-full group">
+                        {/* Sliding active indicator — a quiet tinted panel + accent bar, not a filled pill */}
+                        {isActive && (
+                            <motion.div
+                                layoutId="activeOrgNavIndicator"
+                                className="absolute inset-0 bg-primary/10 border-l-[2.5px] border-primary rounded-lg"
+                                transition={{
+                                    type: 'spring',
+                                    stiffness: 380,
+                                    damping: 30,
+                                }}
+                            />
+                        )}
+                        <button
+                            className={cn(
+                                "relative w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-300 cursor-pointer outline-none text-left",
+                                isActive
+                                    ? "text-primary font-semibold"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
+                                !sidebarOpen && "justify-center px-0"
+                            )}
+                            onClick={() => {
+                                if (window.innerWidth < 768) {
+                                    setSidebarOpen(false);
+                                }
+                            }}
+                        >
+                            <Icon className={cn(
+                                "h-[18px] w-[18px] shrink-0 transition-transform duration-300 group-hover:scale-110",
+                                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                            )} />
+
+                            <AnimatePresence initial={false}>
+                                {sidebarOpen && (
+                                    <motion.span
+                                        initial={{ opacity: 0, width: 0 }}
+                                        animate={{ opacity: 1, width: 'auto' }}
+                                        exit={{ opacity: 0, width: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="font-medium whitespace-nowrap overflow-hidden"
+                                    >
+                                        {item.label}
+                                    </motion.span>
+                                )}
+                            </AnimatePresence>
+                        </button>
+                    </Link>
+                </TooltipTrigger>
+                {!sidebarOpen && (
+                    <TooltipContent side="right" sideOffset={10}>
+                        {item.label}
+                    </TooltipContent>
+                )}
+            </Tooltip>
+        );
+    };
+
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             {/* Sidebar */}
@@ -169,12 +248,17 @@ export function OrgLayoutClient({ children }: { children: React.ReactNode }) {
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -10 }}
                                 transition={{ duration: 0.2 }}
-                                className="flex flex-col min-w-0 flex-1"
+                                className="flex items-center gap-2.5 min-w-0 flex-1"
                             >
-                                <span className="text-2xl font-bold text-primary truncate block">
-                                    {activeOrg?.name || 'QuizBuzz'}
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold shrink-0">
+                                    {(activeOrg?.name || 'QuizBuzz').substring(0, 2).toUpperCase()}
                                 </span>
-                                <p className="text-xs text-muted-foreground mt-1">Admin Panel</p>
+                                <span className="flex flex-col min-w-0">
+                                    <span className="text-base font-bold truncate">
+                                        {activeOrg?.name || 'QuizBuzz'}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">Admin Panel</span>
+                                </span>
                             </motion.div>
                         ) : (
                             <motion.div
@@ -196,71 +280,25 @@ export function OrgLayoutClient({ children }: { children: React.ReactNode }) {
 
                 {/* Navigation */}
                 <TooltipProvider delayDuration={100}>
-                    <nav className="flex-1 flex flex-col gap-2 p-4 overflow-y-auto">
-                        {navItems.map((item) => {
-                            const Icon = item.icon;
-                            const isActive = pathname === item.href;
-
-                            return (
-                                <Tooltip key={item.href}>
-                                    <TooltipTrigger asChild>
-                                        <Link href={item.href} className="relative block w-full group">
-                                            {/* Sliding active pill indicator */}
-                                            {isActive && (
-                                                <motion.div
-                                                    layoutId="activeOrgNavIndicator"
-                                                    className="absolute inset-0 bg-primary rounded-lg shadow-lg shadow-primary/15"
-                                                    transition={{
-                                                        type: 'spring',
-                                                        stiffness: 380,
-                                                        damping: 30,
-                                                    }}
-                                                />
-                                            )}
-                                            <button
-                                                className={cn(
-                                                    "relative w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300 cursor-pointer outline-none text-left",
-                                                    isActive
-                                                        ? "text-primary-foreground font-semibold"
-                                                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
-                                                    !sidebarOpen && "justify-center px-0"
-                                                )}
-                                                onClick={() => {
-                                                    if (window.innerWidth < 768) {
-                                                        setSidebarOpen(false);
-                                                    }
-                                                }}
-                                            >
-                                                <Icon className={cn(
-                                                    "h-5 w-5 shrink-0 transition-transform duration-300 group-hover:scale-110",
-                                                    isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
-                                                )} />
-
-                                                <AnimatePresence initial={false}>
-                                                    {sidebarOpen && (
-                                                        <motion.span
-                                                            initial={{ opacity: 0, width: 0 }}
-                                                            animate={{ opacity: 1, width: 'auto' }}
-                                                            exit={{ opacity: 0, width: 0 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="font-medium whitespace-nowrap overflow-hidden"
-                                                        >
-                                                            {item.label}
-                                                        </motion.span>
-                                                    )}
-                                                </AnimatePresence>
-                                            </button>
-                                        </Link>
-                                    </TooltipTrigger>
-                                    {!sidebarOpen && (
-                                        <TooltipContent side="right" sideOffset={10}>
-                                            {item.label}
-                                        </TooltipContent>
-                                    )}
-                                </Tooltip>
-                            );
-                        })}
+                    <nav className="flex-1 flex flex-col p-4 overflow-y-auto">
+                        {navGroups.map((group) => (
+                            <div key={group.label} className="mb-4 last:mb-0">
+                                {sidebarOpen && (
+                                    <p className="px-4 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                                        {group.label}
+                                    </p>
+                                )}
+                                <div className="flex flex-col gap-0.5">
+                                    {group.items.map(renderNavItem)}
+                                </div>
+                            </div>
+                        ))}
                     </nav>
+
+                    {/* Settings — kept apart from the grouped sections above */}
+                    <div className="border-t border-border/40 px-4 pt-3 pb-1 shrink-0">
+                        {renderNavItem(SETTINGS_ITEM)}
+                    </div>
 
                     {/* User Info and Logout */}
                     <div className="border-t border-border/40 p-4 space-y-3 shrink-0">

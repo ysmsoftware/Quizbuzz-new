@@ -108,12 +108,16 @@ export interface RegistrationResult {
 
 // QUERY FILTERS
 
+export type ListContestsSortBy = 'startTime' | 'createdAt' | 'registrationDeadline' | 'participants';
+
 export interface ListContestsFilter {
   status?: ContestStatus | null | undefined;
   page?: number;
   limit?: number;
   search?: string | null | undefined;
   isArchived?: boolean;
+  sortBy?: ListContestsSortBy;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ListParticipantsFilter {
@@ -133,6 +137,9 @@ export interface ContestSummary {
   status: ContestStatus;
   startTime: Date;
   registrationDeadline: Date;
+  createdAt: Date;
+  maxParticipants: number | null;
+  topics: string[];
   registrationCount: number;
   paymentEnabled: boolean;
   paymentConfig?: { amount: number; currency: string; description?: string | null } | null;

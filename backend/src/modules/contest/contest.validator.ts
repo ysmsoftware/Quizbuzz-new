@@ -209,6 +209,8 @@ export const ListContestsQuerySchema = z.object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
     search: z.string().optional(),
+    sortBy: z.enum(['startTime', 'createdAt', 'registrationDeadline', 'participants']).default('startTime'),
+    sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 
 

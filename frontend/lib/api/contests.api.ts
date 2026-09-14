@@ -17,12 +17,16 @@ export async function listContests(params?: {
   page?: number;
   limit?: number;
   search?: string;
+  sortBy?: 'startTime' | 'createdAt' | 'registrationDeadline' | 'participants';
+  sortOrder?: 'asc' | 'desc';
 }): Promise<ApiResponse<{ data: Contest[]; pagination?: any }>> {
   const query = new URLSearchParams();
   if (params?.status) query.append('status', params.status);
   if (params?.page) query.append('page', String(params.page));
   if (params?.limit) query.append('limit', String(params.limit));
   if (params?.search) query.append('search', params.search);
+  if (params?.sortBy) query.append('sortBy', params.sortBy);
+  if (params?.sortOrder) query.append('sortOrder', params.sortOrder);
 
   const path = `/contests${query.toString() ? '?' + query.toString() : ''}`;
   return get<{ data: Contest[]; pagination?: any }>(path);

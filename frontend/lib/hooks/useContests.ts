@@ -15,6 +15,8 @@ export function useContests(filters?: {
   page?: number;
   limit?: number;
   search?: string;
+  sortBy?: 'startTime' | 'createdAt' | 'registrationDeadline' | 'participants';
+  sortOrder?: 'asc' | 'desc';
 }) {
   const queryClient = useQueryClient();
 

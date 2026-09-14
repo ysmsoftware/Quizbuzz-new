@@ -25,6 +25,8 @@ export interface Contest {
     details?: string;
     shortDescription: string;
     topic: string;
+    /** Real field from the backend Contest model — populated on the list endpoint; `category`/`tags` below are not. */
+    topics?: string[];
     tags: string[];
     category: string;
     difficulty: DifficultyLevel;

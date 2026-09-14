@@ -174,6 +174,7 @@ export class ContestRepository implements IContestRepository {
         const page = query.page || 1;
         const limit = query.limit || 10;
         const skip = (page - 1) * limit;
+        const sortOrder = query.sortOrder ?? 'asc';
 
         const where: Prisma.ContestWhereInput = {
             organizationId,
@@ -183,12 +184,18 @@ export class ContestRepository implements IContestRepository {
             ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
         };
 
+        // "participants" sorts by registration count via the relation, not a scalar column.
+        const orderBy: Prisma.ContestOrderByWithRelationInput =
+            query.sortBy === 'participants'
+                ? { participants: { _count: sortOrder } }
+                : { [query.sortBy ?? 'startTime']: sortOrder };
+
         const [contests, total] = await prisma.$transaction([
             prisma.contest.findMany({
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'desc' },
+                orderBy,
                 select: {
                     id: true,
                     title: true,
@@ -196,6 +203,9 @@ export class ContestRepository implements IContestRepository {
                     status: true,
                     startTime: true,
                     registrationDeadline: true,
+                    createdAt: true,
+                    maxParticipants: true,
+                    topics: true,
                     paymentEnabled: true,
                     paymentConfig: true,
                     bannerImage: true,
@@ -212,6 +222,9 @@ export class ContestRepository implements IContestRepository {
             status: contest.status,
             startTime: contest.startTime,
             registrationDeadline: contest.registrationDeadline,
+            createdAt: contest.createdAt,
+            maxParticipants: contest.maxParticipants,
+            topics: contest.topics,
             registrationCount: contest._count.participants,
             paymentEnabled: contest.paymentEnabled,
             paymentConfig: contest.paymentConfig,

@@ -1,94 +1,144 @@
 'use client';
 
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, Search } from 'lucide-react';
 import { useState } from 'react';
+import Link from 'next/link';
+import { formatDistanceToNowStrict, format } from 'date-fns';
+import { Users } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useRecentRegistrations } from '@/lib/hooks/useDashboard';
+import type { ParticipantStatus } from '@/lib/api/dashboard.api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PaginationBar } from '@/components/ui/pagination-bar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DashboardWidgetError } from '@/components/features/dashboard/dashboard-shared';
+
+const STATUS_LABEL: Record<ParticipantStatus, string> = {
+  PENDING_PAYMENT: 'Pending payment',
+  REGISTERED: 'Registered',
+  CHECKED_IN: 'Checked in',
+  IN_WAITING: 'In waiting room',
+  IN_QUIZ: 'In quiz',
+  SUBMITTED: 'Submitted',
+  DISQUALIFIED: 'Disqualified',
+  ABSENT: 'Absent',
+};
+
+const PAGE_SIZE = 20;
 
 export default function ParticipantsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const { activeOrg } = useAuth();
+  const orgId = activeOrg?.id || '';
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<ParticipantStatus | 'all'>('all');
 
-  const mockParticipants = [
-    { id: '1', name: 'John Doe', email: 'john@example.com', contests: 5, totalScore: 450 },
-    { id: '2', name: 'Jane Smith', email: 'jane@example.com', contests: 8, totalScore: 720 },
-    { id: '3', name: 'Mike Johnson', email: 'mike@example.com', contests: 3, totalScore: 280 },
-    { id: '4', name: 'Sarah Williams', email: 'sarah@example.com', contests: 12, totalScore: 1050 },
-    { id: '5', name: 'Robert Brown', email: 'robert@example.com', contests: 6, totalScore: 540 },
-  ];
+  const { data, isLoading, isError, refetch, isFetching } = useRecentRegistrations(orgId, {
+    page,
+    limit: PAGE_SIZE,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    status: status === 'all' ? undefined : status,
+  });
 
-  const filtered = mockParticipants.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const registrations = data?.data.data ?? [];
+  const total = data?.data.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <Link href="/org" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-5 w-5" />
-            <span>Back</span>
-          </Link>
-          <h1 className="text-2xl font-bold">Participants</h1>
-          <div className="w-[60px]" />
-        </div>
-      </header>
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Participants</h2>
+        <p className="text-sm text-muted-foreground mt-1">Everyone who has registered for one of your contests.</p>
+      </div>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              All Participants
+      <Card className="border-border/50">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              All participants
             </CardTitle>
-            <CardDescription>Manage and monitor participant information</CardDescription>
-          </CardHeader>
+            <CardDescription>{total.toLocaleString('en-IN')} total registrations</CardDescription>
+          </div>
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              setStatus(v as ParticipantStatus | 'all');
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
 
-          <CardContent className="space-y-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+        <CardContent aria-busy={isFetching}>
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
             </div>
+          ) : isError ? (
+            <DashboardWidgetError message="Couldn't load participants." onRetry={() => refetch()} />
+          ) : registrations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <Users className="h-6 w-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {status === 'all' ? 'No one has registered yet.' : 'No registrations match this status.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Contest</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Registered</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {registrations.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium">
+                        {r.contact.firstName} {r.contact.lastName ?? ''}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{r.contact.email}</TableCell>
+                      <TableCell>
+                        <Link href={`/org/contests/${r.contest.id}/registrations`} className="hover:underline hover:text-primary">
+                          {r.contest.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{STATUS_LABEL[r.status]}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground" title={format(new Date(r.createdAt), 'PPpp')}>
+                        {formatDistanceToNowStrict(new Date(r.createdAt), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
-            {filtered.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No participants found</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border/50">
-                      <th className="text-left py-3 px-4 font-semibold text-sm">Name</th>
-                      <th className="text-left py-3 px-4 font-semibold text-sm">Email</th>
-                      <th className="text-left py-3 px-4 font-semibold text-sm">Contests</th>
-                      <th className="text-left py-3 px-4 font-semibold text-sm">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(participant => (
-                      <tr key={participant.id} className="border-b border-border/30 hover:bg-secondary/20 transition-colors">
-                        <td className="py-3 px-4 font-medium">{participant.name}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{participant.email}</td>
-                        <td className="py-3 px-4 text-sm">{participant.contests}</td>
-                        <td className="py-3 px-4 text-sm font-semibold">{participant.totalScore}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
+              <PaginationBar page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} className="mt-4" />
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
