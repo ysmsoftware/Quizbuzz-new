@@ -27,6 +27,8 @@ import { useBatchUpload, type BatchStep } from '@/lib/hooks/useBatchUpload';
 import { MultiStepLoader } from '@/components/ui/multi-step-loader';
 import { chunkArray } from '@/lib/utils';
 import { BULK_UPLOAD_BATCH_SIZE, BULK_UPLOAD_MAX_TOTAL } from '@/lib/constants/bulk-upload';
+import { QuestionTextEditor } from '@/components/shared/QuestionTextEditor';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -322,9 +324,12 @@ export default function CreateQuestionPage() {
           <Card className="border-border/50">
             <CardHeader>
               <CardTitle>Bulk Upload (CSV)</CardTitle>
-              <CardDescription className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <span>
+              <CardDescription className="flex flex-col gap-1">
+                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   Download the <a href="/templates/questions_template.csv" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CSV Template</a> to get started.
+                </span>
+                <span className="text-xs">
+                  Question text supports <code className="rounded bg-muted px-1 py-0.5">`code`</code> and <code className="rounded bg-muted px-1 py-0.5">$formula$</code> markdown. For multi-line code snippets, prefer an <b>.xlsx</b> file — use Alt+Enter for line breaks inside a cell.
                 </span>
                 <button
                   type="button"
@@ -422,7 +427,7 @@ export default function CreateQuestionPage() {
                       <tbody>
                         {csvPreview.map((q, i) => (
                           <tr key={i} className="border-b last:border-0 hover:bg-secondary/50">
-                            <td className="p-2 truncate max-w-[200px]">{q.questionText}</td>
+                            <td className="p-2 truncate max-w-[200px]"><QuestionRenderer text={q.questionText} inline /></td>
                             <td className="p-2">
                               <Badge variant="outline" className="text-[10px]">
                                 {q.difficulty}
@@ -493,11 +498,10 @@ export default function CreateQuestionPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Question Text</label>
-                  <textarea
-                    className="min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter your question here..."
+                  <QuestionTextEditor
                     value={form.questionText}
-                    onChange={(e) => setForm({ ...form, questionText: e.target.value })}
+                    onChange={(v) => setForm({ ...form, questionText: v })}
+                    placeholder="Enter your question here..."
                   />
                 </div>
 

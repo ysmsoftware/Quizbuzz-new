@@ -84,6 +84,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import { PaginationBar } from '@/components/ui/pagination-bar';
 
 interface SubmissionRecord {
@@ -643,9 +644,10 @@ export default function ContestSubmissionsPage() {
                           <div className="flex items-start justify-between gap-4 mb-2.5">
                             <div className="space-y-0.5">
                               <span className="text-[9px] text-muted-foreground font-bold">Question {idx + 1}</span>
-                              <h4 className="text-xs lg:text-sm font-semibold text-foreground leading-relaxed">
-                                {ans.questionText}
-                              </h4>
+                              <QuestionRenderer
+                                text={ans.questionText}
+                                className="text-xs lg:text-sm font-semibold text-foreground leading-relaxed"
+                              />
                             </div>
                             <Badge className={cn("text-[8px] font-bold px-1.5 py-0.5 border shrink-0", difficultyColor)}>
                               {ans.difficulty || "Standard"}
@@ -674,7 +676,7 @@ export default function ContestSubmissionsPage() {
                                   <X className="h-3.5 w-3.5 shrink-0" />
                                 )}
                                 <span className="text-xs font-bold leading-tight">
-                                  {isSkipped ? 'Skipped Question' : (ans.selectedOptionText || 'Unknown Option')}
+                                  {isSkipped ? 'Skipped Question' : <QuestionRenderer text={ans.selectedOptionText || 'Unknown Option'} inline />}
                                 </span>
                               </div>
                             </div>
@@ -687,7 +689,7 @@ export default function ContestSubmissionsPage() {
                               <div className="flex items-center gap-1.5">
                                 <Check className="h-3.5 w-3.5 shrink-0" />
                                 <span className="text-xs font-bold leading-tight">
-                                  {ans.correctOptionText || 'No correct option set'}
+                                  <QuestionRenderer text={ans.correctOptionText || 'No correct option set'} inline />
                                 </span>
                               </div>
                             </div>

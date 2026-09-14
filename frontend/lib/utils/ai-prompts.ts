@@ -101,7 +101,7 @@ export function buildQuestionsAiPrompt(): string {
 
 questionText,difficulty,category,option1,option2,option3,option4,correctOption
 
-- questionText: the question itself, 5-2000 characters.
+- questionText: the question itself, 5-8000 characters. It can freely mix plain text with markdown: \`inline code\` wrapped in single backticks, a fenced code block for a multi-line snippet (a line of three backticks, optionally followed immediately by a language name like python, then the code, then a line of three backticks to close it), and math formulas as $inline$ or a centered $$display$$ formula. Plain sentences, code, and formulas can all appear in the same questionText, in any order.
 - difficulty: exactly one of EASY, MEDIUM, or HARD (case-insensitive).
 - category: a single topic/tag for the question (e.g. "React", "SQL", "General Knowledge").
 - option1..option4: the four answer choices, 1-500 characters each. You can add up to two more columns (option5, option6) if a question needs 5 or 6 choices — 2 is the minimum, 6 is the maximum.
@@ -114,9 +114,10 @@ This prompt covers two different jobs — read both option blocks near the botto
 - OPTION B — FIX AN EXISTING FILE: I'll paste my existing CSV/spreadsheet data below, in whatever format it's currently in; convert it to the exact CSV format above, correcting anything that doesn't match — wrong header names, separate per-option "isCorrect" boolean columns instead of a single correctOption index, wrong difficulty casing, etc. Keep the original question wording and answers intact, only fix the structure/format.
 
 Rules that apply either way:
-1. Output plain CSV text only — the header row exactly as shown, then one row per question, comma-separated, with any field containing a comma or quote wrapped in double quotes.
+1. Output plain CSV text only — the header row exactly as shown, then one row per question, comma-separated, with any field containing a comma, quote, or line break wrapped in double quotes (and any double quote inside such a field doubled, per standard CSV escaping).
 2. Every row needs exactly one correct answer marked via the correctOption index — never zero, never more than one.
 3. Don't invent extra columns beyond questionText, difficulty, category, option1-6, correctOption, hint, explanation — anything else is ignored by the system.
+4. If a questionText contains a multi-line code block, keep it as one CSV field (quoted, with real line breaks inside the quotes) rather than collapsing it to one line — but mention to me that a multi-line snippet is easier to get right by pasting into an .xlsx file instead (one cell, Alt+Enter for line breaks), since raw CSV's multiline-quoted-field handling is more fragile when round-tripped through Excel/Sheets.
 
 --- FILL IN ONLY ONE OF THE TWO SECTIONS BELOW ---
 

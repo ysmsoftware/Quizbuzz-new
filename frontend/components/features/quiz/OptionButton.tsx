@@ -7,6 +7,7 @@
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 
 interface OptionButtonProps {
   option: { index: number; text: string };
@@ -92,9 +93,11 @@ export function OptionButton({
       </div>
 
       {/* Option Text */}
-      <span className={cn("text-base flex-1 leading-snug transition-colors duration-300", styles.textClass)}>
-        {option.text}
-      </span>
+      <QuestionRenderer
+        text={option.text}
+        inline
+        className={cn("text-base flex-1 leading-snug transition-colors duration-300", styles.textClass)}
+      />
 
       {/* Check/Status Indicators */}
       {isSelected && !isCorrect && !isWrong && (

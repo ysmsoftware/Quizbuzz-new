@@ -43,7 +43,9 @@ function validateOptions(options: { isCorrect: boolean; position: number }[], ct
 
 export const CreateQuestionSchema = z
     .object({
-        questionText: z.string().min(5).max(2000),
+        // 8000 (not the old 2000) — a code snippet or a worked formula sharing
+        // the body with plain text eats the character budget fast.
+        questionText: z.string().min(5).max(8000),
         difficulty: z.nativeEnum(QuestionDifficulty),
         hint: z.string().max(500).optional(),
         explanation: z.string().max(2000).optional(),
@@ -57,7 +59,7 @@ export const CreateQuestionSchema = z
 
 export const UpdateQuestionSchema = z
     .object({
-        questionText: z.string().min(5).max(2000).optional(),
+        questionText: z.string().min(5).max(8000).optional(),
         difficulty: z.nativeEnum(QuestionDifficulty).optional(),
         hint: z.string().max(500).nullable().optional(),
         explanation: z.string().max(2000).nullable().optional(),

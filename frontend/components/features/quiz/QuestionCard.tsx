@@ -7,6 +7,7 @@
 import type { QuizQuestion } from '@/lib/stores/quiz-store';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 
 interface QuestionCardProps {
     question: QuizQuestion;
@@ -23,17 +24,24 @@ export function QuestionCard({
 }: QuestionCardProps) {
     return (
         <div className="space-y-3 lg:space-y-4">
-            {/* Compact mobile header — Q-number sits inline with the start of the
-                question text (not stacked in its own row above it), so the label
-                doesn't waste a full line of blank space beside it; the text wraps
-                normally beneath once it runs past the label's width. */}
-            <div className="lg:hidden flex items-start gap-2">
-                <span className="text-xs font-black tracking-widest text-primary font-mono shrink-0 mt-0.5">
+            {/* Compact mobile header — Q-number floats at the top-left so the
+                first line of question text starts right beside it, but once
+                the text wraps past the label's height it returns to using the
+                full card width (no hanging indent wasting the left margin on
+                every wrapped line). `overflow-hidden` both clears the float
+                (so this container's height includes it) and — as a load-
+                bearing side effect — establishes a block formatting context,
+                which is what lets the code block below correctly compute its
+                available width and actually scroll horizontally instead of
+                silently growing the whole layout past the screen edge (the
+                classic flex/float "min-width: auto" content-overflow trap). */}
+            <div className="lg:hidden overflow-hidden">
+                <span className="float-left mr-2 mt-0.5 text-xs font-black tracking-widest text-primary font-mono">
                     Q{questionNumber}
                 </span>
-                <div
+                <QuestionRenderer
+                    text={question.text}
                     className="text-foreground text-[16px] leading-snug font-bold font-sans"
-                    dangerouslySetInnerHTML={{ __html: question.text }}
                 />
             </div>
 
@@ -48,9 +56,9 @@ export function QuestionCard({
 
             {/* Question Text — desktop only; mobile renders it inline with the
                 Q-label above instead */}
-            <div
+            <QuestionRenderer
+                text={question.text}
                 className="hidden lg:block text-foreground text-xl font-medium leading-relaxed font-sans"
-                dangerouslySetInnerHTML={{ __html: question.text }}
             />
 
             {/* Question Image if present */}

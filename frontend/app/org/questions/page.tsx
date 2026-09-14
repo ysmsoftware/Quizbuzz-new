@@ -56,6 +56,8 @@ import { useQuestions, useQuestion } from '@/lib/hooks/useQuestions';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuestionQuestionsListComponent from '@/components/questions/QuestionQuestionsListComponent';
+import { QuestionTextEditor } from '@/components/shared/QuestionTextEditor';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 
 export default function QuestionsPage() {
   const router = useRouter();
@@ -123,6 +125,12 @@ export default function QuestionsPage() {
     options: [],
   });
 
+  // Forces a fresh mount of the question-text editor once the real content
+  // arrives, so its "open already rendered" default (see QuestionTextEditor)
+  // sees the actual saved text instead of the transient blank value editForm
+  // starts with while detailedQuestion is still loading.
+  const [editorInstanceKey, setEditorInstanceKey] = useState('empty');
+
   useEffect(() => {
     if (isEditModalOpen && detailedQuestion && detailedQuestion.id === editingQuestionId) {
       setEditForm({
@@ -137,6 +145,7 @@ export default function QuestionsPage() {
           isCorrect: !!o.isCorrect,
         })) || [],
       });
+      setEditorInstanceKey(detailedQuestion.id);
     }
   }, [detailedQuestion, isEditModalOpen, editingQuestionId]);
 
@@ -537,7 +546,7 @@ export default function QuestionsPage() {
                 <div className="space-y-6 mt-2">
                   <div>
                     <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground mb-1 select-none">Question Text</h4>
-                    <p className="text-base font-semibold leading-relaxed text-foreground/90">{displayQuestion.questionText}</p>
+                    <QuestionRenderer text={displayQuestion.questionText} className="text-base font-semibold leading-relaxed text-foreground/90" />
                   </div>
                   
                   <div>
@@ -563,9 +572,11 @@ export default function QuestionsPage() {
                             >
                               {letter}
                             </div>
-                            <span className={`text-sm leading-relaxed ${option.isCorrect ? 'text-zinc-950 dark:text-zinc-50 font-black' : 'text-foreground/80 font-medium'}`}>
-                              {option.text}
-                            </span>
+                            <QuestionRenderer
+                              text={option.text}
+                              inline
+                              className={`text-sm leading-relaxed ${option.isCorrect ? 'text-zinc-950 dark:text-zinc-50 font-black' : 'text-foreground/80 font-medium'}`}
+                            />
                             {option.isCorrect && (
                               <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0">
                                 <ShieldCheck className="h-3 w-3" />
@@ -616,7 +627,7 @@ export default function QuestionsPage() {
 
         {/* Edit Question Dialog (Fully functional) */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto rounded-2xl border border-border/40 shadow-xl">
+          <DialogContent className="sm:max-w-[960px] max-h-[85vh] overflow-y-auto rounded-2xl border border-border/40 shadow-xl">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold">Edit Question</DialogTitle>
             </DialogHeader>
@@ -626,110 +637,115 @@ export default function QuestionsPage() {
               </div>
             ) : (
               <div className="space-y-4 mt-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground/80">Question Text</label>
-                  <textarea
-                    className="min-h-[85px] w-full rounded-xl border border-input bg-transparent px-3.5 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary/50 transition-all leading-relaxed"
-                    placeholder="Enter question text..."
-                    value={editForm.questionText}
-                    onChange={(e) => setEditForm({ ...editForm, questionText: e.target.value })}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground/80">Difficulty</label>
-                    <Select
-                      value={editForm.difficulty}
-                      onValueChange={(val: any) => setEditForm({ ...editForm, difficulty: val })}
-                    >
-                      <SelectTrigger className="rounded-xl border-border/40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="EASY">Easy</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="HARD">Hard</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground/80">Category / Tag</label>
-                    <Input
-                      placeholder="e.g. React, Math"
-                      value={editForm.category}
-                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                      className="rounded-xl h-10 border-border/40"
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                  {/* Left column — question text editor */}
+                  <div className="md:col-span-7 space-y-2">
+                    <label className="text-sm font-semibold text-foreground/80">Question Text</label>
+                    <QuestionTextEditor
+                      key={editorInstanceKey}
+                      value={editForm.questionText}
+                      onChange={(v) => setEditForm({ ...editForm, questionText: v })}
+                      placeholder="Enter question text..."
+                      minHeightClassName="min-h-[220px]"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground/80">Hint (Optional)</label>
-                    <Input
-                      placeholder="Hint text"
-                      value={editForm.hint}
-                      onChange={(e) => setEditForm({ ...editForm, hint: e.target.value })}
-                      className="rounded-xl h-10 border-border/40"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground/80">Explanation (Optional)</label>
-                    <Input
-                      placeholder="Explanation text"
-                      value={editForm.explanation}
-                      onChange={(e) => setEditForm({ ...editForm, explanation: e.target.value })}
-                      className="rounded-xl h-10 border-border/40"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-semibold text-foreground/80">Options</label>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleEditAddOption}
-                      className="h-8 gap-1 text-xs rounded-lg border-border/40"
-                      disabled={editForm.options.length >= 6}
-                    >
-                      <Plus className="h-3 w-3" />
-                      Add Option
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {editForm.options.map((option, index) => (
-                      <div key={option.id} className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditCorrectToggle(option.id)}
-                          className={`h-9 w-9 flex items-center justify-center rounded-xl border transition-all ${
-                            option.isCorrect
-                              ? 'bg-primary border-primary text-primary-foreground'
-                              : 'border-border text-muted-foreground hover:border-primary/50'
-                          }`}
-                        >
-                          <CheckCircle2 className={`h-4 w-4 ${option.isCorrect ? 'scale-110' : 'scale-100 opacity-20'}`} />
-                        </button>
-                        <Input
-                          placeholder={`Option ${index + 1}`}
-                          value={option.text}
-                          onChange={(e) => handleEditOptionChange(option.id, e.target.value)}
-                          className="h-9 flex-1 rounded-xl border-border/40"
-                        />
+                  {/* Right column — options, difficulty, category, hint, explanation */}
+                  <div className="md:col-span-5 space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-foreground/80">Options</label>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditRemoveOption(option.id)}
-                          disabled={editForm.options.length <= 2}
-                          className="h-9 w-9 text-muted-foreground hover:text-destructive rounded-xl hover:bg-destructive/5"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleEditAddOption}
+                          className="h-8 gap-1 text-xs rounded-lg border-border/40"
+                          disabled={editForm.options.length >= 6}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Plus className="h-3 w-3" />
+                          Add Option
                         </Button>
                       </div>
-                    ))}
+                      <div className="space-y-2">
+                        {editForm.options.map((option, index) => (
+                          <div key={option.id} className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditCorrectToggle(option.id)}
+                              className={`h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border transition-all ${
+                                option.isCorrect
+                                  ? 'bg-primary border-primary text-primary-foreground'
+                                  : 'border-border text-muted-foreground hover:border-primary/50'
+                              }`}
+                            >
+                              <CheckCircle2 className={`h-4 w-4 ${option.isCorrect ? 'scale-110' : 'scale-100 opacity-20'}`} />
+                            </button>
+                            <Input
+                              placeholder={`Option ${index + 1}`}
+                              value={option.text}
+                              onChange={(e) => handleEditOptionChange(option.id, e.target.value)}
+                              className="h-9 flex-1 rounded-xl border-border/40"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditRemoveOption(option.id)}
+                              disabled={editForm.options.length <= 2}
+                              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive rounded-xl hover:bg-destructive/5"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-foreground/80">Difficulty</label>
+                        <Select
+                          value={editForm.difficulty}
+                          onValueChange={(val: any) => setEditForm({ ...editForm, difficulty: val })}
+                        >
+                          <SelectTrigger className="rounded-xl border-border/40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            <SelectItem value="EASY">Easy</SelectItem>
+                            <SelectItem value="MEDIUM">Medium</SelectItem>
+                            <SelectItem value="HARD">Hard</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-foreground/80">Category / Tag</label>
+                        <Input
+                          placeholder="e.g. React, Math"
+                          value={editForm.category}
+                          onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                          className="rounded-xl h-10 border-border/40"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-foreground/80">Hint (Optional)</label>
+                      <Input
+                        placeholder="Hint text"
+                        value={editForm.hint}
+                        onChange={(e) => setEditForm({ ...editForm, hint: e.target.value })}
+                        className="rounded-xl h-10 border-border/40"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-foreground/80">Explanation (Optional)</label>
+                      <Input
+                        placeholder="Explanation text"
+                        value={editForm.explanation}
+                        onChange={(e) => setEditForm({ ...editForm, explanation: e.target.value })}
+                        className="rounded-xl h-10 border-border/40"
+                      />
+                    </div>
                   </div>
                 </div>
 

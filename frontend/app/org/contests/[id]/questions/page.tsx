@@ -33,6 +33,8 @@ import { useContestQuestions } from '@/lib/hooks/useContestQuestions';
 import * as questionsApi from '@/lib/api/questions.api';
 import QuestionBankModal from '@/components/admin/question-bank-modal';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
+import { QuestionTextEditor } from '@/components/shared/QuestionTextEditor';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -395,7 +397,7 @@ export default function QuestionsTabPage() {
                                                         className="px-4 py-4 font-medium max-w-[300px] truncate cursor-pointer hover:text-primary transition-colors select-none"
                                                         onClick={() => toggleExpand(q.id)}
                                                     >
-                                                        {q.text}
+                                                        <QuestionRenderer text={q.text} inline />
                                                     </td>
                                                     <td className="px-4 py-4 text-center">
                                                         <Badge variant="outline" className={cn(
@@ -532,9 +534,7 @@ export default function QuestionsTabPage() {
                                                                                     >
                                                                                         {letter}
                                                                                     </div>
-                                                                                    <span className="text-sm leading-relaxed">
-                                                                                        {option.text}
-                                                                                    </span>
+                                                                                    <QuestionRenderer text={option.text} inline className="text-sm leading-relaxed" />
                                                                                     {option.isCorrect && (
                                                                                         <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
                                                                                             <Check className="h-3 w-3" />
@@ -1177,7 +1177,7 @@ function ImportCSVModal({
                                     <div className="flex justify-between items-start gap-3">
                                         <div className="space-y-1">
                                             <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Question #{idx + 1}</span>
-                                            <p className="text-sm font-bold text-foreground">{q.questionText}</p>
+                                            <p className="text-sm font-bold text-foreground"><QuestionRenderer text={q.questionText} inline /></p>
                                         </div>
                                         <Badge variant="outline" className={cn(
                                             "font-semibold text-xs border uppercase shrink-0",
@@ -1197,7 +1197,7 @@ function ImportCSVModal({
                                                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-semibold"
                                                     : "bg-background/50 text-muted-foreground border-muted/50"
                                             )}>
-                                                <span className="truncate">{opt.text}</span>
+                                                <span className="truncate"><QuestionRenderer text={opt.text} inline /></span>
                                                 {opt.isCorrect && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 ml-1.5" />}
                                             </div>
                                         ))}
@@ -1391,12 +1391,18 @@ function QuestionModal({
         { text: '', isCorrect: false },
         { text: '', isCorrect: false },
     ]);
+    // Forces a fresh mount of the question-text editor once this effect has
+    // set the real text — QuestionTextEditor decides whether to open already
+    // rendered based on the value it sees on its *first* mount, which would
+    // otherwise be the stale/blank value this state starts render with.
+    const [editorInstanceKey, setEditorInstanceKey] = useState('empty');
 
     // Reset form when modal opens
     useEffect(() => {
         if (isOpen) {
             if (editingQuestion) {
                 setQuestionText(editingQuestion.text || '');
+                setEditorInstanceKey(editingQuestion.id || editingQuestion.questionId || 'editing');
                 setDifficulty(editingQuestion.difficulty ? editingQuestion.difficulty.toUpperCase() as 'EASY' | 'MEDIUM' | 'HARD' : 'MEDIUM');
                 setHint(editingQuestion.hint || '');
                 setExplanation(editingQuestion.explanation || '');
@@ -1416,6 +1422,7 @@ function QuestionModal({
                 );
             } else {
                 setQuestionText('');
+                setEditorInstanceKey('new');
                 setDifficulty('MEDIUM');
                 setHint('');
                 setExplanation('');
@@ -1546,13 +1553,13 @@ function QuestionModal({
                             {/* Question Text */}
                             <div className="space-y-2">
                                 <Label htmlFor="questionText" className="text-sm font-bold text-foreground/80">Question Text</Label>
-                                <Textarea
+                                <QuestionTextEditor
+                                    key={editorInstanceKey}
                                     id="questionText"
                                     placeholder="Enter the question text here..."
-                                    className="min-h-[110px] bg-muted/20 border-border/40 focus-visible:ring-primary rounded-xl resize-none text-sm leading-relaxed"
+                                    minHeightClassName="min-h-[110px]"
                                     value={questionText}
-                                    onChange={(e) => setQuestionText(e.target.value)}
-                                    required
+                                    onChange={setQuestionText}
                                 />
                             </div>
 

@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MultiStepLoader } from '@/components/ui/multi-step-loader';
 import { useStepChecklist, type ChecklistStep } from '@/lib/hooks/useStepChecklist';
@@ -816,7 +817,7 @@ export default function QuestionBankModal({
                                                         />
                                                     </div>
                                                     <div className="flex-1 min-w-0 font-medium text-xs ml-2 pr-4 truncate">
-                                                        {q.questionText}
+                                                        <QuestionRenderer text={q.questionText} inline />
                                                     </div>
                                                     <div className="w-28 text-center">
                                                         <Badge variant="outline" className={cn(

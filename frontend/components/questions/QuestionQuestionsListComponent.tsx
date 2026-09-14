@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -175,9 +176,10 @@ export default function QuestionQuestionsListComponent({
                   }`}
                   onClick={() => toggleExpand(question.id)}
                 >
-                  <h3 className="text-sm font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors leading-relaxed">
-                    {question.questionText}
-                  </h3>
+                  <QuestionRenderer
+                    text={question.questionText}
+                    className="text-sm font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors leading-relaxed"
+                  />
                   
                   {/* Brief metadata under text */}
                   <p className="text-xs text-muted-foreground/75 mt-1.5 flex flex-wrap items-center gap-1.5 font-medium leading-none">
@@ -326,9 +328,11 @@ export default function QuestionQuestionsListComponent({
                                 >
                                   {letter}
                                 </div>
-                                <span className={`text-sm leading-relaxed ${option.isCorrect ? 'text-zinc-950 dark:text-zinc-50 font-black' : 'text-foreground/80 font-medium'}`}>
-                                  {option.text}
-                                </span>
+                                <QuestionRenderer
+                                  text={option.text}
+                                  inline
+                                  className={`text-sm leading-relaxed ${option.isCorrect ? 'text-zinc-950 dark:text-zinc-50 font-black' : 'text-foreground/80 font-medium'}`}
+                                />
                                 {option.isCorrect && (
                                   <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0">
                                     <ShieldCheck className="h-3 w-3" />

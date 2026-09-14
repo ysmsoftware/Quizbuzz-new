@@ -291,3 +291,18 @@
         animation: flow-across 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
 }
+
+/* Question/option markdown rendering (QuestionRenderer) — a $$display$$
+   formula scrolls its own overflow instead of the page, and shrinks a step
+   on phone so it doesn't force horizontal scroll of its own. */
+.katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.25rem 0;
+}
+
+@media (max-width: 640px) {
+    .katex-display {
+        font-size: 0.9em;
+    }
+}

@@ -51,6 +51,7 @@ import { useResults } from '@/lib/hooks/useResults';
 import { useParticipantSubmission } from '@/lib/hooks/useParticipantSubmission';
 import { useParticipantCertificate } from '@/lib/hooks/useParticipantCertificate';
 import { contestService } from '@/lib/services/contest-service';
+import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import { cn } from '@/lib/utils';
 import type { QuizResult } from '@/lib/types';
 
@@ -680,9 +681,10 @@ export default function QuizResultsPage() {
                                                                     </Badge>
                                                                 </div>
 
-                                                                <p className="font-extrabold text-foreground text-base mb-6 leading-snug">
-                                                                    {item.questionText}
-                                                                </p>
+                                                                <QuestionRenderer
+                                                                    text={item.questionText}
+                                                                    className="font-extrabold text-foreground text-base mb-6 leading-snug"
+                                                                />
 
                                                                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                                                                     <div className="p-4 rounded-2xl bg-background/50 border border-border/50">
@@ -693,7 +695,7 @@ export default function QuizResultsPage() {
                                                                             isWrong && "text-destructive",
                                                                             isSkipped && "text-muted-foreground italic"
                                                                         )}>
-                                                                            {isSkipped ? 'No Answer Submitted' : item.yourAnswer.join(', ')}
+                                                                            {isSkipped ? 'No Answer Submitted' : <QuestionRenderer text={item.yourAnswer.join(', ')} inline />}
                                                                         </p>
                                                                     </div>
 
@@ -701,7 +703,7 @@ export default function QuizResultsPage() {
                                                                         <div className="p-4 rounded-2xl bg-background/50 border border-border/50">
                                                                             <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest mb-1.5">Official Solution</p>
                                                                             <p className="font-extrabold text-success">
-                                                                                {item.correctAnswer.join(', ')}
+                                                                                <QuestionRenderer text={item.correctAnswer.join(', ')} inline />
                                                                             </p>
                                                                         </div>
                                                                     )}
