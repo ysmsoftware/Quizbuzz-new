@@ -29,12 +29,15 @@ export function OptionButton({
   onClick,
 }: OptionButtonProps) {
   // Determine visual state styles
+  // Each keycap's drop shadow is tinted toward that state's own hue rather
+  // than flat black — a neutral shadow on a colored (teal/green/red) surface
+  // reads as a mismatched smudge rather than depth.
   const getStyles = () => {
     if (isCorrect) {
       return {
         bg: 'bg-success/10 backdrop-blur-md',
         border: 'border-success',
-        circleBg: 'bg-gradient-to-br from-success to-success/80 text-success-foreground border-success/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        circleBg: 'bg-gradient-to-br from-success to-success/80 text-success-foreground border-success/40 shadow-[0_3px_0_rgba(20,83,45,0.45)]',
         textClass: 'text-success',
       };
     }
@@ -42,7 +45,7 @@ export function OptionButton({
       return {
         bg: 'bg-destructive/10 backdrop-blur-md',
         border: 'border-destructive/80',
-        circleBg: 'bg-gradient-to-br from-destructive to-destructive/80 text-destructive-foreground border-destructive/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        circleBg: 'bg-gradient-to-br from-destructive to-destructive/80 text-destructive-foreground border-destructive/40 shadow-[0_3px_0_rgba(120,20,15,0.45)]',
         textClass: 'text-destructive line-through opacity-70',
       };
     }
@@ -50,14 +53,14 @@ export function OptionButton({
       return {
         bg: 'bg-primary/10 backdrop-blur-xl',
         border: 'border-primary',
-        circleBg: 'bg-gradient-to-b from-primary to-primary/80 text-primary-foreground border-primary/40 shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+        circleBg: 'bg-gradient-to-b from-primary to-primary/80 text-primary-foreground border-primary/40 shadow-[0_3px_0_rgba(13,95,90,0.45)]',
         textClass: 'text-primary font-semibold',
       };
     }
     return {
       bg: 'bg-card/40 backdrop-blur-md',
       border: 'border-border/80 hover:border-border',
-      circleBg: 'bg-muted text-muted-foreground border border-border shadow-[0_3px_0_rgba(0,0,0,0.35)]',
+      circleBg: 'bg-muted text-muted-foreground border border-border shadow-[0_3px_0_rgba(40,35,30,0.3)]',
       textClass: 'text-foreground/90',
     };
   };

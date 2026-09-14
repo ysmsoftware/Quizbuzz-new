@@ -8,7 +8,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Send, ChevronRight, SkipForward } from "lucide-react";
+import { Clock, Send, ChevronRight, SkipForward, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { useQuizSocket } from "@/lib/hooks/useQuizSocket";
 import { useAnswerHandler } from "@/lib/hooks/useAnswerHandler";
 import { useQuizTimer } from "@/lib/hooks/useQuizTimer";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { WidgetErrorBoundary } from "@/components/shared/WidgetErrorBoundary";
 
 // Components
@@ -88,6 +89,18 @@ export default function QuizPlayPage() {
     const [contest, setContest] = useState<any>(null);
     const [contestId, setContestId] = useState<string>(authContestId);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [isQuestionExpanded, setIsQuestionExpanded] = useState(false);
+
+    // Below `lg`, a phone/tablet turned sideways gets a two-column layout
+    // (camera+question | options) instead of the portrait stack — matches
+    // Tailwind's `lg` breakpoint so it never fights the desktop layout.
+    const isMobileLandscape = useMediaQuery("(orientation: landscape) and (max-width: 1023px)");
+
+    // Collapse the expanded-question overlay when moving to a new question,
+    // whichever path got it there (Next, Skip, or otherwise).
+    useEffect(() => {
+        setIsQuestionExpanded(false);
+    }, [currentIndex]);
 
 
     // ─── Question-mapping helper ─────────────────────────────────────────────
@@ -506,6 +519,188 @@ export default function QuizPlayPage() {
     const hasAnswer = answers[currentIndex] !== undefined;
     const progressPct = Math.round((currentIndex / questions.length) * 100);
 
+    // ─── Layout building blocks ──────────────────────────────────────────────
+    // Extracted so the same JSX can be placed into either the portrait+desktop
+    // arrangement or the mobile-landscape split below, without duplicating the
+    // camera block — the video/canvas pair must exist exactly once in the DOM
+    // (see the comment on cameraBlock itself) or the camera stream only ever
+    // attaches to whichever copy wins the ref race.
+    const cameraBlock = proctoringEnabled && (
+        <div className="flex-none lg:order-last max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full lg:w-64 lg:shrink-0 lg:sticky lg:top-6 mb-3 lg:mb-0">
+            <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
+                <div className="relative w-36 h-20 lg:w-full lg:h-auto lg:aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
+                    <video
+                        ref={videoRef}
+                        autoPlay playsInline muted
+                        className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
+                    />
+
+                    {/* Live face-tracking box — drawn onto this canvas by the
+                        existing detection loop every ~2s (see useFaceDetection). */}
+                    <canvas
+                        ref={overlayCanvasRef}
+                        className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
+                    />
+
+                    {/* Pulsing Scanline overlay — desktop only, too small to read on the mobile thumbnail */}
+                    <motion.div
+                        className="hidden lg:block absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
+                        animate={{ top: ["0%", "100%", "0%"] }}
+                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                    />
+
+                    {/* HUD corner markings — desktop only */}
+                    <div className="hidden lg:flex absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg items-center justify-center">
+                        <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
+                        <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
+                        <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
+                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
+                    </div>
+
+                    <div className="absolute top-1 left-1 lg:top-2 lg:left-2 flex items-center gap-1.5 px-1.5 py-0.5 lg:px-2 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
+                        <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                        <span className="hidden lg:inline">REC</span>
+                    </div>
+
+                    <div className="hidden lg:flex absolute top-2 right-2 items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
+                        <span>SECURE LINK</span>
+                    </div>
+
+                    <div className="hidden lg:block absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
+                        CAM_01 // ACTIVE_FEED
+                    </div>
+                </div>
+
+                {/* Mobile-only status column — LIVE badge (with its own pulsing
+                    dot) stacked above the name/status text instead of split off
+                    to the far right, so the whole thing reads as one inline block
+                    next to the camera thumbnail. */}
+                <div className="min-w-0 lg:hidden flex flex-col gap-1">
+                    <span className="inline-flex items-center gap-1.5 w-fit text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                        <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-primary animate-ping" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                        </span>
+                        Live
+                    </span>
+                    <p className="text-xs font-bold text-foreground leading-tight">Proctoring active</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{faceDetected ? "Face detected" : "No face detected"}</p>
+                </div>
+            </div>
+            <p className="hidden lg:block text-center text-[10px] font-semibold text-muted-foreground mt-2">
+                Stays visible while you scroll
+            </p>
+        </div>
+    );
+
+    // The question card itself — an expand button floats over it (outside its
+    // own scroll area, so it stays put) rather than living inside QuestionCard,
+    // since it's this screen's layout concern, not a generic card feature.
+    const questionZoneBlock = (
+        <div className="flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full relative">
+            <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-4 sm:p-5 md:p-6 relative max-lg:max-h-[42vh] max-lg:overflow-y-auto lg:overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
+
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentIndex}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -15 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                    >
+                        <QuestionCard
+                            question={currentQuestion}
+                            questionNumber={currentIndex + 1}
+                            isFlagged={flagged.includes(currentIndex)}
+                            onToggleFlag={() => toggleFlag(currentIndex)}
+                        />
+                    </motion.div>
+                </AnimatePresence>
+            </div>
+
+            {/* Expand — opens the same question, bigger, in a dimmed overlay
+                for a long question that doesn't fully fit the capped card
+                above. A same-document overlay never blurs the window or
+                hides the tab, so it can't trip the tab-switch/window-blur
+                proctoring checks — it's a plain positioned div, not a new
+                window/tab. No resting background — question text wraps right
+                up to this corner, and a solid patch here would sit on top of
+                and hide part of it; the icon alone (with a drop shadow for
+                contrast against whatever's behind it) stays legible without
+                blocking anything, and only gains a background on touch. */}
+            <button
+                type="button"
+                onClick={() => setIsQuestionExpanded(true)}
+                title="Expand question"
+                className="lg:hidden absolute top-2 right-2 z-10 flex items-center justify-center h-11 w-11 rounded-lg text-muted-foreground hover:text-foreground active:bg-background/50 transition-colors"
+            >
+                <Maximize2 className="h-4 w-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+            </button>
+        </div>
+    );
+
+    const optionsListBlock = (
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={currentIndex}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="grid gap-2.5 lg:gap-3 pb-2"
+            >
+                {currentQuestion.options.map((option, i) => (
+                    <OptionButton
+                        key={option.index}
+                        option={option}
+                        optionLabel={OPTION_LABELS[i] ?? String(i)}
+                        isSelected={answers[currentIndex] === option.index}
+                        onClick={() => handleAnswer(currentIndex, option.index)}
+                    />
+                ))}
+            </motion.div>
+        </AnimatePresence>
+    );
+
+    const navButtonsBlock = isLastQuestion ? (
+        <Button
+            size="lg"
+            className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 border-0 shadow-lg shadow-primary/20 text-base cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+            onClick={() => setShowSubmitModal(true)}
+        >
+            <Send className="h-4 w-4" />
+            Submit Quiz
+        </Button>
+    ) : (
+        <>
+            <Button
+                size="lg"
+                variant="ghost"
+                className="rounded-2xl h-12 px-6 text-muted-foreground hover:text-foreground hover:bg-muted/40 gap-2 border border-border hover:border-border/60 text-sm font-semibold transition-all duration-200 cursor-pointer"
+                onClick={handleSkip}
+            >
+                <SkipForward className="h-4 w-4 text-muted-foreground" />
+                <span>Skip</span>
+            </Button>
+
+            <Button
+                size="lg"
+                className={cn(
+                    "flex-1 sm:flex-initial rounded-2xl h-12 px-10 font-bold gap-2 border transition-all text-base cursor-pointer",
+                    hasAnswer
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 border-0 hover:-translate-y-0.5"
+                        : "bg-muted/60 hover:bg-muted/90 text-muted-foreground border-border hover:text-foreground",
+                )}
+                onClick={handleNext}
+            >
+                <span>Next</span>
+                <ChevronRight className="h-5 w-5" />
+            </Button>
+        </>
+    );
+
     // Root box: `fixed inset-0` pins the quiz shell to the viewport on every screen
     // size. Do NOT add `relative` alongside it — Tailwind emits `position:relative`
     // after `position:fixed`, so it silently wins, `inset-0` stops constraining the
@@ -541,6 +736,49 @@ export default function QuizPlayPage() {
                 onClose={() => setShowSubmitModal(false)}
                 onConfirm={handleManualSubmit}
             />
+
+            {/* Expanded question overlay — a same-document fixed panel, exactly
+                like FocusReturnOverlay/FullscreenReturnOverlay above. It never
+                touches document.visibilitychange or window.blur (those only
+                fire for a real tab switch/window blur — not for showing more
+                of this same page), so it can't trip the proctoring checks.
+                A dimmed, translucent backdrop rather than an opaque takeover —
+                the camera strip and options stay dimly visible behind it, so
+                it reads as "this question, bigger" rather than a different
+                screen. Tapping the backdrop closes it, same as tapping compact. */}
+            {isQuestionExpanded && (
+                <div
+                    className="fixed inset-0 z-[70] bg-background/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+                    onClick={() => setIsQuestionExpanded(false)}
+                >
+                    <div
+                        className="w-full max-w-2xl max-h-[75vh] flex flex-col rounded-3xl border border-border/80 bg-card shadow-2xl overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex-none flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border/60">
+                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                                Question {currentIndex + 1} of {questions.length}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsQuestionExpanded(false)}
+                                title="Compact"
+                                className="flex items-center justify-center h-11 w-11 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <Minimize2 className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+                            <QuestionCard
+                                question={currentQuestion}
+                                questionNumber={currentIndex + 1}
+                                isFlagged={flagged.includes(currentIndex)}
+                                onToggleFlag={() => toggleFlag(currentIndex)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── Header ──────────────────────────────────────────────────────── */}
             <header className="flex-none h-14 sm:h-16 flex items-center justify-between px-3 sm:px-6 md:px-8 border-b border-border/60 bg-card/40 backdrop-blur-xl z-40">
@@ -608,10 +846,12 @@ export default function QuizPlayPage() {
             </div>
 
             {/* ── Main container ─────────────────────────────────────────────────── */}
-            {/* Below `lg`, only the option list scrolls — header, progress, camera
-                and question stay pinned so the camera can never be scrolled out of
-                view and the question never fights the page for space. At `lg`+ this
-                reverts to one normal scrolling page (unchanged desktop behaviour). */}
+            {/* Below `lg`, only the option list scrolls (portrait) — header, progress,
+                camera and question stay pinned so the camera can never be scrolled out
+                of view and the question never fights the page for space. A phone/tablet
+                turned sideways (`isMobileLandscape`) instead splits into two columns —
+                see the comment above that flag's declaration. At `lg`+ this reverts to
+                one normal scrolling page (unchanged desktop behaviour). */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-transparent z-10">
                 <WidgetErrorBoundary name="Question Player">
                     {/* `min-h-0` overrides the flex default of `min-height: auto`, which
@@ -619,182 +859,64 @@ export default function QuizPlayPage() {
                         instead of clipping it — the classic reason a nested
                         `flex-1 overflow-y-auto` silently refuses to scroll. */}
                     <main className="flex-1 min-h-0 flex flex-col overflow-hidden lg:overflow-y-auto px-4 md:px-8 pt-3 pb-2 lg:py-4">
-                        <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:items-start lg:gap-8 lg:max-w-5xl lg:mx-auto lg:w-full">
-
-                            {/* Proctoring Camera — a single video/canvas pair (never duplicated,
-                                or the stream would only ever attach to whichever copy wins the
-                                ref race). Below `lg` it's a compact strip that stacks above the
-                                question, in normal document order. At `lg`+ `lg:order-last` moves
-                                it to the visual right without moving it in the DOM, and it becomes
-                                a sticky sidebar column — a real layout track, not a viewport-fixed
-                                overlay, so it can never land on top of the question column no
-                                matter how narrow the window gets. Rendered outside the question's
-                                AnimatePresence so it never remounts — and never loses its stream —
-                                between questions. */}
-                            {proctoringEnabled && (
-                                <div className="flex-none lg:order-last max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full lg:w-64 lg:shrink-0 lg:sticky lg:top-6 mb-3 lg:mb-0">
-                                    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/60 backdrop-blur-md px-3 py-2.5 lg:block lg:p-0 lg:border-0 lg:bg-transparent lg:rounded-none">
-                                        <div className="relative w-36 h-20 lg:w-full lg:h-auto lg:aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted/60 border border-border shrink-0 lg:shadow-2xl lg:backdrop-blur-md group transition-all duration-300 lg:hover:border-primary/40">
-                                            <video
-                                                ref={videoRef}
-                                                autoPlay playsInline muted
-                                                className="w-full h-full object-cover scale-x-[-1] brightness-[0.85] contrast-[1.05] group-hover:brightness-100 transition-all duration-300"
-                                            />
-
-                                            {/* Live face-tracking box — drawn onto this canvas by the
-                                                existing detection loop every ~2s (see useFaceDetection). */}
-                                            <canvas
-                                                ref={overlayCanvasRef}
-                                                className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
-                                            />
-
-                                            {/* Pulsing Scanline overlay — desktop only, too small to read on the mobile thumbnail */}
-                                            <motion.div
-                                                className="hidden lg:block absolute left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-destructive/80 to-transparent pointer-events-none"
-                                                animate={{ top: ["0%", "100%", "0%"] }}
-                                                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                                            />
-
-                                            {/* HUD corner markings — desktop only */}
-                                            <div className="hidden lg:flex absolute inset-x-6 inset-y-4 pointer-events-none border border-dashed border-primary/10 rounded-lg items-center justify-center">
-                                                <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t border-l border-primary/40" />
-                                                <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t border-r border-primary/40" />
-                                                <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b border-l border-primary/40" />
-                                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b border-r border-primary/40" />
-                                            </div>
-
-                                            <div className="absolute top-1 left-1 lg:top-2 lg:left-2 flex items-center gap-1.5 px-1.5 py-0.5 lg:px-2 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-foreground/90">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-ping absolute" />
-                                                <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                                                <span className="hidden lg:inline">REC</span>
-                                            </div>
-
-                                            <div className="hidden lg:flex absolute top-2 right-2 items-center gap-1 px-2 py-0.5 rounded-full bg-background/70 border border-border/50 backdrop-blur-md text-[9px] uppercase tracking-wider font-extrabold text-primary">
-                                                <span>SECURE LINK</span>
-                                            </div>
-
-                                            <div className="hidden lg:block absolute bottom-2 left-2 text-[8px] font-mono text-foreground/40 tracking-wider">
-                                                CAM_01 // ACTIVE_FEED
-                                            </div>
-                                        </div>
-
-                                        {/* Mobile-only status column — LIVE badge (with its own pulsing
-                                            dot) stacked above the name/status text instead of split off
-                                            to the far right, so the whole thing reads as one inline block
-                                            next to the camera thumbnail. */}
-                                        <div className="min-w-0 lg:hidden flex flex-col gap-1">
-                                            <span className="inline-flex items-center gap-1.5 w-fit text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                                                <span className="relative flex h-1.5 w-1.5">
-                                                    <span className="absolute inline-flex h-full w-full rounded-full bg-primary animate-ping" />
-                                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-                                                </span>
-                                                Live
-                                            </span>
-                                            <p className="text-xs font-bold text-foreground leading-tight">Proctoring active</p>
-                                            <p className="text-[10px] text-muted-foreground leading-tight">{faceDetected ? "Face detected" : "No face detected"}</p>
-                                        </div>
-                                    </div>
-                                    <p className="hidden lg:block text-center text-[10px] font-semibold text-muted-foreground mt-2">
-                                        Stays visible while you scroll
-                                    </p>
+                        {isMobileLandscape ? (
+                            <div className="flex-1 min-h-0 flex gap-4">
+                                {/* Left: camera + question, scrolling together */}
+                                <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-1">
+                                    {cameraBlock}
+                                    {questionZoneBlock}
                                 </div>
-                            )}
-
-                            {/* Question + options column */}
-                            <div className="flex-1 min-h-0 flex flex-col">
-
-                                {/* Question zone — fixed on mobile, normal flow on desktop */}
-                                <div className="flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full relative">
-                                    <div className="backdrop-blur-xl bg-card/30 border border-border/80 rounded-3xl p-4 sm:p-5 md:p-6 relative overflow-hidden">
-                                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
-
-                                        <AnimatePresence mode="wait">
-                                            <motion.div
-                                                key={currentIndex}
-                                                initial={{ opacity: 0, y: 15 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -15 }}
-                                                transition={{ duration: 0.22, ease: "easeOut" }}
-                                            >
-                                                <QuestionCard
-                                                    question={currentQuestion}
-                                                    questionNumber={currentIndex + 1}
-                                                    isFlagged={flagged.includes(currentIndex)}
-                                                    onToggleFlag={() => toggleFlag(currentIndex)}
-                                                />
-                                            </motion.div>
-                                        </AnimatePresence>
+                                {/* Right: options + Skip/Next — no full-width strip to
+                                    stick these to in this layout, so they live here instead
+                                    of in the standalone <footer> below. */}
+                                <div className="w-60 shrink-0 flex flex-col min-h-0">
+                                    <div className="flex-1 min-h-0 overflow-y-auto">
+                                        {optionsListBlock}
                                     </div>
-                                </div>
-
-                                {/* Options — the only region that scrolls on mobile */}
-                                <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:min-h-fit lg:flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full mt-4 lg:mt-6">
-                                    <AnimatePresence mode="wait">
-                                        <motion.div
-                                            key={currentIndex}
-                                            initial={{ opacity: 0, y: 15 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -15 }}
-                                            transition={{ duration: 0.22, ease: "easeOut" }}
-                                            className="grid gap-2.5 lg:gap-3 pb-2"
-                                        >
-                                            {currentQuestion.options.map((option, i) => (
-                                                <OptionButton
-                                                    key={option.index}
-                                                    option={option}
-                                                    optionLabel={OPTION_LABELS[i] ?? String(i)}
-                                                    isSelected={answers[currentIndex] === option.index}
-                                                    onClick={() => handleAnswer(currentIndex, option.index)}
-                                                />
-                                            ))}
-                                        </motion.div>
-                                    </AnimatePresence>
+                                    <div className="flex-none flex items-center justify-between gap-2 pt-3 mt-2 border-t border-border/60">
+                                        {navButtonsBlock}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="flex-1 min-h-0 flex flex-col lg:flex-row lg:items-start lg:gap-8 lg:max-w-5xl lg:mx-auto lg:w-full">
+                                {/* Proctoring Camera — a single video/canvas pair (never
+                                    duplicated, or the stream would only ever attach to
+                                    whichever copy wins the ref race). Below `lg` it's a
+                                    compact strip that stacks above the question, in normal
+                                    document order. At `lg`+ `lg:order-last` moves it to the
+                                    visual right without moving it in the DOM, and it becomes
+                                    a sticky sidebar column — a real layout track, not a
+                                    viewport-fixed overlay, so it can never land on top of the
+                                    question column no matter how narrow the window gets.
+                                    Rendered outside the question's AnimatePresence so it
+                                    never remounts — and never loses its stream — between
+                                    questions. */}
+                                {cameraBlock}
+
+                                {/* Question + options column */}
+                                <div className="flex-1 min-h-0 flex flex-col">
+                                    {questionZoneBlock}
+
+                                    {/* Options — the only region that scrolls on mobile */}
+                                    <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:min-h-fit lg:flex-none max-w-2xl mx-auto lg:max-w-none lg:mx-0 w-full mt-4 lg:mt-6">
+                                        {optionsListBlock}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
-                    {/* ── Bottom navigation bar stuck at screen bottom ───────────────── */}
-                    <footer className="flex-none border-t border-border/60 bg-card/50 backdrop-blur-xl py-4 px-6 md:px-8 z-40">
-                        <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
-                            {isLastQuestion ? (
-                                <Button
-                                    size="lg"
-                                    className="w-full sm:w-auto sm:ml-auto rounded-2xl h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 border-0 shadow-lg shadow-primary/20 text-base cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
-                                    onClick={() => setShowSubmitModal(true)}
-                                >
-                                    <Send className="h-4 w-4" />
-                                    Submit Quiz
-                                </Button>
-                            ) : (
-                                <>
-                                    <Button
-                                        size="lg"
-                                        variant="ghost"
-                                        className="rounded-2xl h-12 px-6 text-muted-foreground hover:text-foreground hover:bg-muted/40 gap-2 border border-border hover:border-border/60 text-sm font-semibold transition-all duration-200 cursor-pointer"
-                                        onClick={handleSkip}
-                                    >
-                                        <SkipForward className="h-4 w-4 text-muted-foreground" />
-                                        <span>Skip</span>
-                                    </Button>
-
-                                    <Button
-                                        size="lg"
-                                        className={cn(
-                                            "flex-1 sm:flex-initial rounded-2xl h-12 px-10 font-bold gap-2 border transition-all text-base cursor-pointer",
-                                            hasAnswer
-                                                ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 border-0 hover:-translate-y-0.5"
-                                                : "bg-muted/60 hover:bg-muted/90 text-muted-foreground border-border hover:text-foreground",
-                                        )}
-                                        onClick={handleNext}
-                                    >
-                                        <span>Next</span>
-                                        <ChevronRight className="h-5 w-5" />
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </footer>
+                    {/* ── Bottom navigation bar stuck at screen bottom ─────────────────
+                        Hidden in the mobile-landscape split, which shows the same
+                        buttons inside the right column above instead. */}
+                    {!isMobileLandscape && (
+                        <footer className="flex-none border-t border-border/60 bg-card/50 backdrop-blur-xl py-4 px-6 md:px-8 z-40">
+                            <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+                                {navButtonsBlock}
+                            </div>
+                        </footer>
+                    )}
                 </WidgetErrorBoundary>
             </div>
         </div>
