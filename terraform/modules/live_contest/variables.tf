@@ -55,8 +55,8 @@ variable "instance_type" {
 
 variable "min_size" {
   type        = number
-  default     = 3
-  description = "ASG minimum instances. Raised from 2: load testing found each t3.medium hits its EC2 network packets-per-second allowance (confirmed via `ethtool -S <iface>` showing nonzero pps_allowance_exceeded, not CPU/memory/conntrack) at ~450-500 concurrent real-time WebSocket connections — a 2-instance floor puts 1,000 total participants right at that ceiling. See load-testing/LOAD_TEST_INCIDENT_REPORT.md. Never below 2 regardless — single instance = single point of failure during a live quiz."
+  default     = 2
+  description = "ASG minimum instances. Was temporarily raised to 3 during the mass-disconnect investigation, on the theory that each t3.medium hits its EC2 network packets-per-second allowance at ~450-500 concurrent WebSocket connections. That theory is now retired — the actual cause was a k6 test-script bug (blocking sleep() in a WebSocket message handler, causing false ping-timeout disconnects unrelated to instance capacity) — see load-testing/LOAD_TEST_INCIDENT_REPORT.md §1j/§1n. Floor kept at 2, not dropped to 1, for an independent reason: single instance = single point of failure during a live quiz (a deploy, an AZ blip, or an instance replacement would drop every connected participant with no failover). Real scale-out beyond this floor is now driven by connections_scale_out (asg.tf), which tracks actual WebSocket load instead of CPU."
 }
 
 variable "max_size" {
@@ -68,6 +68,12 @@ variable "max_size" {
 variable "desired_capacity" {
   type        = number
   description = "Initial instance count, calculated by root module from expected_participants (1 instance per ~1000 users)."
+}
+
+variable "target_connections_per_instance" {
+  type        = number
+  default     = 500
+  description = "Target active WebSocket connections per instance for the connections_scale_out target-tracking policy (asg.tf) — the real scale-out signal, since this I/O-bound workload never drives CPU past ~25% even near saturation. Starting value only, NOT yet empirically re-validated post the load-testing/LOAD_TEST_INCIDENT_REPORT.md §1j fix — tune after §1n's 600/750-participant scale-out validation runs."
 }
 
 # ── APPLICATION CONFIG ──────────────────────────────────────────────────────

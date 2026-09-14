@@ -134,6 +134,13 @@ data "aws_ami" "amazon_linux_2023" {
 # Terraform will always create/read the Redis replication group's endpoint
 # before rendering this userdata.
 # ─────────────────────────────────────────────────────────────────────────────
+locals {
+  # Static literal, not a resource reference — both the ASG resource below
+  # and this userdata pass it as plain text, so there's no circular
+  # dependency between the launch template and the ASG that uses it.
+  asg_name = "quizbuzz-quiz-asg"
+}
+
 data "cloudinit_config" "quiz_config" {
   gzip          = true
   base64_encode = true
@@ -220,7 +227,7 @@ resource "aws_launch_template" "quiz" {
 # ~1000 users, capped at max_size). See environments/prod/main.tf locals.
 # ─────────────────────────────────────────────────────────────────────────────
 resource "aws_autoscaling_group" "quiz" {
-  name                = "quizbuzz-quiz-asg"
+  name                = local.asg_name
   vpc_zone_identifier = var.quiz_private_subnets
   target_group_arns   = [aws_lb_target_group.quiz.arn]
 
@@ -291,6 +298,91 @@ resource "aws_autoscaling_policy" "cpu_scale_out" {
     }
     target_value     = 60.0
     disable_scale_in = true
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCALING POLICY — target tracking on ALB ActiveConnectionCount/instance
+#
+# WHY THIS EXISTS: this workload is I/O-bound, not CPU-bound. Every load
+# test in load-testing/LOAD_TEST_INCIDENT_REPORT.md showed CPU staying
+# under ~25% even with ~1,000 concurrent WebSocket connections on a single
+# instance — the CPU policy above would NEVER fire before an instance hit
+# its real ceiling (memory, FDs, or connection count itself) and degraded
+# or crashed. See §1n. This policy tracks the actual load-bearing resource
+# instead: concurrent connections, via `ActiveConnectionCount` — an AWS
+# CloudWatch metric the ALB itself publishes automatically (same as
+# `ASGAverageCPUUtilization` above: zero application code required, purely
+# infra, unlike an earlier version of this policy that had the backend
+# publish its own custom metric — reverted, see load-testing/
+# LOAD_TEST_INCIDENT_REPORT.md §1n's note on that).
+#
+# CAVEAT: ActiveConnectionCount counts concurrent TCP connections at the
+# ALB (both client-side and target-side), not a strict "sockets this app
+# considers active" count — it's a proxy, not an exact figure, so
+# target_value needs empirical tuning against what §1n's validation runs
+# actually observe, same as the app-published version would have needed.
+#
+# METRIC MATH: ActiveConnectionCount is dimensioned per load balancer (not
+# per instance), so this divides the ALB-wide total by AWS/AutoScaling's
+# own GroupInServiceInstances to get an average-per-instance figure — the
+# same pattern AWS uses internally for ALBRequestCountPerTarget, just
+# expressed explicitly since AWS doesn't offer ActiveConnectionCount as a
+# predefined per-target-tracking option.
+# ─────────────────────────────────────────────────────────────────────────────
+resource "aws_autoscaling_policy" "connections_scale_out" {
+  name                   = "quizbuzz-connections-scale-out"
+  autoscaling_group_name = aws_autoscaling_group.quiz.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    target_value     = var.target_connections_per_instance
+    disable_scale_in = true
+
+    customized_metric_specification {
+      metrics {
+        id          = "active_connections_total"
+        label       = "Total active ALB connections (client + target side)"
+        return_data = false
+
+        metric_stat {
+          metric {
+            namespace   = "AWS/ApplicationELB"
+            metric_name = "ActiveConnectionCount"
+            dimensions {
+              name  = "LoadBalancer"
+              value = aws_lb.quiz.arn_suffix
+            }
+          }
+          stat = "Sum"
+        }
+      }
+
+      metrics {
+        id          = "instances_in_service"
+        label       = "In-service instance count"
+        return_data = false
+
+        metric_stat {
+          metric {
+            namespace   = "AWS/AutoScaling"
+            metric_name = "GroupInServiceInstances"
+            dimensions {
+              name  = "AutoScalingGroupName"
+              value = local.asg_name
+            }
+          }
+          stat = "Average"
+        }
+      }
+
+      metrics {
+        id          = "connections_per_instance"
+        label       = "Average active connections per instance"
+        expression  = "active_connections_total / instances_in_service"
+        return_data = true
+      }
+    }
   }
 }
 
