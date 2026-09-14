@@ -15,12 +15,13 @@
 import { Worker as BullMQWorker, Job, UnrecoverableError } from "bullmq";
 import { redis } from "../config/redis";
 import { config } from "../config";
-import { submissionService, messagingService } from "../container";
+import { submissionService, messagingService, organizationRepository } from "../container";
 import { prisma } from "../config/db";
 import { MessageTemplate } from "../types/message-template.enum";
 import { SubmissionJobPayload } from "../modules/submission/submission.types";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
+import { formatDateTimeHuman } from "../utils/timezone";
 import logger from "../config/logger";
 import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
@@ -159,6 +160,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
 
         const orgId = payload.organizationId || p?.organizationId;
         if (p?.contact?.email && orgId) {
+            const timezone = await organizationRepository.findTimezone(orgId);
             await messagingService.enqueueMessage(orgId, {
                 participantId: payload.participantId,
                 contestId: payload.contestId,
@@ -170,7 +172,7 @@ async function processSubmission(job: Job<SubmissionJobPayload>): Promise<void> 
                     name: p.contact.firstName || "Participant",
                     eventName: p.contest?.title ?? "Quiz",
                     submissionRef: submissionId,
-                    submittedAt: new Date(payload.submittedAt).toLocaleString(),
+                    submittedAt: formatDateTimeHuman(payload.submittedAt, timezone),
                     totalQuestions: String(payload.totalQuestions ?? 0),
                     attempted: String(payload.attempted ?? 0),
                 },
