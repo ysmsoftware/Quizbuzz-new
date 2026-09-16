@@ -58,6 +58,7 @@ export interface Contest {
     shuffleOptions: boolean;
     allowBackNavigation: boolean;
     proctoringEnabled: boolean;
+    isPrivate?: boolean;
     fullscreenRequired: boolean;
     webcamRequired: boolean;
     tabSwitchLimit: number;
@@ -496,6 +497,7 @@ export interface ServerContest {
     /** Real column on Contest (defaults true) — was missing here, so the client mapper
      *  hardcoded `false` and every admin screen showed the wrong proctoring state. */
     proctoringEnabled?: boolean;
+    isPrivate?: boolean;
     showResultsAfter: number;
     bannerImage?: string | null;
     defaultQuestionMarks?: number;

@@ -416,6 +416,7 @@ model Contest {
   registrationFields          Json?
   isDeleted                   Boolean        @default(false)
   isArchived                  Boolean        @default(false)
+  isPrivate                   Boolean        @default(false)
   createdAt                   DateTime       @default(now())
   updatedAt                   DateTime       @updatedAt
   certificateTemplateId       String?
@@ -435,13 +436,14 @@ model Contest {
   payments           Payment[]
   proctoringScores   ProctoringScore[]
   exportLogs         ExportLog[]
-  ambassadorCampaign AmbassadorCampaign?
+  ambassadorCampaigns AmbassadorCampaign[]
 
   @@unique([organizationId, slug]) // slug is unique within an org, not globally
   @@index([organizationId, status])
   @@index([startTime, status])
   @@index([registrationDeadline])
   @@index([isDeleted, status])
+  @@index([isDeleted, isPrivate, status])
   @@index([organizationId, isArchived])
   @@map("contests")
 }
@@ -1322,7 +1324,7 @@ model AmbassadorCampaign {
   enrollments  AmbassadorCampaignEnrollment[]
   groups       AmbassadorGroup[]
 
-  @@unique([contestId])
+  @@index([contestId])
   @@index([organizationId, status])
   @@map("ambassador_campaigns")
 }

@@ -99,7 +99,7 @@ export default function QuizResultsPage() {
             participantResult.breakdown
                 .filter((item) => item.negativeMark > 0)
                 .map((item) => item.negativeMark)
-          ))
+        ))
         : [];
 
     const scorePercentage = participantResult
@@ -221,7 +221,11 @@ export default function QuizResultsPage() {
         entry.participantId.toLowerCase().includes(leaderboardSearch.toLowerCase())
     );
 
-    const remainingRankings = filteredLeaderboard;
+    // Limit public leaderboard display strictly to Top 25
+    const remainingRankings = filteredLeaderboard.slice(0, 25);
+    const isSelfInTop25 = verifiedId
+        ? leaderboard.slice(0, 25).some(entry => entry.participantId === verifiedId)
+        : false;
 
 
     return (
@@ -265,7 +269,7 @@ export default function QuizResultsPage() {
                                 <CardContent className="p-8 space-y-6">
                                     <div className="space-y-2">
                                         <label className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                            Email, Phone, or Registration ID
+                                            Email ID
                                         </label>
                                         <Input
                                             type="text"
@@ -717,11 +721,55 @@ export default function QuizResultsPage() {
 
                                         <TabsContent value="leaderboard" className="space-y-6 animate-in fade-in-50 duration-300">
 
+                                            {/* Pinned Participant Position Card (when participant rank is outside Top 25) */}
+                                            {verifiedId && participantResult && !isSelfInTop25 && (
+                                                <Card className="bg-primary/5 border-2 border-primary/30 rounded-[1.5rem] p-5 shadow-sm relative overflow-hidden">
+                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex flex-col items-center justify-center shadow-md shrink-0">
+                                                                <span className="text-[9px] uppercase font-bold opacity-80 leading-none">Rank</span>
+                                                                <span className="text-base font-black leading-none mt-0.5">
+                                                                    {participantResult.rank > 0 ? `#${participantResult.rank}` : 'N/A'}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <h4 className="font-extrabold text-base text-foreground">Your Standing</h4>
+                                                                    <Badge className="bg-primary text-primary-foreground border-none text-[9px] font-extrabold px-2 py-0">
+                                                                        YOU
+                                                                    </Badge>
+                                                                </div>
+                                                                <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                                                                    {participantResult.participantName}
+                                                                    {participantResult.totalParticipants > 0 
+                                                                        ? ` • Rank ${participantResult.rank} of ${participantResult.totalParticipants} participants`
+                                                                        : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-primary/10">
+                                                            <div className="text-center sm:text-right">
+                                                                <p className="text-[10px] uppercase font-black text-muted-foreground tracking-wider">Your Score</p>
+                                                                <p className="text-base font-black text-primary">{participantResult.score} / {participantResult.totalMarks}</p>
+                                                            </div>
+                                                            <div className="text-center sm:text-right">
+                                                                <p className="text-[10px] uppercase font-black text-muted-foreground tracking-wider">Time Taken</p>
+                                                                <p className="text-xs font-bold text-foreground">{participantResult.timeTaken}</p>
+                                                            </div>
+                                                            <Badge variant="outline" className="border-primary/30 text-primary text-[10px] font-bold px-2.5 py-1 rounded-xl uppercase tracking-wider hidden md:inline-flex">
+                                                                Outside Top 25
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            )}
+
                                             {/* Main rankings list */}
                                             <div className="space-y-4">
                                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                                                     <h4 className="text-lg font-black tracking-tight flex items-center gap-2">
-                                                        <FileText className="h-5 w-5 text-muted-foreground" /> All Official Standings
+                                                        <Trophy className="h-5 w-5 text-amber-500" /> Top 25 Standings
                                                     </h4>
                                                     <div className="relative w-full sm:w-72">
                                                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

@@ -211,6 +211,7 @@ export class ContestService {
 
         const where: any = {
             isDeleted: false,
+            isPrivate: false,
             status: {
                 in: [
                     ContestStatus.PUBLISHED,

@@ -117,6 +117,9 @@ export const ambassadorCampaignApi = {
   getCampaign: (id: string) =>
     get<CampaignResult>(`/org/campaigns/${id}`),
 
+  getCampaignsForContest: (contestId: string) =>
+    get<CampaignResult[]>(`/org/campaigns/contest/${contestId}`),
+
   // Starts a DRAFT — only `name` is required. The creation wizard fills in the rest one
   // step at a time via updateCampaign(), then finalizes with publishCampaign().
   createCampaign: (body: {

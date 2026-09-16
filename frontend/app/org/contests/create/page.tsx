@@ -85,6 +85,7 @@ interface ContestForm {
     shuffleQuestions: boolean;
     shuffleOptions: boolean;
     proctoringEnabled: boolean;
+    isPrivate: boolean;
     bannerImage?: string;
 }
 
@@ -124,6 +125,7 @@ export default function CreateContestPage() {
         shuffleQuestions: true,
         shuffleOptions: false,
         proctoringEnabled: true,
+        isPrivate: false,
         bannerImage: undefined,
     });
 
@@ -471,6 +473,7 @@ export default function CreateContestPage() {
                 shuffleQuestions: form.shuffleQuestions,
                 shuffleOptions: form.shuffleOptions,
                 proctoringEnabled: form.proctoringEnabled,
+                isPrivate: form.isPrivate,
                 showResultsAfter: Number(form.showResultsAfter) || 24,
                 prizes: form.prizes.map(p => ({
                     rankFrom: Number(p.rankFrom),
@@ -1157,24 +1160,43 @@ export default function CreateContestPage() {
                                             Shuffle options for each participant (Default: false)
                                         </label>
                                     </div>
-                                </div>
 
-                                {/* Proctoring Toggle */}
-                                <div className="flex items-center justify-between rounded-2xl border border-border/50 p-4">
-                                    <div className="space-y-0.5">
-                                        <label className="text-sm font-semibold">Enable Proctoring</label>
-                                        <p className="text-xs text-muted-foreground">
-                                            When enabled, participants must allow camera access and will be
-                                            monitored for face detection, tab switching, and audio anomalies.
-                                            Disable for load testing or low-stakes contests.
-                                        </p>
+                                    {/* Proctoring Toggle */}
+                                    <div className="flex items-center justify-between rounded-2xl border border-border/50 p-4">
+                                        <div className="space-y-0.5">
+                                            <label className="text-sm font-semibold">Enable Proctoring</label>
+                                            <p className="text-xs text-muted-foreground">
+                                                When enabled, participants must allow camera access and will be
+                                                monitored for face detection, tab switching, and audio anomalies.
+                                                Disable for load testing or low-stakes contests.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={form.proctoringEnabled}
+                                            onCheckedChange={(checked) =>
+                                                setForm(prev => ({ ...prev, proctoringEnabled: checked }))
+                                            }
+                                        />
                                     </div>
-                                    <Switch
-                                        checked={form.proctoringEnabled}
-                                        onCheckedChange={(checked) =>
-                                            setForm(prev => ({ ...prev, proctoringEnabled: checked }))
-                                        }
-                                    />
+
+                                    {/* Private Contest Toggle */}
+                                    <div className="flex items-center justify-between rounded-2xl border border-border/50 p-4 bg-amber-500/5 border-amber-500/20">
+                                        <div className="space-y-0.5">
+                                            <label className="text-sm font-semibold flex items-center gap-2">
+                                                Make Contest Private
+                                            </label>
+                                            <p className="text-xs text-muted-foreground">
+                                                When enabled, this contest will be hidden from the public browse contests page.
+                                                Participants can only view and register via direct link.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={form.isPrivate}
+                                            onCheckedChange={(checked) =>
+                                                setForm(prev => ({ ...prev, isPrivate: checked }))
+                                            }
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}

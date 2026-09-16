@@ -273,13 +273,6 @@ export class AmbassadorCampaignService {
     /** Starts a DRAFT — only `name` is required. The creation wizard fills the rest in
      *  step by step via updateCampaign(), then finalizes with publishCampaign(). */
     async createCampaign(organizationId: string, createdById: string, dto: CreateCampaignDTO): Promise<CampaignResult> {
-        if (dto.contestId) {
-            const existing = await this.campaignRepo.findByContestId(dto.contestId, organizationId);
-            if (existing) {
-                throw new ConflictError("This contest already has an ambassador campaign.");
-            }
-        }
-
         const startDate = dto.startDate ? new Date(dto.startDate) : null;
         const endDate = dto.endDate ? new Date(dto.endDate) : null;
         const phases = this._computePhases(startDate, endDate);
@@ -357,6 +350,11 @@ export class AmbassadorCampaignService {
         return this._toCampaignResult(campaign);
     }
 
+    async getCampaignsForContest(organizationId: string, contestId: string): Promise<CampaignResult[]> {
+        const rows = await this.campaignRepo.findManyByContestId(contestId, organizationId);
+        return rows.map((r) => this._toCampaignResult(r));
+    }
+
     async listCampaigns(organizationId: string, query: ListCampaignsQueryDTO): Promise<PaginatedResult<CampaignListItem>> {
         const skip = (query.page - 1) * query.limit;
         const { rows, total } = await this.campaignRepo.findAll({
@@ -397,13 +395,6 @@ export class AmbassadorCampaignService {
             throw new BadRequestError(
                 `Cannot change ${disallowed.join(", ")} once a campaign is ${existing.status}.`,
             );
-        }
-
-        if (dto.contestId !== undefined && dto.contestId !== existing.contestId) {
-            const conflict = await this.campaignRepo.findByContestId(dto.contestId, organizationId);
-            if (conflict && conflict.id !== id) {
-                throw new ConflictError("This contest already has an ambassador campaign.");
-            }
         }
 
         if (dto.rewardConfig !== undefined) {
@@ -471,12 +462,6 @@ export class AmbassadorCampaignService {
         // Defensive re-check — the same conflict guard already runs when contestId is set via
         // updateCampaign(), but a campaign built through a burst of concurrent PATCHes shouldn't
         // be able to slip past it.
-        const target = this._resolveTarget(this._toCampaignResult(existing));
-        const conflict = await this.campaignRepo.findByContestId(target.contestId, organizationId);
-        if (conflict && conflict.id !== id) {
-            throw new ConflictError("This contest already has an ambassador campaign.");
-        }
-
         await this.campaignRepo.updateById(id, organizationId, {
             status: AmbassadorCampaignStatus.PUBLISHED,
             publishedAt: new Date(),
@@ -544,11 +529,6 @@ export class AmbassadorCampaignService {
     async duplicateCampaign(organizationId: string, createdById: string, id: string, dto: DuplicateCampaignDTO): Promise<CampaignResult> {
         const source = await this.campaignRepo.findById(id, organizationId);
         if (!source) throw new NotFoundError("Campaign not found.");
-
-        const existing = await this.campaignRepo.findByContestId(dto.contestId, organizationId);
-        if (existing) {
-            throw new ConflictError("This contest already has an active ambassador campaign.");
-        }
 
         const campaign = await this.campaignRepo.create({
             organizationId,
@@ -670,13 +650,6 @@ export class AmbassadorCampaignService {
         const found = await this.campaignRepo.findTemplateById(templateId, organizationId);
         if (!found) throw new NotFoundError("Template not found.");
         const template = this._toTemplateResult(found);
-
-        if (dto.contestId) {
-            const existing = await this.campaignRepo.findByContestId(dto.contestId, organizationId);
-            if (existing) {
-                throw new ConflictError("This contest already has an ambassador campaign.");
-            }
-        }
 
         const campaign = await this.campaignRepo.create({
             organizationId,

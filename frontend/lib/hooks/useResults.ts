@@ -25,7 +25,7 @@ export function useResults(contestId: string, participantId?: string) {
   // 1. Fetch public leaderboard
   const leaderboardQuery = useQuery({
     queryKey: ['leaderboard', contestId],
-    queryFn: () => getPublicLeaderboard(contestId),
+    queryFn: () => getPublicLeaderboard(contestId, { page: 1, limit: 25 }),
     enabled: !!contestId,
   });
 

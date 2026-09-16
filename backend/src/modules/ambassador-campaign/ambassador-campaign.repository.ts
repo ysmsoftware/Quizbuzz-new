@@ -100,6 +100,14 @@ export class AmbassadorCampaignRepository {
         return prisma.ambassadorCampaign.findFirst({ where: { contestId, organizationId } });
     }
 
+    async findManyByContestId(contestId: string, organizationId: string): Promise<CampaignWithContestTitle[]> {
+        return prisma.ambassadorCampaign.findMany({
+            where: { contestId, organizationId },
+            include: { contest: { select: CONTEST_PREVIEW_SELECT }, _count: { select: { enrollments: true } } },
+            orderBy: { createdAt: "desc" },
+        });
+    }
+
     /** Org-agnostic lookup — used by the ambassador-facing side, where a campaign's
      *  organization is just data to display, not a scoping/access-control boundary
      *  (an ambassador identity isn't tied to any one org). */

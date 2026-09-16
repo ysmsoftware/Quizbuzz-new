@@ -38,6 +38,7 @@ const PERSISTABLE_CONTEST_FIELDS = new Set([
   'shuffleQuestions',
   'shuffleOptions',
   'proctoringEnabled',
+  'isPrivate',
   'showResultsAfter',
   'defaultQuestionMarks',
   'defaultQuestionNegativeMark',
@@ -140,6 +141,7 @@ export function adaptServerContest(server: ServerContest): Contest {
     // is a real column (defaults true). Admin screens reading this were shown the wrong
     // proctoring state for every contest.
     proctoringEnabled: server.proctoringEnabled ?? true,
+    isPrivate: server.isPrivate ?? false,
     fullscreenRequired: false,
     webcamRequired: false,
     tabSwitchLimit: 3,

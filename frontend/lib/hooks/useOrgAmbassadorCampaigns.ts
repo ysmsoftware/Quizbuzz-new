@@ -186,3 +186,18 @@ export function useOrgAmbassadorCampaignTemplates(filters: TemplatesFilters = {}
     instantiateTemplateLoading: instantiateMutation.isPending,
   };
 }
+
+export function useContestCampaigns(contestId: string) {
+  const query = useQuery({
+    queryKey: ['org-ambassador-campaigns-contest', contestId],
+    queryFn: () => ambassadorCampaignApi.getCampaignsForContest(contestId),
+    enabled: !!contestId,
+  });
+
+  return {
+    campaigns: query.data?.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}

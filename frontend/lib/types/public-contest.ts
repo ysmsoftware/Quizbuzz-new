@@ -44,6 +44,7 @@ export interface PublicContestSummary {
   maxParticipants: number | null;
   cutoffScore: number | null;
   paymentEnabled: boolean;
+  isPrivate?: boolean;
   paymentConfig: PublicContestPaymentConfig | null;
   showResultsAfter: number;
   bannerImage?: string | null;

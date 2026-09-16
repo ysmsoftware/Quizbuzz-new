@@ -6,7 +6,7 @@ import { resultsApi } from '@/lib/api/results-certs.api';
 export function usePublicLeaderboard(contestId: string, page = 1) {
   const leaderboardQuery = useQuery({
     queryKey: ['public-leaderboard', contestId, page],
-    queryFn: () => resultsApi.getPublicLeaderboard(contestId, { page, limit: 50 }),
+    queryFn: () => resultsApi.getPublicLeaderboard(contestId, { page, limit: 25 }),
     enabled: !!contestId,
     retry: false,
   });

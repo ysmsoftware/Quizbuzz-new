@@ -57,6 +57,7 @@ export interface CreateContestDTO {
   shuffleQuestions?: boolean | undefined;
   shuffleOptions?: boolean | undefined;
   proctoringEnabled?: boolean | undefined;
+  isPrivate?: boolean | undefined;
   showResultsAfter?: number | undefined; // hours
   prizes?: PrizeDTO[] | undefined;
   bannerImage?: string | null | undefined;
@@ -142,6 +143,7 @@ export interface ContestSummary {
   topics: string[];
   registrationCount: number;
   paymentEnabled: boolean;
+  isPrivate: boolean;
   paymentConfig?: { amount: number; currency: string; description?: string | null } | null;
   bannerImage: string | null;
 }

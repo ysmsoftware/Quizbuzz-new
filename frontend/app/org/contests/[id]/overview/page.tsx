@@ -27,9 +27,13 @@ import {
     Check,
     Copy,
     X,
-    Pencil
+    Pencil,
+    Lock,
+    Eye,
+    Globe
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 import { fmtDateTime } from '@/lib/formatDate';
 import { useContestDetail } from '@/lib/hooks/useContestDetail';
@@ -390,7 +394,21 @@ export default function ContestOverviewPage() {
                                     multiline={true}
                                 />
 
-                                <div className="flex flex-wrap gap-4 pt-2">
+                                <div className="flex flex-wrap items-center gap-4 pt-2">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Visibility</label>
+                                        {contest.isPrivate ? (
+                                            <Badge variant="outline" className="px-3 py-1 text-xs border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold gap-1.5">
+                                                <Lock className="h-3 w-3" />
+                                                Private Contest
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="px-3 py-1 text-xs border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold gap-1.5">
+                                                <Globe className="h-3 w-3" />
+                                                Public Contest
+                                            </Badge>
+                                        )}
+                                    </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Category</label>
                                         <Badge variant="secondary" className="px-3 py-1 text-xs">
@@ -408,6 +426,28 @@ export default function ContestOverviewPage() {
                                             ))}
                                         </div>
                                     </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* Visibility Toggle Control */}
+                                <div className="flex items-center justify-between rounded-xl border border-border/50 p-4 bg-muted/20">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <Lock className="h-4 w-4 text-amber-500" />
+                                            <label className="text-sm font-semibold cursor-pointer">Private Contest</label>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            {contest.isPrivate
+                                                ? "This contest is hidden from the public browse list. Only users with the direct link can access and register."
+                                                : "This contest is visible on the public browse page. Toggle to hide it from public listing."}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={!!contest.isPrivate}
+                                        disabled={isCancelled}
+                                        onCheckedChange={(checked) => handleSave('isPrivate', checked)}
+                                    />
                                 </div>
 
                                 {/* Payment info — only shown when contest is paid */}

@@ -73,6 +73,7 @@ const CreateContestBase = z.object({
     shuffleQuestions: z.boolean().default(true),
     shuffleOptions: z.boolean().default(false),
     proctoringEnabled: z.boolean().default(true),
+    isPrivate: z.boolean().default(false),
     showResultsAfter: z.number().int().min(0).max(168).default(24), // max 7 days
     defaultQuestionMarks: z.number().int().min(1).default(4),
     defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),

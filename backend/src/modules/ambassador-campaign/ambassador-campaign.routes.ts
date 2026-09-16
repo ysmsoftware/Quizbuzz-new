@@ -40,6 +40,7 @@ campaignRouter.post("/templates",                 (req, res, next) => ctrl().cre
 campaignRouter.delete("/templates/:id",           (req, res, next) => ctrl().deleteTemplate(req, res, next));
 campaignRouter.post("/templates/:id/instantiate", (req, res, next) => ctrl().instantiateTemplate(req, res, next));
 
+campaignRouter.get("/contest/:contestId",         (req, res, next) => ctrl().getCampaignsForContest(req, res, next));
 campaignRouter.get("/:id",               (req, res, next) => ctrl().getCampaign(req, res, next));
 campaignRouter.patch("/:id",             (req, res, next) => ctrl().updateCampaign(req, res, next));
 campaignRouter.post("/:id/publish",      (req, res, next) => ctrl().publishCampaign(req, res, next));

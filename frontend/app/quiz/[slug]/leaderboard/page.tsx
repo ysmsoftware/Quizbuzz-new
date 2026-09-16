@@ -47,7 +47,7 @@ export default function PublicLeaderboardPage() {
 
   const { data: leaderboardData, isLoading: isLeaderboardLoading, error } = useQuery({
     queryKey: ['public-leaderboard', contestId, { page }],
-    queryFn: () => resultsApi.getPublicLeaderboard(contestId!, { page, limit: 50 }),
+    queryFn: () => resultsApi.getPublicLeaderboard(contestId!, { page, limit: 25 }),
     enabled: !!contestId,
     retry: false, // If 404, results not declared
   });

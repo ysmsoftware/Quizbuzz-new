@@ -151,6 +151,16 @@ export class AmbassadorCampaignController {
         }
     };
 
+    getCampaignsForContest = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const result = await this.service.getCampaignsForContest(organizationId, req.params.contestId as string);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     updateCampaign = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const organizationId = req.user!.organizationId;
