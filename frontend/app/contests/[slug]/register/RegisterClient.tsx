@@ -156,7 +156,7 @@ function RegisterPageInner() {
         spread: 80,
         origin: { y: 0.6 }
       });
-      
+
       const end = Date.now() + 1500;
       const interval = setInterval(() => {
         if (Date.now() > end) return clearInterval(interval);
@@ -168,7 +168,7 @@ function RegisterPageInner() {
           particleCount: 20
         });
       }, 200);
-      
+
       return () => clearInterval(interval);
     }
   }, [step]);
@@ -216,7 +216,7 @@ function RegisterPageInner() {
   }, [slug]);
 
   useEffect(() => {
-    referenceDataService.getColleges().then(setColleges).catch(() => {});
+    referenceDataService.getColleges().then(setColleges).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -1260,17 +1260,6 @@ function RegisterPageInner() {
                     <li>3. Prepare your system and ensure proctoring requirements are met</li>
                     <li>4. Join the contest using your registered email ID and the join code received in your email</li>
                   </ul>
-                </div>
-
-                <div className="flex gap-3">
-                  <Link href="/contests" className="flex-1">
-                    <Button variant="outline" className="w-full">
-                      Browse More Contests
-                    </Button>
-                  </Link>
-                  <Link href={`/quiz/${contest.slug}/join`} className="flex-1">
-                    <Button className="w-full">Go to Quiz Entry</Button>
-                  </Link>
                 </div>
               </CardContent>
             </Card>

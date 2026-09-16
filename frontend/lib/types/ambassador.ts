@@ -78,7 +78,7 @@ export interface MilestoneTier {
   maxRegistrations: number | null; // null = uncapped top tier
   rewardType: "PER_REGISTRATION" | "FLAT_PLUS_PER_REG";
   amountPerRegistration: number; // rupees
-  goodie?: { label: string; cashEquivalent?: number };
+  goodie?: { label: string; cashEquivalent?: number; imageUrl?: string };
 }
 
 export interface SpeedBonusTier {
@@ -86,7 +86,7 @@ export interface SpeedBonusTier {
   bonusAmount: number; // rupees
   label: string;
   maxWinners?: number;
-  goodie?: { label: string; cashEquivalent?: number };
+  goodie?: { label: string; cashEquivalent?: number; imageUrl?: string };
 }
 
 export type SpeedBonusStartMode = 'CONTEST_START' | 'OFFSET_WEEKS' | 'CUSTOM';
@@ -128,7 +128,7 @@ export interface LeaderboardRankReward {
   rank?: number;
   rankRange?: [number, number];
   cashAmount?: number;
-  goodie?: { label: string; cashEquivalent?: number };
+  goodie?: { label: string; cashEquivalent?: number; imageUrl?: string };
   label?: string;
 }
 
@@ -278,6 +278,7 @@ export interface TierBracketBreakdown {
   subtotal: number; // rupees
   goodieLabel?: string;
   goodieCashEquivalent?: number; // rupees
+  goodieImageUrl?: string;
 }
 
 export interface MyCampaignItem {

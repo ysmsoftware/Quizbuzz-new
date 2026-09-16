@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { LeaderboardEntryResult, LeaderboardScope } from '@/lib/types/ambassador';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 
 const RANK_COLOR: Record<number, string> = {
   1: 'text-warning',
@@ -61,8 +62,9 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
           <TableBody>
             {rows.map((row) => {
               const isYou = scope.kind === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
-              return (
-                <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/10 font-semibold')}>
+              const goodie = row.prize && !row.prize.cashAmount ? row.prize.goodie : undefined;
+              const tableRow = (
+                <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/10 font-semibold', goodie && 'cursor-default')}>
                   <TableCell className={cn('px-2.5 py-2 font-bold text-xs sm:text-sm', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>
                   <TableCell className="px-2.5 py-2 text-xs sm:text-sm font-medium min-w-0 truncate max-w-[120px] sm:max-w-[220px]">
                     <span className="truncate block" title={row.label}>
@@ -76,6 +78,9 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
                   </TableCell>
                 </TableRow>
               );
+              return goodie ? (
+                <GoodieHoverCard key={row.groupKey} goodie={goodie}>{tableRow}</GoodieHoverCard>
+              ) : tableRow;
             })}
           </TableBody>
         </Table>

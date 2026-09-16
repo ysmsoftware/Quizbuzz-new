@@ -37,7 +37,7 @@ export class AmbassadorCampaignController {
                 throw new UnauthorizedError("User not authorized.");
             }
             const dto = RequestPosterUploadUrlSchema.parse(req.body);
-            const result = await this.service.getPosterUploadUrl(user.organizationId, dto.filename, dto.mimeType);
+            const result = await this.service.getPosterUploadUrl(user.organizationId, dto.filename, dto.mimeType, dto.assetType);
 
             res.status(200).json({
                 success: true,

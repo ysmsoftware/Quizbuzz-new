@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ImageUploadCell } from '@/components/features/shared/ImageUploadCell';
 import { cn } from '@/lib/utils';
 
 /** Editable "type or pick a suggestion" cell for `combobox` columns — free text is always
@@ -86,7 +87,7 @@ function ComboboxCell({
 export interface RepeatingRowColumn<T> {
   key: keyof T;
   label: string;
-  type: 'text' | 'number' | 'select' | 'combobox';
+  type: 'text' | 'number' | 'select' | 'combobox' | 'image';
   options?: string[]; // for 'select': the only allowed values; for 'combobox': suggestions only, free text still accepted
   placeholder?: string;
   minWidth?: string;
@@ -103,6 +104,9 @@ interface RepeatingRowTableProps<T> {
   getCellError?: (rowIndex: number, key: keyof T) => string | undefined;
   /** Validation message for the array itself (e.g. "Add at least one tier"), shown above the Add button. */
   arrayError?: string;
+  /** Required when any column has type 'image' — compresses + uploads the file via presigned
+   *  PUT and resolves to the permanent URL (see useRewardImageUpload.ts). */
+  onUploadImage?: (file: File) => Promise<string>;
 }
 
 /** Small repeating-row editor: Table + inline Input/Select cells, add/remove rows. Reused across the
@@ -116,6 +120,7 @@ export function RepeatingRowTable<T extends Record<string, any>>({
   addLabel = 'Add row',
   getCellError,
   arrayError,
+  onUploadImage,
 }: RepeatingRowTableProps<T>) {
   const updateCell = (index: number, key: keyof T, value: string | number) => {
     const next = [...rows];
@@ -170,6 +175,12 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                             placeholder={col.placeholder}
                             error={!!cellError}
                             onChange={(v) => updateCell(index, col.key, v)}
+                          />
+                        ) : col.type === 'image' ? (
+                          <ImageUploadCell
+                            value={row[col.key] ? String(row[col.key]) : ''}
+                            onChange={(v) => updateCell(index, col.key, v)}
+                            onUploadImage={onUploadImage!}
                           />
                         ) : (
                           <Input

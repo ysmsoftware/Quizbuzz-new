@@ -79,7 +79,7 @@ export const ambassadorCampaignApi = {
   // `url`, then strips the query string off it to get the permanent object URL to save
   // (see ShareTemplatesEditor.tsx's handlePosterSelect, mirrors the ambassador-proof upload
   // flow in app/ambassador/[orgSlug]/apply/page.tsx).
-  getPosterUploadUrl: (body: { filename: string; mimeType: string }) =>
+  getPosterUploadUrl: (body: { filename: string; mimeType: string; assetType?: 'poster' | 'reward-image' }) =>
     post<{ url: string; storageKey: string }>('/org/campaigns/poster-upload-url', body),
 
   // Applications — per-campaign (an ambassador's applicant identity is shared across orgs,

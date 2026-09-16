@@ -59,7 +59,7 @@ export function computeMilestoneReward(
                     registrationsInBracket,
                     amountPerRegistration: tier.amountPerRegistration,
                     subtotal: bracketAmount + goodieCash,
-                    ...(goodieCash > 0 && { goodieLabel: tier.goodie!.label, goodieCashEquivalent: goodieCash }),
+                    ...(goodieCash > 0 && { goodieLabel: tier.goodie!.label, goodieCashEquivalent: goodieCash, goodieImageUrl: tier.goodie!.imageUrl }),
                 });
             }
         }

@@ -5,9 +5,11 @@ import { ArrowLeft, Clock, Lock, UserPlus, XCircle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
+import { cn } from '@/lib/utils';
 import { CampaignTimelineStrip } from './CampaignTimelineStrip';
 import { RewardTiersCard } from './RewardTiersCard';
 import { CampaignLeaderboardCard } from './CampaignLeaderboardCard';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import { Rupees } from './Rupees';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type { AvailableCampaignItem } from '@/lib/types/ambassador';
@@ -188,23 +190,38 @@ export function CampaignPreview({
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {speedBonusTiers.map((tier, i) => (
-                    <Card key={i} className="border-border/50">
-                      <CardContent className="pt-4 pb-4">
-                        <Zap className="h-4 w-4 text-muted-foreground mb-2" />
-                        <p className="font-semibold text-foreground text-sm">{tier.label}</p>
-                        <p className="text-lg font-bold text-foreground mt-1">
-                          +<Rupees amount={tier.bonusAmount} />
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">Within {tier.withinDays} days of launch</p>
-                        {tier.maxWinners && (
-                          <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/60">
-                            First {tier.maxWinners} to qualify
+                  {speedBonusTiers.map((tier, i) => {
+                    const card = (
+                      <Card className={cn('border-border/50', tier.goodie && 'cursor-default')}>
+                        <CardContent className="pt-4 pb-4">
+                          <Zap className="h-4 w-4 text-muted-foreground mb-2" />
+                          <p className="font-semibold text-foreground text-sm">{tier.label}</p>
+                          <p className="text-lg font-bold text-foreground mt-1">
+                            +<Rupees amount={tier.bonusAmount} />
                           </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <p className="text-xs text-muted-foreground mt-1">Within {tier.withinDays} days of launch</p>
+                          {tier.goodie && (
+                            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/60">
+                              {tier.goodie.imageUrl && (
+                                <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                              )}
+                              Includes: {tier.goodie.label}
+                            </p>
+                          )}
+                          {tier.maxWinners && (
+                            <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/60">
+                              First {tier.maxWinners} to qualify
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                    return tier.goodie ? (
+                      <GoodieHoverCard key={i} goodie={tier.goodie}>{card}</GoodieHoverCard>
+                    ) : (
+                      <div key={i}>{card}</div>
+                    );
+                  })}
                 </div>
               </section>
             )}

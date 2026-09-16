@@ -11,6 +11,7 @@ import { useAmbassadorCampaignLeaderboard } from '@/lib/hooks/useAmbassadorCampa
 import { LeaderboardChart } from './LeaderboardChart';
 import { LeaderboardTable } from './LeaderboardTable';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import { leaderboardScopeKey, type LeaderboardCut, type LeaderboardRankReward, type MilestoneTier } from '@/lib/types/ambassador';
 
 function rankLabel(r: LeaderboardRankReward): string {
@@ -32,25 +33,38 @@ const PRIZE_BAR_COLOR = ['bg-warning', 'bg-muted-foreground/50', 'bg-secondary-f
  *  LeaderboardChart uses once there's data to show (registration counts) to replace. */
 function PrizePreviewChart({ cut }: { cut: LeaderboardCut }) {
   const items = [
-    ...cut.ranks.map((r) => ({ key: rankLabel(r), amount: r.cashAmount ?? r.goodie?.cashEquivalent ?? 0, fallback: r.goodie?.label ?? r.label })),
-    ...(cut.consolation ? [{ key: cut.consolation.label, amount: cut.consolation.cashAmount, fallback: undefined }] : []),
+    ...cut.ranks.map((r) => ({
+      key: rankLabel(r),
+      amount: r.cashAmount ?? r.goodie?.cashEquivalent ?? 0,
+      fallback: r.goodie?.label ?? r.label,
+      goodie: r.goodie,
+    })),
+    ...(cut.consolation ? [{ key: cut.consolation.label, amount: cut.consolation.cashAmount, fallback: undefined, goodie: undefined }] : []),
   ];
   const max = Math.max(1, ...items.map((i) => i.amount));
 
   return (
     <div className="flex items-end gap-3 h-[120px] pt-2">
-      {items.map((item, i) => (
-        <div key={i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
-          <span className="mb-1 max-w-full truncate text-[11px] font-bold text-foreground">
-            {item.amount > 0 ? <Rupees amount={item.amount} /> : (item.fallback ?? '—')}
-          </span>
-          <div
-            className={cn('w-full rounded-t-md', PRIZE_BAR_COLOR[i] ?? 'bg-secondary-foreground/25')}
-            style={{ height: `${Math.max(14, (item.amount / max) * 100)}%` }}
-          />
-          <span className="mt-1.5 max-w-full truncate text-center text-[10px] text-muted-foreground">{item.key}</span>
-        </div>
-      ))}
+      {items.map((item, i) => {
+        const column = (
+          <div key={i} className={cn('flex h-full min-w-0 flex-1 flex-col items-center justify-end', item.goodie && 'cursor-default')}>
+            <span className="mb-1 flex max-w-full items-center gap-1 truncate text-[11px] font-bold text-foreground">
+              {item.amount === 0 && item.goodie?.imageUrl && (
+                <img src={item.goodie.imageUrl} alt="" className="h-4 w-4 shrink-0 rounded object-cover border border-border/50" />
+              )}
+              {item.amount > 0 ? <Rupees amount={item.amount} /> : (item.fallback ?? '—')}
+            </span>
+            <div
+              className={cn('w-full rounded-t-md', PRIZE_BAR_COLOR[i] ?? 'bg-secondary-foreground/25')}
+              style={{ height: `${Math.max(14, (item.amount / max) * 100)}%` }}
+            />
+            <span className="mt-1.5 max-w-full truncate text-center text-[10px] text-muted-foreground">{item.key}</span>
+          </div>
+        );
+        return item.goodie ? (
+          <GoodieHoverCard key={i} goodie={item.goodie}>{column}</GoodieHoverCard>
+        ) : column;
+      })}
     </div>
   );
 }

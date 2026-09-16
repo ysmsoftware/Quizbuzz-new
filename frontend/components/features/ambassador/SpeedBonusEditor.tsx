@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable';
+import { useRewardImageUpload } from '@/lib/hooks/useRewardImageUpload';
 import { Rupees } from './Rupees';
 import { addWeeksIso } from './campaign-timeline';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ interface SpeedBonusRow {
   maxWinners: number;
   goodieLabel: string;
   goodieCashEquivalent: number;
+  goodieImageUrl: string;
 }
 
 const COLUMNS: RepeatingRowColumn<SpeedBonusRow>[] = [
@@ -32,6 +34,7 @@ const COLUMNS: RepeatingRowColumn<SpeedBonusRow>[] = [
   { key: 'maxWinners', label: 'Max Winners (optional)', type: 'number', placeholder: '10', minWidth: 'w-28' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Badge, merch…', minWidth: 'min-w-[160px]' },
   { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'w-28' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
 ];
 
 const EMPTY: SpeedBonusConfig = { enabled: false, milestoneThreshold: 0, tiers: [] };
@@ -51,6 +54,7 @@ export function SpeedBonusEditor({
   contestRegistrationStartDate?: string;
   errors?: FieldErrorMap;
 }) {
+  const uploadRewardImage = useRewardImageUpload();
   const speedBonus = value ?? EMPTY;
   const startMode: SpeedBonusStartMode = speedBonus.campaignStartAtMode ?? 'CONTEST_START';
   const offsetWeeks = speedBonus.campaignStartAtOffsetWeeks ?? 0;
@@ -84,6 +88,7 @@ export function SpeedBonusEditor({
     maxWinners: t.maxWinners ?? 0,
     goodieLabel: t.goodie?.label ?? '',
     goodieCashEquivalent: t.goodie?.cashEquivalent ?? 0,
+    goodieImageUrl: t.goodie?.imageUrl ?? '',
   }));
 
   const handleTiersChange = (nextRows: SpeedBonusRow[]) => {
@@ -101,7 +106,11 @@ export function SpeedBonusEditor({
         label: r.label,
         maxWinners: r.maxWinners ? Math.max(0, r.maxWinners) : undefined,
         goodie: r.goodieLabel.trim()
-          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent ? Math.max(0, r.goodieCashEquivalent) : undefined }
+          ? {
+              label: r.goodieLabel,
+              cashEquivalent: r.goodieCashEquivalent ? Math.max(0, r.goodieCashEquivalent) : undefined,
+              imageUrl: r.goodieImageUrl || undefined,
+            }
           : undefined,
       })),
     });
@@ -209,6 +218,7 @@ export function SpeedBonusEditor({
             columns={COLUMNS}
             addLabel="Add bonus tier"
             onChange={handleTiersChange}
+            onUploadImage={uploadRewardImage}
             arrayError={errors[`${PREFIX}.tiers`]}
             getCellError={(index, key) => {
               const k = String(key);
@@ -221,7 +231,7 @@ export function SpeedBonusEditor({
               }
               return errors[baseKey];
             }}
-            newRow={() => ({ withinDays: 7, bonusAmount: 0, label: '', maxWinners: 0, goodieLabel: '', goodieCashEquivalent: 0 })}
+            newRow={() => ({ withinDays: 7, bonusAmount: 0, label: '', maxWinners: 0, goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
           />
 
           {rows.length > 0 && (

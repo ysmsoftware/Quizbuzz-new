@@ -10,7 +10,7 @@ function validateFolder(folder: string) {
     // (wired to the live POST /ambassador/upload-profile-image route) builds folder
     // `ambassador-profile/${ambassadorId}/...`, which this allow-list was missing —
     // every profile-photo upload request was throwing "Access Denied" below.
-    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster", "ambassador-profile"];
+    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster", "ambassador-campaign-reward-image", "ambassador-profile", "contest-prize-reward-image"];
     if (parts.length !== 3 || !validPrefixes.includes(parts[0] as string) || !parts[1] || !parts[2]) {
         throw new Error("Access Denied: Invalid folder structure.");
     }

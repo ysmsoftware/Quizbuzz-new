@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import { ContestService } from "./contest.service";
 import {
     CreateContestSchema,
@@ -11,9 +12,17 @@ import {
     RescheduleContestSchema,
     ForceEndContestSchema,
     StartContestNowSchema,
+    RequestPrizeRewardImageUploadUrlSchema,
 } from "./contest.validator";
 import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
 import { storageService } from "../../services/storage.service";
+import { getStorageProvider } from "../../providers/storage.provider";
+
+// Presigned-PUT-URL flow (see ambassador-campaign.service.ts's getPosterUploadUrl) — a
+// separate singleton from storageService above, which is the older base64-body upload
+// path uploadBanner() below still uses. Constructed here directly (not via container.ts)
+// to avoid a circular import: container.ts itself imports ContestController.
+const storageProvider = getStorageProvider();
 
 export class ContestController {
     constructor(private readonly contestService: ContestService) { }
@@ -479,6 +488,39 @@ export class ContestController {
                     url: uploadResult.url,
                     key: uploadResult.key
                 },
+                requestId: req.id,
+            });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    // Presigned-PUT-URL flow for a prize goodie image (see ambassador-campaign.service.ts's
+    // getPosterUploadUrl) — the frontend PUTs the raw file straight to storage with the
+    // returned `url`, then strips the query string off it to get the permanent object URL.
+    getPrizeRewardImageUploadUrl = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const dto = RequestPrizeRewardImageUploadUrlSchema.parse(req.body);
+            if (!dto.mimeType.startsWith("image/")) {
+                throw new BadRequestError("File must be an image.");
+            }
+
+            const folder = `contest-prize-reward-image/${user.organizationId}/${crypto.randomUUID()}`;
+            const result = await storageProvider.getPresignedPutUrl({
+                filename: dto.filename,
+                folder,
+                mimeType: dto.mimeType,
+                expiresInSeconds: 300,
+            });
+
+            res.status(200).json({
+                success: true,
+                message: "Upload URL generated successfully",
+                data: result,
                 requestId: req.id,
             });
         } catch (err) {

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable';
+import { useRewardImageUpload } from '@/lib/hooks/useRewardImageUpload';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
@@ -17,13 +18,25 @@ import type { LeaderboardCut } from '@/lib/types/ambassador';
 
 const MAX_GROUP_FIELD_KEYS = 3;
 
-// ponytail: rank rows here only support a single `rank` + cash + label — no
-// rankRange or goodie editing yet. Add a "range" toggle per row if a campaign
-// actually needs banded prizes (e.g. rank 4-10 share a reward).
-const RANK_COLUMNS: RepeatingRowColumn<{ rank: number; cashAmount: number; label: string }>[] = [
+// ponytail: rank rows here only support a single `rank`, not rankRange — no banded-prize
+// editing yet. Add a "range" toggle per row if a campaign actually needs it (e.g. rank 4-10
+// share a reward).
+interface RankRow {
+  rank: number;
+  cashAmount: number;
+  label: string;
+  goodieLabel: string;
+  goodieCashEquivalent: number;
+  goodieImageUrl: string;
+}
+
+const RANK_COLUMNS: RepeatingRowColumn<RankRow>[] = [
   { key: 'rank', label: 'Rank', type: 'number', minWidth: 'w-24' },
   { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number', minWidth: 'w-32' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner', minWidth: 'min-w-[160px]' },
+  { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Trophy, merch…', minWidth: 'min-w-[160px]' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'w-28' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
 ];
 
 const PREFIX = 'rewardConfig.leaderboardPrizes';
@@ -39,10 +52,14 @@ function RankEditor({
   errors: FieldErrorMap;
   onChange: (patch: Partial<LeaderboardCut>) => void;
 }) {
-  const rankRows = cut.ranks.map((r) => ({
+  const uploadRewardImage = useRewardImageUpload();
+  const rankRows: RankRow[] = cut.ranks.map((r) => ({
     rank: r.rank ?? r.rankRange?.[0] ?? 0,
     cashAmount: r.cashAmount ?? 0,
     label: r.label ?? '',
+    goodieLabel: r.goodie?.label ?? '',
+    goodieCashEquivalent: r.goodie?.cashEquivalent ?? 0,
+    goodieImageUrl: r.goodie?.imageUrl ?? '',
   }));
 
   return (
@@ -50,6 +67,7 @@ function RankEditor({
       rows={rankRows}
       columns={RANK_COLUMNS}
       addLabel="Add rank"
+      onUploadImage={uploadRewardImage}
       arrayError={errors[`${cutPrefix}.ranks`]}
       getCellError={(index, key) => {
         const k = String(key);
@@ -62,14 +80,21 @@ function RankEditor({
         }
         return errors[baseKey];
       }}
-      newRow={() => ({ rank: rankRows.length + 1, cashAmount: 0, label: '' })}
+      newRow={() => ({ rank: rankRows.length + 1, cashAmount: 0, label: '', goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
       onChange={(rows) =>
         onChange({
           // Keep the raw label text — don't trim on every keystroke, which would strip a
           // trailing space as soon as it's typed (this is a controlled input fed back from
           // `cut.ranks` above) and make a multi-word label impossible to type. `.trim()`
           // still decides emptiness; real trimming happens server-side at save time.
-          ranks: rows.map((r) => ({ rank: r.rank, cashAmount: r.cashAmount, label: r.label.trim() ? r.label : undefined })),
+          ranks: rows.map((r) => ({
+            rank: r.rank,
+            cashAmount: r.cashAmount,
+            label: r.label.trim() ? r.label : undefined,
+            goodie: r.goodieLabel.trim()
+              ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined, imageUrl: r.goodieImageUrl || undefined }
+              : undefined,
+          })),
         })
       }
     />

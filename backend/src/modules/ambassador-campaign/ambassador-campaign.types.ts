@@ -17,7 +17,7 @@ export interface MilestoneTier {
     maxRegistrations: number | null; // null = uncapped top tier
     rewardType: "PER_REGISTRATION" | "FLAT_PLUS_PER_REG";
     amountPerRegistration: number;
-    goodie?: { label: string; cashEquivalent?: number | undefined } | undefined;
+    goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
 }
 
 export interface SpeedBonusConfig {
@@ -34,7 +34,7 @@ export interface SpeedBonusConfig {
         bonusAmount: number;
         label: string;
         maxWinners?: number | undefined;
-        goodie?: { label: string; cashEquivalent?: number | undefined } | undefined;
+        goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
     }[];
 }
 
@@ -59,7 +59,7 @@ export interface LeaderboardCut {
         rank?: number | undefined;
         rankRange?: [number, number] | undefined;
         cashAmount?: number | undefined;
-        goodie?: { label: string; cashEquivalent?: number | undefined } | undefined;
+        goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
         label?: string | undefined;
     }[];
     consolation?: { label: string; cashAmount: number } | undefined;
@@ -334,6 +334,7 @@ export interface TierBracketBreakdown {
     subtotal: number; // registrationsInBracket * amountPerRegistration (+ goodie cash equivalent, if any)
     goodieLabel?: string | undefined;
     goodieCashEquivalent?: number | undefined;
+    goodieImageUrl?: string | undefined;
 }
 
 export interface SpeedBonusResult {
@@ -342,7 +343,7 @@ export interface SpeedBonusResult {
         withinDays: number;
         bonusAmount: number;
         label: string;
-        goodie?: { label: string; cashEquivalent?: number | undefined } | undefined;
+        goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
     } | null;
     daysToMilestone: number | null;
 }

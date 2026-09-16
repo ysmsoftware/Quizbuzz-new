@@ -5,6 +5,7 @@ import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui
 import { Gift } from 'lucide-react';
 import { CopyIconButton } from './CopyIconButton';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import type { CampaignStats, MilestoneTier, ShareTemplates } from '@/lib/types/ambassador';
 
 function tierRange(tier: MilestoneTier) {
@@ -61,8 +62,8 @@ export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, ref
           <CardContent className="py-1 px-5 divide-y divide-border">
             {milestoneTiers.map((tier, i) => {
               const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
-              return (
-                <div key={i} className="flex items-center justify-between gap-3 py-3.5">
+              const row = (
+                <div className={`flex items-center justify-between gap-3 py-3.5 ${tier.goodie ? 'cursor-default' : ''}`}>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-foreground">{tier.label ?? `Tier ${i + 1}`}</span>
@@ -74,9 +75,17 @@ export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, ref
                     </div>
                     <p className="text-xs text-muted-foreground">{tierRange(tier)}</p>
                   </div>
-                  <p className="text-sm font-semibold text-foreground text-right shrink-0">
-                    <Rupees amount={tier.amountPerRegistration} />/reg{tier.goodie ? ` + ${tier.goodie.label}` : ''}
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground text-right shrink-0">
+                    {tier.goodie?.imageUrl && (
+                      <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                    )}
+                    <span><Rupees amount={tier.amountPerRegistration} />/reg{tier.goodie ? ` + ${tier.goodie.label}` : ''}</span>
                   </p>
+                </div>
+              );
+              return (
+                <div key={i}>
+                  {tier.goodie ? <GoodieHoverCard goodie={tier.goodie}>{row}</GoodieHoverCard> : row}
                 </div>
               );
             })}

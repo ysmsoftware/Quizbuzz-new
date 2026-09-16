@@ -15,6 +15,7 @@ export const contestRouter = Router();
 contestRouter.post("/", authenticatedOrgMiddleware, enforceContestCreateLimits, (req, res, next) => ctrl().createContest(req, res, next));
 contestRouter.get("/", authenticatedOrgMiddleware, (req, res, next) => ctrl().listContests(req, res, next));
 contestRouter.post("/upload-banner", authenticatedOrgMiddleware, (req, res, next) => ctrl().uploadBanner(req, res, next));
+contestRouter.post("/prize-reward-image-upload-url", authenticatedOrgMiddleware, (req, res, next) => ctrl().getPrizeRewardImageUploadUrl(req, res, next));
 contestRouter.post("/register/:contestSlug", enforceParticipantRegistrationLimit, (req, res, next) => ctrl().registerParticipant(req, res, next));
 contestRouter.post("/register-status/:contestSlug", (req, res, next) => ctrl().getRegisterStatus(req, res, next));
 

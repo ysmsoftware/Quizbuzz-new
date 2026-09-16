@@ -2,6 +2,7 @@
 
 import { Progress } from '@/components/ui/progress';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import type { CampaignStats } from '@/lib/types/ambassador';
 
 function tierRange(tier: CampaignStats['currentTier']) {
@@ -32,14 +33,19 @@ export function MilestoneProgress({ stats }: { stats: CampaignStats }) {
         <p className="text-xs text-muted-foreground">{progress.required - progress.current} more to reach the next tier</p>
       )}
       {goodie && (
-        <p className="text-xs text-primary">
-          Includes: {goodie.label}
-          {goodie.cashEquivalent !== undefined && (
-            <>
-              {' '}(worth <Rupees amount={goodie.cashEquivalent} />)
-            </>
-          )}
-        </p>
+        <GoodieHoverCard goodie={goodie}>
+          <p className="flex items-center gap-1.5 text-xs text-primary cursor-default">
+            {goodie.imageUrl && <img src={goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />}
+            <span>
+              Includes: {goodie.label}
+              {goodie.cashEquivalent !== undefined && (
+                <>
+                  {' '}(worth <Rupees amount={goodie.cashEquivalent} />)
+                </>
+              )}
+            </span>
+          </p>
+        </GoodieHoverCard>
       )}
     </div>
   );

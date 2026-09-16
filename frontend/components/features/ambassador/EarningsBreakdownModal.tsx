@@ -3,6 +3,7 @@
 import { Trophy, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import type {
   AmbassadorCampaignStatus,
   CampaignSpeedBonusStatus,
@@ -86,18 +87,32 @@ export function EarningsBreakdownModal({
               Registration rewards · {registrationCount} total
             </p>
             <div className="space-y-2">
-              {tierBreakdown.map((b, i) => (
-                <div key={i} className="flex items-start justify-between gap-3 text-sm">
-                  <div>
-                    <p className="font-medium text-foreground">{b.tierLabel}</p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {b.registrationsInBracket} reg{b.registrationsInBracket === 1 ? '' : 's'} × <Rupees amount={b.amountPerRegistration} />
-                      {b.goodieCashEquivalent ? ` + ${b.goodieLabel}` : ''}
-                    </p>
+              {tierBreakdown.map((b, i) => {
+                const row = (
+                  <div className={`flex items-start justify-between gap-3 text-sm ${b.goodieLabel ? 'cursor-default' : ''}`}>
+                    {b.goodieImageUrl && (
+                      <img src={b.goodieImageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border/50" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{b.tierLabel}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {b.registrationsInBracket} reg{b.registrationsInBracket === 1 ? '' : 's'} × <Rupees amount={b.amountPerRegistration} />
+                        {b.goodieCashEquivalent ? ` + ${b.goodieLabel}` : ''}
+                      </p>
+                    </div>
+                    <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={b.subtotal} /></p>
                   </div>
-                  <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={b.subtotal} /></p>
-                </div>
-              ))}
+                );
+                return (
+                  <div key={i}>
+                    {b.goodieLabel ? (
+                      <GoodieHoverCard goodie={{ label: b.goodieLabel, cashEquivalent: b.goodieCashEquivalent, imageUrl: b.goodieImageUrl }}>
+                        {row}
+                      </GoodieHoverCard>
+                    ) : row}
+                  </div>
+                );
+              })}
               {tierBreakdown.length === 0 && <p className="text-xs text-muted-foreground">No registrations yet.</p>}
             </div>
             <div className="flex items-center justify-between gap-3 text-sm pt-2 mt-2 border-t border-border/60">
@@ -112,13 +127,22 @@ export function EarningsBreakdownModal({
                 <Zap className="h-3.5 w-3.5 text-warning" />
                 Speed bonus
               </p>
-              <div className="flex items-start justify-between gap-3 text-sm">
-                <div>
-                  <p className="font-medium text-foreground">{speedBonus.tier.label}</p>
-                  {speedBonus.tier.goodie && <p className="text-xs text-muted-foreground">Includes {speedBonus.tier.goodie.label}</p>}
-                </div>
-                <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={speedBonusAmount} /></p>
-              </div>
+              {(() => {
+                const goodie = speedBonus.tier.goodie;
+                const row = (
+                  <div className={`flex items-start justify-between gap-3 text-sm ${goodie ? 'cursor-default' : ''}`}>
+                    {goodie?.imageUrl && (
+                      <img src={goodie.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border/50" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{speedBonus.tier.label}</p>
+                      {goodie && <p className="text-xs text-muted-foreground">Includes {goodie.label}</p>}
+                    </div>
+                    <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={speedBonusAmount} /></p>
+                  </div>
+                );
+                return goodie ? <GoodieHoverCard goodie={goodie}>{row}</GoodieHoverCard> : row;
+              })()}
             </div>
           )}
 

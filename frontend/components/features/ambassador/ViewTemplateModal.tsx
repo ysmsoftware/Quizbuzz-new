@@ -21,6 +21,7 @@ import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useOrgAmbassadorCampaignTemplates } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import type { CampaignTemplate } from '@/lib/types/ambassador';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 
 interface ViewTemplateModalProps {
   template: CampaignTemplate | null;
@@ -151,21 +152,31 @@ export function ViewTemplateModal({ template, open, onOpenChange }: ViewTemplate
                   <p className="text-xs text-muted-foreground italic">No milestone tiers set.</p>
                 ) : (
                   <div className="space-y-2">
-                    {milestoneTiers.map((tier, idx) => (
-                      <Card key={idx} className="border-border/40 bg-muted/20">
-                        <CardContent className="p-3 flex items-center justify-between text-xs">
-                          <div>
-                            <p className="font-semibold text-foreground">{tier.label || `Tier ${idx + 1}`}</p>
-                            <p className="text-muted-foreground text-[11px]">
-                              {tier.minRegistrations} – {tier.maxRegistrations ? `${tier.maxRegistrations} regs` : '∞ regs'}
-                            </p>
-                          </div>
-                          <div className="font-bold text-foreground">
-                            {tier.amountPerRegistration ? <Rupees amount={tier.amountPerRegistration} /> : tier.goodie?.label || '—'}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    {milestoneTiers.map((tier, idx) => {
+                      const card = (
+                        <Card className={`border-border/40 bg-muted/20 ${tier.goodie ? 'cursor-default' : ''}`}>
+                          <CardContent className="p-3 flex items-center justify-between text-xs">
+                            <div>
+                              <p className="font-semibold text-foreground">{tier.label || `Tier ${idx + 1}`}</p>
+                              <p className="text-muted-foreground text-[11px]">
+                                {tier.minRegistrations} – {tier.maxRegistrations ? `${tier.maxRegistrations} regs` : '∞ regs'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-foreground">
+                              {tier.goodie?.imageUrl && (
+                                <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                              )}
+                              {tier.amountPerRegistration ? <Rupees amount={tier.amountPerRegistration} /> : tier.goodie?.label || '—'}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                      return (
+                        <div key={idx}>
+                          {tier.goodie ? <GoodieHoverCard goodie={tier.goodie}>{card}</GoodieHoverCard> : card}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

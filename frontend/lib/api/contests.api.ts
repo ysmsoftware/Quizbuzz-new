@@ -309,3 +309,11 @@ export async function getLeaderboard(
 export async function uploadBanner(body: { fileData: string; fileName: string }): Promise<ApiResponse<{ url: string }>> {
   return post<{ url: string }>('/contests/upload-banner', body);
 }
+
+/**
+ * POST /contests/prize-reward-image-upload-url — presigned-PUT-URL flow for a prize goodie
+ * image, mirroring ambassadorCampaignApi.getPosterUploadUrl.
+ */
+export async function getPrizeRewardImageUploadUrl(body: { filename: string; mimeType: string }): Promise<ApiResponse<{ url: string; storageKey: string }>> {
+  return post<{ url: string; storageKey: string }>('/contests/prize-reward-image-upload-url', body);
+}

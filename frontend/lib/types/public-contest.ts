@@ -19,6 +19,9 @@ export interface PublicContestPrize {
   currency: string;
   label: string | null;
   benefits: string[];
+  goodieLabel?: string | null;
+  goodieCashEquivalent?: number | string | null;
+  goodieImageUrl?: string | null;
 }
 
 export interface PublicContestPaymentConfig {

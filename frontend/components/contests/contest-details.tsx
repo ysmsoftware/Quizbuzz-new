@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   Calendar,
   Clock,
@@ -401,45 +402,118 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {contest.prizes.map((prize, index) => (
-                        <div
-                          key={prize.id || index}
-                          className={`flex items-center gap-4 p-4 rounded-lg border ${
-                            index === 0
-                              ? 'bg-accent/10 border-accent/30'
-                              : index === 1
-                                ? 'bg-secondary border-border'
-                                : 'bg-card'
-                          }`}
-                        >
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-full font-bold ${
-                            index === 0
-                              ? 'bg-accent text-accent-foreground'
-                              : index === 1
-                                ? 'bg-muted text-muted-foreground'
-                                : 'bg-muted/50 text-muted-foreground'
-                          }`}>
-                            {prize.rankFrom === prize.rankTo
-                              ? `#${prize.rankFrom}`
-                              : `#${prize.rankFrom}-${prize.rankTo}`}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-semibold">
-                              {prize.label || `Rank ${prize.rankFrom}${prize.rankTo !== prize.rankFrom ? `-${prize.rankTo}` : ''}`}
-                            </p>
+                      {contest.prizes.map((prize, index) => {
+                        const rankText = prize.rankFrom === prize.rankTo ? `#${prize.rankFrom}` : `#${prize.rankFrom}-${prize.rankTo}`;
+                        const titleText = prize.label || `Rank ${prize.rankFrom}${prize.rankTo !== prize.rankFrom ? `-${prize.rankTo}` : ''}`;
+                        const goodieWorth = prize.goodieCashEquivalent != null && Number(prize.goodieCashEquivalent) > 0
+                          ? formatCurrency(Number(prize.goodieCashEquivalent))
+                          : null;
+                        const hasGoodie = !!(prize.goodieLabel || prize.goodieImageUrl);
+
+                        const infoBlock = (
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold">{titleText}</p>
                             {prize.benefits && prize.benefits.length > 0 && (
                               <p className="text-sm text-muted-foreground">
                                 {prize.benefits.join(', ')}
                               </p>
                             )}
+                            {prize.goodieLabel && (
+                              <p className="text-sm text-muted-foreground underline decoration-dotted underline-offset-2">
+                                Includes: {prize.goodieLabel}
+                                {goodieWorth && ` (Worth ~${goodieWorth})`}
+                              </p>
+                            )}
                           </div>
-                          {Number(prize.amount) > 0 && (
-                            <p className="text-lg font-bold text-primary">
-                              {formatCurrency(Number(prize.amount))}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                        );
+
+                        const row = (
+                          <div
+                            key={prize.id || index}
+                            className={`flex items-center gap-4 p-4 rounded-lg border ${
+                              index === 0
+                                ? 'bg-accent/10 border-accent/30'
+                                : index === 1
+                                  ? 'bg-secondary border-border'
+                                  : 'bg-card'
+                            } ${hasGoodie ? 'cursor-default' : ''}`}
+                          >
+                            <div className={`flex h-12 min-w-12 shrink-0 items-center justify-center whitespace-nowrap rounded-2xl px-2.5 font-bold ${
+                              prize.rankFrom === prize.rankTo ? 'text-sm' : 'text-xs'
+                            } ${
+                              index === 0
+                                ? 'bg-accent text-accent-foreground'
+                                : index === 1
+                                  ? 'bg-muted text-muted-foreground'
+                                  : 'bg-muted/50 text-muted-foreground'
+                            }`}>
+                              {rankText}
+                            </div>
+                            {prize.goodieImageUrl && (
+                              <img
+                                src={prize.goodieImageUrl}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/50"
+                              />
+                            )}
+                            {infoBlock}
+                            {Number(prize.amount) > 0 && (
+                              <p className="text-lg font-bold text-primary shrink-0">
+                                {formatCurrency(Number(prize.amount))}
+                              </p>
+                            )}
+                          </div>
+                        );
+
+                        return hasGoodie ? (
+                          <HoverCard key={prize.id || index} openDelay={150}>
+                            <HoverCardTrigger asChild>{row}</HoverCardTrigger>
+                            <HoverCardContent className="w-80" align="start">
+                              <div className="space-y-3">
+                                {prize.goodieImageUrl && (
+                                  <div className="relative">
+                                    <img
+                                      src={prize.goodieImageUrl}
+                                      alt=""
+                                      className="w-full h-52 object-cover rounded-md border border-border/50"
+                                    />
+                                    {goodieWorth && (
+                                      <span className="absolute top-2 right-2 rounded-full border border-border/50 bg-background/90 px-2 py-1 text-xs font-semibold shadow-sm">
+                                        Worth ~{goodieWorth}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-semibold text-base">{titleText}</p>
+                                  {Number(prize.amount) > 0 && (
+                                    <p className="text-sm font-semibold text-primary">
+                                      Cash prize: {formatCurrency(Number(prize.amount))}
+                                    </p>
+                                  )}
+                                </div>
+                                {prize.benefits && prize.benefits.length > 0 && (
+                                  <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Benefits</p>
+                                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-0.5">
+                                      {prize.benefits.map((b) => <li key={b}>{b}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {prize.goodieLabel && (
+                                  <div className="pt-2 border-t border-border/50">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Goodie</p>
+                                    <p className="text-sm font-medium">
+                                      {prize.goodieLabel}
+                                      {goodieWorth && !prize.goodieImageUrl && ` (Worth ~${goodieWorth})`}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        ) : row;
+                      })}
                     </div>
                   </CardContent>
                 </Card>

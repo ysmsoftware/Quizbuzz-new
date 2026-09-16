@@ -470,6 +470,7 @@ model Prize {
   benefits       String[] // e.g. ["Certificate", "Internship opportunity"]
   goodieLabel          String? // e.g. "Gift voucher", "Bluetooth speaker"
   goodieCashEquivalent Decimal? @db.Decimal(10, 2) // optional estimated value of the goodie
+  goodieImageUrl       String? // optional photo of the goodie
   createdAt      DateTime @default(now())
 
   // Relations

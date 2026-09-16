@@ -21,6 +21,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ImageUploadCell } from '@/components/features/shared/ImageUploadCell';
+import { useContestPrizeImageUpload } from '@/lib/hooks/useContestPrizeImageUpload';
 
 export interface PrizeBracketDraft {
     rankFrom: number;
@@ -31,6 +33,7 @@ export interface PrizeBracketDraft {
     benefits: string[];
     goodieLabel: string;
     goodieCashEquivalent: number;
+    goodieImageUrl: string;
 }
 
 interface RawPrize {
@@ -42,6 +45,7 @@ interface RawPrize {
     benefits?: string[];
     goodieLabel?: string | null;
     goodieCashEquivalent?: number | string | null;
+    goodieImageUrl?: string | null;
 }
 
 interface EditPrizesModalProps {
@@ -52,6 +56,7 @@ interface EditPrizesModalProps {
 }
 
 export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPrizesModalProps) {
+    const uploadPrizeImage = useContestPrizeImageUpload();
     const [drafts, setDrafts] = useState<PrizeBracketDraft[]>([]);
     const [benefitInputs, setBenefitInputs] = useState<Record<number, string>>({});
     const [saving, setSaving] = useState(false);
@@ -68,6 +73,7 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                     benefits: p.benefits || [],
                     goodieLabel: p.goodieLabel || '',
                     goodieCashEquivalent: Number(p.goodieCashEquivalent) || 0,
+                    goodieImageUrl: p.goodieImageUrl || '',
                 }))
             );
             setBenefitInputs({});
@@ -86,6 +92,7 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                 benefits: [],
                 goodieLabel: '',
                 goodieCashEquivalent: 0,
+                goodieImageUrl: '',
             },
         ]);
     };
@@ -288,7 +295,7 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                                             <div>
                                                 <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie (optional)</label>
                                                 <Input
@@ -306,6 +313,14 @@ export function EditPrizesModal({ open, onOpenChange, prizes, onSave }: EditPriz
                                                     onChange={(e) => handleFieldChange(idx, 'goodieCashEquivalent', Number(e.target.value))}
                                                     placeholder="2000"
                                                     className="h-8 text-xs"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Image</label>
+                                                <ImageUploadCell
+                                                    value={prize.goodieImageUrl}
+                                                    onChange={(url) => handleFieldChange(idx, 'goodieImageUrl', url)}
+                                                    onUploadImage={uploadPrizeImage}
                                                 />
                                             </div>
                                         </div>

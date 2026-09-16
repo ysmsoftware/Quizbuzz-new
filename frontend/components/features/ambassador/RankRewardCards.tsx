@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type { CampaignStats } from '@/lib/types/ambassador';
 import { QRCodeSVG } from 'qrcode.react';
@@ -32,15 +33,22 @@ export function RankRewardCards({ stats, referralLink, onOpenQr }: RankRewardCar
           ))}
         </CardContent>
       )}
-      {nextTier && (
-        <CardContent className={rankEntries.length > 0 ? 'pt-3 mt-3 border-t border-border/40' : undefined}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Next reward</p>
-          <p className="text-xl font-bold text-foreground"><Rupees amount={nextTier.amountPerRegistration} /><span className="text-sm font-normal text-muted-foreground"> /registration</span></p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            at {nextTier.label ?? 'the next tier'}{nextTier.goodie ? ` · plus ${nextTier.goodie.label}` : ''}
-          </p>
-        </CardContent>
-      )}
+      {nextTier && (() => {
+        const goodie = nextTier.goodie;
+        const content = (
+          <CardContent className={`${rankEntries.length > 0 ? 'pt-3 mt-3 border-t border-border/40' : ''} ${goodie ? 'cursor-default' : ''}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Next reward</p>
+            <p className="text-xl font-bold text-foreground"><Rupees amount={nextTier.amountPerRegistration} /><span className="text-sm font-normal text-muted-foreground"> /registration</span></p>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+              {goodie?.imageUrl && (
+                <img src={goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
+              )}
+              <span>at {nextTier.label ?? 'the next tier'}{goodie ? ` · plus ${goodie.label}` : ''}</span>
+            </p>
+          </CardContent>
+        );
+        return goodie ? <GoodieHoverCard goodie={goodie}>{content}</GoodieHoverCard> : content;
+      })()}
       {referralLink && onOpenQr && (
         <CardContent className={rankEntries.length > 0 || nextTier ? 'pt-3 mt-3 border-t border-border/40' : undefined}>
           <div className="flex items-center justify-between gap-3">

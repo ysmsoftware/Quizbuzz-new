@@ -32,8 +32,19 @@ export const PrizeSchema = z.object({
     // the ambassador campaign milestone tier reward pattern.
     goodieLabel: z.string().max(200).optional(),
     goodieCashEquivalent: z.number().min(0).optional(),
+    // .or(z.literal("")): EditPrizesModal.tsx sends the raw draft row (empty string for "no
+    // image set", the same tolerance goodieLabel above already has) straight through as the
+    // PATCH body, not just create/page.tsx's cleaned payload — so "" must validate here too.
+    goodieImageUrl: z.union([z.string().url(), z.literal("")]).optional(),
 }).refine((p) => p.rankTo >= p.rankFrom, {
     message: "rankTo must be >= rankFrom",
+});
+
+// POST /contests/prize-reward-image-upload-url — request a presigned S3 PUT URL for a
+// prize goodie image, mirroring RequestPosterUploadUrlSchema in the ambassador-campaign module.
+export const RequestPrizeRewardImageUploadUrlSchema = z.object({
+    filename: z.string().min(1, "File name is required."),
+    mimeType: z.string().min(1, "File type is required."),
 });
 
 // REGISTRATION FIELD (organizer-defined, extra field on the public registration form)
@@ -53,8 +64,13 @@ export const RegistrationFieldSchema = z.object({
 
 const CreateContestBase = z.object({
     title: z.string().min(3).max(200),
-    description: z.string().optional(),
-    details: z.string().optional(),
+    // .nullable(): description/details/cutoffScore/maxParticipants are all nullable columns
+    // on Contest (empty = "unset", not an empty string/0) — EditContestDetailsModal.tsx
+    // sends an explicit `null` for each when its field is cleared, which `.optional()` alone
+    // rejects ("expected string/number, received null"), failing every save from that modal
+    // whenever any of these happened to be unset, regardless of which field was actually edited.
+    description: z.string().optional().nullable(),
+    details: z.string().optional().nullable(),
     bannerImage: z.string().optional().nullable(),
     topics: z.array(z.string()).default([]),
     rules: z.array(z.string()).default([]),
@@ -65,8 +81,8 @@ const CreateContestBase = z.object({
         description: z.string().optional()
     }).optional(),
     duration: z.number().int().min(10).max(480), // 10 min – 8 hrs
-    cutoffScore: z.number().int().min(0).max(100).optional(),
-    maxParticipants: z.number().int().positive().optional(),
+    cutoffScore: z.number().int().min(0).max(100).optional().nullable(),
+    maxParticipants: z.number().int().positive().optional().nullable(),
     registrationDeadline: z.coerce.date(),
     startTime: z.coerce.date(),
     joinCode: z.string().min(4).max(20).optional(),

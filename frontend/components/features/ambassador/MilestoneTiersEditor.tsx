@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable';
+import { useRewardImageUpload } from '@/lib/hooks/useRewardImageUpload';
 import type { FieldErrorMap } from './campaign-schema';
 import type { MilestoneTier } from '@/lib/types/ambassador';
 
@@ -12,6 +13,7 @@ interface MilestoneRow {
   amountPerRegistration: number;
   goodieLabel: string;
   goodieCashEquivalent: number;
+  goodieImageUrl: string;
 }
 
 const COLUMNS: RepeatingRowColumn<MilestoneRow>[] = [
@@ -21,6 +23,7 @@ const COLUMNS: RepeatingRowColumn<MilestoneRow>[] = [
   { key: 'amountPerRegistration', label: 'Amount / Reg (₹)', type: 'number', minWidth: 'w-28' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Gift voucher, earbuds…', minWidth: 'min-w-[160px]' },
   { key: 'goodieCashEquivalent', label: 'Goodie Value (₹)', type: 'number', minWidth: 'w-28' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
 ];
 
 const PREFIX = 'rewardConfig.milestoneTiers';
@@ -34,6 +37,7 @@ export function MilestoneTiersEditor({
   onChange: (tiers: MilestoneTier[]) => void;
   errors?: FieldErrorMap;
 }) {
+  const uploadRewardImage = useRewardImageUpload();
   const rows: MilestoneRow[] = tiers.map((t) => ({
     label: t.label ?? '',
     minRegistrations: t.minRegistrations,
@@ -41,6 +45,7 @@ export function MilestoneTiersEditor({
     amountPerRegistration: t.amountPerRegistration,
     goodieLabel: t.goodie?.label ?? '',
     goodieCashEquivalent: t.goodie?.cashEquivalent ?? 0,
+    goodieImageUrl: t.goodie?.imageUrl ?? '',
   }));
 
   const handleChange = (nextRows: MilestoneRow[]) => {
@@ -59,7 +64,7 @@ export function MilestoneTiersEditor({
         rewardType: 'PER_REGISTRATION' as const,
         amountPerRegistration: r.amountPerRegistration,
         goodie: r.goodieLabel.trim()
-          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined }
+          ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined, imageUrl: r.goodieImageUrl || undefined }
           : undefined,
       })),
     );
@@ -75,6 +80,7 @@ export function MilestoneTiersEditor({
           rows={rows}
           columns={COLUMNS}
           onChange={handleChange}
+          onUploadImage={uploadRewardImage}
           addLabel="Add tier"
           arrayError={errors[PREFIX]}
           getCellError={(index, key) => {
@@ -95,6 +101,7 @@ export function MilestoneTiersEditor({
             amountPerRegistration: 0,
             goodieLabel: '',
             goodieCashEquivalent: 0,
+            goodieImageUrl: '',
           })}
         />
       </CardContent>

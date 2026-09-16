@@ -10,6 +10,7 @@ export interface PrizeDTO {
   benefits?: string[] | undefined;
   goodieLabel?: string | undefined;
   goodieCashEquivalent?: number | undefined;
+  goodieImageUrl?: string | undefined;
 }
 
 export interface PrizeDetail {
@@ -22,6 +23,7 @@ export interface PrizeDetail {
   benefits?: string[] | undefined;
   goodieLabel?: string | undefined;
   goodieCashEquivalent?: number | undefined;
+  goodieImageUrl?: string | undefined;
 }
 
 // REGISTRATION FIELD (organizer-defined)
@@ -40,16 +42,16 @@ export interface CreateContestDTO {
   organizationId: string;
   createdById: string;
   title: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   slug: string;
-  details?: string | undefined;
+  details?: string | null | undefined;
   topics?: string[] | undefined;
   rules?: string[] | undefined;
   paymentEnabled?: boolean | undefined;
   paymentConfig?: { amount: number; currency: string; description?: string | undefined } | undefined;
   duration: number; // minutes
-  cutoffScore?: number | undefined; // percentage
-  maxParticipants?: number | undefined;
+  cutoffScore?: number | null | undefined; // percentage
+  maxParticipants?: number | null | undefined;
   registrationDeadline: Date;
   startTime: Date;
   endTime: Date;

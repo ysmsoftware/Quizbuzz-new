@@ -92,6 +92,7 @@ export class ContestRepository implements IContestRepository {
                         benefits: p.benefits ?? [],
                         goodieLabel: p.goodieLabel ?? null,
                         goodieCashEquivalent: p.goodieCashEquivalent ?? null,
+                        goodieImageUrl: p.goodieImageUrl ?? null,
                     }))
                 });
             }
@@ -261,8 +262,12 @@ export class ContestRepository implements IContestRepository {
         if (prizes) {
             parsed.prizes = {
                 deleteMany: {},
+                // organizationId is a required scalar on Prize (not inferred from the parent
+                // Contest.update's `where`) — omitting it here throws "Argument `organization`
+                // is missing." from Prisma on every prize edit, pre-existing and unrelated to
+                // any particular prize field.
                 create: prizes.map(prize => {
-                    return stripUndefined(prize);
+                    return { ...stripUndefined(prize), organizationId };
                 })
             };
         }

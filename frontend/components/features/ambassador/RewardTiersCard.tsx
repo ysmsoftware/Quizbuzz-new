@@ -6,6 +6,7 @@ import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
 
 function tierRange(tier: MilestoneTier) {
@@ -44,8 +45,8 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
       <CardContent className="px-5 py-1 lg:hidden divide-y divide-border">
         {milestoneTiers.map((tier, i) => {
           const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
-          return (
-            <div key={i} className="flex items-center justify-between gap-3 py-3">
+          const row = (
+            <div className={cn('flex items-center justify-between gap-3 py-3', tier.goodie && 'cursor-default')}>
               <div>
                 <p className="flex items-center gap-2 text-[12.5px] font-semibold text-foreground">
                   {tier.label ?? `Tier ${i + 1}`}
@@ -62,8 +63,18 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                   <Rupees amount={tier.amountPerRegistration} />
                   /reg
                 </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{tier.goodie ? tier.goodie.label : '—'}</p>
+                <p className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                  {tier.goodie?.imageUrl && (
+                    <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                  )}
+                  {tier.goodie ? tier.goodie.label : '—'}
+                </p>
               </div>
+            </div>
+          );
+          return (
+            <div key={i}>
+              {tier.goodie ? <GoodieHoverCard goodie={tier.goodie}>{row}</GoodieHoverCard> : row}
             </div>
           );
         })}
@@ -82,8 +93,8 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
           <TableBody>
             {milestoneTiers.map((tier, i) => {
               const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
-              return (
-                <TableRow key={i} className={cn(isCurrent && 'bg-primary/5')}>
+              const row = (
+                <TableRow key={i} className={cn(isCurrent && 'bg-primary/5', tier.goodie && 'cursor-default')}>
                   <TableCell className="pl-5 font-semibold text-foreground">
                     <span className="flex items-center gap-2">
                       {tier.label ?? `Tier ${i + 1}`}
@@ -99,9 +110,19 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                     <Rupees amount={tier.amountPerRegistration} />
                     /reg
                   </TableCell>
-                  <TableCell className="text-right pr-5 text-muted-foreground">{tier.goodie ? tier.goodie.label : '—'}</TableCell>
+                  <TableCell className="text-right pr-5 text-muted-foreground">
+                    <span className="flex items-center justify-end gap-1.5">
+                      {tier.goodie?.imageUrl && (
+                        <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                      )}
+                      {tier.goodie ? tier.goodie.label : '—'}
+                    </span>
+                  </TableCell>
                 </TableRow>
               );
+              return tier.goodie ? (
+                <GoodieHoverCard key={i} goodie={tier.goodie}>{row}</GoodieHoverCard>
+              ) : row;
             })}
           </TableBody>
         </Table>

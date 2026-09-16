@@ -36,7 +36,9 @@ import { DateTimePicker } from '@/components/ui/datetime-picker';
 import { isOnStartTimeGrid, getStartTimeGridMessage } from '@/lib/constants/contest-scheduling';
 import { toLocalInputValue } from '@/lib/utils/datetime';
 import { FileUpload } from '@/components/features/shared/FileUpload';
+import { ImageUploadCell } from '@/components/features/shared/ImageUploadCell';
 import { uploadBanner } from '@/lib/api/contests.api';
+import { useContestPrizeImageUpload } from '@/lib/hooks/useContestPrizeImageUpload';
 
 const STEPS = [
     { id: 1, title: 'Basic Info', description: 'Title, description, details, topics, and rules' },
@@ -53,6 +55,7 @@ interface PrizeBracket {
     benefits: string[];
     goodieLabel: string;
     goodieCashEquivalent: number;
+    goodieImageUrl: string;
 }
 
 interface RegistrationFieldRow {
@@ -94,6 +97,7 @@ export default function CreateContestPage() {
     const { toast } = useToast();
     const { createContestMutation } = useContests();
     const { isLoggedIn, meQuery } = useAuth();
+    const uploadPrizeImage = useContestPrizeImageUpload();
 
     const [currentStep, setCurrentStep] = useState(1);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -267,6 +271,7 @@ export default function CreateContestPage() {
                     benefits: [],
                     goodieLabel: '',
                     goodieCashEquivalent: 0,
+                    goodieImageUrl: '',
                 },
             ],
         }));
@@ -484,6 +489,7 @@ export default function CreateContestPage() {
                     benefits: p.benefits,
                     goodieLabel: p.goodieLabel || undefined,
                     goodieCashEquivalent: p.goodieCashEquivalent || undefined,
+                    goodieImageUrl: p.goodieImageUrl || undefined,
                 })),
                 registrationFields: form.registrationFields
                     .filter(f => f.label.trim())
@@ -1001,7 +1007,7 @@ export default function CreateContestPage() {
                                                         </div>
 
                                                         {/* Goodie */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                                                             <div>
                                                                 <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Goodie (optional)</label>
                                                                 <Input
@@ -1019,6 +1025,14 @@ export default function CreateContestPage() {
                                                                     onChange={(e) => handlePrizeFieldChange(idx, 'goodieCashEquivalent', Number(e.target.value))}
                                                                     placeholder="2000"
                                                                     className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[10px] font-semibold mb-1 block text-muted-foreground">Image</label>
+                                                                <ImageUploadCell
+                                                                    value={prize.goodieImageUrl}
+                                                                    onChange={(url) => handlePrizeFieldChange(idx, 'goodieImageUrl', url)}
+                                                                    onUploadImage={uploadPrizeImage}
                                                                 />
                                                             </div>
                                                         </div>

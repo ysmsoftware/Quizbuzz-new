@@ -5,6 +5,7 @@ import { LeaderboardScopeKind } from "./ambassador-campaign.types";
 const goodieSchema = z.object({
     label: z.string().trim().min(1, "Goodie name is required"),
     cashEquivalent: z.number().min(0, "Goodie value must be 0 or greater").optional(),
+    imageUrl: z.string().url().optional(),
 });
 
 const milestoneTierSchema = z.object({
@@ -156,10 +157,12 @@ const phaseTemplateSchema = phaseTemplateFieldsSchema.min(1).refine(
     { message: "Phase fractions must sum to 1." },
 );
 
-// POST /campaigns/poster-upload-url — request a presigned S3 PUT URL for a campaign poster.
+// POST /campaigns/poster-upload-url — request a presigned S3 PUT URL for a campaign poster
+// or reward goodie image (assetType picks the storage folder — see ambassador-campaign.service.ts).
 export const RequestPosterUploadUrlSchema = z.object({
     filename: z.string().min(1, "File name is required."),
     mimeType: z.string().min(1, "File type is required."),
+    assetType: z.enum(["poster", "reward-image"]).optional().default("poster"),
 });
 
 const shareMessageTemplateSchema = z.object({

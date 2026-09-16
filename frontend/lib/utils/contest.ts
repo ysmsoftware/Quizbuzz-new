@@ -85,15 +85,11 @@ export function adaptServerContest(server: ServerContest): Contest {
     mappedStatus = 'cancelled';
   }
 
-  // Construct prizes
-  const prizes = (server.prizes || []).map(p => {
-    return {
-      rank: `${p.rankFrom}-${p.rankTo}`,
-      title: p.label || '',
-      amount: Number(p.amount) || 0,
-      description: p.benefits?.join(', ') || '',
-    };
-  });
+  // Pass prizes through as-is (real Prize shape) — this used to collapse rankFrom/rankTo
+  // into a "1-3" string and drop the goodie fields entirely, which is why
+  // ContestPrizeBracket.tsx ended up reading fields (rank/title/description) that don't
+  // exist on the actual backend model.
+  const prizes = server.prizes || [];
 
   return {
     id: server.id,

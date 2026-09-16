@@ -121,10 +121,16 @@ export interface RegistrationField {
 }
 
 export interface Prize {
-    rank: number | string; // 1, 2, 3 or "4-10"
-    title: string;
-    amount?: number;
-    description?: string;
+    id: string;
+    rankFrom: number;
+    rankTo: number;
+    amount: number;
+    currency?: string;
+    label?: string | null;
+    benefits?: string[];
+    goodieLabel?: string | null;
+    goodieCashEquivalent?: number | null;
+    goodieImageUrl?: string | null;
 }
 
 export interface Question {
@@ -503,12 +509,16 @@ export interface ServerContest {
     defaultQuestionMarks?: number;
     defaultQuestionNegativeMark?: number | string | any;
     prizes?: Array<{
+        id: string;
         rankFrom: number;
         rankTo: number;
         amount: number;
         currency?: string;
         label?: string | null;
         benefits?: string[];
+        goodieLabel?: string | null;
+        goodieCashEquivalent?: number | null;
+        goodieImageUrl?: string | null;
     }>;
     createdAt: string;
     updatedAt: string;

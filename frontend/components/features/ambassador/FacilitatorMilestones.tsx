@@ -2,6 +2,7 @@
 
 import { Check, Lock, Zap } from 'lucide-react';
 import { Rupees } from './Rupees';
+import { GoodieHoverCard } from './GoodieHoverCard';
 import type { CampaignSpeedBonusStatus, MilestoneTier } from '@/lib/types/ambassador';
 
 interface FacilitatorMilestonesProps {
@@ -25,10 +26,9 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
         const isDone = registrationCount >= tier.minRegistrations && (tier.maxRegistrations === null || registrationCount <= tier.maxRegistrations) && currentTier?.minRegistrations === tier.minRegistrations;
         const isReached = registrationCount >= tier.minRegistrations;
         const remaining = Math.max(0, tier.minRegistrations - registrationCount);
-        return (
+        const card = (
           <div
-            key={i}
-            className={`rounded-xl border p-4 ${isReached ? 'border-success/40 bg-success/5' : 'border-border/50 bg-card'}`}
+            className={`rounded-xl border p-4 ${isReached ? 'border-success/40 bg-success/5' : 'border-border/50 bg-card'} ${tier.goodie ? 'cursor-default' : ''}`}
           >
             <div className="flex items-start justify-between gap-2 mb-2.5">
               <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${isReached ? 'bg-success text-success-foreground' : 'bg-secondary text-muted-foreground'}`}>
@@ -41,10 +41,20 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
               </span>
             </div>
             <p className="text-[13px] font-semibold text-foreground">{tier.label ?? `Tier ${i + 1}`}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              <Rupees amount={tier.amountPerRegistration} />
-              /reg{tier.goodie ? ` · ${tier.goodie.label}` : ''}
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+              {tier.goodie?.imageUrl && (
+                <img src={tier.goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
+              )}
+              <span>
+                <Rupees amount={tier.amountPerRegistration} />
+                /reg{tier.goodie ? ` · ${tier.goodie.label}` : ''}
+              </span>
             </p>
+          </div>
+        );
+        return (
+          <div key={i}>
+            {tier.goodie ? <GoodieHoverCard goodie={tier.goodie}>{card}</GoodieHoverCard> : card}
           </div>
         );
       })}
@@ -54,8 +64,9 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
 
 function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonusStatus }) {
   const earned = speedBonus.earned && speedBonus.tier;
-  return (
-    <div className={`rounded-xl border p-4 ${earned ? 'border-warning/40 bg-warning/5' : 'border-border/50 bg-card'}`}>
+  const goodie = earned ? speedBonus.tier!.goodie : undefined;
+  const card = (
+    <div className={`rounded-xl border p-4 ${earned ? 'border-warning/40 bg-warning/5' : 'border-border/50 bg-card'} ${goodie ? 'cursor-default' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${earned ? 'bg-warning text-warning-foreground' : 'bg-secondary text-muted-foreground'}`}>
           <Zap className="h-3.5 w-3.5" />
@@ -65,15 +76,21 @@ function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonu
         </span>
       </div>
       <p className="text-[13px] font-semibold text-foreground">{earned ? speedBonus.tier!.label : 'Speed bonus'}</p>
-      <p className="text-[11px] text-muted-foreground mt-0.5">
-        {earned ? (
-          <>
-            <Rupees amount={speedBonus.tier!.bonusAmount} /> bonus
-          </>
-        ) : (
-          'Hit the milestone fast for a bonus'
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+        {goodie?.imageUrl && (
+          <img src={goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
         )}
+        <span>
+          {earned ? (
+            <>
+              <Rupees amount={speedBonus.tier!.bonusAmount} /> bonus{goodie ? ` · ${goodie.label}` : ''}
+            </>
+          ) : (
+            'Hit the milestone fast for a bonus'
+          )}
+        </span>
       </p>
     </div>
   );
+  return goodie ? <GoodieHoverCard goodie={goodie}>{card}</GoodieHoverCard> : card;
 }
