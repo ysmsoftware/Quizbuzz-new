@@ -18,6 +18,7 @@ import { isRouteExcluded } from '@/lib/constants/pwa-excluded-routes';
 
 const COOLDOWN_DAYS = 7;
 const DISMISSAL_KEY = 'pwa-install-dismissed-at';
+const SESSION_SHOWN_KEY = 'pwa-install-prompt-shown-session';
 
 export function InstallPrompt() {
   const pathname = usePathname();
@@ -34,15 +35,36 @@ export function InstallPrompt() {
     triggerInstall,
   } = usePwaStore();
 
-  // Helper: check dismissal cooldown
+  // Helper: check dismissal cooldown or if shown in current session
   const isDismissedOnCooldown = (): boolean => {
     if (typeof window === 'undefined') return false;
+
+    // Suppress if prompt was already auto-triggered or closed in current session
+    if (sessionStorage.getItem(SESSION_SHOWN_KEY) === 'true') {
+      return true;
+    }
+
     const dismissedAt = localStorage.getItem(DISMISSAL_KEY);
     if (!dismissedAt) return false;
     const dismissedTime = parseInt(dismissedAt, 10);
+    if (isNaN(dismissedTime)) return false;
     const now = Date.now();
     const cooldownMs = COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
     return now - dismissedTime < cooldownMs;
+  };
+
+  const markDismissed = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DISMISSAL_KEY, Date.now().toString());
+      sessionStorage.setItem(SESSION_SHOWN_KEY, 'true');
+    }
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setShowInstallPrompt(open);
+    if (!open) {
+      markDismissed();
+    }
   };
 
   useEffect(() => {
@@ -68,9 +90,15 @@ export function InstallPrompt() {
 
     if (isIos && isSafari && !isStandaloneMode) {
       setIsIosSafari(true);
-      // Auto-trigger iOS prompt if not dismissed recently
-      if (!isDismissedOnCooldown() && !isRouteExcluded(pathname)) {
-        setShowInstallPrompt(true);
+      // Auto-trigger iOS prompt ONCE if not dismissed recently or in session
+      if (!isDismissedOnCooldown() && !isRouteExcluded(window.location.pathname)) {
+        sessionStorage.setItem(SESSION_SHOWN_KEY, 'true');
+        const timer = setTimeout(() => {
+          if (!isRouteExcluded(window.location.pathname)) {
+            setShowInstallPrompt(true);
+          }
+        }, 4000);
+        return () => clearTimeout(timer);
       }
     }
 
@@ -78,9 +106,14 @@ export function InstallPrompt() {
     const handleBeforeInstall = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Auto-trigger Android/Desktop prompt if not dismissed recently
-      if (!isDismissedOnCooldown() && !isRouteExcluded(pathname)) {
-        setShowInstallPrompt(true);
+      // Auto-trigger Android/Desktop prompt ONCE if not dismissed recently or in session
+      if (!isDismissedOnCooldown() && !isRouteExcluded(window.location.pathname)) {
+        sessionStorage.setItem(SESSION_SHOWN_KEY, 'true');
+        const timer = setTimeout(() => {
+          if (!isRouteExcluded(window.location.pathname)) {
+            setShowInstallPrompt(true);
+          }
+        }, 4000);
       }
     };
 
@@ -127,7 +160,7 @@ export function InstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
       navigator.serviceWorker?.removeEventListener('controllerchange', handleControllerChange);
     };
-  }, [pathname, setDeferredPrompt, setShowInstallPrompt, setIsStandalone]);
+  }, [setDeferredPrompt, setShowInstallPrompt, setIsStandalone]);
 
   // Handler for service worker updates
   const handleSWUpdate = (waitingWorker: ServiceWorker) => {
@@ -149,8 +182,7 @@ export function InstallPrompt() {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSAL_KEY, Date.now().toString());
-    setShowInstallPrompt(false);
+    handleOpenChange(false);
   };
 
   const handleInstallClick = async () => {
@@ -169,7 +201,7 @@ export function InstallPrompt() {
   if (isRouteExcluded(pathname)) return null;
 
   return (
-    <Drawer open={showInstallPrompt} onOpenChange={setShowInstallPrompt}>
+    <Drawer open={showInstallPrompt} onOpenChange={handleOpenChange}>
       <DrawerContent className="p-0 border-t bg-background">
         <div className="mx-auto max-w-md w-full px-6 py-6 space-y-6">
           <DrawerHeader className="p-0 text-center sm:text-left">
