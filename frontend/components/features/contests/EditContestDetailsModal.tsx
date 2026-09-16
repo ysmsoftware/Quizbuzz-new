@@ -57,34 +57,38 @@ export function EditContestDetailsModal({
     }
   };
 
-  const [formData, setFormData] = useState<any>({
+  const emptyFormData = {
     title: '',
     description: '',
     details: '',
-    topics: [],
-    rules: [],
+    topics: [] as string[],
     registrationDeadline: '',
     startTime: '',
     durationMinutes: 90,
-    maxParticipants: '',
+    maxParticipants: '' as number | '',
     cutoffScore: 60,
     showResultsAfter: 24,
     shuffleQuestions: true,
     shuffleOptions: false,
     proctoringEnabled: true,
-    defaultQuestionMarks: 1,
-    defaultQuestionNegativeMark: 0.5,
-  });
+  };
+
+  const [formData, setFormData] = useState<any>(emptyFormData);
+  // Snapshot of formData exactly as populated on open — handleSave diffs against this so a
+  // save only ever sends the fields the admin actually touched. Re-sending every field
+  // (even unchanged ones) on every save isn't just wasteful: a value read from a stale
+  // `contest` prop can silently overwrite a fresher change made through another path
+  // (e.g. the "Add Rule" button, or a concurrent edit) with an old snapshot.
+  const [initialFormData, setInitialFormData] = useState<any>(emptyFormData);
 
   // Pre-populate data whenever modal is opened
   useEffect(() => {
     if (isOpen && contest) {
-      setFormData({
+      const initial = {
         title: contest.title || '',
         description: contest.description || '',
         details: contest.details || '',
         topics: contest.tags || [],
-        rules: contest.rules || [],
         registrationDeadline: formatToLocalDatetime(contest.registrationDeadline),
         startTime: formatToLocalDatetime(contest.startTime),
         durationMinutes: contest.durationMinutes || 90,
@@ -94,9 +98,9 @@ export function EditContestDetailsModal({
         shuffleQuestions: contest.shuffleQuestions ?? true,
         shuffleOptions: contest.shuffleOptions ?? false,
         proctoringEnabled: contest.proctoringEnabled ?? true,
-        defaultQuestionMarks: contest.defaultQuestionMarks ?? 1,
-        defaultQuestionNegativeMark: contest.defaultQuestionNegativeMark ?? 0.5,
-      });
+      };
+      setFormData(initial);
+      setInitialFormData(initial);
       setTopicInput('');
       setActiveTab('general');
     }
@@ -154,17 +158,9 @@ export function EditContestDetailsModal({
         return;
       }
 
-      if (formData.defaultQuestionMarks !== undefined && Number(formData.defaultQuestionMarks) <= 0) {
-        toast.error('Default Marks must be greater than 0');
-        return;
-      }
-
-      if (formData.defaultQuestionNegativeMark !== undefined && Number(formData.defaultQuestionNegativeMark) < 0) {
-        toast.error('Default Negative Mark penalty cannot be negative');
-        return;
-      }
-
-      const payload: any = {
+      // Only fields that actually differ from what the modal opened with are sent — never
+      // the whole form. See the `initialFormData` comment above for why.
+      const current: Record<string, unknown> = {
         title: formData.title.trim(),
         description: formData.description.trim() || null,
         details: formData.details.trim() || null,
@@ -172,12 +168,28 @@ export function EditContestDetailsModal({
         shuffleQuestions: formData.shuffleQuestions,
         shuffleOptions: formData.shuffleOptions,
         proctoringEnabled: formData.proctoringEnabled,
-        defaultQuestionMarks: Number(formData.defaultQuestionMarks),
-        defaultQuestionNegativeMark: Number(formData.defaultQuestionNegativeMark),
         maxParticipants: formData.maxParticipants ? Number(formData.maxParticipants) : null,
         cutoffScore: Number(formData.cutoffScore),
         showResultsAfter: Number(formData.showResultsAfter),
       };
+      const original: Record<string, unknown> = {
+        title: initialFormData.title.trim(),
+        description: initialFormData.description.trim() || null,
+        details: initialFormData.details.trim() || null,
+        topics: initialFormData.topics,
+        shuffleQuestions: initialFormData.shuffleQuestions,
+        shuffleOptions: initialFormData.shuffleOptions,
+        proctoringEnabled: initialFormData.proctoringEnabled,
+        maxParticipants: initialFormData.maxParticipants ? Number(initialFormData.maxParticipants) : null,
+        cutoffScore: Number(initialFormData.cutoffScore),
+        showResultsAfter: Number(initialFormData.showResultsAfter),
+      };
+      const payload: any = {};
+      for (const key of Object.keys(current)) {
+        if (JSON.stringify(current[key]) !== JSON.stringify(original[key])) {
+          payload[key] = current[key];
+        }
+      }
 
       // Timing fields are editable only in Draft phase
       if (isDraft) {
@@ -198,10 +210,19 @@ export function EditContestDetailsModal({
           return;
         }
 
-        payload.startTime = start.toISOString();
-        payload.registrationDeadline = deadline.toISOString();
-        payload.duration = Number(formData.durationMinutes);
-        payload.durationMinutes = Number(formData.durationMinutes);
+        if (formData.startTime !== initialFormData.startTime || formData.registrationDeadline !== initialFormData.registrationDeadline) {
+          payload.startTime = start.toISOString();
+          payload.registrationDeadline = deadline.toISOString();
+        }
+        if (Number(formData.durationMinutes) !== Number(initialFormData.durationMinutes)) {
+          payload.duration = Number(formData.durationMinutes);
+          payload.durationMinutes = Number(formData.durationMinutes);
+        }
+      }
+
+      if (Object.keys(payload).length === 0) {
+        onOpenChange(false);
+        return;
       }
 
       if (onSave) {
@@ -386,36 +407,13 @@ export function EditContestDetailsModal({
               </div>
             </TabsContent>
 
-            {/* Scoring Defaults & Proctoring */}
+            {/* Proctoring & Quiz Controls — marks-per-question / negative-marking defaults
+                live only in the Questions tab now (with its own "apply to existing
+                questions" option), not duplicated here. */}
             <TabsContent value="scoring" className="space-y-4 outline-none">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="defaultQuestionMarks" className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Default Marks Per Question</Label>
-                  <Input
-                    id="defaultQuestionMarks"
-                    type="number"
-                    min={1}
-                    value={formData.defaultQuestionMarks}
-                    onChange={(e) => handleInputChange('defaultQuestionMarks', e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="defaultQuestionNegativeMark" className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Default Negative Mark</Label>
-                  <Input
-                    id="defaultQuestionNegativeMark"
-                    type="number"
-                    min={0}
-                    step={0.1}
-                    value={formData.defaultQuestionNegativeMark}
-                    onChange={(e) => handleInputChange('defaultQuestionNegativeMark', e.target.value)}
-                  />
-                </div>
-              </div>
-
               <div className="space-y-3 p-4 bg-muted/30 rounded-lg border border-border/50">
                 <h4 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Quiz Controls</h4>
-                
+
                 <div className="flex items-center justify-between py-1">
                   <div className="space-y-0.5">
                     <Label htmlFor="shuffleQuestions" className="font-medium text-sm">Shuffle Questions</Label>

@@ -62,6 +62,13 @@ export const RegistrationFieldSchema = z.object({
 
 // CREATE CONTEST
 
+// No `.default(...)` on any field here — this base is shared with UpdateContestSchema via
+// `.partial()`, and Zod's `.default()` fires even when a field is entirely absent from a
+// `.partial()`-parsed object (verified: `Base.partial().parse({title:'x'})` resurrects every
+// defaulted field at its default value). On a real PATCH that only sends `{title}`, that
+// silently reset topics/rules to `[]` and shuffleQuestions/proctoringEnabled/etc. back to
+// their create-time defaults on every partial update — e.g. editing just the contest title
+// wiped its rules. Defaults are applied once, only for creation, in CreateContestSchema below.
 const CreateContestBase = z.object({
     title: z.string().min(3).max(200),
     // .nullable(): description/details/cutoffScore/maxParticipants are all nullable columns
@@ -72,9 +79,9 @@ const CreateContestBase = z.object({
     description: z.string().optional().nullable(),
     details: z.string().optional().nullable(),
     bannerImage: z.string().optional().nullable(),
-    topics: z.array(z.string()).default([]),
-    rules: z.array(z.string()).default([]),
-    paymentEnabled: z.boolean().default(false),
+    topics: z.array(z.string()).optional(),
+    rules: z.array(z.string()).optional(),
+    paymentEnabled: z.boolean().optional(),
     paymentConfig: z.object({
         amount: z.number().int().min(0),
         currency: z.string().default("INR"),
@@ -86,19 +93,32 @@ const CreateContestBase = z.object({
     registrationDeadline: z.coerce.date(),
     startTime: z.coerce.date(),
     joinCode: z.string().min(4).max(20).optional(),
-    shuffleQuestions: z.boolean().default(true),
-    shuffleOptions: z.boolean().default(false),
-    proctoringEnabled: z.boolean().default(true),
-    isPrivate: z.boolean().default(false),
-    showResultsAfter: z.number().int().min(0).max(168).default(24), // max 7 days
-    defaultQuestionMarks: z.number().int().min(1).default(4),
-    defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),
+    shuffleQuestions: z.boolean().optional(),
+    shuffleOptions: z.boolean().optional(),
+    proctoringEnabled: z.boolean().optional(),
+    isPrivate: z.boolean().optional(),
+    showResultsAfter: z.number().int().min(0).max(168).optional(), // max 7 days
+    defaultQuestionMarks: z.number().int().min(1).optional(),
+    defaultQuestionNegativeMark: z.number().min(0).max(10).optional(),
     prizes: z.array(PrizeSchema).optional(),
     certificateTemplateId: z.string().optional().nullable(),
     registrationFields: z.array(RegistrationFieldSchema).max(20).optional(),
 });
 
-export const CreateContestSchema = CreateContestBase.refine(
+export const CreateContestSchema = CreateContestBase.extend({
+    // Defaults applied only here, at creation — see the no-`.default()` note on
+    // CreateContestBase above for why they can't live on the shared base.
+    topics: z.array(z.string()).default([]),
+    rules: z.array(z.string()).default([]),
+    paymentEnabled: z.boolean().default(false),
+    shuffleQuestions: z.boolean().default(true),
+    shuffleOptions: z.boolean().default(false),
+    proctoringEnabled: z.boolean().default(true),
+    isPrivate: z.boolean().default(false),
+    showResultsAfter: z.number().int().min(0).max(168).default(24),
+    defaultQuestionMarks: z.number().int().min(1).default(4),
+    defaultQuestionNegativeMark: z.number().min(0).max(10).default(1),
+}).refine(
     (d) => d.startTime > d.registrationDeadline,
     { message: "startTime must be after registrationDeadline", path: ["startTime"] }
 ).refine(
