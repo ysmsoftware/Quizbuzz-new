@@ -231,7 +231,6 @@ export default function AmbassadorCampaignDetailPage() {
             sidebar on the right — a desktop dashboard layout, not a stretched mobile column. */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_344px] gap-6 items-start">
           <div className="space-y-6 min-w-0">
-            <CampaignTimelineStrip status={campaign.status} endDate={campaign.endDate} phases={campaign.phases} />
 
             <TierLadder
               milestoneTiers={campaign.milestoneTiers}
@@ -241,6 +240,7 @@ export default function AmbassadorCampaignDetailPage() {
               milestoneAmount={stats.milestoneAmount}
               onOpenEarnings={() => setEarningsModalOpen(true)}
             />
+            <CampaignTimelineStrip status={campaign.status} endDate={campaign.endDate} phases={campaign.phases} />
 
             <SpeedBonusStrip speedBonus={stats.speedBonus} />
 

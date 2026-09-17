@@ -12,6 +12,7 @@ import { LeaderboardChart } from './LeaderboardChart';
 import { LeaderboardTable } from './LeaderboardTable';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { GoodieThumb } from './GoodieThumb';
 import { leaderboardScopeKey, type LeaderboardCut, type LeaderboardRankReward, type MilestoneTier } from '@/lib/types/ambassador';
 
 function rankLabel(r: LeaderboardRankReward): string {
@@ -44,14 +45,12 @@ function PrizePreviewChart({ cut }: { cut: LeaderboardCut }) {
   const max = Math.max(1, ...items.map((i) => i.amount));
 
   return (
-    <div className="flex items-end gap-3 h-[120px] pt-2">
+    <div className="flex items-end gap-3 h-[136px] pt-2">
       {items.map((item, i) => {
         const column = (
           <div key={i} className={cn('flex h-full min-w-0 flex-1 flex-col items-center justify-end', item.goodie && 'cursor-default')}>
+            {item.amount === 0 && item.goodie?.imageUrl && <GoodieThumb goodie={item.goodie} size="xs" className="mb-1.5" />}
             <span className="mb-1 flex max-w-full items-center gap-1 truncate text-[11px] font-bold text-foreground">
-              {item.amount === 0 && item.goodie?.imageUrl && (
-                <img src={item.goodie.imageUrl} alt="" className="h-4 w-4 shrink-0 rounded object-cover border border-border/50" />
-              )}
               {item.amount > 0 ? <Rupees amount={item.amount} /> : (item.fallback ?? '—')}
             </span>
             <div

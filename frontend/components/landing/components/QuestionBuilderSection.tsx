@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Plus, Check, Trash2, GripVertical, Sparkles, BookOpen, Layers } from 'lucide-react';
 
 export function QuestionBuilderSection() {
@@ -49,6 +50,7 @@ export function QuestionBuilderSection() {
 
   const [activeCategory, setActiveCategory] = useState('All Topics');
   const [newQuestionAdded, setNewQuestionAdded] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const handleAddQuestion = () => {
     const nextNum = Math.max(...questions.map((q) => q.num)) + 1;
@@ -133,17 +135,27 @@ export function QuestionBuilderSection() {
             ))}
           </div>
 
-          {/* Question List */}
+          {/* Question List — layout+AnimatePresence make filtering and adding legible */}
           <div className="p-5 space-y-4">
             {filteredQuestions.length === 0 && (
               <div className="p-6 text-center text-xs text-[var(--muted-foreground)]">
                 No questions in this topic yet.
               </div>
             )}
+            <AnimatePresence initial={false}>
             {filteredQuestions.map((q, idx) => (
-              <div
+              <motion.div
                 key={q.id}
-                className="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/20 hover:border-[var(--primary)]/60 transition-all shadow-xs"
+                layout
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0.01 }
+                    : { duration: 0.25, ease: [0.16, 1, 0.3, 1] }
+                }
+                className="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/20 hover:border-[var(--primary)]/60 transition-colors shadow-xs"
               >
                 <div className="flex items-start justify-between gap-3 mb-2.5">
                   <div className="flex items-center gap-2.5">
@@ -182,11 +194,12 @@ export function QuestionBuilderSection() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             ))}
+            </AnimatePresence>
 
             {newQuestionAdded && (
-              <div className="p-3 bg-[color-mix(in_oklch,var(--success)_15%,var(--card))] border border-[var(--success)] rounded-xl text-center text-xs font-semibold text-[var(--success)] animate-bounce">
+              <div className="p-3 bg-[color-mix(in_oklch,var(--success)_15%,var(--card))] border border-[var(--success)] rounded-xl text-center text-xs font-semibold text-[var(--success)] animate-toast-in">
                 ✓ Question added to contest bank and indexed for Round 3!
               </div>
             )}

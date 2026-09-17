@@ -192,6 +192,23 @@
     100% { transform: translateX(100%); opacity: 0; }
 }
 
+/* Landing hero's auto-tour progress rail — a scaleX fill (not width) so it
+   stays compositor-only and never triggers layout on every frame. */
+@keyframes progress-fill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+@keyframes pop-in {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes toast-in {
+    from { transform: translateY(6px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
 @keyframes glow-pulse {
     0%, 100% {
         box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 45%, transparent);
@@ -212,6 +229,15 @@
     }
 }
 
+@keyframes glow-pulse-success {
+    0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in oklch, var(--success) 45%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 6px color-mix(in oklch, var(--success) 0%, transparent);
+    }
+}
+
 @layer components {
     /* Draws the eye to a CTA that's easy to miss on first load — used on the
        public contest page's sticky "Register Now" bar so new visitors don't
@@ -226,6 +252,13 @@
        drawing the eye without competing with the primary CTA. */
     .animate-glow-amber {
         animation: glow-pulse-amber 2.2s ease-in-out infinite;
+    }
+
+    /* Same idea as .animate-glow-pulse, tinted to match a success/green CTA
+       (e.g. the ambassador campaign page's "Apply to this campaign" button)
+       instead of clashing with the teal primary glow. */
+    .animate-glow-success {
+        animation: glow-pulse-success 2.2s ease-in-out infinite;
     }
 
     .animate-skeleton {
@@ -289,6 +322,20 @@
 
     .animate-flow {
         animation: flow-across 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .animate-progress-fill {
+        animation: progress-fill 3.8s linear forwards;
+    }
+
+    /* One-shot settle, replacing Tailwind's infinite animate-bounce
+       (bounce/elastic easing reads as dated per the design detector). */
+    .animate-pop-in {
+        animation: pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .animate-toast-in {
+        animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 }
 

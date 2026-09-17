@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { GoodieThumb } from './GoodieThumb';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
 
 function tierRange(tier: MilestoneTier) {
@@ -58,17 +59,15 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                 </p>
                 <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{tierRange(tier)} registrations</p>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-[12.5px] font-semibold text-foreground tabular-nums">
-                  <Rupees amount={tier.amountPerRegistration} />
-                  /reg
-                </p>
-                <p className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground mt-0.5">
-                  {tier.goodie?.imageUrl && (
-                    <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
-                  )}
-                  {tier.goodie ? tier.goodie.label : '—'}
-                </p>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="text-right">
+                  <p className="text-[12.5px] font-semibold text-foreground tabular-nums">
+                    <Rupees amount={tier.amountPerRegistration} />
+                    /reg
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{tier.goodie ? tier.goodie.label : '—'}</p>
+                </div>
+                {tier.goodie?.imageUrl && <GoodieThumb goodie={tier.goodie} size="sm" />}
               </div>
             </div>
           );
@@ -111,11 +110,9 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                     /reg
                   </TableCell>
                   <TableCell className="text-right pr-5 text-muted-foreground">
-                    <span className="flex items-center justify-end gap-1.5">
-                      {tier.goodie?.imageUrl && (
-                        <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
-                      )}
+                    <span className="flex items-center justify-end gap-2.5">
                       {tier.goodie ? tier.goodie.label : '—'}
+                      {tier.goodie?.imageUrl && <GoodieThumb goodie={tier.goodie} size="sm" />}
                     </span>
                   </TableCell>
                 </TableRow>

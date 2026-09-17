@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { cn } from '@/lib/utils';
+import { Reveal, PulseDot } from '@/components/contests/contest-motion';
 import { CampaignTimelineStrip } from './CampaignTimelineStrip';
+import { TierLadder } from './TierLadder';
 import { RewardTiersCard } from './RewardTiersCard';
 import { CampaignLeaderboardCard } from './CampaignLeaderboardCard';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { GoodieThumb } from './GoodieThumb';
 import { Rupees } from './Rupees';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type { AvailableCampaignItem } from '@/lib/types/ambassador';
@@ -57,24 +60,33 @@ export function CampaignPreview({
   const speedBonusTiers = preview.rewardConfig.speedBonus?.enabled ? preview.rewardConfig.speedBonus.tiers : [];
 
   return (
-    <div className="min-h-screen bg-background px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="relative min-h-screen bg-background px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {preview.status === 'LIVE' && (
+        <div
+          className="pointer-events-none absolute inset-x-0 -top-24 mx-auto h-72 max-w-3xl blur-3xl opacity-60 -z-10"
+          style={{ background: 'radial-gradient(50% 100% at 50% 30%, var(--success), transparent 70%)' }}
+          aria-hidden
+        />
+      )}
+      <div className="relative max-w-6xl mx-auto space-y-6">
         {backHref && (
-          <Button variant="ghost" size="sm" className="-ml-2" asChild>
-            <Link href={backHref}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              {backLabel ?? 'Back'}
-            </Link>
-          </Button>
+          <Reveal mode="mount">
+            <Button variant="ghost" size="sm" className="-ml-2" asChild>
+              <Link href={backHref}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {backLabel ?? 'Back'}
+              </Link>
+            </Button>
+          </Reveal>
         )}
 
-        <div className="flex items-start justify-between gap-3 flex-wrap">
+        <Reveal mode="mount" delay={0.05} className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap mb-1">
-              <h1 className="text-2xl font-bold text-foreground">{preview.name}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{preview.name}</h1>
               {preview.status === 'LIVE' && (
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-success bg-success/10 rounded-full px-2.5 py-1 shrink-0">
-                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                  <PulseDot />
                   Live
                 </span>
               )}
@@ -110,24 +122,31 @@ export function CampaignPreview({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {!hasApplied && (
-              <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90" disabled={applying} onClick={onApply}>
+              <Button
+                size="sm"
+                className="bg-success text-success-foreground hover:bg-success/90 active:scale-[0.98] transition-transform"
+                disabled={applying}
+                onClick={onApply}
+              >
                 <UserPlus className="h-4 w-4" />
                 {applying ? 'Applying…' : 'Apply to this campaign'}
               </Button>
             )}
           </div>
-        </div>
-        <p className="text-sm text-muted-foreground max-w-[70ch]">
-          {preview.organizationName} is recruiting {preview.ambassadorTypesAllowed.map(typeLabel).join(', ') || 'ambassadors'} to help
-          promote {preview.contestTitle}. Below is exactly what applying pays, and how the campaign is timed.
-        </p>
+        </Reveal>
+        <Reveal mode="mount" delay={0.08}>
+          <p className="text-sm text-muted-foreground max-w-[70ch]">
+            {preview.organizationName} is recruiting {preview.ambassadorTypesAllowed.map(typeLabel).join(', ') || 'ambassadors'} to help
+            promote {preview.contestTitle}. Below is exactly what applying pays, and how the campaign is timed.
+          </p>
+        </Reveal>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_344px] gap-6 items-start">
           <div className="space-y-6 min-w-0">
-            <section className="space-y-3">
+            <Reveal className="space-y-3">
               <h2 className="text-[17px] font-bold text-foreground">What you&apos;re promoting</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="border-border/50">
+                <Card className="border-border/50 transition-shadow hover:shadow-md">
                   <CardContent className="pt-5 pb-5">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contest</p>
                     <p className="text-lg font-bold text-foreground mt-1">{preview.contestTitle}</p>
@@ -157,7 +176,7 @@ export function CampaignPreview({
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="border-border/50 border-l-4 border-l-primary">
+                <Card className="border-border/50 border-l-4 border-l-primary transition-shadow hover:shadow-md">
                   <CardContent className="pt-5 pb-5">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Eligibility</p>
                     <p className="text-sm font-bold text-foreground mt-1.5">
@@ -169,20 +188,28 @@ export function CampaignPreview({
                   </CardContent>
                 </Card>
               </div>
-            </section>
+            </Reveal>
 
-            <CampaignTimelineStrip status={preview.status} endDate={preview.endDate} phases={preview.phases} />
+            <Reveal delay={0.04}>
+              <CampaignTimelineStrip status={preview.status} endDate={preview.endDate} phases={preview.phases} />
+            </Reveal>
 
-            <section className="space-y-3">
+            {milestoneTiers.length > 0 && (
+              <Reveal delay={0.05}>
+                <TierLadder milestoneTiers={milestoneTiers} preview />
+              </Reveal>
+            )}
+
+            <Reveal delay={0.06} className="space-y-3">
               <div>
                 <h2 className="text-[17px] font-bold text-foreground">Reward tiers</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">What each milestone pays out per registration, from your first referral.</p>
               </div>
               <RewardTiersCard milestoneTiers={milestoneTiers} currentTier={null} />
-            </section>
+            </Reveal>
 
             {speedBonusTiers.length > 0 && (
-              <section className="space-y-3">
+              <Reveal delay={0.08} className="space-y-3">
                 <div>
                   <h2 className="text-[17px] font-bold text-foreground">Speed bonus</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -192,19 +219,26 @@ export function CampaignPreview({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {speedBonusTiers.map((tier, i) => {
                     const card = (
-                      <Card className={cn('border-border/50', tier.goodie && 'cursor-default')}>
+                      <Card className={cn('border-border/50 h-full transition-shadow hover:shadow-md', tier.goodie && 'cursor-default')}>
                         <CardContent className="pt-4 pb-4">
-                          <Zap className="h-4 w-4 text-muted-foreground mb-2" />
-                          <p className="font-semibold text-foreground text-sm">{tier.label}</p>
-                          <p className="text-lg font-bold text-foreground mt-1">
-                            +<Rupees amount={tier.bonusAmount} />
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">Within {tier.withinDays} days of launch</p>
+                          <div className="flex items-start gap-3">
+                            {tier.goodie?.imageUrl ? (
+                              <GoodieThumb goodie={tier.goodie} size="md" />
+                            ) : (
+                              <div className="size-14 sm:size-16 shrink-0 rounded-xl bg-accent/15 border border-border/50 flex items-center justify-center">
+                                <Zap className="h-5 w-5 text-accent-foreground" />
+                              </div>
+                            )}
+                            <div className="min-w-0 pt-0.5">
+                              <p className="font-semibold text-foreground text-sm truncate">{tier.label}</p>
+                              <p className="text-lg font-bold text-foreground mt-0.5">
+                                +<Rupees amount={tier.bonusAmount} />
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Within {tier.withinDays} days of launch</p>
+                            </div>
+                          </div>
                           {tier.goodie && (
-                            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/60">
-                              {tier.goodie.imageUrl && (
-                                <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
-                              )}
+                            <p className="text-[11px] text-muted-foreground mt-3 pt-2 border-t border-border/60">
                               Includes: {tier.goodie.label}
                             </p>
                           )}
@@ -223,10 +257,10 @@ export function CampaignPreview({
                     );
                   })}
                 </div>
-              </section>
+              </Reveal>
             )}
 
-            <section className="space-y-3">
+            <Reveal delay={0.1} className="space-y-3">
               <div>
                 <h2 className="text-[17px] font-bold text-foreground">Leaderboards</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -250,22 +284,22 @@ export function CampaignPreview({
               ) : (
                 <p className="text-sm text-muted-foreground py-6 text-center">No leaderboard configured for this campaign.</p>
               )}
-            </section>
+            </Reveal>
 
-            <section className="space-y-3">
+            <Reveal delay={0.12} className="space-y-3">
               <div>
                 <h2 className="text-[17px] font-bold text-foreground">Ambassador kit</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Unlocks once you're approved — your referral link gets stitched into these automatically.
                 </p>
               </div>
-              <Card className="border-border/50">
+              <Card className="border-border/50 transition-shadow hover:shadow-md">
                 {preview.posterImageUrl ? (
                   <CardContent className="flex items-center gap-4 py-5">
                     <img
                       src={preview.posterImageUrl}
                       alt="Campaign share poster"
-                      className="w-20 h-20 rounded-lg object-cover shrink-0 bg-muted"
+                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover shrink-0 bg-muted border border-border/50"
                     />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -289,11 +323,11 @@ export function CampaignPreview({
                   </CardContent>
                 )}
               </Card>
-            </section>
+            </Reveal>
           </div>
 
-          <div className="space-y-4 lg:sticky lg:top-8">
-            <Card className="border-border/50">
+          <Reveal mode="mount" delay={0.14} className="space-y-4 lg:sticky lg:top-8">
+            <Card className="border-border/50 shadow-sm">
               <CardContent className="pt-5 pb-5 space-y-4">
                 <div>
                   <h3 className="text-[15px] font-bold text-foreground">{hasApplied ? 'Your application' : 'Apply to join'}</h3>
@@ -318,7 +352,11 @@ export function CampaignPreview({
                   </p>
                 ) : (
                   <>
-                    <Button className="w-full bg-success text-success-foreground hover:bg-success/90" disabled={applying} onClick={onApply}>
+                    <Button
+                      className="w-full bg-success text-success-foreground hover:bg-success/90 active:scale-[0.98] transition-transform animate-glow-success"
+                      disabled={applying}
+                      onClick={onApply}
+                    >
                       <UserPlus className="h-4 w-4" />
                       {applying ? 'Applying…' : 'Apply to this campaign'}
                     </Button>
@@ -329,7 +367,7 @@ export function CampaignPreview({
                 )}
               </CardContent>
             </Card>
-          </div>
+          </Reveal>
         </div>
       </div>
     </div>

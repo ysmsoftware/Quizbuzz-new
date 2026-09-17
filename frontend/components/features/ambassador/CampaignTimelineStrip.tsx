@@ -29,8 +29,8 @@ export function CampaignTimelineStrip({ status, endDate, phases }: { status: str
           <span
             key={p.key}
             className={cn(
-              'h-1.5 flex-1 rounded-full',
-              i < activeIndex ? 'bg-primary' : i === activeIndex ? 'bg-primary/50' : 'bg-muted'
+              'h-1.5 flex-1 rounded-full transition-colors',
+              i < activeIndex ? 'bg-primary' : i === activeIndex ? 'bg-primary animate-pulse-gentle' : 'bg-muted'
             )}
           />
         ))}

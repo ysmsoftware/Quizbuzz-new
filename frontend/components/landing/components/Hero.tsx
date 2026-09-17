@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import {
   ArrowRight,
   Shield,
@@ -21,20 +22,52 @@ interface HeroProps {
   onExploreContests: () => void;
 }
 
+const STAGE_DURATION_MS = 3800;
+
 export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
   const [activeStage, setActiveStage] = useState<number>(0);
+  const [direction, setDirection] = useState<1 | -1>(1);
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(true);
   const [timerSeconds, setTimerSeconds] = useState<number>(42 * 60 + 18);
   const [participantCount, setParticipantCount] = useState<number>(2104);
+  const prefersReducedMotion = useReducedMotion();
 
-  // Auto-play through stages
+  const goToStage = (id: number) => {
+    setDirection(id >= activeStage ? 1 : -1);
+    setActiveStage(id);
+    setIsAutoPlaying(false);
+  };
+
+  // Auto-play through the contest lifecycle tour
   useEffect(() => {
     if (!isAutoPlaying) return;
     const interval = setInterval(() => {
+      setDirection(1);
       setActiveStage((prev) => (prev + 1) % 5);
-    }, 3800);
+    }, STAGE_DURATION_MS);
     return () => clearInterval(interval);
   }, [isAutoPlaying]);
+
+  const stageVariants: Variants = {
+    enter: (dir: number) => ({
+      opacity: 0,
+      x: prefersReducedMotion ? 0 : dir * 20,
+    }),
+    center: {
+      opacity: 1,
+      x: 0,
+      transition: prefersReducedMotion
+        ? { duration: 0.01 }
+        : { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
+    },
+    exit: (dir: number) => ({
+      opacity: 0,
+      x: prefersReducedMotion ? 0 : dir * -14,
+      transition: prefersReducedMotion
+        ? { duration: 0.01 }
+        : { duration: 0.18, ease: [0.4, 0, 1, 1] },
+    }),
+  };
 
   // Live countdown timer in hero room
   useEffect(() => {
@@ -110,31 +143,43 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
         {/* Signature Interactive Contest Dashboard Visualization */}
         <div className="max-w-5xl mx-auto">
           {/* Stage Switcher Controls */}
-          <div className="flex items-center justify-between gap-2 mb-3 px-1 flex-wrap">
+          <div className="flex items-center justify-between gap-2 mb-1 px-1 flex-wrap">
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-              {stages.map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => {
-                    setActiveStage(st.id);
-                    setIsAutoPlaying(false);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${activeStage === st.id
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
-                      : 'bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:text-[var(--foreground)]'
-                    }`}
-                >
-                  {st.label}
-                  <span
-                    className={`text-[9px] px-1 py-0.2 rounded font-mono ${activeStage === st.id
-                        ? 'bg-black/20 text-white'
-                        : 'bg-[var(--secondary)] text-[var(--muted-foreground)]'
+              {stages.map((st) => {
+                const isActive = activeStage === st.id;
+                return (
+                  <button
+                    key={st.id}
+                    onClick={() => goToStage(st.id)}
+                    aria-current={isActive ? 'step' : undefined}
+                    className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${isActive
+                        ? 'text-[var(--primary-foreground)]'
+                        : 'bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)] hover:text-[var(--foreground)] transition-colors'
                       }`}
                   >
-                    {st.badge}
-                  </span>
-                </button>
-              ))}
+                    {isActive && (
+                      <motion.span
+                        layoutId="hero-stage-pill"
+                        className="absolute inset-0 rounded-lg bg-[var(--primary)] shadow-xs"
+                        transition={
+                          prefersReducedMotion
+                            ? { duration: 0.01 }
+                            : { type: 'spring', stiffness: 500, damping: 40 }
+                        }
+                      />
+                    )}
+                    <span className="relative z-10">{st.label}</span>
+                    <span
+                      className={`relative z-10 text-[9px] px-1 py-0.2 rounded font-mono ${isActive
+                          ? 'bg-black/20 text-white'
+                          : 'bg-[var(--secondary)] text-[var(--muted-foreground)]'
+                        }`}
+                    >
+                      {st.badge}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] ml-auto">
@@ -156,6 +201,16 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Auto-tour progress — mirrors the exam-clock motif the rest of the product uses */}
+          <div className="h-0.5 rounded-full bg-[var(--border)]/60 overflow-hidden mb-3 mx-1">
+            {isAutoPlaying && (
+              <div
+                key={`progress-${activeStage}`}
+                className="h-full w-full bg-[var(--primary)] origin-left animate-progress-fill"
+              />
+            )}
           </div>
 
           {/* Main Dashboard Window */}
@@ -236,10 +291,18 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
             </div>
 
             {/* Dynamic Stage View */}
-            <div className="p-5 md:p-6 bg-[var(--background)]/50 min-h-[320px] flex flex-col justify-center">
+            <div className="p-5 md:p-6 bg-[var(--background)]/50 min-h-[320px] flex flex-col justify-center overflow-hidden">
+              <AnimatePresence mode="wait" custom={direction} initial={false}>
               {/* STAGE 0: REGISTRATION */}
               {activeStage === 0 && (
-                <div className="animate-in fade-in duration-300 grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+                <motion.div
+                  key="stage-0"
+                  custom={direction}
+                  variants={stageVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
                   <div className="md:col-span-2 bg-[var(--card)] p-5 rounded-xl border border-[var(--border)] shadow-xs">
                     <div className="flex items-center justify-between pb-3 border-b border-[var(--border)]">
                       <div>
@@ -329,12 +392,19 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                       Instant payment verification via UPI / Razorpay / Stripe
                     </span>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* STAGE 1: CHECK-IN & SYSTEM VERIFY */}
               {activeStage === 1 && (
-                <div className="animate-in fade-in duration-300 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <motion.div
+                  key="stage-1"
+                  custom={direction}
+                  variants={stageVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--border)] flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-bold text-[var(--foreground)]">Webcam Sensor</span>
@@ -405,12 +475,19 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                       ✓ Instant room entry allowed
                     </span>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* STAGE 2: LIVE ROOM & REAL-TIME LEADERBOARD */}
               {activeStage === 2 && (
-                <div className="animate-in fade-in duration-300 grid grid-cols-1 md:grid-cols-12 gap-5">
+                <motion.div
+                  key="stage-2"
+                  custom={direction}
+                  variants={stageVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5">
                   <div className="md:col-span-7 bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
                     <div className="px-4 py-2.5 bg-[var(--secondary)]/60 border-b border-[var(--border)] flex items-center justify-between text-xs font-semibold">
                       <span>Live Contest Question 27 / 50</span>
@@ -470,12 +547,19 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                       ))}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* STAGE 3: INTEGRITY MONITOR */}
               {activeStage === 3 && (
-                <div className="animate-in fade-in duration-300 grid grid-cols-1 md:grid-cols-3 gap-5">
+                <motion.div
+                  key="stage-3"
+                  custom={direction}
+                  variants={stageVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div className="md:col-span-2 bg-[var(--card)] rounded-xl border border-[var(--border)] overflow-hidden">
                     <div className="px-4 py-2.5 bg-[var(--secondary)]/60 border-b border-[var(--border)] flex items-center justify-between text-xs font-semibold">
                       <span className="flex items-center gap-2">
@@ -554,12 +638,19 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                       💡 Human-in-the-loop review ensures every competition result stands up to student appeals.
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* STAGE 4: RESULTS & CERTIFICATE */}
               {activeStage === 4 && (
-                <div className="animate-in fade-in duration-300 grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                <motion.div
+                  key="stage-4"
+                  custom={direction}
+                  variants={stageVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
                   <div className="md:col-span-5 space-y-3">
                     <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[color-mix(in_oklch,var(--success)_15%,var(--card))] text-[var(--success)] text-xs font-semibold border border-[color-mix(in_oklch,var(--success)_30%,var(--border))]">
                       <CheckCircle2 className="w-3.5 h-3.5" />
@@ -622,8 +713,9 @@ export function Hero({ onCreateContest, onExploreContests }: HeroProps) {
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
 
             {/* Bottom Status Ticker */}

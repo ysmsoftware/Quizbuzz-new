@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Radio, Users, CheckCircle, AlertTriangle, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { SAMPLE_LEADERBOARD, SAMPLE_PROCTOR_ALERTS } from '../data/mockData';
 import { LeaderboardEntry, ProctorAlert } from '../types';
@@ -10,6 +11,7 @@ export function LiveRoomSection() {
   const [alerts, setAlerts] = useState<ProctorAlert[]>(SAMPLE_PROCTOR_ALERTS);
   const [submittedCount, setSubmittedCount] = useState(68421);
   const [timerSeconds, setTimerSeconds] = useState(12 * 60 + 47);
+  const prefersReducedMotion = useReducedMotion();
 
   // Countdown timer
   useEffect(() => {
@@ -23,28 +25,25 @@ export function LiveRoomSection() {
     return () => clearInterval(t);
   }, []);
 
-  // Real-time rank changes simulation
+  // Real-time rank changes simulation — a submission lands, the board
+  // re-sorts by score, and rank/delta are derived from that sort (not
+  // hardcoded positions), so displayed rank always matches displayed score.
   useEffect(() => {
     const shuffleInterval = setInterval(() => {
       setLeaderboard((prev) => {
         if (prev.length < 4) return prev;
-        const copy = [...prev];
-        // Swap rank 2 and 3 with delta markers
-        const idx1 = 1;
-        const idx2 = 2;
-        const temp = { ...copy[idx1] };
-        copy[idx1] = {
-          ...copy[idx2],
-          rank: 2,
-          delta: 'up',
-          score: copy[idx2].score + 15,
-        };
-        copy[idx2] = {
-          ...temp,
-          rank: 3,
-          delta: 'down',
-        };
-        return copy;
+        const bumpIdx = 1 + Math.floor(Math.random() * (Math.min(prev.length, 5) - 1));
+        const bumped = prev.map((row, i) =>
+          i === bumpIdx ? { ...row, score: row.score + 15 } : row
+        );
+        return [...bumped]
+          .sort((a, b) => b.score - a.score)
+          .map((row, i) => {
+            const newRank = i + 1;
+            const delta: LeaderboardEntry['delta'] =
+              newRank < row.rank ? 'up' : newRank > row.rank ? 'down' : 'flat';
+            return { ...row, rank: newRank, delta };
+          });
       });
 
       // Clear delta after 2.5s
@@ -108,18 +107,27 @@ export function LiveRoomSection() {
               </div>
             </div>
 
-            {/* Board Rows */}
+            {/* Board Rows — layout animates the FLIP reorder when rank changes */}
             <div className="p-3 divide-y divide-[var(--border)]">
               {leaderboard.slice(0, 5).map((row) => (
-                <div
+                <motion.div
                   key={row.id}
-                  className="p-3 flex items-center justify-between gap-3 hover:bg-[var(--secondary)]/30 rounded-lg transition-all"
+                  layout
+                  transition={
+                    prefersReducedMotion
+                      ? { duration: 0.01 }
+                      : { type: 'spring', stiffness: 380, damping: 32 }
+                  }
+                  className="p-3 flex items-center justify-between gap-3 hover:bg-[var(--secondary)]/30 rounded-lg transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {/* Rank delta */}
                     <div className="w-4 text-center">
                       {row.delta === 'up' && (
-                        <ArrowUp className="w-3.5 h-3.5 text-[var(--success)] font-bold animate-bounce" />
+                        <ArrowUp
+                          key={`${row.id}-up`}
+                          className="w-3.5 h-3.5 text-[var(--success)] font-bold animate-pop-in"
+                        />
                       )}
                       {row.delta === 'down' && (
                         <ArrowDown className="w-3.5 h-3.5 text-[var(--destructive)] font-bold" />
@@ -155,7 +163,7 @@ export function LiveRoomSection() {
                       pts
                     </span>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
 
