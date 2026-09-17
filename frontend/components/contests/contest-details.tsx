@@ -13,7 +13,7 @@ import {
 } from '@/lib/contestStatus';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { PrizeShowcase } from '@/components/contests/prize-showcase';
 import { markdownComponents } from '@/components/contests/markdown-components';
@@ -209,7 +209,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
               <Calendar className="h-6 w-6 shrink-0 text-primary" />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Starts</p>
-                <p className="text-sm font-semibold truncate">{formatDateTime(contest.startTime)}</p>
+                <p className="text-sm font-semibold">{formatDateTime(contest.startTime)}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 rounded-lg bg-card border p-3.5">
@@ -245,7 +245,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
         <section className="pt-6 sm:pt-8">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mb-1 flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-accent-foreground" />
+              <Trophy className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-bold tracking-tight">Prizes & Recognition</h2>
             </div>
             <p className="mb-4 text-sm text-muted-foreground">
@@ -265,7 +265,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
               {/* About */}
               <Card>
                 <CardHeader>
-                  <CardTitle>About This Contest</CardTitle>
+                  <h2 data-slot="card-title" className="leading-none font-semibold">About This Contest</h2>
                 </CardHeader>
                 <CardContent>
                   {/* Topics moved here from the banner image overlay — the banner is
@@ -301,7 +301,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
               {/* Contest Rules */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Contest Rules & Format</CardTitle>
+                  <h2 data-slot="card-title" className="leading-none font-semibold">Contest Rules & Format</h2>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-3">
@@ -343,14 +343,25 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                         Proctored
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
-                      <Shuffle className="h-3.5 w-3.5 text-primary" />
-                      Questions {contest.shuffleQuestions ? 'shuffled' : 'fixed order'}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
-                      <Shuffle className="h-3.5 w-3.5 text-primary" />
-                      Options {contest.shuffleOptions ? 'shuffled' : 'fixed order'}
-                    </span>
+                    {contest.shuffleQuestions === contest.shuffleOptions ? (
+                      // Same setting for both — one chip instead of two identical-shaped
+                      // ones, keeping the row within the ~4-chip scannable range.
+                      <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                        <Shuffle className="h-3.5 w-3.5 text-primary" />
+                        Questions & options {contest.shuffleQuestions ? 'shuffled' : 'fixed order'}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                          <Shuffle className="h-3.5 w-3.5 text-primary" />
+                          Questions {contest.shuffleQuestions ? 'shuffled' : 'fixed order'}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                          <Shuffle className="h-3.5 w-3.5 text-primary" />
+                          Options {contest.shuffleOptions ? 'shuffled' : 'fixed order'}
+                        </span>
+                      </>
+                    )}
                     {contest.showResultsAfter != null && (
                       <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
                         <Hourglass className="h-3.5 w-3.5 text-primary" />
@@ -368,7 +379,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                   {/* Server-defined rules */}
                   {contest.rules && contest.rules.length > 0 && (
                     <div className="space-y-3">
-                      <h4 className="font-medium">Additional Rules</h4>
+                      <h3 className="font-medium">Additional Rules</h3>
                       <ul className="space-y-2">
                         {contest.rules.map((rule, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm">
@@ -384,11 +395,13 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
 
             </div>
 
-            {/* Right Column - Registration Card */}
-            <div className="lg:col-span-1">
-              <Card className="sticky top-24">
+            {/* Right Column - Registration Card. Shown first on mobile (order-first)
+                so price/deadline/capacity aren't buried below the About/Rules cards;
+                back to its natural sidebar position at the lg breakpoint. */}
+            <div className="order-first lg:order-none lg:col-span-1">
+              <Card className="lg:sticky lg:top-24">
                 <CardHeader>
-                  <CardTitle>Register Now</CardTitle>
+                  <h2 data-slot="card-title" className="leading-none font-semibold">Register Now</h2>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Fee */}

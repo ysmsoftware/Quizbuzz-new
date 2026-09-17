@@ -93,7 +93,7 @@ function PrizeDetails({ prize, rank, label }: { prize: PublicContestPrize; rank:
       <div className={cn('relative w-full aspect-square rounded-xl overflow-hidden bg-gradient-to-br p-[2px]', PODIUM_GRADIENT)}>
         <div className="size-full rounded-[10px] overflow-hidden bg-card flex items-center justify-center">
           {prize.goodieImageUrl ? (
-            <img src={prize.goodieImageUrl} alt={label} className="size-full object-cover" />
+            <img src={prize.goodieImageUrl} alt={label} loading="lazy" className="size-full object-cover" />
           ) : (
             <span className={cn('text-4xl font-extrabold', PODIUM_TEXT)}>{ordinal(rank)}</span>
           )}
@@ -158,7 +158,7 @@ function Pedestal({ prize }: { prize: PublicContestPrize }) {
           style.blockHeight,
         )}
       >
-        <span className="text-2xl font-extrabold text-black/40">{rank}</span>
+        <span className={cn('text-2xl font-extrabold', PODIUM_TEXT)}>{rank}</span>
       </div>
     </div>
   );
@@ -178,10 +178,15 @@ function TierRow({ prize }: { prize: PublicContestPrize }) {
           lost in — this tier's reward is the point of the card. */}
       <div className="relative size-28 sm:size-32 shrink-0 rounded-xl overflow-hidden border bg-accent/10 shadow-sm">
         {prize.goodieImageUrl ? (
-          <img src={prize.goodieImageUrl} alt={prize.goodieLabel ?? label} className="size-full object-cover" />
+          <img
+            src={prize.goodieImageUrl}
+            alt={prize.goodieLabel ?? label}
+            loading="lazy"
+            className="size-full object-cover"
+          />
         ) : (
           <div className="size-full flex items-center justify-center">
-            <Gift className="size-9 text-accent-foreground/60" />
+            <Gift className="size-9 text-muted-foreground" />
           </div>
         )}
         {worth && (

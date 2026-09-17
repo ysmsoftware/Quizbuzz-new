@@ -8,7 +8,7 @@
 # Node modules
 node_modules/
 **/node_modules/
-
+.impeccable/**
 # Build outputs
 dist/
 build/
