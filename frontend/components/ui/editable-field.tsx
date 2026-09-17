@@ -113,7 +113,7 @@ export function EditableField({
   if (disabled) {
     return (
       <div className={cn("group flex flex-col gap-1.5", className)}>
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
+        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -131,7 +131,7 @@ export function EditableField({
   return (
     <div className={cn("group flex flex-col gap-1.5", className)}>
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
+        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
         {status === 'saving' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
         {status === 'success' && <Check className="h-3 w-3 text-green-500" />}
         {status === 'error' && (
@@ -215,7 +215,11 @@ export function EditableField({
             key="viewing"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="group/field relative flex items-center gap-2 py-1 px-2 rounded-md border border-transparent hover:border-border hover:bg-muted/50 cursor-pointer transition-all"
+            // The hover-highlight box keeps its px-2 padding so the rounded background
+            // has breathing room, but -mx-2 cancels that as an offset — otherwise the
+            // value text sat 8px right of the uppercase label above it, reading as a
+            // stray gap instead of the two being aligned.
+            className="group/field relative -mx-2 flex items-center gap-2 py-1 px-2 rounded-md border border-transparent hover:border-border hover:bg-muted/50 cursor-pointer transition-all"
             onClick={() => setIsEditing(true)}
           >
             <span className={cn(

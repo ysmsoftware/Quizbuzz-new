@@ -49,6 +49,7 @@ import { EditableField } from '@/components/ui/editable-field';
 import { ContestPrizeBracket } from '@/components/features/contests/ContestPrizeBracket';
 import { EditPrizesModal, PrizeBracketDraft } from '@/components/features/contests/EditPrizesModal';
 import { PublicLinkCard } from '@/components/features/contests/PublicLinkCard';
+import { ContestDetailsCard } from '@/components/features/contests/ContestDetailsCard';
 import { KeyDatesCard } from '@/components/features/contests/KeyDatesCard';
 import { DraftChecklistCard } from '@/components/features/contests/DraftChecklistCard';
 import { DangerZoneCard } from '@/components/features/contests/DangerZoneCard';
@@ -367,7 +368,7 @@ export default function ContestOverviewPage() {
 
                                     <div className="flex-1 space-y-4">
                                         <EditableField
-                                            label="Contest Title"
+                                            label="Title"
                                             value={contest.title}
                                             onSave={(v) => handleSave('title', v)}
                                             disabled={isCancelled}
@@ -375,24 +376,23 @@ export default function ContestOverviewPage() {
                                             className="[&_span]:text-2xl [&_span]:font-bold [&_span]:font-plus-jakarta"
                                         />
 
-                                        {/* "Short Description" removed — Contest has no such
-                                            column. adaptServerContest derives it as
-                                            description.slice(0, 120), so edits could never
-                                            persist; the PATCH now 400s outright. "Full
-                                            Description" below is the real storable field. */}
+                                        {/* Moved up from below the image/title row — that
+                                            spot was blank whitespace next to a 200px-wide
+                                            banner thumbnail, while this sat isolated under
+                                            a full-width Separator. Same field, same
+                                            handleSave('description', …), just relocated. */}
+                                        <EditableField
+                                            label="Description"
+                                            value={contest.description || ''}
+                                            onSave={(v) => handleSave('description', v)}
+                                            disabled={isCancelled}
+                                            autoSave={isDraft}
+                                            multiline={true}
+                                        />
                                     </div>
                                 </div>
 
                                 <Separator />
-
-                                <EditableField
-                                    label="Full Description"
-                                    value={contest.description || ''}
-                                    onSave={(v) => handleSave('description', v)}
-                                    disabled={isCancelled}
-                                    autoSave={isDraft}
-                                    multiline={true}
-                                />
 
                                 <div className="flex flex-wrap items-center gap-4 pt-2">
                                     <div className="space-y-2">
@@ -409,19 +409,19 @@ export default function ContestOverviewPage() {
                                             </Badge>
                                         )}
                                     </div>
+                                    {/* Category + Tags collapsed into one "Topics" field —
+                                        both were reading the same underlying contest.topics
+                                        array (category = topics[0], tags = topics), so showing
+                                        them separately just duplicated the same values under
+                                        two confusing labels. This uses contest.topics directly,
+                                        the one real field. */}
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Category</label>
-                                        <Badge variant="secondary" className="px-3 py-1 text-xs">
-                                            {contest.topic}
-                                        </Badge>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Tags</label>
+                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Topics</label>
                                         <div className="flex flex-wrap gap-2">
-                                            {contest.tags.map(tag => (
-                                                <Badge key={tag} variant="outline" className="text-[10px] font-medium bg-muted/30">
+                                            {(contest.topics ?? []).map(t => (
+                                                <Badge key={t} variant="outline" className="text-[10px] font-medium bg-muted/30">
                                                     <Tag className="mr-1 h-2 w-2" />
-                                                    {tag}
+                                                    {t}
                                                 </Badge>
                                             ))}
                                         </div>
@@ -570,6 +570,18 @@ export default function ContestOverviewPage() {
                                 </div>
                             </CardContent>
                         </Card>
+                    </section>
+
+                    {/* FULL DETAILS (markdown) — the "Full Description" field above is
+                        contest.description, a plain-text summary; contest.details is the
+                        separate long-form markdown body the public page renders under
+                        "About This Contest", and had no editor anywhere until this card. */}
+                    <section className="space-y-4">
+                        <ContestDetailsCard
+                            value={contest.details || ''}
+                            onSave={(v) => handleSave('details', v)}
+                            disabled={isCancelled}
+                        />
                     </section>
 
                     {/* RULES & PROCTORING */}

@@ -67,6 +67,14 @@ export interface PublicContestDetail extends PublicContestSummary {
   rules: string[];
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
+  proctoringEnabled: boolean;
+  /** Marks awarded per question by default (questions may override individually). */
+  defaultQuestionMarks: number;
+  /** Negative marks deducted per wrong answer by default. */
+  defaultQuestionNegativeMark: number;
+  /** True if the organizer set a join code at creation — the code itself is never sent. */
+  joinCodeRequired: boolean;
+  endTime?: string;                // ISO date
   createdAt: string;
   organization?: {
     name: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,7 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { PrizeShowcase } from '@/components/contests/prize-showcase';
+import { markdownComponents } from '@/components/contests/markdown-components';
 import {
   Calendar,
   Clock,
@@ -28,71 +29,15 @@ import {
   FileText,
   Award,
   Timer,
+  ShieldCheck,
+  Shuffle,
+  Hourglass,
+  Coins,
 } from 'lucide-react';
 
 interface ContestDetailsProps {
   contest: PublicContestDetail;
 }
-
-// The contest-create form labels this field "Rich Text Details / Markdown"
-// and its placeholder is literal markdown (## headings, etc.), so it has to
-// actually be rendered as markdown here — not dumped into a <p> as raw text.
-// Styled to match the surrounding card typography rather than pulling in the
-// Tailwind Typography plugin for one field.
-const markdownComponents = {
-  h1: ({ children }: { children?: ReactNode }) => (
-    <h1 className="text-2xl font-bold text-foreground mt-6 mb-3 first:mt-0">{children}</h1>
-  ),
-  h2: ({ children }: { children?: ReactNode }) => (
-    <h2 className="text-xl font-bold text-foreground mt-5 mb-2.5 first:mt-0">{children}</h2>
-  ),
-  h3: ({ children }: { children?: ReactNode }) => (
-    <h3 className="text-lg font-semibold text-foreground mt-4 mb-2 first:mt-0">{children}</h3>
-  ),
-  p: ({ children }: { children?: ReactNode }) => (
-    <p className="leading-relaxed mb-3 last:mb-0">{children}</p>
-  ),
-  ul: ({ children }: { children?: ReactNode }) => (
-    <ul className="list-disc pl-5 space-y-1 mb-3 last:mb-0">{children}</ul>
-  ),
-  ol: ({ children }: { children?: ReactNode }) => (
-    <ol className="list-decimal pl-5 space-y-1 mb-3 last:mb-0">{children}</ol>
-  ),
-  li: ({ children }: { children?: ReactNode }) => <li className="leading-relaxed">{children}</li>,
-  a: ({ children, href }: { children?: ReactNode; href?: string }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary underline underline-offset-2 hover:no-underline"
-    >
-      {children}
-    </a>
-  ),
-  strong: ({ children }: { children?: ReactNode }) => (
-    <strong className="font-semibold text-foreground">{children}</strong>
-  ),
-  code: ({ children }: { children?: ReactNode }) => (
-    <code className="px-1.5 py-0.5 rounded bg-muted text-foreground text-[0.85em] font-mono">{children}</code>
-  ),
-  blockquote: ({ children }: { children?: ReactNode }) => (
-    <blockquote className="border-l-2 border-primary/30 pl-4 italic text-muted-foreground/90 my-3">
-      {children}
-    </blockquote>
-  ),
-  hr: () => <hr className="my-4 border-border/50" />,
-  table: ({ children }: { children?: ReactNode }) => (
-    <div className="overflow-x-auto my-3">
-      <table className="w-full text-sm border-collapse">{children}</table>
-    </div>
-  ),
-  th: ({ children }: { children?: ReactNode }) => (
-    <th className="border border-border/50 px-2 py-1 text-left font-semibold bg-muted/50">{children}</th>
-  ),
-  td: ({ children }: { children?: ReactNode }) => (
-    <td className="border border-border/50 px-2 py-1">{children}</td>
-  ),
-};
 
 const statusLabels: Record<string, string> = {
   PUBLISHED: 'Open for Registration',
@@ -112,19 +57,9 @@ const statusColors: Record<string, string> = {
   COMPLETED: 'bg-secondary text-secondary-foreground',
 };
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 function formatDateTime(dateString: string): string {
   return new Date(dateString).toLocaleString('en-US', {
-    weekday: 'long',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
@@ -184,7 +119,6 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
   // button. Once the contest reaches 'ended', joining no longer makes sense.
   const canJoinQuiz = phase === 'registration_closed' || phase === 'live';
   const fee = contest.paymentConfig?.amount ?? 0;
-  const topic = contest.topics?.[0] ?? '';
   const banner = publicPhaseBanner[phase];
 
   // Shared CTA target/label for the top hero button and the sticky bottom
@@ -209,49 +143,57 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
 
   return (
     <div className={`bg-secondary/10${showCta ? ' pb-24' : ''}`}>
-      {/* Contest Banner Image */}
-      {contest.bannerImage && (
-        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-2xl border border-border/30 shadow-sm aspect-[4/1] max-h-[250px] w-full">
+      {/* Compact hero — banner, status/topic badges, and title are one
+          overlaid block instead of a full-height image followed by a
+          separate gradient section, so the register CTA and quick stats sit
+          close to the fold instead of being pushed down by the banner. See
+          public-contest-page redesign. */}
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+        {contest.bannerImage ? (
+          <div className="relative overflow-hidden rounded-2xl border border-border/30 shadow-sm h-[180px] sm:h-[240px] lg:h-[280px] w-full">
             <img
               src={contest.bannerImage}
               alt={contest.title}
-              className="object-cover w-full h-full"
+              className="absolute inset-0 h-full w-full object-cover"
             />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            <div className="absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-5">
+              <Badge variant="outline" className={`${banner.className} border-transparent bg-background/85 backdrop-blur-sm`}>
+                {banner.label}
+              </Badge>
+            </div>
+            <h1 className="absolute inset-x-4 bottom-4 text-2xl font-bold tracking-tight text-white text-balance drop-shadow-sm sm:inset-x-6 sm:bottom-5 sm:text-3xl lg:text-4xl">
+              {contest.title}
+            </h1>
           </div>
-        </div>
-      )}
-
-      {/* Hero Section */}
-      <section className="bg-gradient-to-b from-primary/5 to-transparent border-b">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-start gap-2 mb-4">
+        ) : (
+          <div className="flex flex-wrap items-start gap-2 pt-2">
             <Badge variant="outline" className={banner.className}>
               {banner.label}
             </Badge>
-            {topic && <Badge variant="outline">{topic}</Badge>}
           </div>
+        )}
 
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl text-balance">
-            {contest.title}
-          </h1>
+        <div className="pt-4">
+          {!contest.bannerImage && (
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">{contest.title}</h1>
+          )}
 
-          {contest.description && (
-            <p className="mt-4 text-lg text-muted-foreground max-w-3xl">
-              {contest.description}
+          {contest.organization?.name && (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+              <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-accent to-accent/70 text-[10px] font-bold text-accent-foreground">
+                {contest.organization.name.charAt(0)}
+              </span>
+              Hosted by {contest.organization.name}
             </p>
           )}
 
-          {/* Top CTA — the full registration card lives in the sidebar further
-              down the page, which can end up entirely below the fold (a
-              banner image + this hero easily push it out of view on a
-              laptop-sized viewport). Repeating a compact version of the same
-              action here means a new visitor sees a real "Register Now"
-              button immediately, instead of guessing that the top nav's
-              "Install App" or "Browse Contests" is the way to register. See
-              public-contest-page audit. */}
+          {contest.description && (
+            <p className="mt-2 text-base text-muted-foreground max-w-3xl">{contest.description}</p>
+          )}
+
           {showCta && (
-            <div className="mt-6">
+            <div className="mt-4">
               <Link href={ctaHref}>
                 <Button size="lg" className="gap-2">
                   {ctaLabel}
@@ -262,38 +204,57 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
           )}
 
           {/* Quick Stats */}
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
-              <Calendar className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-xs text-muted-foreground">Start Date</p>
-                <p className="font-semibold">{formatDate(contest.startTime)}</p>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="flex items-center gap-3 rounded-lg bg-card border p-3.5">
+              <Calendar className="h-6 w-6 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Starts</p>
+                <p className="text-sm font-semibold truncate">{formatDateTime(contest.startTime)}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
-              <Clock className="h-8 w-8 text-primary" />
+            <div className="flex items-center gap-3 rounded-lg bg-card border p-3.5">
+              <Clock className="h-6 w-6 shrink-0 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Duration</p>
-                <p className="font-semibold">{contest.duration} minutes</p>
+                <p className="text-sm font-semibold">{contest.duration} minutes</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
-              <FileText className="h-8 w-8 text-primary" />
+            <div className="flex items-center gap-3 rounded-lg bg-card border p-3.5">
+              <FileText className="h-6 w-6 shrink-0 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Questions</p>
-                <p className="font-semibold">{questionCount} questions</p>
+                <p className="text-sm font-semibold">{questionCount}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg bg-card border p-4">
-              <Users className="h-8 w-8 text-primary" />
+            <div className="flex items-center gap-3 rounded-lg bg-card border p-3.5">
+              <Users className="h-6 w-6 shrink-0 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Registered</p>
-                <p className="font-semibold">{participantCount.toLocaleString()}</p>
+                <p className="text-sm font-semibold">{participantCount.toLocaleString()}</p>
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Prizes — moved above About/Rules so the payoff is visible before the
+          fine print, and rendered without a bordered card wrapper around the
+          podium (only the individual tier rows below it keep card styling).
+          See public-contest-page redesign. */}
+      {contest.prizes && contest.prizes.length > 0 && (
+        <section className="pt-6 sm:pt-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-1 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-accent-foreground" />
+              <h2 className="text-xl font-bold tracking-tight">Prizes & Recognition</h2>
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Merit ranked by score and speed — here&apos;s what the top performers take home.
+            </p>
+            <PrizeShowcase prizes={contest.prizes} />
+          </div>
+        </section>
+      )}
 
       {/* Main Content */}
       <section className="py-8">
@@ -307,8 +268,24 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                   <CardTitle>About This Contest</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {/* Topics moved here from the banner image overlay — the banner is
+                      about the contest's look, not its metadata, and one topic pill
+                      squeezed onto it never showed the full list anyway. */}
+                  {contest.topics && contest.topics.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {contest.topics.map((t) => (
+                        <Badge key={t} variant="secondary" className="text-xs">
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   {contest.details ? (
-                    <div className="text-muted-foreground text-sm">
+                    // Markdown structure (headings, bold, lists) already carries the
+                    // hierarchy — a muted gray on top of that made body text hard to
+                    // read, so this uses the same full-contrast foreground color as
+                    // the rest of the page instead of a dimmed tone.
+                    <div className="text-foreground text-sm">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                         {contest.details}
                       </ReactMarkdown>
@@ -327,7 +304,7 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                   <CardTitle>Contest Rules & Format</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     <div className="flex items-start gap-3">
                       <FileText className="h-5 w-5 text-primary mt-0.5" />
                       <div>
@@ -355,169 +332,56 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
 
                   <Separator />
 
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Additional Rules</h4>
-                    <ul className="space-y-2">
-                      <li className="flex items-center gap-2 text-sm">
-                        {contest.shuffleQuestions ? (
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>Questions {contest.shuffleQuestions ? 'will be' : 'will not be'} shuffled</span>
-                      </li>
-                      <li className="flex items-center gap-2 text-sm">
-                        {contest.shuffleOptions ? (
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>Options {contest.shuffleOptions ? 'will be' : 'will not be'} shuffled</span>
-                      </li>
-                    </ul>
+                  {/* Integrity & format — the booleans an organizer actually sets
+                      (proctoring, shuffle, marking scheme) shown as scannable
+                      chips instead of a checklist, plus a computed
+                      average since marks/negative marks are set per question. */}
+                  <div className="flex flex-wrap gap-2">
+                    {contest.proctoringEnabled && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                        Proctored
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                      <Shuffle className="h-3.5 w-3.5 text-primary" />
+                      Questions {contest.shuffleQuestions ? 'shuffled' : 'fixed order'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                      <Shuffle className="h-3.5 w-3.5 text-primary" />
+                      Options {contest.shuffleOptions ? 'shuffled' : 'fixed order'}
+                    </span>
+                    {contest.showResultsAfter != null && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                        <Hourglass className="h-3.5 w-3.5 text-primary" />
+                        Results in {contest.showResultsAfter}h
+                      </span>
+                    )}
+                    {contest.defaultQuestionMarks != null && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary/60 px-3 py-1.5 text-xs font-medium">
+                        <Coins className="h-3.5 w-3.5 text-primary" />+{contest.defaultQuestionMarks} / -
+                        {contest.defaultQuestionNegativeMark} marking
+                      </span>
+                    )}
+                  </div>
 
-                    {/* Server-defined rules */}
-                    {contest.rules && contest.rules.length > 0 && (
-                      <ul className="space-y-2 mt-3">
+                  {/* Server-defined rules */}
+                  {contest.rules && contest.rules.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Additional Rules</h4>
+                      <ul className="space-y-2">
                         {contest.rules.map((rule, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm">
-                            <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                             <span>{rule}</span>
                           </li>
                         ))}
                       </ul>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Prizes */}
-              {contest.prizes && contest.prizes.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-accent" />
-                      Prizes & Recognition
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {contest.prizes.map((prize, index) => {
-                        const rankText = prize.rankFrom === prize.rankTo ? `#${prize.rankFrom}` : `#${prize.rankFrom}-${prize.rankTo}`;
-                        const titleText = prize.label || `Rank ${prize.rankFrom}${prize.rankTo !== prize.rankFrom ? `-${prize.rankTo}` : ''}`;
-                        const goodieWorth = prize.goodieCashEquivalent != null && Number(prize.goodieCashEquivalent) > 0
-                          ? formatCurrency(Number(prize.goodieCashEquivalent))
-                          : null;
-                        const hasGoodie = !!(prize.goodieLabel || prize.goodieImageUrl);
-
-                        const infoBlock = (
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold">{titleText}</p>
-                            {prize.benefits && prize.benefits.length > 0 && (
-                              <p className="text-sm text-muted-foreground">
-                                {prize.benefits.join(', ')}
-                              </p>
-                            )}
-                            {prize.goodieLabel && (
-                              <p className="text-sm text-muted-foreground underline decoration-dotted underline-offset-2">
-                                Includes: {prize.goodieLabel}
-                                {goodieWorth && ` (Worth ~${goodieWorth})`}
-                              </p>
-                            )}
-                          </div>
-                        );
-
-                        const row = (
-                          <div
-                            key={prize.id || index}
-                            className={`flex items-center gap-4 p-4 rounded-lg border ${
-                              index === 0
-                                ? 'bg-accent/10 border-accent/30'
-                                : index === 1
-                                  ? 'bg-secondary border-border'
-                                  : 'bg-card'
-                            } ${hasGoodie ? 'cursor-default' : ''}`}
-                          >
-                            <div className={`flex h-12 min-w-12 shrink-0 items-center justify-center whitespace-nowrap rounded-2xl px-2.5 font-bold ${
-                              prize.rankFrom === prize.rankTo ? 'text-sm' : 'text-xs'
-                            } ${
-                              index === 0
-                                ? 'bg-accent text-accent-foreground'
-                                : index === 1
-                                  ? 'bg-muted text-muted-foreground'
-                                  : 'bg-muted/50 text-muted-foreground'
-                            }`}>
-                              {rankText}
-                            </div>
-                            {prize.goodieImageUrl && (
-                              <img
-                                src={prize.goodieImageUrl}
-                                alt=""
-                                className="h-10 w-10 shrink-0 rounded-md object-cover border border-border/50"
-                              />
-                            )}
-                            {infoBlock}
-                            {Number(prize.amount) > 0 && (
-                              <p className="text-lg font-bold text-primary shrink-0">
-                                {formatCurrency(Number(prize.amount))}
-                              </p>
-                            )}
-                          </div>
-                        );
-
-                        return hasGoodie ? (
-                          <HoverCard key={prize.id || index} openDelay={150}>
-                            <HoverCardTrigger asChild>{row}</HoverCardTrigger>
-                            <HoverCardContent className="w-80" align="start">
-                              <div className="space-y-3">
-                                {prize.goodieImageUrl && (
-                                  <div className="relative">
-                                    <img
-                                      src={prize.goodieImageUrl}
-                                      alt=""
-                                      className="w-full h-52 object-cover rounded-md border border-border/50"
-                                    />
-                                    {goodieWorth && (
-                                      <span className="absolute top-2 right-2 rounded-full border border-border/50 bg-background/90 px-2 py-1 text-xs font-semibold shadow-sm">
-                                        Worth ~{goodieWorth}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="font-semibold text-base">{titleText}</p>
-                                  {Number(prize.amount) > 0 && (
-                                    <p className="text-sm font-semibold text-primary">
-                                      Cash prize: {formatCurrency(Number(prize.amount))}
-                                    </p>
-                                  )}
-                                </div>
-                                {prize.benefits && prize.benefits.length > 0 && (
-                                  <div>
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Benefits</p>
-                                    <ul className="text-sm text-muted-foreground list-disc list-inside space-y-0.5">
-                                      {prize.benefits.map((b) => <li key={b}>{b}</li>)}
-                                    </ul>
-                                  </div>
-                                )}
-                                {prize.goodieLabel && (
-                                  <div className="pt-2 border-t border-border/50">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-0.5">Goodie</p>
-                                    <p className="text-sm font-medium">
-                                      {prize.goodieLabel}
-                                      {goodieWorth && !prize.goodieImageUrl && ` (Worth ~${goodieWorth})`}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </HoverCardContent>
-                          </HoverCard>
-                        ) : row;
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
 
             {/* Right Column - Registration Card */}
@@ -535,15 +399,17 @@ export function ContestDetails({ contest: initialContest }: ContestDetailsProps)
                     </p>
                   </div>
 
-                  {/* Timing */}
+                  {/* Timing — both dates show a time now; registration deadline
+                      previously showed the date only, which read as if it
+                      closed at midnight regardless of the actual cutoff. */}
                   <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-sm gap-3">
                       <span className="text-muted-foreground">Registration Ends</span>
-                      <span className="font-medium">{formatDate(contest.registrationDeadline)}</span>
+                      <span className="font-medium text-right">{formatDateTime(contest.registrationDeadline)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between text-sm gap-3">
                       <span className="text-muted-foreground">Starts At</span>
-                      <span className="font-medium">{formatDateTime(contest.startTime)}</span>
+                      <span className="font-medium text-right">{formatDateTime(contest.startTime)}</span>
                     </div>
                   </div>
 

@@ -101,6 +101,12 @@ export function adaptServerContest(server: ServerContest): Contest {
     description: server.description || '',
     details: server.details || '',
     shortDescription: server.description?.slice(0, 120) || '',
+    // The real field — topic/tags/category below are legacy derived aliases
+    // of this same array (kept for whatever still reads them), but nothing
+    // actually copied `topics` itself onto Contest before, so any screen
+    // reading contest.topics directly (the org overview page's collapsed
+    // Topics field) saw an empty list even when the contest had topics set.
+    topics: server.topics || [],
     topic: server.topics?.[0] || 'General',
     tags: server.topics || [],
     category: server.topics?.[0] || 'General',
