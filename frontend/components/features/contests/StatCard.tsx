@@ -21,21 +21,21 @@ interface StatCardProps {
   className?: string;
 }
 
-export function StatCard({ 
-  label, 
-  value, 
-  icon: Icon, 
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
   format = (val) => val.toLocaleString(),
   trend,
   status,
-  className 
+  className
 }: StatCardProps) {
   const springValue = useSpring(0, {
     stiffness: 100,
     damping: 30,
     restDelta: 0.001
   });
-  
+
   const displayValue = useTransform(springValue, (latest) => format(Math.floor(latest)));
 
   useEffect(() => {
@@ -44,9 +44,9 @@ export function StatCard({
 
   return (
     <Card className={cn("overflow-hidden border-border/50", className)}>
-      <CardContent className="p-4">
+      <CardContent className="px-4 py-1">
         <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
             <motion.h3 className="text-2xl font-bold tracking-tight">
               {displayValue}
@@ -58,7 +58,7 @@ export function StatCard({
         </div>
 
         {(trend || status) && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-1.5 flex items-center gap-2">
             {trend && (
               <div className={cn(
                 "flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",

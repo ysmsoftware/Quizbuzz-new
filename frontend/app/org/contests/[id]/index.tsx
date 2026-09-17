@@ -131,7 +131,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500">
             {/* Breadcrumbs */}
             <Breadcrumb>
                 <BreadcrumbList>
@@ -160,9 +160,6 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                     <div className="space-y-1">
                         <h1 className="text-2xl font-bold tracking-tight">{contest.title}</h1>
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground">
-                                {contest.orgSlug}
-                            </span>
                             <ContestPhaseBadge phase={contestPhase} />
                         </div>
                     </div>
@@ -222,7 +219,6 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                         label="Completed"
                         value={snapshot?.completionCount || contest?._count?.submissions || 0}
                         icon={CheckCircle2}
-                        status={{ label: 'On track', type: 'success' }}
                     />
                     <StatCard
                         label="Avg Score"
@@ -246,7 +242,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                             key={tab.id}
                             href={`/org/contests/${contestId}${tab.id === 'overview' ? '' : '/' + tab.id}`}
                             className={cn(
-                                "relative px-4 py-3 text-sm font-medium transition-colors hover:text-primary",
+                                "relative px-4 py-2 text-sm font-medium transition-colors hover:text-primary",
                                 activeTab === tab.id ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
                             )}
                         >
@@ -274,7 +270,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
             </div>
 
             {/* Tab Content */}
-            <div className="mt-6">
+            <div className="mt-4">
                 {children}
             </div>
         </div>

@@ -507,7 +507,7 @@ export default function ContestOverviewPage() {
                             )}
                         </div>
                         <Card className="border-border/50">
-                            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                            <CardContent className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                                 <EditableField
                                     label="Start Date & Time"
                                     type="datetime-local"

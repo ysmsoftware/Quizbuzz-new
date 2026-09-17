@@ -111,14 +111,18 @@ export function EditableField({
   };
 
   if (disabled) {
+    // No input-like background box here anymore — a locked field should read
+    // the same as any other plain value (bold, full-contrast text), not like
+    // a grayed-out form control. The lock reason still surfaces on hover via
+    // the tooltip and cursor-not-allowed, just without the boxed styling.
     return (
       <div className={cn("group flex flex-col gap-1.5", className)}>
         <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-2 py-1 px-2 rounded-md border border-transparent bg-muted/30 cursor-not-allowed">
-                <span className="text-sm font-medium text-muted-foreground line-clamp-1">{displayValue || value || '—'}</span>
+              <div className="cursor-not-allowed">
+                <span className="text-sm font-semibold text-foreground line-clamp-1">{displayValue || value || '—'}</span>
               </div>
             </TooltipTrigger>
             {lockReason && <TooltipContent>{lockReason}</TooltipContent>}
@@ -223,8 +227,8 @@ export function EditableField({
             onClick={() => setIsEditing(true)}
           >
             <span className={cn(
-              "text-sm font-medium transition-colors",
-              !value && "text-muted-foreground italic"
+              "text-sm font-semibold text-foreground transition-colors",
+              !value && "font-medium text-muted-foreground italic"
             )}>
               {displayValue || value || `No ${label.toLowerCase()} set`}
             </span>
