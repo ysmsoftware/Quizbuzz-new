@@ -6,7 +6,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import Image from 'next/image';
 import { shareToWhatsApp } from '@/lib/utils/whatsapp-share';
+import { onImageError } from '@/lib/utils/image';
 
 interface ShareCampaignCardProps {
   campaignName: string;
@@ -64,7 +66,7 @@ export function ShareCampaignCard({
     <Card className="overflow-hidden border-border/50 py-0 gap-0">
       <div className="relative h-[104px] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary/25 to-accent/40">
         {posterImageUrl ? (
-          <img src={posterImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <Image src={posterImageUrl} alt="" fill sizes="400px" onError={onImageError} className="object-cover" />
         ) : (
           <MessageCircle className="h-8 w-8 text-card/90" strokeWidth={1.6} aria-hidden="true" />
         )}

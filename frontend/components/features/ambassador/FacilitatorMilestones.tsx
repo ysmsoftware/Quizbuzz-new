@@ -1,8 +1,10 @@
 'use client';
 
 import { Check, Lock, Zap } from 'lucide-react';
+import Image from 'next/image';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { onImageError } from '@/lib/utils/image';
 import type { CampaignSpeedBonusStatus, MilestoneTier } from '@/lib/types/ambassador';
 
 interface FacilitatorMilestonesProps {
@@ -43,7 +45,9 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
             <p className="text-[13px] font-semibold text-foreground">{tier.label ?? `Tier ${i + 1}`}</p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
               {tier.goodie?.imageUrl && (
-                <img src={tier.goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
+                <span className="relative inline-block h-4 w-4 shrink-0">
+                  <Image src={tier.goodie.imageUrl} alt="" fill sizes="16px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                </span>
               )}
               <span>
                 <Rupees amount={tier.amountPerRegistration} />
@@ -78,7 +82,9 @@ function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonu
       <p className="text-[13px] font-semibold text-foreground">{earned ? speedBonus.tier!.label : 'Speed bonus'}</p>
       <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
         {goodie?.imageUrl && (
-          <img src={goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
+          <span className="relative inline-block h-4 w-4 shrink-0">
+            <Image src={goodie.imageUrl} alt="" fill sizes="16px" onError={onImageError} className="rounded object-cover border border-border/50" />
+          </span>
         )}
         <span>
           {earned ? (

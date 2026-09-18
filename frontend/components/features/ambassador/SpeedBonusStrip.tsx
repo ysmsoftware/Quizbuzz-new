@@ -2,8 +2,10 @@
 
 import { Zap } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 import type { CampaignSpeedBonusStatus } from '@/lib/types/ambassador';
 
 export function SpeedBonusStrip({ speedBonus }: { speedBonus: CampaignSpeedBonusStatus | null }) {
@@ -16,7 +18,9 @@ export function SpeedBonusStrip({ speedBonus }: { speedBonus: CampaignSpeedBonus
         <CardContent className="py-3.5 flex items-center gap-3">
           <Zap className="h-5 w-5 text-warning shrink-0" />
           {goodie?.imageUrl && (
-            <img src={goodie.imageUrl} alt="" className="h-8 w-8 rounded object-cover border border-border/50 shrink-0" />
+            <span className="relative inline-block h-8 w-8 shrink-0">
+              <Image src={goodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+            </span>
           )}
           <div>
             <p className="font-semibold text-foreground text-sm">{speedBonus.tier.label}</p>

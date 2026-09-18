@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import {
@@ -140,13 +141,13 @@ export default function FaqPage() {
             </h1>
             <p className="mt-2 text-muted-foreground">
               Can&apos;t find what you&apos;re looking for? Visit our{' '}
-              <a href="/help" className="text-primary underline underline-offset-2">
+              <Link href="/help" className="text-primary underline underline-offset-2">
                 Help Center
-              </a>{' '}
+              </Link>{' '}
               or{' '}
-              <a href="/contact" className="text-primary underline underline-offset-2">
+              <Link href="/contact" className="text-primary underline underline-offset-2">
                 contact us
-              </a>
+              </Link>
               .
             </p>
           </div>

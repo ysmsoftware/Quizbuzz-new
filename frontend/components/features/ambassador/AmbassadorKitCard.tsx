@@ -13,6 +13,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Image from 'next/image';
+import { onImageError } from '@/lib/utils/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -141,11 +143,16 @@ export function AmbassadorKitCard({ shareTemplates, values, campaignName }: Amba
                 {/* Left section: Poster thumbnail / Icon & Title */}
                 <div className="flex items-center gap-3.5 min-w-0">
                   {kit.posterImageUrl ? (
-                    <img
-                      src={kit.posterImageUrl}
-                      alt={kit.name}
-                      className="w-14 h-14 rounded-lg border border-border/50 object-cover shrink-0 bg-muted group-hover:scale-105 transition-transform duration-200 shadow-2xs"
-                    />
+                    <div className="relative w-14 h-14 shrink-0 bg-muted rounded-lg overflow-hidden">
+                      <Image
+                        src={kit.posterImageUrl}
+                        alt={kit.name}
+                        fill
+                        sizes="56px"
+                        onError={onImageError}
+                        className="rounded-lg border border-border/50 object-cover group-hover:scale-105 transition-transform duration-200 shadow-2xs"
+                      />
+                    </div>
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary group-hover:bg-primary/20 transition-colors">
                       <Sparkles className="h-5 w-5" />
@@ -342,11 +349,16 @@ function AmbassadorKitDetailModal({
                 Campaign Poster &amp; Graphic
               </h4>
               <div className="flex flex-col sm:flex-row items-center gap-4 bg-card border border-border/50 rounded-xl p-4">
-                <img
-                  src={kit.posterImageUrl}
-                  alt="Kit poster"
-                  className="w-full sm:w-28 h-36 rounded-lg object-cover border border-border/50 bg-muted shrink-0 shadow-sm"
-                />
+                <div className="relative w-full sm:w-28 h-36 rounded-lg shrink-0 bg-muted overflow-hidden">
+                  <Image
+                    src={kit.posterImageUrl}
+                    alt="Kit poster"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 112px"
+                    onError={onImageError}
+                    className="object-cover border border-border/50 rounded-lg shadow-sm"
+                  />
+                </div>
                 <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
                   <div>
                     <p className="text-xs font-bold text-foreground">Promotional Poster</p>

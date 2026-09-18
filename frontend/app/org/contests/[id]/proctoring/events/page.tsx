@@ -33,6 +33,7 @@ import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 const VIOLATION_TYPES = [
   'FACE_NOT_DETECTED',
@@ -229,7 +230,7 @@ export default function ProctoringEventLogPage() {
           </DialogHeader>
           {previewPhotoUrl && (
             <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-slate-950 flex flex-col items-center justify-center">
-              <img src={previewPhotoUrl} alt="Violation Snapshot" className="max-w-full max-h-full object-contain" />
+              <Image src={previewPhotoUrl} alt="Violation Snapshot" fill sizes="(max-width: 768px) 100vw, 672px" className="object-contain" />
               <Button
                 variant="outline"
                 size="icon"

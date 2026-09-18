@@ -2,8 +2,10 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { uploadBanner, closeRegistration } from '@/lib/api/contests.api';
 import { compressImage } from '@/lib/utils/image-compress';
+import { onImageError } from '@/lib/utils/image';
 import {
     AlertDialog,
     AlertDialogContent,
@@ -334,7 +336,7 @@ export default function ContestOverviewPage() {
                         <Card className="border-border/50 overflow-hidden">
                             <CardContent className="p-6 space-y-6">
                                 <div className="flex flex-col md:flex-row gap-6">
-                                    <div className="relative group shrink-0" onClick={handleBannerClick}>
+                                    <div className="relative group shrink-0 w-full md:w-[200px] aspect-video" onClick={handleBannerClick}>
                                         <input
                                             type="file"
                                             ref={fileInputRef}
@@ -342,14 +344,14 @@ export default function ContestOverviewPage() {
                                             accept="image/*"
                                             className="hidden"
                                         />
-                                        <img
+                                        <Image
                                             src={contest.bannerImage || contest.coverImage || '/placeholder.svg'}
                                             alt={contest.title}
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).src = '/placeholder.svg';
-                                            }}
+                                            fill
+                                            sizes="(max-width: 768px) 100vw, 200px"
+                                            onError={onImageError}
                                             className={cn(
-                                                "w-full md:w-[200px] aspect-video object-cover rounded-lg border shadow-sm transition-all duration-300",
+                                                "object-cover rounded-lg border shadow-sm transition-all duration-300",
                                                 !isCancelled && "cursor-pointer hover:brightness-90"
                                             )}
                                         />

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Trophy } from 'lucide-react';
 
 export function Footer() {
@@ -62,9 +63,9 @@ export function Footer() {
             <ul className="space-y-2">
               <li><a href="#faq" className="hover:text-[var(--foreground)] transition-colors">FAQ</a></li>
               <li><a href="#branding" className="hover:text-[var(--foreground)] transition-colors">White-Label Guide</a></li>
-              <li><a href="/faq" className="hover:text-[var(--foreground)] transition-colors">Exam Cell SLA Spec</a></li>
-              <li><a href="/privacy" className="hover:text-[var(--foreground)] transition-colors">Privacy & GDPR</a></li>
-              <li><a href="/terms" className="hover:text-[var(--foreground)] transition-colors">Terms of Service</a></li>
+              <li><Link href="/faq" className="hover:text-[var(--foreground)] transition-colors">Exam Cell SLA Spec</Link></li>
+              <li><Link href="/privacy" className="hover:text-[var(--foreground)] transition-colors">Privacy & GDPR</Link></li>
+              <li><Link href="/terms" className="hover:text-[var(--foreground)] transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

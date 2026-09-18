@@ -159,12 +159,13 @@ const phaseTemplateSchema = phaseTemplateFieldsSchema.min(1).refine(
     { message: "Phase fractions must sum to 1." },
 );
 
-// POST /campaigns/poster-upload-url — request a presigned S3 PUT URL for a campaign poster
-// or reward goodie image (assetType picks the storage folder — see ambassador-campaign.service.ts).
+// POST /campaigns/poster-upload-url — request a presigned S3 PUT URL for a campaign poster,
+// reward goodie image, or kit attachment (assetType picks the storage folder and whether
+// non-image files are allowed — see ambassador-campaign.service.ts).
 export const RequestPosterUploadUrlSchema = z.object({
     filename: z.string().min(1, "File name is required."),
     mimeType: z.string().min(1, "File type is required."),
-    assetType: z.enum(["poster", "reward-image"]).optional().default("poster"),
+    assetType: z.enum(["poster", "reward-image", "kit-asset"]).optional().default("poster"),
 });
 
 const shareMessageTemplateSchema = z.object({

@@ -1,5 +1,7 @@
+import Image from 'next/image';
 import { Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 import { Rupees } from './Rupees';
 
 interface Goodie {
@@ -37,7 +39,7 @@ export function GoodieThumb({
       )}
     >
       {goodie.imageUrl ? (
-        <img src={goodie.imageUrl} alt={goodie.label} loading="lazy" className="size-full object-cover" />
+        <Image src={goodie.imageUrl} alt={goodie.label} fill sizes="96px" loading="lazy" onError={onImageError} className="object-cover" />
       ) : (
         <div className="size-full flex items-center justify-center">
           <Gift className="size-1/3 text-muted-foreground" />

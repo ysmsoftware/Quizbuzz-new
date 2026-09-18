@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,9 +40,9 @@ export default function StatusPage() {
             <p className="mt-2 text-muted-foreground">
               This is a manually maintained summary, not a live monitoring feed — if you&apos;re
               seeing an issue right now that isn&apos;t reflected here, please{' '}
-              <a href="/contact" className="text-primary underline underline-offset-2">
+              <Link href="/contact" className="text-primary underline underline-offset-2">
                 let us know
-              </a>
+              </Link>
               .
             </p>
           </div>

@@ -2,9 +2,11 @@
 
 import { Zap, Wallet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
 import { MilestoneProgress } from './MilestoneProgress';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { Rupees } from './Rupees';
+import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats } from '@/lib/types/ambassador';
 
 export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
@@ -14,7 +16,9 @@ export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
       <CardContent className="pt-6 flex items-center gap-3">
         <Zap className="h-5 w-5 text-warning shrink-0" />
         {earnedSpeedBonusGoodie?.imageUrl && (
-          <img src={earnedSpeedBonusGoodie.imageUrl} alt="" className="h-8 w-8 rounded object-cover border border-border/50 shrink-0" />
+          <span className="relative inline-block h-8 w-8 shrink-0">
+            <Image src={earnedSpeedBonusGoodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+          </span>
         )}
         <div>
           <p className="font-semibold text-foreground text-sm">{stats.speedBonus.tier.label}</p>

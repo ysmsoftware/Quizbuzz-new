@@ -16,8 +16,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Image from 'next/image';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
+import { onImageError } from '@/lib/utils/image';
 import { useOrgAmbassadorCampaignTemplates } from '@/lib/hooks/useOrgAmbassadorCampaigns';
 import type { CampaignTemplate } from '@/lib/types/ambassador';
 import { Rupees } from './Rupees';
@@ -164,7 +166,9 @@ export function ViewTemplateModal({ template, open, onOpenChange }: ViewTemplate
                             </div>
                             <div className="flex items-center gap-1.5 font-bold text-foreground">
                               {tier.goodie?.imageUrl && (
-                                <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                                <span className="relative inline-block h-5 w-5 shrink-0">
+                                  <Image src={tier.goodie.imageUrl} alt="" fill sizes="20px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                                </span>
                               )}
                               {tier.amountPerRegistration ? <Rupees amount={tier.amountPerRegistration} /> : tier.goodie?.label || '—'}
                             </div>

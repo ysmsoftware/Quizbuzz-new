@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { Upload, X, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 
 type AspectRatio = 'square' | 'video' | 'banner' | 'card' | 'auto';
 
@@ -133,14 +135,29 @@ export function FileUpload({
               containerClassName
             )}
           >
-            <img
-              src={preview}
-              alt="Preview"
-              className={cn(
-                'w-full h-full',
-                aspectRatio === 'square' ? 'object-contain p-2' : 'object-cover'
-              )}
-            />
+            {aspectRatio === 'auto' ? (
+              // No fixed aspect ratio here (ID-proof uploads must never be cropped, whatever
+              // orientation the photo was taken in), so `fill` can't be used — it needs a
+              // container with real dimensions. Intrinsic width/height are a placeholder
+              // ratio only; `style` overrides them to stay responsive at the source's own ratio.
+              <Image
+                src={preview}
+                alt="Preview"
+                width={400}
+                height={300}
+                style={{ width: '100%', height: 'auto' }}
+                onError={onImageError}
+              />
+            ) : (
+              <Image
+                src={preview}
+                alt="Preview"
+                fill
+                sizes="(max-width: 768px) 100vw, 400px"
+                onError={onImageError}
+                className={cn(aspectRatio === 'square' ? 'object-contain p-2' : 'object-cover')}
+              />
+            )}
             {/* Clear button */}
             {onClear && (
               <button

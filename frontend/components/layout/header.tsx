@@ -43,10 +43,14 @@ export function Header() {
                 {/* Logo */}
                 <Link href="/" className="flex items-center">
                     {appLogoUrl && !logoFailed ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- dynamic upload URL, not a known static/remote-pattern domain
-                        <img
+                        // next.config's images.unoptimized:true means Image skips the optimizer's
+                        // domain allowlist for this org-controlled upload URL — plain <img> isn't needed.
+                        <Image
                             src={appLogoUrl}
                             alt="QuizBuzz"
+                            width={140}
+                            height={40}
+                            priority
                             className="h-8 w-auto sm:h-9"
                             onError={() => setLogoFailed(true)}
                         />

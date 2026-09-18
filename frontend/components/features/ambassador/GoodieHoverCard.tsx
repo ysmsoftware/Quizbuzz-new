@@ -1,7 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { onImageError } from '@/lib/utils/image';
 import { Rupees } from './Rupees';
 
 interface Goodie {
@@ -23,8 +25,8 @@ export function GoodieHoverCard({ goodie, children }: { goodie: Goodie; children
       <HoverCardContent className="w-72" align="start">
         <div className="space-y-3">
           {goodie.imageUrl && (
-            <div className="relative">
-              <img src={goodie.imageUrl} alt="" className="w-full h-44 object-cover rounded-md border border-border/50" />
+            <div className="relative w-full h-44">
+              <Image src={goodie.imageUrl} alt="" fill sizes="288px" onError={onImageError} className="object-cover rounded-md border border-border/50" />
               {!!goodie.cashEquivalent && (
                 <span className="absolute top-2 right-2 rounded-full border border-border/50 bg-background/90 px-2 py-1 text-xs font-semibold shadow-sm">
                   Worth ~<Rupees amount={goodie.cashEquivalent} />

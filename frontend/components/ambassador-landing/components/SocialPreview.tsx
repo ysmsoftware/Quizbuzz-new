@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { 
   Copy, 
   Check, 
@@ -266,11 +267,13 @@ Whether you're looking to test your domain skills or represent our university on
                     }`}
                   >
                     <div className="relative h-16 w-full rounded-lg overflow-hidden bg-slate-900 mb-1.5">
-                      <img
+                      <Image
                         src={preset.url}
                         alt={preset.label}
+                        fill
+                        sizes="200px"
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/20" />
                       {isSelected && (
@@ -428,12 +431,14 @@ Whether you're looking to test your domain skills or represent our university on
                     {/* Compact Image Banner */}
                     <div className="relative h-32 sm:h-36 w-full overflow-hidden bg-slate-900">
                       {!imageLoadError ? (
-                        <img
+                        <Image
                           src={currentImageUrl}
                           alt={metaTitle}
+                          fill
+                          sizes="500px"
                           referrerPolicy="no-referrer"
                           onError={() => setImageLoadError(true)}
-                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                          className="object-cover group-hover:scale-102 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full bg-slate-900 p-3 flex flex-col justify-between text-white">
@@ -584,12 +589,14 @@ Whether you're looking to test your domain skills or represent our university on
                     {/* Compact Visual Card Banner */}
                     <div className="relative h-28 sm:h-32 overflow-hidden bg-slate-900 text-white">
                       {!imageLoadError ? (
-                        <img
+                        <Image
                           src={currentImageUrl}
                           alt={metaTitle}
+                          fill
+                          sizes="400px"
                           referrerPolicy="no-referrer"
                           onError={() => setImageLoadError(true)}
-                          className="w-full h-full object-cover"
+                          className="object-cover"
                         />
                       ) : (
                         <div className="w-full h-full bg-linear-to-br from-emerald-800 to-slate-950 p-2.5 flex flex-col justify-between">
@@ -715,12 +722,14 @@ Whether you're looking to test your domain skills or represent our university on
               <div className="rounded-xl border border-[var(--border)] overflow-hidden bg-[var(--background)] group mb-2.5">
                 <div className="relative h-32 sm:h-36 overflow-hidden bg-slate-900 text-white">
                   {!imageLoadError ? (
-                    <img
+                    <Image
                       src={currentImageUrl}
                       alt={metaTitle}
+                      fill
+                      sizes="500px"
                       referrerPolicy="no-referrer"
                       onError={() => setImageLoadError(true)}
-                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                      className="object-cover group-hover:scale-102 transition-transform duration-300"
                     />
                   ) : null}
 

@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════
 
 import type { QuizQuestion } from '@/lib/stores/quiz-store';
+import Image from 'next/image';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
@@ -63,11 +64,13 @@ export function QuestionCard({
 
             {/* Question Image if present */}
             {question.imageUrl && (
-                <div className="relative mt-4 rounded-2xl overflow-hidden border border-border/80 bg-muted/40 shadow-inner group">
-                    <img
+                <div className="relative mt-4 h-[320px] rounded-2xl overflow-hidden border border-border/80 bg-muted/40 shadow-inner group">
+                    <Image
                         src={question.imageUrl}
                         alt={`Question ${questionNumber}`}
-                        className="w-full max-h-[320px] object-contain mx-auto transition-transform duration-300 group-hover:scale-[1.01]"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 700px"
+                        className="object-contain transition-transform duration-300 group-hover:scale-[1.01]"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent pointer-events-none" />
                 </div>

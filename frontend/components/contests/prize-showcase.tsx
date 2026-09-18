@@ -10,6 +10,8 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
+import { onImageError } from "@/lib/utils/image";
 import { Reveal } from "@/components/contests/contest-motion";
 
 // Isolated + memoized so the perpetual breathing loop never restarts —
@@ -102,12 +104,15 @@ function PedestalMedal({
           PODIUM_GRADIENT,
         )}
       >
-        <div className="size-full rounded-full overflow-hidden bg-card border-2 border-background flex items-center justify-center">
+        <div className="relative size-full rounded-full overflow-hidden bg-card border-2 border-background flex items-center justify-center">
           {imageUrl ? (
-            <img
+            <Image
               src={imageUrl}
               alt={label}
-              className="size-full object-cover"
+              fill
+              sizes="96px"
+              onError={onImageError}
+              className="object-cover"
             />
           ) : (
             <span
@@ -154,13 +159,16 @@ function PrizeDetails({
           PODIUM_GRADIENT,
         )}
       >
-        <div className="size-full rounded-[10px] overflow-hidden bg-card flex items-center justify-center">
+        <div className="relative size-full rounded-[10px] overflow-hidden bg-card flex items-center justify-center">
           {prize.goodieImageUrl ? (
-            <img
+            <Image
               src={prize.goodieImageUrl}
               alt={label}
+              fill
+              sizes="(max-width: 768px) 50vw, 200px"
               loading="lazy"
-              className="size-full object-cover"
+              onError={onImageError}
+              className="object-cover"
             />
           ) : (
             <span className={cn("text-4xl font-extrabold", PODIUM_TEXT)}>
@@ -282,11 +290,14 @@ function TierRow({ prize }: { prize: PublicContestPrize }) {
           lost in — this tier's reward is the point of the card. */}
       <div className="relative size-28 sm:size-32 shrink-0 rounded-xl overflow-hidden border bg-accent/10 shadow-sm">
         {prize.goodieImageUrl ? (
-          <img
+          <Image
             src={prize.goodieImageUrl}
             alt={prize.goodieLabel ?? label}
+            fill
+            sizes="128px"
             loading="lazy"
-            className="size-full object-cover"
+            onError={onImageError}
+            className="object-cover"
           />
         ) : (
           <div className="size-full flex items-center justify-center">

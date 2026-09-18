@@ -559,10 +559,10 @@ export function ContestActionBar({
         </Link>
       </Button>
       <Button size="sm" className="bg-primary" asChild>
-        <a href={`/quiz/${contest.slug}/leaderboard`} target="_blank" rel="noopener noreferrer">
+        <Link href={`/quiz/${contest.slug}/leaderboard`} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="mr-2 h-4 w-4" />
           View Public Leaderboard
-        </a>
+        </Link>
       </Button>
     </div>
   );

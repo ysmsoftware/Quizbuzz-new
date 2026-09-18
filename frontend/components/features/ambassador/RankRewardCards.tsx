@@ -1,8 +1,10 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { onImageError } from '@/lib/utils/image';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type { CampaignStats } from '@/lib/types/ambassador';
 import { QRCodeSVG } from 'qrcode.react';
@@ -41,7 +43,9 @@ export function RankRewardCards({ stats, referralLink, onOpenQr }: RankRewardCar
             <p className="text-xl font-bold text-foreground"><Rupees amount={nextTier.amountPerRegistration} /><span className="text-sm font-normal text-muted-foreground"> /registration</span></p>
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
               {goodie?.imageUrl && (
-                <img src={goodie.imageUrl} alt="" className="h-4 w-4 rounded object-cover border border-border/50" />
+                <span className="relative inline-block h-4 w-4 shrink-0">
+                  <Image src={goodie.imageUrl} alt="" fill sizes="16px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                </span>
               )}
               <span>at {nextTier.label ?? 'the next tier'}{goodie ? ` · plus ${goodie.label}` : ''}</span>
             </p>

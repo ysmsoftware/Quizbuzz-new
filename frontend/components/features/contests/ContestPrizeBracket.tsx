@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { Contest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import Image from 'next/image';
+import { onImageError } from '@/lib/utils/image';
 
 interface PrizeBracketProps {
   prizes: Contest['prizes'];
@@ -32,11 +34,14 @@ function PrizeDetailsHoverCard({ prize, worth, children }: { prize: PrizeItem; w
       <HoverCardContent className="w-80" align="start">
         <div className="space-y-3">
           {prize.goodieImageUrl && (
-            <div className="relative">
-              <img
+            <div className="relative w-full h-52">
+              <Image
                 src={prize.goodieImageUrl}
                 alt=""
-                className="w-full h-52 object-cover rounded-md border border-border/50"
+                fill
+                sizes="320px"
+                onError={onImageError}
+                className="object-cover rounded-md border border-border/50"
               />
               {worth && (
                 <span className="absolute top-2 right-2 rounded-full border border-border/50 bg-background/90 px-2 py-1 text-xs font-semibold shadow-sm">
@@ -126,11 +131,11 @@ export function ContestPrizeBracket({ prizes, className }: PrizeBracketProps) {
               "bg-muted/30 border-x border-t border-border/30 h-32"
             )}>
               <div className={cn(
-                "absolute -top-10 flex h-14 w-14 items-center justify-center rounded-full shadow-lg border-4 border-background",
+                "absolute -top-10 flex h-14 w-14 items-center justify-center rounded-full shadow-lg border-4 border-background overflow-hidden",
                 isFirst ? "bg-yellow-500" : !isThird ? "bg-slate-400" : "bg-amber-600"
               )}>
                 {prize.goodieImageUrl ? (
-                  <img src={prize.goodieImageUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                  <Image src={prize.goodieImageUrl} alt="" fill sizes="56px" onError={onImageError} className="rounded-full object-cover" />
                 ) : isFirst ? (
                   <Trophy className="h-7 w-7 text-white" />
                 ) : (
@@ -207,7 +212,9 @@ export function ContestPrizeBracket({ prizes, className }: PrizeBracketProps) {
                         {hasGoodie ? (
                           <span className="flex items-center gap-2">
                             {prize.goodieImageUrl && (
-                              <img src={prize.goodieImageUrl} alt="" className="h-6 w-6 rounded object-cover border border-border/50 shrink-0" />
+                              <span className="relative inline-block h-6 w-6 shrink-0">
+                                <Image src={prize.goodieImageUrl} alt="" fill sizes="24px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                              </span>
                             )}
                             <span className="font-medium text-foreground">
                               {prize.goodieLabel}

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Download, Eye, FileText, MessageSquare, Paperclip, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { substitutePlaceholders } from '../ShareTemplatesEditor';
+import { onImageError } from '@/lib/utils/image';
 import type { ShareKit } from '@/lib/types/ambassador';
 
 interface ViewKitModalProps {
@@ -69,11 +71,16 @@ export function ViewKitModal({ kit, open, onOpenChange, contestTitle, onEdit }: 
                 Poster Image
               </h4>
               <div className="flex items-center gap-4 bg-card border border-border/50 rounded-xl p-3">
-                <img
-                  src={kit.posterImageUrl}
-                  alt="Kit poster"
-                  className="w-20 h-24 rounded-lg object-cover border border-border/50 bg-muted shrink-0"
-                />
+                <div className="relative w-20 h-24 shrink-0 bg-muted rounded-lg overflow-hidden">
+                  <Image
+                    src={kit.posterImageUrl}
+                    alt="Kit poster"
+                    fill
+                    sizes="80px"
+                    onError={onImageError}
+                    className="object-cover border border-border/50 rounded-lg"
+                  />
+                </div>
                 <div className="flex-1 min-w-0 space-y-2">
                   <p className="text-xs font-medium text-foreground">Promotional Poster / Graphic</p>
                   <a href={kit.posterImageUrl} target="_blank" rel="noopener noreferrer" download>

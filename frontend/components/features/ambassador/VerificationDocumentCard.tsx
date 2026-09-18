@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, FileText, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -78,11 +79,13 @@ export function VerificationDocumentCard({ proofUrl, proofFieldLabel }: Verifica
                 <FileText className="h-8 w-8" />
               </a>
             ) : (
-              <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="block">
-                <img
+              <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="relative block aspect-[1.586/1] w-full">
+                <Image
                   src={proofUrl}
                   alt={proofFieldLabel}
-                  className="aspect-[1.586/1] w-full rounded-xl border border-border object-cover hover:opacity-90 transition-opacity"
+                  fill
+                  sizes="180px"
+                  className="rounded-xl border border-border object-cover hover:opacity-90 transition-opacity"
                 />
               </a>
             )}

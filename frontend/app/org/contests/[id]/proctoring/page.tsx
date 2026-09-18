@@ -69,6 +69,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import Image from 'next/image';
 
 interface ProctoringOverview {
   totalParticipants: number;
@@ -536,7 +537,7 @@ export default function ProctoringControlPanel() {
                                                     {/* If snapshot exists, display thumbnail */}
                                                     {event.snapshotUrl && (
                                                         <div className="mt-2.5 relative w-24 h-16 rounded border border-border/60 overflow-hidden cursor-pointer hover:opacity-85 transition-opacity group-hover:scale-102 duration-200" onClick={() => setPreviewPhotoUrl(event.snapshotUrl)}>
-                                                            <img src={event.snapshotUrl} alt="Violation" className="w-full h-full object-cover" />
+                                                            <Image src={event.snapshotUrl} alt="Violation" fill sizes="96px" className="object-cover" />
                                                             <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                                                 <Eye className="h-4 w-4" />
                                                             </div>
@@ -572,7 +573,7 @@ export default function ProctoringControlPanel() {
           </DialogHeader>
           {previewPhotoUrl && (
             <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-slate-950 flex flex-col items-center justify-center">
-              <img src={previewPhotoUrl} alt="Violation Snapshot" className="max-w-full max-h-full object-contain" />
+              <Image src={previewPhotoUrl} alt="Violation Snapshot" fill sizes="(max-width: 768px) 100vw, 672px" className="object-contain" />
               <Button 
                 variant="outline" 
                 size="icon" 

@@ -2,18 +2,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { FileStorageProvider } from "./storage.provider";
+import { validatePresignedFolder as validateFolder } from "./storage-folders";
 import { config } from "../config";
-
-function validateFolder(folder: string) {
-    const parts = folder.split("/");
-    // Mirrors S3StorageProvider's allowlist — was previously hardcoded to "proctoring" only,
-    // which meant the presigned-URL flow (ambassador-proof, and now ambassador-campaign-poster)
-    // would 500 in local/dev mode even though it works fine against real S3.
-    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster", "ambassador-campaign-reward-image", "contest-prize-reward-image"];
-    if (parts.length !== 3 || !validPrefixes.includes(parts[0] as string) || !parts[1] || !parts[2]) {
-        throw new Error("Access Denied: Invalid folder structure.");
-    }
-}
 
 export class LocalStorageProvider implements FileStorageProvider {
     private baseDir: string;

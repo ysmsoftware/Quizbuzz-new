@@ -4,8 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Gift } from 'lucide-react';
 import { CopyIconButton } from './CopyIconButton';
+import Image from 'next/image';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats, MilestoneTier, ShareTemplates } from '@/lib/types/ambassador';
 
 function tierRange(tier: MilestoneTier) {
@@ -77,7 +79,9 @@ export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, ref
                   </div>
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground text-right shrink-0">
                     {tier.goodie?.imageUrl && (
-                      <img src={tier.goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />
+                      <span className="relative inline-block h-5 w-5 shrink-0">
+                        <Image src={tier.goodie.imageUrl} alt="" fill sizes="20px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                      </span>
                     )}
                     <span><Rupees amount={tier.amountPerRegistration} />/reg{tier.goodie ? ` + ${tier.goodie.label}` : ''}</span>
                   </p>

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
+import { onImageError } from '@/lib/utils/image';
 import { Reveal, PulseDot } from '@/components/contests/contest-motion';
 import { CampaignTimelineStrip } from './CampaignTimelineStrip';
 import { TierLadder } from './TierLadder';
@@ -296,11 +298,16 @@ export function CampaignPreview({
               <Card className="border-border/50 transition-shadow hover:shadow-md">
                 {preview.posterImageUrl ? (
                   <CardContent className="flex items-center gap-4 py-5">
-                    <img
-                      src={preview.posterImageUrl}
-                      alt="Campaign share poster"
-                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover shrink-0 bg-muted border border-border/50"
-                    />
+                    <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl shrink-0 bg-muted overflow-hidden">
+                      <Image
+                        src={preview.posterImageUrl}
+                        alt="Campaign share poster"
+                        fill
+                        sizes="112px"
+                        onError={onImageError}
+                        className="object-cover border border-border/50 rounded-xl"
+                      />
+                    </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                         <Lock className="h-3.5 w-3.5 text-muted-foreground" />

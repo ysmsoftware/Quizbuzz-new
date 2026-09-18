@@ -1,20 +1,9 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FileStorageProvider } from "./storage.provider";
+import { validatePresignedFolder as validateFolder } from "./storage-folders";
 import crypto from "crypto";
 import { config } from "../config";
-
-function validateFolder(folder: string) {
-    const parts = folder.split("/");
-    // "ambassador-profile" added: ambassador.service.ts's getProfileImageUploadUrl()
-    // (wired to the live POST /ambassador/upload-profile-image route) builds folder
-    // `ambassador-profile/${ambassadorId}/...`, which this allow-list was missing —
-    // every profile-photo upload request was throwing "Access Denied" below.
-    const validPrefixes = ["proctoring", "ambassador-proof", "ambassador-campaign-poster", "ambassador-campaign-reward-image", "ambassador-profile", "contest-prize-reward-image"];
-    if (parts.length !== 3 || !validPrefixes.includes(parts[0] as string) || !parts[1] || !parts[2]) {
-        throw new Error("Access Denied: Invalid folder structure.");
-    }
-}
 
 export class S3StorageProvider implements FileStorageProvider {
     private client: S3Client;

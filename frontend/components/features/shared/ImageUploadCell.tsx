@@ -1,15 +1,23 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Image from 'next/image';
 import { ImagePlus, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { onImageError } from '@/lib/utils/image';
+
+// Matches uploadViaPresignedUrl's MAX_UPLOAD_BYTES — shown to the user so a large image
+// isn't a surprise once compression silently shrinks it.
+const RECOMMENDED_SIZE_HINT = 'Square image recommended, e.g. 400×400px · auto-compressed to ~500KB';
 
 /** Small thumbnail + upload/replace/clear control — compression and the presigned-upload
  *  request happen inside the `onUploadImage` callback the caller supplies (see
  *  useRewardImageUpload.ts / useContestPrizeImageUpload.ts); this component only manages
  *  the file picker and its own local "uploading" state, matching FileUpload.tsx's
  *  local-only-state pattern. Shared by RepeatingRowTable's `image` column type and the
- *  contest prize forms, which don't use RepeatingRowTable. */
+ *  contest prize forms, which don't use RepeatingRowTable. Goodie/prize images render as
+ *  small square-cropped (object-cover) thumbnails everywhere (GoodieThumb, prize cards) —
+ *  a non-square source gets cropped to fit, which the size hint below calls out. */
 export function ImageUploadCell({
   value,
   onChange,
@@ -47,7 +55,7 @@ export function ImageUploadCell({
       />
       {value ? (
         <div className="relative h-8 w-8">
-          <img src={value} alt="" className="h-8 w-8 rounded object-cover border border-border/50" />
+          <Image src={value} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
           <button
             type="button"
             aria-label="Remove image"
@@ -66,6 +74,7 @@ export function ImageUploadCell({
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
           aria-label="Add image"
+          title={RECOMMENDED_SIZE_HINT}
         >
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
         </Button>

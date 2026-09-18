@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { Flag, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,11 +53,13 @@ export function QuestionDisplay({
         </h2>
 
         {question.imageUrl && (
-          <div className="mt-4 rounded-lg overflow-hidden border bg-muted">
-            <img
+          <div className="relative mt-4 h-64 rounded-lg overflow-hidden border bg-muted">
+            <Image
               src={question.imageUrl}
               alt="Question illustration"
-              className="w-full max-h-64 object-contain"
+              fill
+              sizes="(max-width: 768px) 100vw, 700px"
+              className="object-contain"
             />
           </div>
         )}

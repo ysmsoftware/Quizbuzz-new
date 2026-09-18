@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { archiveContest } from '@/lib/api/contests.api';
@@ -39,6 +40,7 @@ import { StatCard } from '@/components/features/contests/StatCard';
 import { ContestActionBar } from '@/components/features/contests/ContestActionBar';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 
 interface AdminContestDetailShellProps {
     children: React.ReactNode;
@@ -148,9 +150,9 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-lg overflow-hidden border border-border/50 shadow-sm">
+                    <div className="relative h-14 w-14 rounded-lg overflow-hidden border border-border/50 shadow-sm">
                         {contest.coverImage ? (
-                            <img src={contest.coverImage} alt={contest.title} className="h-full w-full object-cover" />
+                            <Image src={contest.coverImage} alt={contest.title} fill sizes="56px" onError={onImageError} className="object-cover" />
                         ) : (
                             <div className="h-full w-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold text-xl">
                                 {contest.title.charAt(0)}

@@ -5,7 +5,9 @@ import { Check, Lock, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 import { Rupees } from './Rupees';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
 
@@ -69,14 +71,14 @@ function TierNode({
     <div className="relative shrink-0">
       <div
         className={cn(
-          'flex items-center justify-center overflow-hidden rounded-full border-[3px] bg-card font-bold transition-all',
+          'relative flex items-center justify-center overflow-hidden rounded-full border-[3px] bg-card font-bold transition-all',
           size === 'lg' ? 'h-20 w-20' : 'h-16 w-16',
           stateClass,
           !hasImage && (isCurrent ? 'text-primary' : isReached ? 'bg-chart-1 text-white' : 'text-muted-foreground'),
         )}
       >
         {hasImage ? (
-          <img src={tier.goodie!.imageUrl} alt={tier.goodie!.label} className="h-full w-full object-cover" />
+          <Image src={tier.goodie!.imageUrl!} alt={tier.goodie!.label} fill sizes="80px" onError={onImageError} className="object-cover" />
         ) : isCurrent ? (
           <Star className="h-4 w-4 fill-current" />
         ) : isReached ? (
@@ -291,7 +293,7 @@ export function TierLadder({
               </DialogHeader>
               <div className="space-y-4">
                 <div className="relative w-full aspect-square rounded-2xl overflow-hidden border border-border/50 bg-accent/10">
-                  <img src={expanded.tier.goodie!.imageUrl} alt={expanded.tier.goodie!.label} className="h-full w-full object-cover" />
+                  <Image src={expanded.tier.goodie!.imageUrl!} alt={expanded.tier.goodie!.label} fill sizes="(max-width: 480px) 100vw, 380px" onError={onImageError} className="object-cover" />
                   {!!expanded.tier.goodie!.cashEquivalent && (
                     <span className="absolute top-3 right-3 rounded-full bg-background/90 border border-border/50 px-2.5 py-1 text-xs font-semibold shadow-sm">
                       Worth ~<Rupees amount={expanded.tier.goodie!.cashEquivalent} />

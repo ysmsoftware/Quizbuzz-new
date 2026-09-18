@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 export const Footer: React.FC = () => {
   return (
@@ -45,8 +46,8 @@ export const Footer: React.FC = () => {
               Contest Platform
             </h4>
             <ul className="space-y-2">
-              <li><a href="/" className="hover:text-[var(--foreground)] transition-colors">Platform Overview</a></li>
-              <li><a href="/register" className="hover:text-[var(--foreground)] transition-colors">Host a Competition</a></li>
+              <li><Link href="/" className="hover:text-[var(--foreground)] transition-colors">Platform Overview</Link></li>
+              <li><Link href="/register" className="hover:text-[var(--foreground)] transition-colors">Host a Competition</Link></li>
               <li><a href="#" className="hover:text-[var(--foreground)] transition-colors">Test Engine &amp; Proctoring</a></li>
               <li><a href="#" className="hover:text-[var(--foreground)] transition-colors">Leaderboards</a></li>
               <li><a href="#" className="hover:text-[var(--foreground)] transition-colors">Certificates</a></li>
@@ -61,8 +62,8 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2">
               <li><a href="#" className="hover:text-[var(--foreground)] transition-colors">Ambassador Code of Conduct</a></li>
               <li><a href="#" className="hover:text-[var(--foreground)] transition-colors">Referral &amp; Payout Terms</a></li>
-              <li><a href="/privacy" className="hover:text-[var(--foreground)] transition-colors">Privacy Policy</a></li>
-              <li><a href="/terms" className="hover:text-[var(--foreground)] transition-colors">Terms of Service</a></li>
+              <li><Link href="/privacy" className="hover:text-[var(--foreground)] transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:text-[var(--foreground)] transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

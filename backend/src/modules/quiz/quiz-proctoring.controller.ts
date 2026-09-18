@@ -3,6 +3,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import { getStorageProvider } from "../../providers/storage.provider";
+import { validatePresignedKey } from "../../providers/storage-folders";
 import logger from "../../config/logger";
 import { captureMetadataQueue, CaptureMetadataJobPayload } from "../../queues";
 import { ViolationType } from "@prisma/client";
@@ -95,9 +96,11 @@ export class QuizProctoringController {
                 return;
             }
 
-            // Enforce strict proctoring path pattern proctoring/{contestSlug}/{participantSlug}/{filename}
-            const parts = storageKey.split("/");
-            if (parts.length !== 4 || parts[0] !== "proctoring" || !parts[1] || !parts[2] || !parts[3]) {
+            // This relay backs every local-mode presigned upload (proctoring snapshots,
+            // ambassador proof/profile, campaign poster/reward images, contest prize
+            // images — see LocalStorageProvider.getPresignedPutUrl), not just proctoring,
+            // so it must accept the same folder prefixes those uploads are allowed to use.
+            if (!validatePresignedKey(storageKey)) {
                 res.status(403).json({ success: false, message: "Access Denied: Invalid upload path structure." });
                 return;
             }

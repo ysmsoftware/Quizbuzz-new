@@ -10,6 +10,7 @@
 // closes the XSS gap the old rendering had.
 // ═══════════════════════════════════════════════════════
 
+import Image from 'next/image';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -82,10 +83,14 @@ const blockComponents: Partial<Components> = {
       {children}
     </code>
   ),
-  img: ({ src, alt }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="my-3 max-h-[320px] w-full rounded-2xl object-contain" />
-  ),
+  img: ({ src, alt }) => {
+    if (typeof src !== 'string') return null;
+    return (
+      <span className="relative my-3 block h-[320px] w-full overflow-hidden rounded-2xl">
+        <Image src={src} alt={alt ?? ''} fill sizes="(max-width: 768px) 100vw, 700px" className="object-contain" />
+      </span>
+    );
+  },
 };
 
 const inlineComponents: Partial<Components> = {
@@ -108,10 +113,14 @@ const inlineComponents: Partial<Components> = {
       {children}
     </code>
   ),
-  img: ({ src, alt }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="inline-block max-h-8 align-text-bottom" />
-  ),
+  img: ({ src, alt }) => {
+    if (typeof src !== 'string') return null;
+    return (
+      <span className="relative inline-block h-8 w-8 align-text-bottom">
+        <Image src={src} alt={alt ?? ''} fill sizes="32px" className="object-contain" />
+      </span>
+    );
+  },
 };
 
 export function QuestionRenderer({ text, className, inline = false }: QuestionRendererProps) {

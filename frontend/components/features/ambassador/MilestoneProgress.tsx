@@ -1,8 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats } from '@/lib/types/ambassador';
 
 function tierRange(tier: CampaignStats['currentTier']) {
@@ -35,7 +37,11 @@ export function MilestoneProgress({ stats }: { stats: CampaignStats }) {
       {goodie && (
         <GoodieHoverCard goodie={goodie}>
           <p className="flex items-center gap-1.5 text-xs text-primary cursor-default">
-            {goodie.imageUrl && <img src={goodie.imageUrl} alt="" className="h-5 w-5 rounded object-cover border border-border/50" />}
+            {goodie.imageUrl && (
+              <span className="relative inline-block h-5 w-5 shrink-0">
+                <Image src={goodie.imageUrl} alt="" fill sizes="20px" onError={onImageError} className="rounded object-cover border border-border/50" />
+              </span>
+            )}
             <span>
               Includes: {goodie.label}
               {goodie.cashEquivalent !== undefined && (

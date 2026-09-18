@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { LegalPageLayout } from '@/components/legal/legal-page-layout';
 import { SUPPORT_EMAIL } from '@/lib/seo/config';
 
@@ -111,7 +112,7 @@ export default function PrivacyPolicyPage() {
           Authentication is handled via a secure, httpOnly session cookie set by our server —
           it isn&apos;t readable by page scripts. We also store a small number of non-sensitive
           preferences (like light/dark theme) in your browser&apos;s local storage. See our{' '}
-          <a href="/cookies">Cookie Policy</a> for details.
+          <Link href="/cookies">Cookie Policy</Link> for details.
         </p>
       </div>
 

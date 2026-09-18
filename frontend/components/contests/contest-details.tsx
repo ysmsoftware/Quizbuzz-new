@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { onImageError } from "@/lib/utils/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PublicContestDetail } from "@/lib/types/public-contest";
@@ -173,13 +175,14 @@ export function ContestDetails({
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
         {contest.bannerImage ? (
           <div className="relative overflow-hidden rounded-2xl border border-border/30 shadow-sm h-[180px] sm:h-[240px] lg:h-[320px] w-full">
-            <img
+            <Image
               src={contest.bannerImage}
               alt={contest.title}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/placeholder.svg';
-              }}
-              className="absolute inset-0 h-full w-full object-cover"
+              fill
+              priority
+              sizes="(max-width: 1280px) 100vw, 1280px"
+              onError={onImageError}
+              className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
             <Reveal

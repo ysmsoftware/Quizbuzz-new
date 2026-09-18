@@ -86,6 +86,7 @@ import { format } from 'date-fns';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { QuestionRenderer } from '@/components/shared/QuestionRenderer';
 import { PaginationBar } from '@/components/ui/pagination-bar';
+import Image from 'next/image';
 
 interface SubmissionRecord {
   id: string;
@@ -747,10 +748,12 @@ export default function ContestSubmissionsPage() {
                             {captures.map((capture) => (
                               <div key={capture.id} className="space-y-1.5">
                                 <div className="relative rounded-xl overflow-hidden border border-border/40 bg-secondary/10 aspect-video">
-                                  <img
+                                  <Image
                                     src={capture.presignedGetUrl}
                                     alt={capture.captureType}
-                                    className="w-full h-full object-cover"
+                                    fill
+                                    sizes="(max-width: 768px) 50vw, 300px"
+                                    className="object-cover"
                                     loading="lazy"
                                   />
                                   <div className="absolute top-1.5 left-1.5">

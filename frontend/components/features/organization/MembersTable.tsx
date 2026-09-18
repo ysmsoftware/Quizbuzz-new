@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Trash2, Shield, Edit2, Check, X, Crown, Eye, UserCheck, Clock, AlertCircle } from 'lucide-react';
 import {
   Table,
@@ -137,9 +138,9 @@ export function MembersTable({
                     {/* Member Info */}
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary text-sm uppercase overflow-hidden">
+                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary text-sm uppercase overflow-hidden">
                           {avatarUrl ? (
-                            <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                            <Image src={avatarUrl} alt={displayName} fill sizes="36px" className="object-cover" />
                           ) : (
                             displayName.charAt(0)
                           )}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import { Check, ChevronRight, Eye, FileText, MessageSquare, Paperclip, Plus, Sparkles, Trophy, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,7 @@ import { substitutePlaceholders } from '@/components/features/ambassador/ShareTe
 import { ViewKitModal } from '@/components/features/ambassador/admin/ViewKitModal';
 import { Rupees } from '@/components/features/ambassador/Rupees';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 import { leaderboardScopeKey } from '@/lib/types/ambassador';
 import type {
   AmbassadorCampaignStatus,
@@ -516,11 +518,16 @@ export function AmbassadorKitCard({
                 {/* Left section: Poster thumbnail / Icon & Title */}
                 <div className="flex items-center gap-3.5 min-w-0">
                   {kit.posterImageUrl ? (
-                    <img
-                      src={kit.posterImageUrl}
-                      alt={kit.name}
-                      className="w-14 h-14 rounded-lg border border-border/50 object-cover shrink-0 bg-muted group-hover:scale-105 transition-transform duration-200 shadow-2xs"
-                    />
+                    <div className="relative w-14 h-14 shrink-0 bg-muted rounded-lg overflow-hidden">
+                      <Image
+                        src={kit.posterImageUrl}
+                        alt={kit.name}
+                        fill
+                        sizes="56px"
+                        onError={onImageError}
+                        className="rounded-lg border border-border/50 object-cover group-hover:scale-105 transition-transform duration-200 shadow-2xs"
+                      />
+                    </div>
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary group-hover:bg-primary/20 transition-colors">
                       <Sparkles className="h-5 w-5" />

@@ -37,10 +37,13 @@ export function PublicHeader() {
       <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center">
           {appLogoUrl && !logoFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element -- dynamic upload URL, not a known static/remote-pattern domain
-            <img
+            // next.config's images.unoptimized:true means Image skips the optimizer's
+            // domain allowlist for this org-controlled upload URL — plain <img> isn't needed.
+            <Image
               src={appLogoUrl}
               alt="QuizBuzz"
+              width={120}
+              height={34}
               className="h-7 w-auto"
               onError={() => setLogoFailed(true)}
             />

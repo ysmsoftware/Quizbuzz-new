@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 interface AmbassadorAvatarProps {
@@ -17,14 +19,17 @@ interface AmbassadorAvatarProps {
  *  (same circular crop, same fallback) instead of three hand-rolled avatar treatments. */
 export function AmbassadorAvatar({ firstName, lastName, profileImageUrl, size = 40, className }: AmbassadorAvatarProps) {
   const initials = `${firstName.charAt(0)}${lastName?.charAt(0) ?? ''}`.toUpperCase();
+  const [imgError, setImgError] = useState(false);
 
-  if (profileImageUrl) {
+  if (profileImageUrl && !imgError) {
     return (
-      <img
+      <Image
         src={profileImageUrl}
         alt={`${firstName} ${lastName ?? ''}`.trim()}
+        width={size}
+        height={size}
+        onError={() => setImgError(true)}
         className={cn('rounded-full object-cover shrink-0 border border-border/50', className)}
-        style={{ width: size, height: size }}
       />
     );
   }

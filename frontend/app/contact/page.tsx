@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { Card, CardContent } from '@/components/ui/card';
@@ -92,9 +93,9 @@ export default function ContactPage() {
                     <h2 className="font-semibold">Have a quick question?</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Check the{' '}
-                      <a href="/faq" className="text-primary underline underline-offset-2">
+                      <Link href="/faq" className="text-primary underline underline-offset-2">
                         FAQ
-                      </a>{' '}
+                      </Link>{' '}
                       — most common questions are answered there.
                     </p>
                   </div>
@@ -110,9 +111,9 @@ export default function ContactPage() {
                     <h2 className="font-semibold">Want to organize on QuizBuzz?</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Mention it in your message, or{' '}
-                      <a href="/register" className="text-primary underline underline-offset-2">
+                      <Link href="/register" className="text-primary underline underline-offset-2">
                         create an organizer account
-                      </a>{' '}
+                      </Link>{' '}
                       to get started directly.
                     </p>
                   </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -119,11 +120,14 @@ export function AmbassadorProfileSheet({ ambassadorId, onClose }: { ambassadorId
                   rel="noopener noreferrer"
                   className="block rounded-lg border border-border overflow-hidden hover:border-primary transition-colors"
                 >
-                  <img
+                  <Image
                     src={ambassador.proofDownloadUrl}
                     alt="Proof document"
+                    width={400}
+                    height={300}
                     loading="lazy"
-                    className="w-full h-auto max-h-80 object-contain bg-muted"
+                    style={{ width: '100%', height: 'auto' }}
+                    className="max-h-80 object-contain bg-muted"
                   />
                 </a>
               </div>

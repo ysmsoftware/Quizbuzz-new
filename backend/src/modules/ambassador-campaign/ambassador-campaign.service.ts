@@ -73,13 +73,20 @@ export class AmbassadorCampaignService {
     // Same shape as AmbassadorService.getUploadUrl (ambassador-proof docs): the frontend PUTs
     // the raw file straight to S3 with this URL, then strips the query string off it to get
     // the permanent object URL to save. No file ever passes through this backend.
-    async getPosterUploadUrl(organizationId: string, filename: string, mimeType: string, assetType: "poster" | "reward-image" = "poster"): Promise<{ url: string; storageKey: string }> {
-        if (!mimeType.startsWith("image/")) throw new BadRequestError("File must be an image.");
+    async getPosterUploadUrl(organizationId: string, filename: string, mimeType: string, assetType: "poster" | "reward-image" | "kit-asset" = "poster"): Promise<{ url: string; storageKey: string }> {
+        // kit-asset covers the ambassador kit's "Attach File (PDF, Image)" upload — everything
+        // else on this endpoint (poster, reward-image) is a decorative image and must stay one.
+        if (assetType !== "kit-asset" && !mimeType.startsWith("image/")) {
+            throw new BadRequestError("File must be an image.");
+        }
 
         const organization = await this.organizationRepo.findById(organizationId);
         if (!organization) throw new NotFoundError("Organization not found.");
 
-        const folderPrefix = assetType === "reward-image" ? "ambassador-campaign-reward-image" : "ambassador-campaign-poster";
+        const folderPrefix =
+            assetType === "reward-image" ? "ambassador-campaign-reward-image" :
+            assetType === "kit-asset" ? "ambassador-campaign-kit-asset" :
+            "ambassador-campaign-poster";
         const folder = `${folderPrefix}/${organization.slug}/${crypto.randomUUID()}`;
         return this.storageProvider.getPresignedPutUrl({
             filename,

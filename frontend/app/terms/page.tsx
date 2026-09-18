@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { LegalPageLayout } from '@/components/legal/legal-page-layout';
 import { SUPPORT_EMAIL } from '@/lib/seo/config';
 
@@ -98,7 +99,7 @@ export default function TermsOfServicePage() {
         <h2>8. Availability</h2>
         <p>
           We aim for high uptime but don&apos;t guarantee uninterrupted access. See our{' '}
-          <a href="/status">System Status</a> page for current service status. We&apos;re not
+          <Link href="/status">System Status</Link> page for current service status. We&apos;re not
           liable for losses caused by scheduled maintenance, third-party outages (e.g. payment
           gateway downtime), or events outside our reasonable control.
         </p>

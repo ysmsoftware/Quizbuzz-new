@@ -18,6 +18,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
     Calendar,
     Clock,
@@ -47,6 +48,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { onImageError } from '@/lib/utils/image';
 
 type Step = 'landing' | 'email' | 'otp' | 'form' | 'payment' | 'success';
 
@@ -250,11 +252,15 @@ export default function PublicRegistrationPage() {
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
                 {/* Contest Banner Image */}
                 {(contest as any).bannerImage && (
-                    <div className="mb-10 w-full overflow-hidden rounded-2xl border border-border/30 shadow-md aspect-[3/1] max-h-[300px]">
-                        <img 
-                            src={(contest as any).bannerImage} 
-                            alt={(contest as any).title} 
-                            className="object-cover w-full h-full"
+                    <div className="relative mb-10 w-full overflow-hidden rounded-2xl border border-border/30 shadow-md aspect-[3/1] max-h-[300px]">
+                        <Image
+                            src={(contest as any).bannerImage}
+                            alt={(contest as any).title}
+                            fill
+                            priority
+                            sizes="(max-width: 1280px) 100vw, 1280px"
+                            onError={onImageError}
+                            className="object-cover"
                         />
                     </div>
                 )}

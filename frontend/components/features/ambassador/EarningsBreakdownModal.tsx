@@ -2,8 +2,10 @@
 
 import { Trophy, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Image from 'next/image';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { onImageError } from '@/lib/utils/image';
 import type {
   AmbassadorCampaignStatus,
   CampaignSpeedBonusStatus,
@@ -91,7 +93,9 @@ export function EarningsBreakdownModal({
                 const row = (
                   <div className={`flex items-start justify-between gap-3 text-sm ${b.goodieLabel ? 'cursor-default' : ''}`}>
                     {b.goodieImageUrl && (
-                      <img src={b.goodieImageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border/50" />
+                      <span className="relative inline-block h-8 w-8 shrink-0">
+                        <Image src={b.goodieImageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                      </span>
                     )}
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{b.tierLabel}</p>
@@ -132,7 +136,9 @@ export function EarningsBreakdownModal({
                 const row = (
                   <div className={`flex items-start justify-between gap-3 text-sm ${goodie ? 'cursor-default' : ''}`}>
                     {goodie?.imageUrl && (
-                      <img src={goodie.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover border border-border/50" />
+                      <span className="relative inline-block h-8 w-8 shrink-0">
+                        <Image src={goodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                      </span>
                     )}
                     <div className="flex-1">
                       <p className="font-medium text-foreground">{speedBonus.tier.label}</p>

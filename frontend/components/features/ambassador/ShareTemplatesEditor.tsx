@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { ChevronDown, Eye, EyeOff, FileText, Paperclip, Plus, Trash2, Upload } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileUpload } from '@/components/features/shared/FileUpload';
 import { ambassadorCampaignApi } from '@/lib/api/ambassador-campaign.api';
+import { onImageError } from '@/lib/utils/image';
 import { cn } from '@/lib/utils';
 import type { ShareKit, ShareKitAsset, ShareTemplates } from '@/lib/types/ambassador';
 
@@ -49,7 +51,9 @@ function KitPreview({
       <p className="text-sm whitespace-pre-wrap leading-relaxed">{sampleText.trim() || 'Write a message template above to preview.'}</p>
       {posterImageUrl && (
         <div className="pt-1">
-          <img src={posterImageUrl} alt="Poster preview" className="w-full max-w-[200px] rounded-lg border border-border/50 shadow-sm" />
+          <div className="relative w-full max-w-[200px] aspect-video">
+            <Image src={posterImageUrl} alt="Poster preview" fill sizes="200px" onError={onImageError} className="rounded-lg border border-border/50 shadow-sm object-cover" />
+          </div>
         </div>
       )}
     </div>
@@ -139,8 +143,8 @@ export function ShareTemplatesEditor({
     setOpenKitIds((prev) => prev.filter((kId) => kId !== id));
   };
 
-  const uploadFileToStorage = async (file: File): Promise<string> => {
-    const { data } = await ambassadorCampaignApi.getPosterUploadUrl({ filename: file.name, mimeType: file.type });
+  const uploadFileToStorage = async (file: File, assetType: 'poster' | 'kit-asset' = 'poster'): Promise<string> => {
+    const { data } = await ambassadorCampaignApi.getPosterUploadUrl({ filename: file.name, mimeType: file.type, assetType });
     const putRes = await fetch(data.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
     if (!putRes.ok) throw new Error('Upload to storage failed');
     return data.url.split('?')[0];
@@ -150,7 +154,7 @@ export function ShareTemplatesEditor({
     setUploadingKitId(kitId);
     setUploadError('');
     try {
-      const permanentUrl = await uploadFileToStorage(file);
+      const permanentUrl = await uploadFileToStorage(file, 'poster');
       updateKit(kitId, { posterImageUrl: permanentUrl });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to upload poster image');
@@ -163,7 +167,10 @@ export function ShareTemplatesEditor({
     setUploadingKitId(kitId);
     setUploadError('');
     try {
-      const permanentUrl = await uploadFileToStorage(file);
+      // 'kit-asset', not 'poster' — this endpoint otherwise rejects any non-image mimeType,
+      // which made every PDF attachment upload here fail with "File must be an image."
+      // even though the button next to it is labeled "Attach File (PDF, Image)".
+      const permanentUrl = await uploadFileToStorage(file, 'kit-asset');
       const kit = kits.find((k) => k.id === kitId);
       const currentAssets = kit?.assets ?? [];
       const newAsset: ShareKitAsset = {
@@ -353,7 +360,7 @@ export function ShareTemplatesEditor({
                         label={uploadingKitId === kit.id ? 'Uploading…' : 'Poster Image'}
                         preview={kit.posterImageUrl}
                         aspectRatio="video"
-                        helperText="Shared along with the kit message."
+                        helperText="Recommended: 1200×675px (16:9) · max 5 MB · shared along with the kit message."
                         onFileSelect={(file) => handlePosterUpload(kit.id, file)}
                         onClear={() => updateKit(kit.id, { posterImageUrl: undefined })}
                       />

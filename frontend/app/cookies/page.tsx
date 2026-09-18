@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { LegalPageLayout } from '@/components/legal/legal-page-layout';
 import { SUPPORT_EMAIL } from '@/lib/seo/config';
 
@@ -68,7 +69,7 @@ export default function CookiePolicyPage() {
       <div>
         <h2>4. Questions</h2>
         <p>
-          See our <a href="/privacy">Privacy Policy</a> for the full picture of what data we
+          See our <Link href="/privacy">Privacy Policy</Link> for the full picture of what data we
           collect, or email{' '}
           <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
         </p>
