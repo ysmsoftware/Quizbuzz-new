@@ -27,7 +27,7 @@ const milestoneTierSchema = z.object({
 const speedBonusFieldsSchema = z.object({
     enabled: z.boolean(),
     campaignStartAt: z.string().optional(),
-    campaignStartAtMode: z.enum(["CONTEST_START", "OFFSET_WEEKS", "CUSTOM"]).optional(),
+    campaignStartAtMode: z.enum(["CONTEST_START", "OFFSET_WEEKS", "CUSTOM", "PER_AMBASSADOR_APPROVAL"]).optional(),
     campaignStartAtOffsetWeeks: z.number().int().min(0).optional(),
     milestoneThreshold: z.number().int().optional(),
     tiers: z.array(z.object({
@@ -44,7 +44,9 @@ const speedBonusFieldsSchema = z.object({
 // never against a single wizard-step PATCH — see speedBonusFieldsSchema below for that.
 const speedBonusSchema = speedBonusFieldsSchema.superRefine((data, ctx) => {
     if (!data.enabled) return;
-    if (!data.campaignStartAt || data.campaignStartAt.trim() === "") {
+    // PER_AMBASSADOR_APPROVAL has no single global date — each enrollment's own reviewedAt
+    // is the clock start, so there's nothing to require here for that mode.
+    if (data.campaignStartAtMode !== "PER_AMBASSADOR_APPROVAL" && (!data.campaignStartAt || data.campaignStartAt.trim() === "")) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Campaign start date is required",

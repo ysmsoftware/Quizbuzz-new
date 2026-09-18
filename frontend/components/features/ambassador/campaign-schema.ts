@@ -28,13 +28,17 @@ const speedBonusTierSchema = z.object({
 const speedBonusSchema = z
   .object({
     enabled: z.boolean(),
-    campaignStartAt: z.string(),
+    campaignStartAt: z.string().optional(),
+    campaignStartAtMode: z.enum(['CONTEST_START', 'OFFSET_WEEKS', 'CUSTOM', 'PER_AMBASSADOR_APPROVAL']).optional(),
+    campaignStartAtOffsetWeeks: z.number().optional(),
     milestoneThreshold: z.number(),
     tiers: z.array(speedBonusTierSchema),
   })
   .superRefine((speedBonus, ctx) => {
     if (!speedBonus.enabled) return;
-    if (!speedBonus.campaignStartAt) {
+    // PER_AMBASSADOR_APPROVAL has no single global date — each ambassador's own approval
+    // date is the clock start, so there's nothing to require here for that mode.
+    if (speedBonus.campaignStartAtMode !== 'PER_AMBASSADOR_APPROVAL' && !speedBonus.campaignStartAt) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Campaign start date is required', path: ['campaignStartAt'] });
     }
     if (!(speedBonus.milestoneThreshold > 0)) {

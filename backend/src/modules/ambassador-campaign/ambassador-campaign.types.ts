@@ -22,10 +22,17 @@ export interface MilestoneTier {
 
 export interface SpeedBonusConfig {
     enabled: boolean;
-    campaignStartAt?: string | undefined; // ISO — the resolved date, always what reward-calculator.ts reads
-    /** UX-only memory of how the frontend computed campaignStartAt — never read by the reward
-     *  math, only used so the editor shows the right mode selected when reopened. */
-    campaignStartAtMode?: "CONTEST_START" | "OFFSET_WEEKS" | "CUSTOM" | undefined;
+    // ISO — the resolved global date. What reward-calculator.ts reads for every mode except
+    // PER_AMBASSADOR_APPROVAL, where each enrollment's own reviewedAt is used instead (see
+    // resolveSpeedBonusStartAt).
+    campaignStartAt?: string | undefined;
+    /** How the clock start is resolved. CONTEST_START/OFFSET_WEEKS/CUSTOM all resolve to the
+     *  single campaignStartAt above (frontend computes it, backend just reads it — the mode
+     *  itself carries no math weight for those three). PER_AMBASSADOR_APPROVAL is the one
+     *  value the reward math actually branches on: it ignores campaignStartAt entirely and
+     *  starts each ambassador's own clock at their enrollment's reviewedAt, so joining late
+     *  no longer forecloses fast-tier bonuses. */
+    campaignStartAtMode?: "CONTEST_START" | "OFFSET_WEEKS" | "CUSTOM" | "PER_AMBASSADOR_APPROVAL" | undefined;
     /** Meaningful only when campaignStartAtMode === "OFFSET_WEEKS". */
     campaignStartAtOffsetWeeks?: number | undefined;
     milestoneThreshold?: number | undefined;
@@ -33,6 +40,9 @@ export interface SpeedBonusConfig {
         withinDays: number;
         bonusAmount: number;
         label: string;
+        // Cap on how many ambassadors can win this tier — first N to qualify, ranked by
+        // thresholdReachedAt, with overflow cascading to the next tier they still qualify
+        // for (see applySpeedBonusCaps). Undefined/blank = unlimited.
         maxWinners?: number | undefined;
         goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
     }[];

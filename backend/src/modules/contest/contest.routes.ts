@@ -46,7 +46,7 @@ contestRouter.post("/:contestId/start-now", authenticatedOrgMiddleware, idempote
 contestRouter.get("/:contestId/participants", authenticatedOrgMiddleware, (req, res, next) => pctrl().listParticipants(req, res, next));
 contestRouter.get("/:contestId/participants/status-summary", authenticatedOrgMiddleware, (req, res, next) => pctrl().getStatusSummary(req, res, next));
 contestRouter.get("/:contestId/participants/:participantId", authenticatedOrgMiddleware, (req, res, next) => pctrl().getParticipantDetails(req, res, next));
-contestRouter.patch("/:contestId/participants/:participantId/disqualify", authenticatedOrgMiddleware, (req, res, next) => pctrl().disqualifyParticipant(req, res, next));
+contestRouter.patch("/:contestId/participants/:participantId/disqualify", authenticatedOrgMiddleware, (req, res, next) => ctrl().disqualifyParticipant(req, res, next));
 
 // Evaluation & Results
 contestRouter.post("/:contestId/evaluate", authenticatedOrgMiddleware, (req, res, next) => ctrl().triggerEvaluation(req, res, next));

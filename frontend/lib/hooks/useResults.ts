@@ -82,6 +82,8 @@ export function useResults(contestId: string, participantId?: string) {
         maxMarks: Number(ans.maxMarks ?? 1),
         negativeMark: Number(ans.negativeMark ?? 0),
       })),
+      disqualified: !!sub.disqualified,
+      disqualificationReason: sub.disqualificationReason ?? null,
     });
   }
 

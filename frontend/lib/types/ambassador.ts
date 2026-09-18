@@ -89,7 +89,7 @@ export interface SpeedBonusTier {
   goodie?: { label: string; cashEquivalent?: number; imageUrl?: string };
 }
 
-export type SpeedBonusStartMode = 'CONTEST_START' | 'OFFSET_WEEKS' | 'CUSTOM';
+export type SpeedBonusStartMode = 'CONTEST_START' | 'OFFSET_WEEKS' | 'CUSTOM' | 'PER_AMBASSADOR_APPROVAL';
 
 export interface SpeedBonusConfig {
   enabled: boolean;

@@ -85,6 +85,7 @@ import { exportToCSV, exportToPDF } from '@/lib/utils/export-utils';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { PaginationBar } from '@/components/ui/pagination-bar';
 import { ParticipantDrawer } from '@/components/features/registrations/ParticipantDrawer';
+import { DisqualifyDialog } from '@/components/contests/disqualify-dialog';
 
 export default function RegistrationsTabPage() {
     const { id } = useParams() as { id: string };
@@ -95,6 +96,7 @@ export default function RegistrationsTabPage() {
     const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
     const [paymentFilter, setPaymentFilter] = useState<'all' | string>('all');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [disqualifyIds, setDisqualifyIds] = useState<string[] | null>(null);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
@@ -134,6 +136,7 @@ export default function RegistrationsTabPage() {
         isLoading,
         isFetching,
         revokeRegistrations,
+        isRevoking,
         markAsPaid,
         allowFreeEntry,
         bulkUpdateStatus,
@@ -612,7 +615,18 @@ export default function RegistrationsTabPage() {
                                                     </td>
                                                     {phase !== 'DRAFT' && phase !== 'PUBLISHED' && phase !== 'REGISTRATION_CLOSED' && (
                                                         <td className="px-4 py-4 text-center">
-                                                            <QuizStatusBadge status={reg.quizStatus || 'not_joined'} progress={reg.currentQuestionIndex} total={reg.totalQuestions} />
+                                                            {reg.quizStatus === 'DISQUALIFIED' && reg.disqualificationReason ? (
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span className="inline-block cursor-help">
+                                                                            <QuizStatusBadge status={reg.quizStatus} progress={reg.currentQuestionIndex} total={reg.totalQuestions} />
+                                                                        </span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent className="max-w-xs">{reg.disqualificationReason}</TooltipContent>
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <QuizStatusBadge status={reg.quizStatus || 'not_joined'} progress={reg.currentQuestionIndex} total={reg.totalQuestions} />
+                                                            )}
                                                         </td>
                                                     )}
                                                     <td className="px-4 py-4">
@@ -639,16 +653,12 @@ export default function RegistrationsTabPage() {
                                                                     setIsMessageModalOpen(true);
                                                                 }}>Send Email</DropdownMenuItem>
                                                                 <DropdownMenuSeparator />
-                                                                {reg.status !== 'revoked' && (
+                                                                {reg.quizStatus !== 'DISQUALIFIED' && (
                                                                     <DropdownMenuItem
                                                                         className="text-destructive"
-                                                                        onClick={() => {
-                                                                            if (confirm("Revoking will prevent this participant from entering the quiz. Continue?")) {
-                                                                                revokeRegistrations({ ids: [reg.id], reason: 'Manual admin revoke' });
-                                                                            }
-                                                                        }}
+                                                                        onClick={() => setDisqualifyIds([reg.id])}
                                                                     >
-                                                                        Revoke Registration
+                                                                        Disqualify Participant
                                                                     </DropdownMenuItem>
                                                                 )}
                                                             </DropdownMenuContent>
@@ -741,26 +751,10 @@ export default function RegistrationsTabPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-red-400 hover:bg-red-400/10 h-8 text-xs font-bold"
-                                onClick={async () => {
-                                    if (confirm(`Disqualify ${selectedIds.length} participants?`)) {
-                                        await bulkUpdateStatus({ ids: selectedIds, status: 'DISQUALIFIED' });
-                                        setSelectedIds([]);
-                                    }
-                                }}
+                                onClick={() => setDisqualifyIds(selectedIds)}
                             >
                                 <AlertTriangle className="mr-2 h-4 w-4" />
-                                Disqualify
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-400 hover:bg-red-400/10 h-8 text-xs"
-                                onClick={() => {
-                                    const reason = prompt("Enter reason for revoking:");
-                                    if (reason) revokeRegistrations({ ids: selectedIds, reason });
-                                }}
-                            >
-                                Revoke Selected
+                                Disqualify Selected
                             </Button>
                         </div>
                     </motion.div>
@@ -832,6 +826,7 @@ export default function RegistrationsTabPage() {
                 onMarkAsPaid={(ref) => markAsPaid({ id: selectedRegistration!.id, reference: ref })}
                 onAllowFree={() => allowFreeEntry(selectedRegistration!.id)}
                 onRevoke={(reason) => revokeRegistrations({ ids: [selectedRegistration!.id], reason })}
+                isRevoking={isRevoking}
                 onSendMessage={(participantId) => {
                     setMessageModalParticipantIds([participantId]);
                     setIsMessageModalOpen(true);
@@ -843,6 +838,18 @@ export default function RegistrationsTabPage() {
                 onOpenChange={setIsMessageModalOpen}
                 contestId={id}
                 selectedParticipantIds={messageModalParticipantIds}
+            />
+
+            <DisqualifyDialog
+                open={!!disqualifyIds}
+                onOpenChange={(open) => { if (!open) setDisqualifyIds(null); }}
+                isPending={isRevoking}
+                participantCount={disqualifyIds?.length}
+                onConfirm={async (reason) => {
+                    await revokeRegistrations({ ids: disqualifyIds!, reason });
+                    setDisqualifyIds(null);
+                    setSelectedIds([]);
+                }}
             />
 
             {/* HIGH-FIDELITY EXPORT CONFIGURATION MODAL */}

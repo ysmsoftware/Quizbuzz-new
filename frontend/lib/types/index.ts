@@ -175,14 +175,23 @@ export interface Registration {
     // Custom Fields
     customFields?: Record<string, string>;
 
-    // Quiz Status (for LIVE/ENDED)
-    quizStatus?: 'not_joined' | 'waiting' | 'answering' | 'submitted' | 'absent';
+    // Quiz Status (for LIVE/ENDED). normalizeRegistration sets this to the raw
+    // backend ParticipantStatus (e.g. 'DISQUALIFIED') when available, falling
+    // back to these legacy lowercase values otherwise — see QuizStatusBadge's
+    // "Raw values map" vs "Legacy/fallback values map".
+    quizStatus?:
+        | 'PENDING_PAYMENT' | 'REGISTERED' | 'CHECKED_IN' | 'IN_WAITING' | 'IN_QUIZ' | 'SUBMITTED' | 'DISQUALIFIED' | 'ABSENT'
+        | 'not_joined' | 'waiting' | 'answering' | 'submitted' | 'absent';
     currentQuestionIndex?: number;
     totalQuestions?: number;
     joinedAt?: string;
     submittedAt?: string;
     lastActivityAt?: string;
     proctoringWarnings?: Array<{ type: string; count: number }>;
+
+    // Set when status is DISQUALIFIED
+    disqualificationReason?: string | null;
+    disqualifiedAt?: string | null;
 }
 
 export interface ParticipantDetails {
@@ -251,6 +260,8 @@ export interface QuizResult {
     percentile: number;
     isPassed: boolean;
     breakdown: ResultBreakdown[];
+    disqualified: boolean;
+    disqualificationReason: string | null;
 }
 
 export interface ResultBreakdown {

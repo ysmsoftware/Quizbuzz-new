@@ -603,6 +603,12 @@ model Participant {
   // keyed by field id. Null/empty when the contest has no extra fields.
   customFields    Json?
 
+  // Set when status transitions to DISQUALIFIED. Who did it is on AuditLog (actorId),
+  // not duplicated here — these two exist so the reason can be shown back to the
+  // participant (results page) and admins without joining AuditLog.
+  disqualificationReason String?
+  disqualifiedAt         DateTime?
+
   // Relations
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact          Contact           @relation(fields: [contactId], references: [id])

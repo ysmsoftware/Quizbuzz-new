@@ -67,7 +67,11 @@ export function SpeedBonusEditor({
   // immediately whenever the admin explicitly interacts with the mode/offset controls.
 
   const setStartMode = (nextMode: SpeedBonusStartMode) => {
-    if (nextMode !== 'CUSTOM' && contestRegistrationStartDate) {
+    if (nextMode === 'PER_AMBASSADOR_APPROVAL') {
+      // No single global date in this mode — each ambassador's own approval date is the
+      // clock start (resolved server-side), so there's nothing to resolve/store here.
+      onChange({ ...speedBonus, campaignStartAtMode: nextMode, campaignStartAt: undefined });
+    } else if (nextMode !== 'CUSTOM' && contestRegistrationStartDate) {
       const resolved = nextMode === 'OFFSET_WEEKS' ? addWeeksIso(contestRegistrationStartDate, offsetWeeks) : contestRegistrationStartDate;
       onChange({ ...speedBonus, campaignStartAtMode: nextMode, campaignStartAt: resolved });
     } else {
@@ -174,15 +178,26 @@ export function SpeedBonusEditor({
                   Custom date
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="PER_AMBASSADOR_APPROVAL" id="sb-start-approval" />
+                <Label htmlFor="sb-start-approval" className="font-normal cursor-pointer">
+                  When each ambassador&apos;s application is approved
+                </Label>
+              </div>
             </RadioGroup>
 
-            {!contestRegistrationStartDate && startMode !== 'CUSTOM' && (
+            {!contestRegistrationStartDate && startMode !== 'CUSTOM' && startMode !== 'PER_AMBASSADOR_APPROVAL' && (
               <p className="text-xs text-muted-foreground">
                 Select a quiz to promote in the Promotion step to use this option, or pick a custom date above.
               </p>
             )}
 
-            {startMode === 'CUSTOM' ? (
+            {startMode === 'PER_AMBASSADOR_APPROVAL' ? (
+              <p className="text-xs text-muted-foreground">
+                Each ambassador gets their own clock, starting the day their application is approved — so joining
+                later doesn&apos;t rule them out of the fast tiers below.
+              </p>
+            ) : startMode === 'CUSTOM' ? (
               <DatePicker
                 value={speedBonus.campaignStartAt ? new Date(speedBonus.campaignStartAt) : undefined}
                 onChange={(date) => onChange({ ...speedBonus, campaignStartAtMode: 'CUSTOM', campaignStartAt: date?.toISOString() })}

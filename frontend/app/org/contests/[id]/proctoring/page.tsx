@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { proctoringApi } from '@/lib/api/post-quiz.api';
 import { disqualifyParticipant } from '@/lib/api/contests.api';
-import { Textarea } from '@/components/ui/textarea';
+import { DisqualifyDialog } from '@/components/contests/disqualify-dialog';
 import {
   Sheet, 
   SheetContent, 
@@ -35,13 +35,11 @@ import {
   SheetDescription, 
   SheetFooter 
 } from '@/components/ui/sheet';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-  DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { useParticipantProctoring } from '@/lib/hooks/useProctoring';
 
@@ -116,7 +114,6 @@ export default function ProctoringControlPanel() {
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   
   const [disqualifyParticipantId, setDisqualifyParticipantId] = useState<string | null>(null);
-  const [disqualifyReason, setDisqualifyReason] = useState('');
 
   // Queries
   const { data: overviewData, isLoading: isOverviewLoading } = useQuery({
@@ -142,13 +139,12 @@ export default function ProctoringControlPanel() {
   const pagination = rawFlagged.pagination ?? (rawFlagged.total != null ? { total: rawFlagged.total, page, limit: 20 } : undefined);
 
   const disqualifyMutation = useMutation({
-    mutationFn: () => disqualifyParticipant(contestId, disqualifyParticipantId as string, disqualifyReason.trim()),
+    mutationFn: (reason: string) => disqualifyParticipant(contestId, disqualifyParticipantId as string, reason),
     onSuccess: () => {
       toast.success('Participant disqualified successfully.');
       queryClient.invalidateQueries({ queryKey: ['proctoring-flagged', contestId] });
       queryClient.invalidateQueries({ queryKey: ['proctoring-overview', contestId] });
       setDisqualifyParticipantId(null);
-      setDisqualifyReason('');
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to disqualify participant.');
@@ -367,7 +363,6 @@ export default function ProctoringControlPanel() {
                                 <DropdownMenuItem className="text-destructive" onClick={(e) => {
                                   e.stopPropagation();
                                   setDisqualifyParticipantId(p.participantId);
-                                  setDisqualifyReason('');
                                 }}>
                                   <Ban className="h-4 w-4 mr-2" />
                                   Disqualify
@@ -561,7 +556,6 @@ export default function ProctoringControlPanel() {
             <Button variant="outline" onClick={() => setSelectedParticipantId(null)}>Close</Button>
             <Button variant="destructive" onClick={() => {
               setDisqualifyParticipantId(selectedParticipantId);
-              setDisqualifyReason('');
               setSelectedParticipantId(null);
             }}>
               Disqualify Participant
@@ -593,67 +587,14 @@ export default function ProctoringControlPanel() {
       </Dialog>
 
       {/* Disqualify Confirmation Dialog */}
-      <Dialog
+      <DisqualifyDialog
         open={!!disqualifyParticipantId}
         onOpenChange={(open) => {
-          if (!open && !disqualifyMutation.isPending) {
-            setDisqualifyParticipantId(null);
-            setDisqualifyReason('');
-          }
+          if (!open) setDisqualifyParticipantId(null);
         }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Disqualify Participant
-            </DialogTitle>
-            <DialogDescription>
-              This action is permanent and cannot be undone. The participant's score will be invalidated and they will be marked as disqualified.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Reason for disqualification <span className="text-destructive">*</span>
-              </label>
-              <Textarea
-                value={disqualifyReason}
-                onChange={(e) => setDisqualifyReason(e.target.value)}
-                placeholder="e.g. Detected use of an external device, repeated tab-switching violations..."
-                rows={3}
-                maxLength={500}
-                disabled={disqualifyMutation.isPending}
-                className={cn(disqualifyReason.trim().length > 0 && disqualifyReason.trim().length < 5 ? 'border-destructive focus-visible:ring-destructive' : '')}
-              />
-              {disqualifyReason.trim().length > 0 && disqualifyReason.trim().length < 5 ? (
-                <p className="text-xs text-destructive">Reason must be at least 5 characters.</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Recorded against this participant's proctoring record.</p>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDisqualifyParticipantId(null)} disabled={disqualifyMutation.isPending}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={disqualifyReason.trim().length < 5 || disqualifyMutation.isPending}
-              onClick={() => disqualifyMutation.mutate()}
-            >
-              {disqualifyMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Disqualifying...
-                </>
-              ) : (
-                'Confirm Disqualification'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onConfirm={(reason) => disqualifyMutation.mutate(reason)}
+        isPending={disqualifyMutation.isPending}
+      />
     </div>
   );
 }

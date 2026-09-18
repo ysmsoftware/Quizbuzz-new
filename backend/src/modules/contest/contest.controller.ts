@@ -13,6 +13,7 @@ import {
     ForceEndContestSchema,
     StartContestNowSchema,
     RequestPrizeRewardImageUploadUrlSchema,
+    DisqualifyParticipantSchema,
 } from "./contest.validator";
 import { UnauthorizedError, BadRequestError } from "../../error/http-errors";
 import { storageService } from "../../services/storage.service";
@@ -366,6 +367,27 @@ export class ContestController {
             );
 
             res.json({ success: true, message: "Evaluation triggered", data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
+    disqualifyParticipant = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user = req.user;
+            if (!user) {
+                throw new UnauthorizedError("User not authorized.");
+            }
+            const { reason } = DisqualifyParticipantSchema.parse(req.body);
+
+            await this.contestService.disqualifyParticipant(
+                req.params.contestId as string,
+                user.organizationId,
+                req.params.participantId as string,
+                reason
+            );
+
+            res.json({ success: true, message: "Participant disqualified", requestId: req.id });
         } catch (err) {
             next(err);
         }

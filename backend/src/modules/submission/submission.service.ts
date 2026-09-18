@@ -283,6 +283,45 @@ export class SubmissionService {
     }
 
     /**
+     * Invalidates the participant's submission as part of disqualifying them, if
+     * one exists and is in a state that can be invalidated. Unlike
+     * invalidateSubmission (the standalone admin action), this never throws —
+     * disqualifying a participant must always succeed regardless of what state
+     * their submission happens to be in (no submission yet, still PENDING, or
+     * already INVALIDATED are all valid no-ops here).
+     *
+     * Returns wasEvaluated so the caller knows whether a leaderboard rebuild is
+     * needed (only an EVALUATED submission could have a LeaderboardEntry).
+     */
+    async invalidateSubmissionForParticipant(
+        organizationId: string,
+        participantId: string,
+        reason: string
+    ): Promise<{ wasEvaluated: boolean }> {
+        const submission = await this.submissionRepo.findByParticipantId(organizationId, participantId);
+        if (!submission || submission.status === "PENDING" || submission.status === "INVALIDATED") {
+            return { wasEvaluated: false };
+        }
+
+        const wasEvaluated = submission.status === "EVALUATED";
+        await this.submissionRepo.markInvalidated(organizationId, submission.id);
+
+        logger.info(
+            `[SubmissionService.invalidateSubmissionForParticipant] ${submission.id} invalidated (participant ${participantId} disqualified). Reason: ${reason}`
+        );
+
+        logAudit({
+            action: "submission.invalidated",
+            targetType: "SUBMISSION",
+            targetId: submission.id,
+            targetLabel: submission.id,
+            organizationId,
+            metadata: { reason, cause: "participant_disqualified", participantId },
+        });
+
+        return { wasEvaluated };
+    }
+
     /**
      * Helper to generate a single absent submission.
      */
@@ -522,7 +561,20 @@ export class SubmissionService {
             }
         }
 
+        const disqualified = participant.status === ParticipantStatus.DISQUALIFIED;
+        const disqualificationReason = participant.disqualificationReason ?? null;
+
         if (!submission) {
+            // A disqualified participant who never submitted still needs to see why,
+            // rather than a bare 404 — surface a minimal disqualified result instead.
+            if (disqualified) {
+                return {
+                    participantId,
+                    contestId: participant.contestId,
+                    disqualified,
+                    disqualificationReason,
+                };
+            }
             throw new NotFoundError("Submission not found");
         }
 
@@ -550,6 +602,8 @@ export class SubmissionService {
             rank,
             percentile,
             totalParticipants,
+            disqualified,
+            disqualificationReason,
         };
     }
 

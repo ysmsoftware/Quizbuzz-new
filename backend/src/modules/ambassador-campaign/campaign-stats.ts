@@ -1,6 +1,6 @@
 import { Ambassador, AmbassadorStatus } from "@prisma/client";
 import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
-import { computeFullReward, computeMilestoneReward } from "./reward-calculator";
+import { applySpeedBonusCaps, computeMilestoneReward, resolveSpeedBonusStartAt, SpeedBonusCandidate } from "./reward-calculator";
 import { paisaToRupees } from "../../utils/currency";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
 import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult, TierBracketBreakdown } from "./ambassador-campaign.types";
@@ -27,33 +27,82 @@ export interface EnrollmentStats {
     speedBonus: SpeedBonusResult | null;
 }
 
+// ponytail: in-memory per-process cache, same shape/TTL as groupsCache below — keyed on
+// campaignId only, not on rewardConfig, so an admin edit to speedBonus tiers/caps mid-window
+// can serve stale winners for up to the TTL. Matches the existing tradeoff groupsCache already
+// makes for leaderboards; upgrade both together (Redis, or invalidate-on-write) if that ever
+// needs tightening.
+const SPEED_BONUS_WINNERS_CACHE_TTL_MS = 20_000;
+const speedBonusWinnersCache = new Map<string, { value: Map<string, SpeedBonusResult | null>; expires: number }>();
+
+/**
+ * Campaign-wide winners pass — reward-calculator.ts's computeSpeedBonus only ever answers
+ * "which tier would this one ambassador qualify for" with no notion of tiers[].maxWinners, so
+ * enforcing the cap needs every APPROVED enrollment's numbers at once (applySpeedBonusCaps).
+ * Cached briefly since a single ambassador's own stats read would otherwise rescan the whole
+ * campaign just to place themselves in the ranking.
+ */
+export async function computeSpeedBonusWinners(
+    campaignRepo: AmbassadorCampaignRepository,
+    campaignId: string,
+    rewardConfig: RewardConfig,
+): Promise<Map<string, SpeedBonusResult | null>> {
+    const speedBonus = rewardConfig.speedBonus;
+    if (!speedBonus?.enabled || speedBonus.milestoneThreshold === undefined) return new Map();
+
+    const cached = speedBonusWinnersCache.get(campaignId);
+    if (cached && cached.expires > Date.now()) return cached.value;
+
+    const threshold = speedBonus.milestoneThreshold;
+    const enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
+        (e) => e.status === AmbassadorStatus.APPROVED,
+    );
+    const counts = await campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
+
+    const candidates: SpeedBonusCandidate[] = await Promise.all(
+        enrollments.map(async (e) => {
+            const registrationCount = counts.get(e.id) ?? 0;
+            const thresholdReachedAt =
+                registrationCount >= threshold ? await campaignRepo.findNthReferralCreatedAt(e.id, threshold) : null;
+            return {
+                enrollmentId: e.id,
+                registrationCount,
+                thresholdReachedAt,
+                bonusStartAt: resolveSpeedBonusStartAt(speedBonus, e.reviewedAt),
+            };
+        }),
+    );
+
+    const value = applySpeedBonusCaps(speedBonus, candidates);
+    speedBonusWinnersCache.set(campaignId, { value, expires: Date.now() + SPEED_BONUS_WINNERS_CACHE_TTL_MS });
+    return value;
+}
+
 export async function computeEnrollmentStats(
     campaignRepo: AmbassadorCampaignRepository,
+    campaignId: string,
     enrollmentId: string,
     rewardConfig: RewardConfig,
 ): Promise<EnrollmentStats> {
     const registrationCount = await campaignRepo.countReferrals(enrollmentId);
+    const milestone = computeMilestoneReward(rewardConfig.milestoneTiers, registrationCount);
 
-    let thresholdReachedAt: Date | null = null;
-    const threshold = rewardConfig.speedBonus?.milestoneThreshold;
-    if (rewardConfig.speedBonus?.enabled && threshold !== undefined && registrationCount >= threshold) {
-        thresholdReachedAt = await campaignRepo.findNthReferralCreatedAt(
-            enrollmentId,
-            threshold,
-        );
-    }
-
-    const reward = computeFullReward(rewardConfig, registrationCount, thresholdReachedAt);
+    const speedBonus = rewardConfig.speedBonus?.enabled
+        ? ((await computeSpeedBonusWinners(campaignRepo, campaignId, rewardConfig)).get(enrollmentId) ?? null)
+        : null;
+    const bonusAmount = speedBonus?.earned
+        ? (speedBonus.tier?.bonusAmount ?? 0) + (speedBonus.tier?.goodie?.cashEquivalent ?? 0)
+        : 0;
 
     return {
         registrationCount,
-        currentTier: reward.currentTier,
-        nextTier: reward.nextTier,
-        progressToNextTier: reward.progressToNextTier,
-        accruedAmount: reward.totalAccrued,
-        milestoneAmount: reward.accruedAmount,
-        tierBreakdown: reward.tierBreakdown,
-        speedBonus: reward.speedBonus,
+        currentTier: milestone.currentTier,
+        nextTier: milestone.nextTier,
+        progressToNextTier: milestone.progressToNextTier,
+        accruedAmount: milestone.accruedAmount + bonusAmount,
+        milestoneAmount: milestone.accruedAmount,
+        tierBreakdown: milestone.tierBreakdown,
+        speedBonus,
     };
 }
 

@@ -226,11 +226,13 @@ export async function getParticipantStatusSummary(
 
 /**
  * POST /contests/:contestId/participants/bulk-status
+ * Only supports resetting back to REGISTERED — bulk disqualify goes through
+ * disqualifyParticipant (looped) so it runs the full disqualify cascade.
  */
 export async function bulkUpdateParticipantStatus(
   contestId: string,
   participantIds: string[],
-  status: 'REGISTERED' | 'DISQUALIFIED'
+  status: 'REGISTERED'
 ): Promise<ApiResponse<{ updatedCount: number }>> {
   return post<{ updatedCount: number }>(`/contests/${contestId}/participants/bulk-status`, {
     participantIds,

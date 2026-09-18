@@ -113,8 +113,13 @@ export default function QuizResultsPage() {
         whatsapp: `https://wa.me/?text=${encodeURIComponent(certUrl)}`,
     };
 
+    // Check if participant was disqualified (checked before/instead of the absent
+    // heuristic below, since a disqualified participant with no submission would
+    // otherwise be misclassified as "Absent").
+    const isDisqualified = !!participantResult?.disqualified;
+
     // Check if participant was absent
-    const isAbsent = participantResult && (participantResult as any).breakdown?.length === 0 && participantResult.correctAnswers === 0 && participantResult.wrongAnswers === 0;
+    const isAbsent = !isDisqualified && participantResult && (participantResult as any).breakdown?.length === 0 && participantResult.correctAnswers === 0 && participantResult.wrongAnswers === 0;
 
     const handleLookupVerify = async () => {
         if (!identifierInput.trim()) {
@@ -345,6 +350,23 @@ export default function QuizResultsPage() {
                                     <h2 className="text-xl font-bold mb-2">No submission found</h2>
                                     <p className="text-muted-foreground text-sm mb-6">
                                         We could not load a submission for this participant in the system.
+                                    </p>
+                                    <Button variant="outline" className="rounded-xl" onClick={() => setIsLookupVerified(false)}>
+                                        Try another search
+                                    </Button>
+                                </Card>
+                            ) : isDisqualified ? (
+                                <Card className="border-destructive/20 bg-destructive/5 backdrop-blur-xl rounded-3xl p-8 text-center max-w-lg mx-auto">
+                                    <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+                                    <h2 className="text-xl font-bold mb-2">You were disqualified from this contest</h2>
+                                    {participantResult.disqualificationReason && (
+                                        <p className="text-sm text-muted-foreground mb-2">
+                                            <span className="font-semibold text-foreground">Reason: </span>
+                                            {participantResult.disqualificationReason}
+                                        </p>
+                                    )}
+                                    <p className="text-muted-foreground text-sm mb-6">
+                                        If you believe this was an error, please contact the contest organizer.
                                     </p>
                                     <Button variant="outline" className="rounded-xl" onClick={() => setIsLookupVerified(false)}>
                                         Try another search

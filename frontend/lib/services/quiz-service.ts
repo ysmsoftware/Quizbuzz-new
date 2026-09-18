@@ -267,6 +267,8 @@ class QuizService {
       contestId: attempt.contestId,
       participantId: attempt.participantId,
       participantName: 'Participant',
+      disqualified: false,
+      disqualificationReason: null,
       score,
       totalMarks,
       totalQuestions: questions.length,

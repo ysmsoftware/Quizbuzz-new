@@ -102,8 +102,13 @@ export class ParticipantController {
             if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
                 return res.status(400).json({ success: false, message: "Invalid or empty participantIds" });
             }
-            if (!["REGISTERED", "DISQUALIFIED"].includes(status)) {
-                return res.status(400).json({ success: false, message: "Invalid status to override. Allowed: REGISTERED, DISQUALIFIED" });
+            // DISQUALIFIED is intentionally not allowed here — disqualifying must go
+            // through PATCH /:contestId/participants/:participantId/disqualify (looped
+            // for bulk from the frontend), which cascades submission invalidation,
+            // leaderboard rebuild, reason capture and the email notice. This endpoint
+            // is only for the REGISTERED reinstate/reset use case.
+            if (status !== "REGISTERED") {
+                return res.status(400).json({ success: false, message: "Invalid status to override. Allowed: REGISTERED" });
             }
 
             const result = await this.participantService.bulkStatusOverride(

@@ -57,9 +57,7 @@ export class ParticipantService {
             throw new NotFoundError("Participant not found");
         }
 
-        // Additional business logic for disqualification could go here
-
-        const result = await this.participantRepo.disqualify(participantId, organizationId);
+        const result = await this.participantRepo.disqualify(participantId, organizationId, reason);
 
         logAudit({
             action: "participant.disqualified",
@@ -175,7 +173,7 @@ export class ParticipantService {
         organizationId: string,
         contestId: string,
         participantIds: string[],
-        status: "REGISTERED" | "DISQUALIFIED"
+        status: "REGISTERED"
     ): Promise<{ updatedCount: number }> {
         const contest = await this.contestRepo.findById(contestId, organizationId);
         if (!contest) {

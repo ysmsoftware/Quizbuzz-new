@@ -226,7 +226,7 @@ export class AmbassadorCampaignService {
         const memberships = await Promise.all(
             enrollments.map(async (e) => {
                 const rewardConfig = e.campaign.rewardConfig as unknown as RewardConfig;
-                const stats = await computeEnrollmentStats(this.campaignRepo, e.id, rewardConfig);
+                const stats = await computeEnrollmentStats(this.campaignRepo, e.campaign.id, e.id, rewardConfig);
                 const accruedAmount = paisaToRupees(stats.accruedAmount);
                 const membership: OrgAmbassadorCampaignMembership = {
                     campaignId: e.campaign.id,
@@ -837,7 +837,7 @@ export class AmbassadorCampaignService {
 
         return Promise.all(
             enrollments.map(async (enrollment) => {
-                const stats = await computeEnrollmentStats(this.campaignRepo, enrollment.id, rewardConfig);
+                const stats = await computeEnrollmentStats(this.campaignRepo, campaignId, enrollment.id, rewardConfig);
                 return {
                     ambassadorId: enrollment.ambassadorId,
                     enrollmentId: enrollment.id,

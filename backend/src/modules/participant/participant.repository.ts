@@ -23,7 +23,7 @@ export interface IParticipantRepository {
         organizationId?: string
     ): Promise<ParticipantDetailRecord | null>;
 
-    disqualify(participantId: string, organizationId: string): Promise<Participant>;
+    disqualify(participantId: string, organizationId: string, reason?: string): Promise<Participant>;
 
     create(input: CreateParticipantInput): Promise<Participant>;
 
@@ -130,10 +130,14 @@ export class ParticipantRepository implements IParticipantRepository {
         });
     }
 
-    async disqualify(participantId: string, organizationId: string): Promise<Participant> {
+    async disqualify(participantId: string, organizationId: string, reason?: string): Promise<Participant> {
         return prisma.participant.update({
             where: { id: participantId, organizationId },
-            data: { status: ParticipantStatus.DISQUALIFIED },
+            data: {
+                status: ParticipantStatus.DISQUALIFIED,
+                disqualificationReason: reason ?? null,
+                disqualifiedAt: new Date(),
+            },
         });
     }
 

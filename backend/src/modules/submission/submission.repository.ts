@@ -380,7 +380,12 @@ export class SubmissionRepository {
         contestId: string
     ): Promise<Array<{ id: string; participantId: string }>> {
         return prisma.submission.findMany({
-            where: { contestId, organizationId, status: "SUBMITTED" },
+            where: {
+                contestId,
+                organizationId,
+                status: "SUBMITTED",
+                participant: { status: { not: "DISQUALIFIED" } },
+            },
             select: { id: true, participantId: true },
             orderBy: { submittedAt: "asc" }, // FIFO — first submitted, first evaluated
         });

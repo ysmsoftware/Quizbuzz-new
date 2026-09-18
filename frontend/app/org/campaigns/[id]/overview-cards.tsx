@@ -718,7 +718,13 @@ export function SpeedBonusConfigCard({
       <CardContent className="space-y-3 text-sm">
         <div className="flex items-center justify-between text-muted-foreground">
           <span>Qualifying window starts</span>
-          <span className="font-medium text-foreground">{speedBonus.campaignStartAt ? formatDate(speedBonus.campaignStartAt) : '—'}</span>
+          <span className="font-medium text-foreground">
+            {speedBonus.campaignStartAtMode === 'PER_AMBASSADOR_APPROVAL'
+              ? "Per ambassador's approval"
+              : speedBonus.campaignStartAt
+                ? formatDate(speedBonus.campaignStartAt)
+                : '—'}
+          </span>
         </div>
         {speedBonus.milestoneThreshold !== undefined && (
           <div className="flex items-center justify-between text-muted-foreground">

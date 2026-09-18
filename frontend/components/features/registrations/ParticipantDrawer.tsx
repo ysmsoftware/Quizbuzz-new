@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DisqualifyDialog } from '@/components/contests/disqualify-dialog';
 import { cn, toDateOrNull } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Registration } from '@/lib/types';
@@ -96,6 +97,7 @@ interface ParticipantDrawerProps {
     contest: any;
     phase: string;
     isLoading?: boolean;
+    isRevoking?: boolean;
     onMarkAsPaid: (ref: string) => void;
     onAllowFree: () => void;
     onRevoke: (reason: string) => void;
@@ -109,6 +111,7 @@ export function ParticipantDrawer({
     contest,
     phase,
     isLoading = false,
+    isRevoking = false,
     onMarkAsPaid,
     onAllowFree,
     onRevoke,
@@ -116,6 +119,7 @@ export function ParticipantDrawer({
 }: ParticipantDrawerProps) {
     const registeredAtDate = toDateOrNull(registration?.registeredAt);
     const paidAtDate = toDateOrNull(registration?.paidAt);
+    const [isDisqualifyDialogOpen, setIsDisqualifyDialogOpen] = React.useState(false);
 
     return (
         <>
@@ -413,18 +417,25 @@ export function ParticipantDrawer({
                             <Button
                                 variant="ghost"
                                 className="col-span-2 text-destructive hover:bg-destructive/5"
-                                onClick={() => {
-                                    const reason = prompt('Reason for revoking:');
-                                    if (reason) onRevoke(reason);
-                                }}
+                                onClick={() => setIsDisqualifyDialogOpen(true)}
                             >
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                Revoke Registration
+                                Disqualify Participant
                             </Button>
                         </SheetFooter>
                     )}
                 </SheetContent>
             </Sheet>
+
+            <DisqualifyDialog
+                open={isDisqualifyDialogOpen}
+                onOpenChange={setIsDisqualifyDialogOpen}
+                isPending={isRevoking}
+                onConfirm={(reason) => {
+                    onRevoke(reason);
+                    setIsDisqualifyDialogOpen(false);
+                }}
+            />
         </>
     );
 }

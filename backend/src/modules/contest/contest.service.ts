@@ -1376,8 +1376,27 @@ export class ContestService {
         participantId: string,
         reason: string
     ) {
-        // Notify participant of disqualification (fire-and-forget)
         const participant = await this.participantService.getParticipantById(contestId, participantId, organizationId);
+
+        const result = await this.participantService.disqualifyParticipant(contestId, participantId, organizationId, reason);
+
+        // Invalidate their submission (if any) so they drop out of scoring/leaderboard
+        // queries, which already filter strictly on Submission.status === "EVALUATED".
+        const { wasEvaluated } = await this.submissionService.invalidateSubmissionForParticipant(
+            organizationId,
+            participantId,
+            reason
+        );
+
+        // Only an EVALUATED submission could have produced a LeaderboardEntry — rebuild
+        // inline so ranks are correct immediately (same pattern as declareResults()).
+        if (wasEvaluated) {
+            const scores = await this.leaderboardRepo.fetchEvaluatedScores(contestId, organizationId);
+            const ranked = rankRows(scores);
+            await this.leaderboardRepo.buildLeaderboard(contestId, organizationId, ranked);
+        }
+
+        // Notify participant of disqualification (fire-and-forget)
         if (participant?.contact?.email) {
             const contest = await this.getContest(contestId, organizationId);
             this.messagingService.enqueueMessage(organizationId, {
@@ -1396,7 +1415,7 @@ export class ContestService {
             });
         }
 
-        return this.participantService.disqualifyParticipant(contestId, participantId, organizationId, reason);
+        return result;
     }
 
     // ─── Evaluation & Results ─────────────────────────────────────────────────

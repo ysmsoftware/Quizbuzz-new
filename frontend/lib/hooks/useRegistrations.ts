@@ -83,6 +83,8 @@ export function normalizeRegistration(raw: any): Registration {
     submittedAt: raw.submittedAt,
     lastActivityAt: raw.lastActivityAt,
     proctoringWarnings: raw.proctoringWarnings,
+    disqualificationReason: raw.disqualificationReason ?? null,
+    disqualifiedAt: raw.disqualifiedAt ?? null,
   } as Registration;
 }
 
@@ -137,7 +139,11 @@ export function useRegistrations(
       queryClient.invalidateQueries({
         queryKey: queryKeys.contests.participants(contestId, params),
       });
-      toast.success(`Revoked ${variables.ids.length > 1 ? 'registrations' : 'registration'}`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.contests.detail(contestId) });
+      toast.success(`Disqualified ${variables.ids.length > 1 ? `${variables.ids.length} participants` : 'participant'}`);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to disqualify participant(s).');
     },
   });
 
@@ -186,7 +192,7 @@ export function useRegistrations(
    * Bulk status update mutation
    */
   const bulkStatusMutation = useMutation({
-    mutationFn: ({ ids, status }: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) =>
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'REGISTERED' }) =>
       contestsApi.bulkUpdateParticipantStatus(contestId, ids, status),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -219,10 +225,14 @@ export function useRegistrations(
 
     // Mutations
     revokeRegistrations: (args: { ids: string[], reason: string }) => revokeMutation.mutateAsync(args),
+    isRevoking: revokeMutation.isPending,
     markAsPaid: (args: { id: string, reference: string }) => markAsPaidMutation.mutateAsync(args),
     allowFreeEntry: (id: string) => allowFreeEntryMutation.mutateAsync(id),
     disqualifyParticipant: (id: string, reason: string) => disqualifyMutation.mutateAsync({ participantId: id, reason }),
-    bulkUpdateStatus: (args: { ids: string[]; status: 'REGISTERED' | 'DISQUALIFIED' }) => bulkStatusMutation.mutateAsync(args),
+    // 'DISQUALIFIED' is intentionally not accepted here anymore — the backend
+    // rejects it too. Bulk/single disqualify always goes through revokeRegistrations
+    // / disqualifyParticipant so the full cascade (submission, leaderboard, email) runs.
+    bulkUpdateStatus: (args: { ids: string[]; status: 'REGISTERED' }) => bulkStatusMutation.mutateAsync(args),
     triggerExport: (format: 'csv' | 'pdf', filters?: any) => contestsApi.triggerExport(contestId, format, filters),
     checkExportStatus: (exportId: string) => contestsApi.getExportStatus(contestId, exportId),
     registrations: participants, // alias used by some pages

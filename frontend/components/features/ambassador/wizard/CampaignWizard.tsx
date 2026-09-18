@@ -121,7 +121,10 @@ export function CampaignWizard({ campaignId }: { campaignId?: string }) {
     const speedBonus = draft.rewardConfig.speedBonus;
     if (!speedBonus?.enabled) return;
     const mode = speedBonus.campaignStartAtMode ?? 'CONTEST_START';
-    if (mode === 'CUSTOM') return;
+    // CUSTOM has its own explicit date; PER_AMBASSADOR_APPROVAL has no global anchor at all
+    // (each ambassador's own reviewedAt is the clock start) — neither should be resynced
+    // to the contest's registration date when the selected contest changes.
+    if (mode === 'CUSTOM' || mode === 'PER_AMBASSADOR_APPROVAL') return;
     const anchor = selectedContestDetail?.registrationStartDate;
     if (!anchor) return;
     const resolved = mode === 'OFFSET_WEEKS' ? addWeeksIso(anchor, speedBonus.campaignStartAtOffsetWeeks ?? 0) : anchor;

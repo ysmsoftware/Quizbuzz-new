@@ -9,6 +9,9 @@ participantRouter.get("/:contestId/participants",                         authen
 participantRouter.get("/:contestId/participants/status-summary",          authenticatedOrgMiddleware, (req, res, next) => ctrl().getStatusSummary(req, res, next));
 participantRouter.post("/:contestId/participants/bulk-status",            authenticatedOrgMiddleware, (req, res, next) => ctrl().bulkStatusOverride(req, res, next));
 participantRouter.get("/:contestId/participants/:participantId",           authenticatedOrgMiddleware, (req, res, next) => ctrl().getParticipantDetails(req, res, next));
-participantRouter.patch("/:contestId/participants/:participantId/disqualify", authenticatedOrgMiddleware, (req, res, next) => ctrl().disqualifyParticipant(req, res, next));
+// Disqualify is handled by contestRouter (contest.routes.ts) -> ContestController,
+// which orchestrates the full disqualify cascade (submission + leaderboard + email).
+// A route registered here would never be reached anyway (contestRouter is mounted
+// first on the same "/contests" base), so it's intentionally not duplicated.
 participantRouter.post("/:contestId/participants/export",                 authenticatedOrgMiddleware, (req, res, next) => ctrl().triggerExport(req, res, next));
 participantRouter.get("/:contestId/participants/export/:exportId",        authenticatedOrgMiddleware, (req, res, next) => ctrl().getExportStatus(req, res, next));

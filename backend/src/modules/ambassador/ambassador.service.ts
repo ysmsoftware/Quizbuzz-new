@@ -522,7 +522,7 @@ export class AmbassadorService {
                 // Pending/rejected applications have no meaningful stats yet — skip the
                 // (relatively expensive) computation and return a zeroed shape instead.
                 const stats = enrollment.status === AmbassadorStatus.APPROVED
-                    ? await computeEnrollmentStats(this.campaignRepo, enrollment.id, rewardConfig)
+                    ? await computeEnrollmentStats(this.campaignRepo, enrollment.campaignId, enrollment.id, rewardConfig)
                     : this._emptyStats();
 
                 return {
@@ -658,7 +658,7 @@ export class AmbassadorService {
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
         const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
-        const stats = await computeEnrollmentStats(this.campaignRepo, enrollment.id, rewardConfig);
+        const stats = await computeEnrollmentStats(this.campaignRepo, campaignId, enrollment.id, rewardConfig);
 
         const leaderboardRanks = await Promise.all(
             (rewardConfig.leaderboardPrizes ?? []).map(async (cut) => {
