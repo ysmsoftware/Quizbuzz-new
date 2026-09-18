@@ -42,7 +42,7 @@ async function getS3(): Promise<import("@aws-sdk/client-s3").S3Client> {
         ...(config.storage.s3.accessKeyId
             ? {
                 credentials: {
-                    accessKeyId:     config.storage.s3.accessKeyId!,
+                    accessKeyId: config.storage.s3.accessKeyId!,
                     secretAccessKey: config.storage.s3.secretKey!,
                 },
             }
@@ -72,8 +72,8 @@ export class StorageService {
      * @returns           { url, key }
      */
     async upload(
-        key:         string,
-        buffer:      Buffer,
+        key: string,
+        buffer: Buffer,
         contentType: string
     ): Promise<UploadResult> {
         if (config.storage.provider === "s3") {
@@ -100,24 +100,30 @@ export class StorageService {
         buffer:      Buffer,
         contentType: string
     ): Promise<UploadResult> {
-        const { PutObjectCommand } = await import("@aws-sdk/client-s3");
-        const s3 = await getS3();
-        const bucket = config.storage.s3.bucket!;
+        try {
+            const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+            const s3 = await getS3();
+            const bucket = config.storage.s3.bucket!;
 
-        await s3.send(
-            new PutObjectCommand({
-                Bucket:      bucket,
-                Key:         key,
-                Body:        buffer,
-                ContentType: contentType,
-                // Public reads handled by bucket policy — no ACL needed
-            })
-        );
+            await s3.send(
+                new PutObjectCommand({
+                    Bucket:      bucket,
+                    Key:         key,
+                    Body:        buffer,
+                    ContentType: contentType,
+                    // Public reads handled by bucket policy — no ACL needed
+                })
+            );
 
-        const url = `https://${bucket}.s3.${config.storage.s3.region ?? "ap-south-1"}.amazonaws.com/${key}`;
+            const url = `https://${bucket}.s3.${config.storage.s3.region ?? "ap-south-1"}.amazonaws.com/${key}`;
 
-        logger.info(`[StorageService] S3 upload: ${key}`);
-        return { url, key };
+            logger.info(`[StorageService] S3 upload: ${key}`);
+            return { url, key };
+        } catch (err: any) {
+            logger.error(`[StorageService] S3 upload failed for key ${key}: ${err?.message || err}`, { error: err });
+            const { BadRequestError } = require("../error/http-errors");
+            throw new BadRequestError(`S3 Upload Failed: ${err?.message || "Check S3 bucket configuration and credentials."}`);
+        }
     }
 
     private async _deleteFromS3(key: string): Promise<void> {
@@ -149,8 +155,9 @@ export class StorageService {
         fs.mkdirSync(fileDir, { recursive: true });
         fs.writeFileSync(filePath, buffer);
 
-        // URL served by a static middleware at /uploads/*
-        const url = `${config.app.baseUrl}/uploads/${key}`;
+        // URL served by static middleware
+        const baseUrl = config.app.baseUrl ? config.app.baseUrl.replace(/\/api\/v1\/?$/, "") : `http://localhost:${config.app.port}`;
+        const url = `${baseUrl}/uploads/${key}`;
 
         logger.info(`[StorageService] Local upload: ${filePath}`);
         return { url, key };

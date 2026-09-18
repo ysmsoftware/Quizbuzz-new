@@ -39,6 +39,7 @@ import { FileUpload } from '@/components/features/shared/FileUpload';
 import { ImageUploadCell } from '@/components/features/shared/ImageUploadCell';
 import { uploadBanner } from '@/lib/api/contests.api';
 import { useContestPrizeImageUpload } from '@/lib/hooks/useContestPrizeImageUpload';
+import { compressImage } from '@/lib/utils/image-compress';
 
 const STEPS = [
     { id: 1, title: 'Basic Info', description: 'Title, description, details, topics, and rules' },
@@ -187,7 +188,14 @@ export default function CreateContestPage() {
     const handleBannerSelect = async (file: File, preview: string) => {
         setUploadingBanner(true);
         try {
-            const res = await uploadBanner({ fileData: preview, fileName: file.name });
+            const compressed = await compressImage(file, { maxDimension: 1200, maxBytes: 400 * 1024 });
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(compressed);
+            });
+            const res = await uploadBanner({ fileData: dataUrl, fileName: compressed.name });
             if (res.data) {
                 setForm(prev => ({ ...prev, bannerImage: res.data.url }));
                 toast({

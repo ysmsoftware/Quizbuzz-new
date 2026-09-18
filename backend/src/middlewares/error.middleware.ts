@@ -33,6 +33,16 @@ export const globalErrorHandler = (
     // request could leak its user context into a subsequent unrelated request.
     Sentry.getCurrentScope().setUser(null);
 
+    // ── 0. Payload Too Large Handler (Express Body-Parser 413) ────────────
+    if ((err as any).type === "entity.too.large" || (err as any).status === 413) {
+        return res.status(413).json({
+            success: false,
+            code: "PAYLOAD_TOO_LARGE",
+            message: "File payload is too large. Please select a smaller file (max 5 MB).",
+            requestId,
+        });
+    }
+
     // ── 1. Zod Validation Error Handler ──────────────────────────────────
     if (err instanceof ZodError) {
         const details: Record<string, string[]> = {};

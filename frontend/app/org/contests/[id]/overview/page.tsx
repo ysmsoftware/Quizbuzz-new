@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { uploadBanner, closeRegistration } from '@/lib/api/contests.api';
+import { compressImage } from '@/lib/utils/image-compress';
 import {
     AlertDialog,
     AlertDialogContent,
@@ -242,37 +243,38 @@ export default function ContestOverviewPage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const preview = reader.result as string;
-
-            const performUpload = async () => {
-                setUploadingBanner(true);
-                try {
-                    const res = await uploadBanner({ fileData: preview, fileName: file.name });
-                    if (res.data) {
-                        await updateMutation.mutateAsync({ bannerImage: res.data.url });
-                        toast.success("Banner image updated successfully!");
-                    }
-                } catch (err: any) {
-                    toast.error(err?.message || "Failed to upload banner image.");
-                } finally {
-                    setUploadingBanner(false);
-                }
-            };
-
-            if (!isDraft && !isCancelled) {
-                setConfirmModal({
-                    isOpen: true,
-                    title: "Confirm Banner Update",
-                    description: "Are you sure you want to update the banner image of this published contest? This will update the banner for all active registrants.",
-                    onConfirm: performUpload
+        const performUpload = async () => {
+            setUploadingBanner(true);
+            try {
+                const compressed = await compressImage(file, { maxDimension: 1200, maxBytes: 400 * 1024 });
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(compressed);
                 });
-            } else {
-                await performUpload();
+                const res = await uploadBanner({ fileData: dataUrl, fileName: compressed.name });
+                if (res.data) {
+                    await updateMutation.mutateAsync({ bannerImage: res.data.url });
+                    toast.success("Banner image updated successfully!");
+                }
+            } catch (err: any) {
+                toast.error(err?.message || "Failed to upload banner image.");
+            } finally {
+                setUploadingBanner(false);
             }
         };
-        reader.readAsDataURL(file);
+
+        if (!isDraft && !isCancelled) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Confirm Banner Update",
+                description: "Are you sure you want to update the banner image of this published contest? This will update the banner for all active registrants.",
+                onConfirm: performUpload
+            });
+        } else {
+            await performUpload();
+        }
     };
 
     const isOpenForRegistration = phase === 'PUBLISHED';
@@ -341,8 +343,11 @@ export default function ContestOverviewPage() {
                                             className="hidden"
                                         />
                                         <img
-                                            src={contest.bannerImage || contest.coverImage || '/placeholder-contest.jpg'}
+                                            src={contest.bannerImage || contest.coverImage || '/placeholder.svg'}
                                             alt={contest.title}
+                                            onError={(e) => {
+                                                (e.target as HTMLImageElement).src = '/placeholder.svg';
+                                            }}
                                             className={cn(
                                                 "w-full md:w-[200px] aspect-video object-cover rounded-lg border shadow-sm transition-all duration-300",
                                                 !isCancelled && "cursor-pointer hover:brightness-90"

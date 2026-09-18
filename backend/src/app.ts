@@ -72,11 +72,13 @@ app.use(morgan(
 
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use("/api/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use("/api/storage", express.static(path.join(process.cwd(), "storage")));
+app.use("/storage", express.static(path.join(process.cwd(), "storage")));
 
 
 // routes
@@ -95,7 +97,7 @@ app.get('/health', async (req, res) => {
         redis.ping(),
     ]);
 
-    const dbOk    = db.status === 'fulfilled';
+    const dbOk = db.status === 'fulfilled';
     const cacheOk = cache.status === 'fulfilled';
 
     // Drain mode: instance is at or above the configured WebSocket connection cap,
@@ -104,40 +106,40 @@ app.get('/health', async (req, res) => {
     // while all existing WebSocket sessions continue uninterrupted — the ALB never
     // closes an already-established TCP connection when a target goes unhealthy.
     const maxConnections = config.websocket.maxConnections;
-    const mem            = process.memoryUsage();
-    const heapUsed       = mem.heapUsed;
-    const heapLimit      = v8.getHeapStatistics().heap_size_limit;
-    const heapPct        = heapLimit > 0 ? Math.round((heapUsed / heapLimit) * 100) : 0;
+    const mem = process.memoryUsage();
+    const heapUsed = mem.heapUsed;
+    const heapLimit = v8.getHeapStatistics().heap_size_limit;
+    const heapPct = heapLimit > 0 ? Math.round((heapUsed / heapLimit) * 100) : 0;
     const heapThresholdPct = Number(process.env.HEALTH_HEAP_THRESHOLD_PCT ?? 80);
     const activeWsConnections = getActiveWsConnections();
 
     const atConnectionCap = activeWsConnections >= maxConnections;
-    const atMemoryCap     = heapPct >= heapThresholdPct;
-    const draining        = atConnectionCap || atMemoryCap;
+    const atMemoryCap = heapPct >= heapThresholdPct;
+    const draining = atConnectionCap || atMemoryCap;
 
     // Overall: unhealthy if DB or cache is down, OR if instance is draining
     const healthy = dbOk && cacheOk && !draining;
 
     const status = !dbOk || !cacheOk ? 'DEGRADED'
-                 : draining           ? 'DRAINING'
-                 :                      'OK';
+        : draining ? 'DRAINING'
+            : 'OK';
 
     res.status(healthy ? 200 : 503).json({
         status,
-        db:               dbOk    ? 'OK' : 'ERROR',
-        cache:            cacheOk ? 'OK' : 'ERROR',
-        wsConnections:    activeWsConnections,
+        db: dbOk ? 'OK' : 'ERROR',
+        cache: cacheOk ? 'OK' : 'ERROR',
+        wsConnections: activeWsConnections,
         wsMaxConnections: maxConnections,
-        heapUsedMb:       Math.round(heapUsed / 1024 / 1024),
-        heapLimitMb:      Math.round(heapLimit / 1024 / 1024),
-        heapUsedPct:      heapPct,
+        heapUsedMb: Math.round(heapUsed / 1024 / 1024),
+        heapLimitMb: Math.round(heapLimit / 1024 / 1024),
+        heapUsedPct: heapPct,
         heapThresholdPct,
         draining,
         atConnectionCap,
         atMemoryCap,
-        uptime:           process.uptime(),
-        timestamp:        new Date().toISOString(),
-        requestId:        req.id,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        requestId: req.id,
     });
 });
 app.get('/sentry-test', () => { throw new Error('Manual Sentry test - backend'); });
