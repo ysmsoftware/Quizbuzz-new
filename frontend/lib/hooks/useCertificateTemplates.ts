@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { certificateTemplatesApi } from '@/lib/api/certificate-templates.api';
+import { certificateTemplatesApi, TemplateLayoutFields } from '@/lib/api/certificate-templates.api';
 import { toast } from 'sonner';
 
 export function useCertificateTemplates() {
@@ -22,7 +22,7 @@ export function useCertificateTemplate(id: string | null) {
 export function useCreateCertificateTemplate() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (body: { name: string; description?: string | null; htmlContent: string }) => certificateTemplatesApi.create(body),
+        mutationFn: (body: { name: string; description?: string | null; htmlContent: string } & TemplateLayoutFields) => certificateTemplatesApi.create(body),
         onSuccess: () => {
             toast.success('Certificate template saved');
             queryClient.invalidateQueries({ queryKey: ['certificate-templates'] });
@@ -34,7 +34,7 @@ export function useCreateCertificateTemplate() {
 export function useUpdateCertificateTemplate() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string | null; htmlContent?: string } }) =>
+        mutationFn: ({ id, body }: { id: string; body: { name?: string; description?: string | null; htmlContent?: string } & TemplateLayoutFields }) =>
             certificateTemplatesApi.update(id, body),
         onSuccess: () => {
             toast.success('Certificate template updated');
@@ -58,7 +58,7 @@ export function useDeleteCertificateTemplate() {
 
 export function usePreviewCertificateTemplate() {
     return useMutation({
-        mutationFn: (body: { templateId?: string; htmlContent?: string }) => certificateTemplatesApi.preview(body),
+        mutationFn: (body: { templateId?: string; htmlContent?: string } & TemplateLayoutFields) => certificateTemplatesApi.preview(body),
         onError: (err: any) => toast.error(err.message || 'Failed to preview template'),
     });
 }

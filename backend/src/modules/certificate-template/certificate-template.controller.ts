@@ -22,7 +22,7 @@ export class CertificateTemplateController {
     create = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const dto = createTemplateSchema.parse(req.body);
-            const result = await this.service.createTemplate(req.user!.organizationId as string, dto.name, dto.htmlContent, dto.description);
+            const result = await this.service.createTemplate(req.user!.organizationId as string, dto.name, dto.htmlContent, dto.description, { orgLogoPosition: dto.orgLogoPosition, pageSize: dto.pageSize });
             res.status(201).json({ success: true, data: result.template, unknownPlaceholders: result.unknownPlaceholders });
         } catch (err) { next(err); }
     };

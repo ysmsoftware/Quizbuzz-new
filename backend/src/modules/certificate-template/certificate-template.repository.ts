@@ -28,6 +28,8 @@ export class CertificateTemplateRepository {
                 description:    input.description ?? null,
                 htmlContent:    input.htmlContent,
                 variables:      input.variables as any,
+                ...(input.orgLogoPosition !== undefined && { orgLogoPosition: input.orgLogoPosition }),
+                ...(input.pageSize        !== undefined && { pageSize: input.pageSize }),
             },
         });
         return this._toResult(row);
@@ -46,6 +48,8 @@ export class CertificateTemplateRepository {
                 ...(input.description !== undefined && { description: input.description }),
                 ...(input.htmlContent !== undefined && { htmlContent: input.htmlContent }),
                 ...(input.variables   !== undefined && { variables: input.variables as any }),
+                ...(input.orgLogoPosition !== undefined && { orgLogoPosition: input.orgLogoPosition }),
+                ...(input.pageSize        !== undefined && { pageSize: input.pageSize }),
                 updatedAt: new Date(),
             },
         });
@@ -64,6 +68,8 @@ export class CertificateTemplateRepository {
             description:    row.description ?? null,
             htmlContent:    row.htmlContent,
             variables:      (row.variables as string[]) ?? [],
+            orgLogoPosition: row.orgLogoPosition ?? "none",
+            pageSize:       row.pageSize ?? null,
             createdAt:      row.createdAt,
             updatedAt:      row.updatedAt,
         };

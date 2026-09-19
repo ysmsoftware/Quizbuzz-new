@@ -1,16 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
     useCreateCertificateTemplate,
     useUpdateCertificateTemplate,
     usePreviewCertificateTemplate,
 } from '@/lib/hooks/useCertificateTemplates';
-import { certificateTemplatesApi, TemplatePreviewResult } from '@/lib/api/certificate-templates.api';
+import {
+    certificateTemplatesApi,
+    TemplatePreviewResult,
+    OrgLogoPosition,
+    PageSizePreset,
+    ORG_LOGO_POSITION_OPTIONS,
+    PAGE_SIZE_OPTIONS,
+} from '@/lib/api/certificate-templates.api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Dialog,
     DialogContent,
@@ -33,39 +41,7 @@ import { Award, Eye, Upload, CheckCircle2, Copy, Check, FileText, ArrowRight, Ar
 import { toast } from 'sonner';
 import { buildCertificateAiPrompt, CERTIFICATE_AVAILABLE_PLACEHOLDERS as AVAILABLE_PLACEHOLDERS } from '@/lib/utils/ai-prompts';
 
-/** Inject auto-scaling script into iframe srcDoc so preview fits 100% inside container without cropping */
-function formatPreviewSrcDoc(rawHtml: string): string {
-    if (!rawHtml) return '';
-    const autoScaleScript = `
-    <script>
-      function fitToWindow() {
-        try {
-          var doc = document.documentElement;
-          var body = document.body;
-          if (!body) return;
-          var contentWidth = Math.max(doc.scrollWidth, body.scrollWidth, 1000);
-          var containerWidth = window.innerWidth;
-          if (contentWidth > 0 && containerWidth > 0) {
-            var scale = containerWidth / contentWidth;
-            doc.style.transform = 'scale(' + scale + ')';
-            doc.style.transformOrigin = 'top left';
-            doc.style.width = (100 / scale) + '%';
-            doc.style.height = (100 / scale) + '%';
-          }
-        } catch (e) {}
-      }
-      window.addEventListener('resize', fitToWindow);
-      document.addEventListener('DOMContentLoaded', fitToWindow);
-      window.addEventListener('load', fitToWindow);
-      setTimeout(fitToWindow, 50);
-      setTimeout(fitToWindow, 300);
-    </script>
-  `;
-    if (rawHtml.includes('</head>')) {
-        return rawHtml.replace('</head>', `${autoScaleScript}</head>`);
-    }
-    return `${autoScaleScript}${rawHtml}`;
-}
+const MM_TO_PX = 96 / 25.4; // CSS px per mm
 
 export interface CertificateTemplateModalProps {
     open: boolean;
@@ -91,11 +67,29 @@ export function CertificateTemplateModal({
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [htmlContent, setHtmlContent] = useState('');
+    const [orgLogoPosition, setOrgLogoPosition] = useState<OrgLogoPosition>('top-right');
+    /** 'auto' = null on the server: the template's own @page rule, else A4 landscape. */
+    const [pageSize, setPageSize] = useState<PageSizePreset | 'auto'>('auto');
     const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
     const [previewResult, setPreviewResult] = useState<TemplatePreviewResult | null>(null);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [copiedVar, setCopiedVar] = useState<string | null>(null);
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+    // The preview iframe is laid out at the certificate's real page size and scaled (CSS
+    // transform) to the panel's width, inside a scrollable box — so the whole page is always
+    // reachable by scrolling, at any page size, instead of being cropped to the panel height.
+    const previewBoxRef = useRef<HTMLDivElement>(null);
+    const [previewBoxWidth, setPreviewBoxWidth] = useState(0);
+    useLayoutEffect(() => {
+        const el = previewBoxRef.current;
+        if (!el) return;
+        const measure = () => setPreviewBoxWidth(el.clientWidth);
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [open, step, isLoadingDetail]);
 
     useEffect(() => {
         if (open) {
@@ -107,6 +101,8 @@ export function CertificateTemplateModal({
                         setName(detail.name);
                         setDescription(detail.description ?? '');
                         setHtmlContent(detail.htmlContent);
+                        setOrgLogoPosition(detail.orgLogoPosition ?? 'none');
+                        setPageSize(detail.pageSize ?? 'auto');
                     })
                     .catch(() => {
                         toast.error('Failed to load template details');
@@ -119,6 +115,8 @@ export function CertificateTemplateModal({
                 setName('');
                 setDescription('');
                 setHtmlContent('');
+                setOrgLogoPosition('top-right');
+                setPageSize('auto');
                 setUploadedFileName(null);
                 setPreviewResult(null);
             }
@@ -141,6 +139,7 @@ export function CertificateTemplateModal({
             previewMutation.mutateAsync({
                 templateId: editingId ?? undefined,
                 htmlContent: htmlContent.trim(),
+                ...layoutFields,
             })
                 .then((res) => {
                     setPreviewResult(res);
@@ -154,7 +153,9 @@ export function CertificateTemplateModal({
         }, 350);
 
         return () => clearTimeout(timer);
-    }, [open, htmlContent, editingId, step]);
+    }, [open, htmlContent, editingId, step, orgLogoPosition, pageSize]);
+
+    const layoutFields = { orgLogoPosition, pageSize: pageSize === 'auto' ? null : pageSize };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -194,6 +195,7 @@ export function CertificateTemplateModal({
             const res = await previewMutation.mutateAsync({
                 templateId: editingId ?? undefined,
                 htmlContent: htmlContent.trim(),
+                ...layoutFields,
             });
             setPreviewResult(res);
         } finally {
@@ -223,13 +225,14 @@ export function CertificateTemplateModal({
         if (editingId) {
             await updateMutation.mutateAsync({
                 id: editingId,
-                body: { name: name.trim(), description: descVal, htmlContent: htmlContent.trim() },
+                body: { name: name.trim(), description: descVal, htmlContent: htmlContent.trim(), ...layoutFields },
             });
         } else {
             await createMutation.mutateAsync({
                 name: name.trim(),
                 description: descVal,
                 htmlContent: htmlContent.trim(),
+                ...layoutFields,
             });
         }
         onOpenChange(false);
@@ -423,7 +426,42 @@ export function CertificateTemplateModal({
                                     />
                                 </div>
 
-                                {/* 3. Available Dynamic Placeholders Cheat-Sheet */}
+                                {/* 3. Logos & page size */}
+                                <div className="p-3 bg-muted/40 border border-border/60 rounded-xl space-y-3 text-xs shrink-0">
+                                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                                        <Award className="h-3.5 w-3.5 text-primary" /> Logos &amp; Page
+                                    </span>
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Organization logo position</label>
+                                        <Select value={orgLogoPosition} onValueChange={(v) => setOrgLogoPosition(v as OrgLogoPosition)}>
+                                            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {ORG_LOGO_POSITION_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Your logo (from Settings) is added automatically, 20mm in from the page edges. The QuizBuzz logo is
+                                            always added at the top left (top right if you pick top left). Keep borders within 15mm of the edge
+                                            so they don't cross the logos.
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Page size</label>
+                                        <Select value={pageSize} onValueChange={(v) => setPageSize(v as PageSizePreset | 'auto')}>
+                                            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="auto" className="text-xs">Auto (from template CSS, else A4 landscape)</SelectItem>
+                                                {PAGE_SIZE_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                {/* 4. Available Dynamic Placeholders Cheat-Sheet */}
                                 <div className="p-3 bg-muted/40 border border-border/60 rounded-xl space-y-2 text-xs shrink-0">
                                     <div className="flex justify-between items-center">
                                         <span className="font-semibold text-foreground flex items-center gap-1.5">
@@ -461,12 +499,12 @@ export function CertificateTemplateModal({
                                         ))}
                                     </div>
                                     <div className="text-[11px] text-muted-foreground pt-1 border-t border-border/40 space-y-0.5">
-                                        <p className="font-medium text-foreground">Page Size Default:</p>
-                                        <p>Defaults to A4 landscape (<code className="font-mono text-[10px]">297mm × 210mm</code>). Override with CSS <code className="font-mono text-[10px]">@page</code>.</p>
+                                        <p className="font-medium text-foreground">Page size:</p>
+                                        <p>Pick a size above, or leave on Auto to use your CSS <code className="font-mono text-[10px]">@page</code> rule (default A4 landscape).</p>
                                     </div>
                                 </div>
 
-                                {/* 4. HTML Content Textarea + File Upload (Self-Contained Scroll Box) */}
+                                {/* 5. HTML Content Textarea + File Upload (Self-Contained Scroll Box) */}
                                 <div className="space-y-1.5 flex-1 flex flex-col min-h-0">
                                     <div className="flex justify-between items-center shrink-0">
                                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">HTML Content</label>
@@ -510,7 +548,7 @@ export function CertificateTemplateModal({
                                         </Button>
                                         {previewResult ? (
                                             <Badge variant="outline" className="text-[11px] font-mono bg-background">
-                                                {Math.round(previewResult.pageWidthMm ?? 297)}mm × {Math.round(previewResult.pageHeightMm ?? 210)}mm (A4 Landscape)
+                                                {Math.round(previewResult.pageWidthMm ?? 297)}mm × {Math.round(previewResult.pageHeightMm ?? 210)}mm
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[11px] font-mono bg-background text-muted-foreground">
@@ -547,24 +585,47 @@ export function CertificateTemplateModal({
                                     </div>
                                 )}
 
-                                {/* Live Iframe Viewport Container */}
-                                <div className="flex-1 min-h-0 relative border rounded-xl overflow-hidden bg-white shadow-sm flex items-center justify-center">
-                                    {previewResult ? (
-                                        <iframe
-                                            srcDoc={formatPreviewSrcDoc(previewResult.html)}
-                                            title="Certificate Template Preview"
-                                            className="w-full h-full border-0 absolute inset-0"
-                                        />
-                                    ) : (
-                                        <div className="text-center p-6 space-y-3 text-muted-foreground">
-                                            <div className="h-12 w-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto">
-                                                <Eye className="h-6 w-6 text-muted-foreground/60" />
+                                {/* Live preview: real page size, scaled to panel width, scrollable */}
+                                <div
+                                    ref={previewBoxRef}
+                                    className="flex-1 min-h-0 overflow-auto rounded-xl border bg-muted/40 p-3"
+                                >
+                                    {previewResult ? (() => {
+                                        const pageWpx = (previewResult.pageWidthMm ?? 297) * MM_TO_PX;
+                                        const pageHpx = (previewResult.pageHeightMm ?? 210) * MM_TO_PX;
+                                        const scale = previewBoxWidth > 24 ? (previewBoxWidth - 24) / pageWpx : 1;
+                                        return (
+                                            <div
+                                                className="relative mx-auto bg-white shadow-md"
+                                                style={{ width: pageWpx * scale, height: pageHpx * scale }}
+                                            >
+                                                <iframe
+                                                    srcDoc={previewResult.html}
+                                                    sandbox="allow-same-origin"
+                                                    title="Certificate Template Preview"
+                                                    scrolling="no"
+                                                    className="absolute top-0 left-0 border-0"
+                                                    style={{
+                                                        width: pageWpx,
+                                                        height: pageHpx,
+                                                        transform: `scale(${scale})`,
+                                                        transformOrigin: 'top left',
+                                                    }}
+                                                />
                                             </div>
-                                            <div className="space-y-1 max-w-sm">
-                                                <p className="font-semibold text-sm text-foreground">No Live Preview Generated</p>
-                                                <p className="text-xs">
-                                                    Enter your template HTML on the left to render an automatic full-fidelity live preview here.
-                                                </p>
+                                        );
+                                    })() : (
+                                        <div className="h-full min-h-[200px] flex items-center justify-center">
+                                            <div className="text-center p-6 space-y-3 text-muted-foreground">
+                                                <div className="h-12 w-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto">
+                                                    <Eye className="h-6 w-6 text-muted-foreground/60" />
+                                                </div>
+                                                <div className="space-y-1 max-w-sm">
+                                                    <p className="font-semibold text-sm text-foreground">No Live Preview Generated</p>
+                                                    <p className="text-xs">
+                                                        Enter your template HTML on the left to render an automatic full-fidelity live preview here.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

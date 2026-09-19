@@ -1,9 +1,13 @@
+import { OrgLogoPosition, PageSizePreset } from "../certificate/certificate.branding";
+
 export interface CreateCertificateTemplateInput {
-    organizationId: string;
-    name:           string;
-    description?:   string | null;
-    htmlContent:    string;
-    variables:      string[];
+    organizationId:  string;
+    name:            string;
+    description?:    string | null;
+    htmlContent:     string;
+    variables:       string[];
+    orgLogoPosition?: OrgLogoPosition;
+    pageSize?:       PageSizePreset | null;
 }
 
 export interface UpdateCertificateTemplateInput {
@@ -11,6 +15,8 @@ export interface UpdateCertificateTemplateInput {
     description?: string | null;
     htmlContent?: string;
     variables?:   string[];
+    orgLogoPosition?: OrgLogoPosition;
+    pageSize?:       PageSizePreset | null;
 }
 
 export interface CertificateTemplateResult {
@@ -20,6 +26,8 @@ export interface CertificateTemplateResult {
     description:    string | null;
     htmlContent:    string;
     variables:      string[];
+    orgLogoPosition: OrgLogoPosition;
+    pageSize:       PageSizePreset | null;
     createdAt:      Date;
     updatedAt:      Date;
 }
@@ -30,6 +38,8 @@ export interface CertificateTemplateListItem {
     name:        string;
     description: string | null;
     variables:   string[];
+    orgLogoPosition: OrgLogoPosition;
+    pageSize:    PageSizePreset | null;
     createdAt:   Date;
     updatedAt:   Date;
 }

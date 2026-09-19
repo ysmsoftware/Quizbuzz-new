@@ -68,6 +68,7 @@ export function CertificateTemplateThumbnail({ templateId, className }: Certific
             ) : (
                 <iframe
                     srcDoc={data.html}
+                    sandbox="allow-same-origin"
                     title="Certificate template preview"
                     className="absolute top-0 left-0 border-0"
                     style={{

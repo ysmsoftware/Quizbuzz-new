@@ -66,18 +66,33 @@ ${placeholderLines}
 4. Default page size is A4 landscape (297mm × 210mm). If a different size is wanted, it must be declared explicitly with a CSS rule like:
    @page { size: 279mm 216mm; margin: 0; }
    html, body { width: 279mm; height: 216mm; }
-   Otherwise leave @page out entirely and it defaults to A4 landscape automatically. If fixing an existing file, check that any declared @page size has matching html/body width/height — a mismatch here is a common bug.
+   Otherwise leave @page out entirely and it defaults to A4 landscape automatically (the admin can also pick a page size in the editor, which overrides any @page rule). If fixing an existing file, check that any declared @page size has matching html/body width/height — a mismatch here is a common bug.
 
-5. Any images (logo, decorative graphics) must be referenced via a public https:// URL in an <img src="..."> tag — no local file paths, no base64 unless already inlined. Flag any non-https or local-path image reference as a bug if fixing an existing file.
+5. Any images (decorative graphics, signatures, seals) must be referenced via a public https:// URL in an <img src="..."> tag — no local file paths, no base64 unless already inlined. Flag any non-https or local-path image reference as a bug if fixing an existing file. Images pointing at private/internal addresses are blocked at render time. Do NOT add the QuizBuzz logo or the organization's logo yourself — see rule 8, the platform places both automatically. Only use {{orgLogoUrl}} in an <img> if the admin says they want to place the organization logo themselves.
 
 6. Keep the whole file under 200KB. Flag it if an existing file is over this.
 
 7. <script> tags get stripped automatically before saving, so any JavaScript in the file is dead weight at best — don't add any if creating new, and flag/remove any found if fixing an existing file.
 
+8. LOGO POSITIONS — the platform overlays two logos on top of the finished page, so the design must leave room for them and must not draw through them. Each logo is a box up to 42mm wide × 14mm tall, placed 20mm in from the page edges (measurements below are for the default A4 landscape, 297mm × 210mm; for any other page size use the same 20mm-from-the-edge rule and the page's own center):
+   - QuizBuzz logo (always present): top-left corner, box from x=20mm to 62mm, y=20mm to 34mm. If the organization logo is set to top-left, the QuizBuzz logo moves to the top-right corner instead.
+   - Organization logo (position chosen by the admin; if they haven't said, assume TOP-RIGHT):
+       top-left      → x 20–62mm,   y 20–34mm
+       top-center    → x 127.5–169.5mm (centered on the page), y 20–34mm
+       top-right     → x 235–277mm, y 20–34mm
+       bottom-left   → x 20–62mm,   y 176–190mm
+       bottom-center → x 127.5–169.5mm (centered), y 176–190mm
+       bottom-right  → x 235–277mm, y 176–190mm
+   Design rules that follow from this:
+   a) Put any border, frame or full-bleed edge decoration within the OUTER 15mm of the page (for example 6–12mm from the edge). Never draw a border, line or shape between 15mm and 36mm from the page edge in the corners or in the top/bottom center — that is exactly where the logos sit, and a line running through a logo looks like a bug.
+   b) Keep ALL text and content at least 38mm below the top edge (the QuizBuzz logo is always at the top), and also at least 38mm above the bottom edge if the organization logo is a bottom position.
+   c) Nothing else may occupy the logo boxes above — no text, no seals, no decorative elements — and don't put a background color/image behind them that would make a logo unreadable (keep the logo areas plain/light).
+   d) Don't add your own logo images or placeholder logo boxes; the logos are added automatically at render time.
+
 --- FILL IN ONLY ONE OF THE TWO SECTIONS BELOW ---
 
 OPTION A — Creating a new template from scratch:
-[Describe the design here — the occasion, tone/formality, color scheme, logo placement, layout style, exact wording you want, portrait vs landscape, etc. Leave blank if using Option B instead.]
+[Describe the design here — the occasion, tone/formality, color scheme, which position the organization logo will use (default top-right), layout style, exact wording you want, portrait vs landscape, etc. Leave blank if using Option B instead.]
 
 OPTION B — Fixing/validating an existing template:
 [Paste the full contents of your existing HTML file here. Leave blank if using Option A instead.]

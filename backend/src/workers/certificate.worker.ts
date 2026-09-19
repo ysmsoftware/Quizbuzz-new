@@ -26,7 +26,8 @@ import { certificateService, certificateTemplateService, organizationRepository 
 import { storageService } from "../services/storage.service";
 import { CertificateJobPayload, CertificateTestJobPayload } from "../modules/certificate/certificate.types";
 import { CertificateQueueJobData } from "../queues";
-import { renderCertificateHtml, renderCustomTemplateHtml } from "../modules/certificate/certificate.template";
+import { guardRequests } from "../modules/certificate/certificate.request-guard";
+import { renderCertificateHtml } from "../modules/certificate/certificate.template";
 import { auditContextStorage } from "../common/audit-context";
 import { auditIfRetriesExhausted } from "../common/job-failure-audit";
 import { withCheckpoint, recordJobBoundary, CheckpointMeta } from "../common/job-checkpoint";
@@ -72,12 +73,15 @@ async function getBrowser(): Promise<Browser> {
 
 // ─── PDF generation ───────────────────────────────────────────────────────────
 
-async function generatePdf(html: string, disableScripts: boolean = false): Promise<Buffer> {
+async function generatePdf(html: string, disableScripts: boolean = false, allowedHosts: string[] = []): Promise<Buffer> {
     const b    = await getBrowser();
     const page = await b.newPage();
 
     try {
-        if (disableScripts) await page.setJavaScriptEnabled(false);
+        if (disableScripts) {
+            await page.setJavaScriptEnabled(false);
+            await guardRequests(page, allowedHosts);
+        }
         await page.setContent(html, { waitUntil: "load" });
 
         const pdf = await page.pdf({
@@ -140,13 +144,15 @@ async function processTestCertificate(
         certificateTemplateService.getTemplate(templateId, organizationId),
         organizationRepository.findTimezone(organizationId),
     ]);
-    const html = renderCustomTemplateHtml(template.htmlContent, metadata, `TEST-${testId}`, timezone);
+    const { html, allowedHosts } = await certificateTemplateService.renderTemplate(
+        organizationId, template, metadata, `TEST-${testId}`, timezone,
+    );
 
     let pdfBuffer: Buffer;
     try {
         // Test-generated PDFs always come from a custom template — same JS-disabled
         // rendering path a real custom-template certificate would use.
-        pdfBuffer = await generatePdf(html, true);
+        pdfBuffer = await generatePdf(html, true, allowedHosts);
     } catch (err: any) {
         throw new Error(`[certificate-worker] Test PDF generation failed for template ${templateId}: ${err.message}`);
     }
@@ -213,12 +219,15 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
     // organization's own configured timezone — see utils/timezone.ts — rather than
     // implicitly using this worker process's local time.
     let usesCustomTemplate = false;
+    let allowedHosts: string[] = [];
     const html = await withCheckpoint(checkpointMeta, "render_html", async () => {
         const timezone = await organizationRepository.findTimezone(organizationId);
         if (metadata.templateId) {
             const template = await certificateTemplateService.getTemplate(metadata.templateId, organizationId);
             usesCustomTemplate = true;
-            return renderCustomTemplateHtml(template.htmlContent, metadata, certificateId, timezone);
+            const rendered = await certificateTemplateService.renderTemplate(organizationId, template, metadata, certificateId, timezone);
+            allowedHosts = rendered.allowedHosts;
+            return rendered.html;
         }
         return renderCertificateHtml(metadata, certificateId, timezone);
     });
@@ -227,7 +236,7 @@ async function processRealCertificateInner(job: Job<CertificateJobPayload>): Pro
 
     let pdfBuffer: Buffer;
     try {
-        pdfBuffer = await withCheckpoint(checkpointMeta, "generate_pdf", () => generatePdf(html, usesCustomTemplate));
+        pdfBuffer = await withCheckpoint(checkpointMeta, "generate_pdf", () => generatePdf(html, usesCustomTemplate, allowedHosts));
     } catch (err: any) {
         // Puppeteer errors (browser crash, render timeout) are retryable
         throw new Error(`[certificate-worker] PDF generation failed for cert ${certificateId}: ${err.message}`);

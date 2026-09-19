@@ -16,6 +16,7 @@
 
 import { CertificateMetadata } from "./certificate.types";
 import { formatDateInTimezone } from "../../utils/timezone";
+import { BrandingOptions, injectBranding, safeHttpUrl, sanitizeTemplateHtml } from "./certificate.branding";
 
 // ─── Template Variants ────────────────────────────────────────────────────────
 
@@ -497,20 +498,32 @@ function medalEmoji(rank: number): string {
  * Any {{placeholder}} that doesn't match a known context key is left blank rather than
  * leaking the raw "{{...}}" text into the rendered certificate — the admin should have
  * already caught this via the preview step before saving the template.
+ *
+ * Substituted values are HTML-escaped (participant names are user-supplied), and the
+ * two values used in non-text positions are validated: orgLogoUrl must be http(s) and
+ * primaryColor must be a hex color. The template itself is re-sanitized on every render
+ * so rows saved before the sanitizer was tightened are covered too.
+ *
+ * `branding`, when given, injects the QuizBuzz + org logos and the page-size override.
  */
 export function renderCustomTemplateHtml(
     htmlTemplate:  string,
     meta:          CertificateMetadata,
     certificateId: string,
     timezone:      string | null = null,
+    branding?:     BrandingOptions,
 ): string {
     const ctx = buildRenderContext(meta, certificateId, timezone);
+    const values: Record<string, unknown> = {
+        ...ctx,
+        orgLogoUrl:   safeHttpUrl(ctx.orgLogoUrl) ?? "",
+        primaryColor: /^#[0-9a-f]{3,8}$/i.test(ctx.primaryColor) ? ctx.primaryColor : "#1a3a6b",
+    };
 
-    let out = htmlTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
-        const value = (ctx as unknown as Record<string, unknown>)[key];
-        return value === undefined || value === null ? "" : String(value);
+    const out = sanitizeTemplateHtml(htmlTemplate).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+        const value = values[key];
+        return value === undefined || value === null ? "" : escHtml(String(value));
     });
 
-    return out;
+    return branding ? injectBranding(out, branding) : out;
 }
-

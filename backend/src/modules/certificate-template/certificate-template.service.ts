@@ -10,6 +10,8 @@ import {
     TestGenerateResult,
 } from "./certificate-template.types";
 import { renderCustomTemplateHtml } from "../certificate/certificate.template";
+import { BrandingOptions, OrgLogoPosition, PAGE_SIZE_PRESETS, PageSizePreset, sanitizeTemplateHtml } from "../certificate/certificate.branding";
+import { PlatformSettingsRepository } from "../platform-settings/platform-settings.repository";
 import { CertificateMetadata, CertificateTestJobPayload } from "../certificate/certificate.types";
 import { certificateQueue, certificateQueueEvents } from "../../queues";
 import { getStorageProvider } from "../../providers/storage.provider";
@@ -38,10 +40,7 @@ export const KNOWN_TEMPLATE_VARIABLES = [
 
 const PLACEHOLDER_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
-/** Strip <script> tags as defense-in-depth. Primary enforcement is disabling JS execution in Puppeteer at render time (see certificate.worker.ts) — this is a belt-and-suspenders text-level pass, not the security boundary itself. */
-function sanitizeHtml(html: string): string {
-    return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
-}
+const sanitizeHtml = sanitizeTemplateHtml;
 
 // A4 landscape — the same fallback certificate.worker.ts's page.pdf() uses via
 // `format: "A4", landscape: true` when the template doesn't declare its own @page size.
@@ -50,12 +49,9 @@ const DEFAULT_PAGE_SIZE_MM = { widthMm: 297, heightMm: 210 };
 const PAGE_SIZE_RULE_RE = /@page\s*{[^}]*size\s*:\s*([^;]+);/i;
 
 const NAMED_PAGE_SIZES_MM: Record<string, { widthMm: number; heightMm: number }> = {
-    "a4 landscape":     { widthMm: 297, heightMm: 210 },
-    "a4 portrait":      { widthMm: 210, heightMm: 297 },
-    "a4":               { widthMm: 210, heightMm: 297 },
-    "letter landscape": { widthMm: 279, heightMm: 216 },
-    "letter portrait":  { widthMm: 216, heightMm: 279 },
-    "letter":           { widthMm: 216, heightMm: 279 },
+    ...Object.fromEntries(Object.values(PAGE_SIZE_PRESETS).map((p) => [p.css, { widthMm: p.widthMm, heightMm: p.heightMm }])),
+    "a4":     { widthMm: 210, heightMm: 297 },
+    "letter": { widthMm: 216, heightMm: 279 },
 };
 
 function unitsToMm(value: number, unit: string): number {
@@ -75,7 +71,8 @@ function unitsToMm(value: number, unit: string): number {
  * Deliberately simple regex parsing, not a full CSS parser — handles the common
  * named formats (A4/Letter, portrait/landscape) and explicit "<num><unit> <num><unit>".
  */
-function detectPageSizeMm(html: string): { widthMm: number; heightMm: number } {
+function detectPageSizeMm(html: string, pageSize?: PageSizePreset | null): { widthMm: number; heightMm: number } {
+    if (pageSize) return PAGE_SIZE_PRESETS[pageSize];
     const match = PAGE_SIZE_RULE_RE.exec(html);
     if (!match) return DEFAULT_PAGE_SIZE_MM;
 
@@ -109,7 +106,56 @@ export class CertificateTemplateService {
     constructor(
         private readonly repo: CertificateTemplateRepository,
         private readonly organizationRepo: OrganizationRepository,
+        private readonly platformSettingsRepo: PlatformSettingsRepository,
     ) { }
+
+    /**
+     * Logos + page size for a template, resolved fresh at render time (not stored in
+     * certificate metadata) so a changed org/app logo applies to re-queued certificates.
+     * Single choke point for preview, test-generate and real issuance — that's what keeps
+     * the preview identical to the issued PDF.
+     */
+    async resolveBranding(
+        organizationId: string,
+        tpl: { orgLogoPosition: OrgLogoPosition; pageSize: PageSizePreset | null },
+    ): Promise<BrandingOptions> {
+        const [org, settings] = await Promise.all([
+            this.organizationRepo.findById(organizationId),
+            this.platformSettingsRepo.get(),
+        ]);
+        return {
+            appLogoUrl:      settings?.appLogoUrl ?? null,
+            orgLogoUrl:      org?.logoUrl ?? null,
+            orgName:         org?.name ?? null,
+            orgLogoPosition: tpl.orgLogoPosition,
+            pageSize:        tpl.pageSize,
+        };
+    }
+
+    /**
+     * Renders a custom template to final HTML and returns the hostnames the renderer
+     * is allowed to fetch from even if they are private (e.g. local-storage logo in dev).
+     */
+    async renderTemplate(
+        organizationId: string,
+        tpl: { htmlContent: string; orgLogoPosition: OrgLogoPosition; pageSize: PageSizePreset | null },
+        metadata: CertificateMetadata,
+        certificateId: string,
+        timezone: string | null,
+    ): Promise<{ html: string; allowedHosts: string[] }> {
+        const branding = await this.resolveBranding(organizationId, tpl);
+        const html = renderCustomTemplateHtml(
+            tpl.htmlContent,
+            { ...metadata, orgName: branding.orgName ?? metadata.orgName, orgLogoUrl: branding.orgLogoUrl ?? metadata.orgLogoUrl },
+            certificateId,
+            timezone,
+            branding,
+        );
+        const allowedHosts = [branding.appLogoUrl, branding.orgLogoUrl].flatMap((u) => {
+            try { return u ? [new URL(u).hostname] : []; } catch { return []; }
+        });
+        return { html, allowedHosts };
+    }
 
     async listTemplates(organizationId: string): Promise<CertificateTemplateListItem[]> {
         const rows = await this.repo.findAllByOrg(organizationId);
@@ -126,13 +172,18 @@ export class CertificateTemplateService {
         organizationId: string,
         name: string,
         htmlContent: string,
-        description?: string | null
+        description?: string | null,
+        opts: { orgLogoPosition?: OrgLogoPosition | undefined; pageSize?: PageSizePreset | null | undefined } = {},
     ): Promise<{ template: CertificateTemplateResult; unknownPlaceholders: string[] }> {
         const clean = sanitizeHtml(htmlContent);
         const { known, unknown } = detectVariables(clean);
 
         try {
-            const template = await this.repo.create({ organizationId, name, description: description ?? null, htmlContent: clean, variables: known });
+            const template = await this.repo.create({
+                organizationId, name, description: description ?? null, htmlContent: clean, variables: known,
+                ...(opts.orgLogoPosition !== undefined && { orgLogoPosition: opts.orgLogoPosition }),
+                ...(opts.pageSize        !== undefined && { pageSize: opts.pageSize }),
+            });
             return { template, unknownPlaceholders: unknown };
         } catch (err: any) {
             if (err.code === "P2002") throw new ConflictError(`A template named "${name}" already exists`);
@@ -143,7 +194,10 @@ export class CertificateTemplateService {
     async updateTemplate(
         id: string,
         organizationId: string,
-        input: { name?: string | undefined; description?: string | null | undefined; htmlContent?: string | undefined }
+        input: {
+            name?: string | undefined; description?: string | null | undefined; htmlContent?: string | undefined;
+            orgLogoPosition?: OrgLogoPosition | undefined; pageSize?: PageSizePreset | null | undefined;
+        }
     ): Promise<{ template: CertificateTemplateResult; unknownPlaceholders: string[] }> {
         await this.getTemplate(id, organizationId); // 404 if missing/not owned by this org
 
@@ -154,6 +208,8 @@ export class CertificateTemplateService {
             const template = await this.repo.update(id, organizationId, {
                 ...(input.name        !== undefined && { name: input.name }),
                 ...(input.description !== undefined && { description: input.description }),
+                ...(input.orgLogoPosition !== undefined && { orgLogoPosition: input.orgLogoPosition }),
+                ...(input.pageSize        !== undefined && { pageSize: input.pageSize }),
                 ...(clean              !== undefined && { htmlContent: clean, variables: detected!.known }),
             });
             return { template, unknownPlaceholders: detected?.unknown ?? [] };
@@ -175,19 +231,19 @@ export class CertificateTemplateService {
      */
     async previewTemplate(
         organizationId: string,
-        input: { templateId?: string | undefined; htmlContent?: string | undefined }
-    ): Promise<TemplatePreviewResult> {
-        let html: string;
-        if (input.templateId) {
-            html = (await this.getTemplate(input.templateId, organizationId)).htmlContent;
-        } else {
-            html = sanitizeHtml(input.htmlContent!);
+        input: {
+            templateId?: string | undefined; htmlContent?: string | undefined;
+            orgLogoPosition?: OrgLogoPosition | undefined; pageSize?: PageSizePreset | null | undefined;
         }
+    ): Promise<TemplatePreviewResult> {
+        // A draft (htmlContent) wins over the saved row: when editing an existing template the
+        // modal sends both, and the preview must reflect the unsaved edits, not the stored HTML.
+        const saved = input.templateId ? await this.getTemplate(input.templateId, organizationId) : null;
+        const html = sanitizeHtml(input.htmlContent ?? saved!.htmlContent);
+        const orgLogoPosition = input.orgLogoPosition ?? saved?.orgLogoPosition ?? "none";
+        const pageSize = input.pageSize !== undefined ? input.pageSize : (saved?.pageSize ?? null);
 
-        const [org, timezone] = await Promise.all([
-            this.organizationRepo.findById(organizationId),
-            this.organizationRepo.findTimezone(organizationId),
-        ]);
+        const timezone = await this.organizationRepo.findTimezone(organizationId);
         const dummyMetadata: CertificateMetadata = {
             participantName: "Jordan Sample",
             contestTitle:    "Sample Contest 2026",
@@ -197,13 +253,13 @@ export class CertificateTemplateService {
             percentage:      87.5,
             rank:            2,
             timeTakenSecs:   1725,
-            orgName:         org?.name ?? undefined,
-            orgLogoUrl:      org?.logoUrl ?? undefined,
         };
 
-        const rendered = renderCustomTemplateHtml(html, dummyMetadata, "PREVIEW-0000001", timezone);
+        const { html: rendered } = await this.renderTemplate(
+            organizationId, { htmlContent: html, orgLogoPosition, pageSize }, dummyMetadata, "PREVIEW-0000001", timezone,
+        );
         const { known, unknown } = detectVariables(html);
-        const { widthMm, heightMm } = detectPageSizeMm(html);
+        const { widthMm, heightMm } = detectPageSizeMm(html, pageSize);
         return {
             html: rendered,
             detectedVariables: known,
@@ -231,7 +287,6 @@ export class CertificateTemplateService {
     ): Promise<TestGenerateResult> {
         await this.getTemplate(templateId, organizationId); // 404 if missing/not owned by this org
 
-        const org = await this.organizationRepo.findById(organizationId);
         const testId = crypto.randomUUID();
 
         const percentage = overrides.percentage ?? 87.5;
@@ -244,8 +299,6 @@ export class CertificateTemplateService {
             score:           percentage,
             rank:            overrides.rank ?? 2,
             timeTakenSecs:   1725,
-            orgName:         org?.name ?? undefined,
-            orgLogoUrl:      org?.logoUrl ?? undefined,
         };
 
         const job = await certificateQueue.add(

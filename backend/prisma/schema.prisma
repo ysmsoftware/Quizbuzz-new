@@ -907,6 +907,8 @@ model CertificateTemplate {
   description    String?
   htmlContent    String // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
   variables      Json // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
+  orgLogoPosition String  @default("none") // none | top-left | top-center | top-right | bottom-left | bottom-center | bottom-right — where the server injects the org logo ("none" = template places {{orgLogoUrl}} itself)
+  pageSize       String? // a4-landscape | a4-portrait | letter-landscape | letter-portrait; null = auto (template's own @page, else A4 landscape)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -85,6 +85,7 @@ export const storageProvider = getStorageProvider();
 
 // ─── Repositories ─────────────────────────────────────────────────────────────
 export const organizationRepository = new OrganizationRepository()
+export const platformSettingsRepository = new PlatformSettingsRepository();
 export const adminAuthRepository = new AdminAuthRepository();
 export const contactRepository = new ContactRepository();
 export const contestRepository = new ContestRepository();
@@ -109,7 +110,7 @@ export const durabilityRepository = new DurabilityRepository();
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
 export const organizationService = new OrganizationService(organizationRepository, messagingService);
 export const adminAuthService = new AdminAuthService(adminAuthRepository, organizationService, messagingService);
-export const certificateTemplateService = new CertificateTemplateService(certificateTemplateRepository, organizationRepository);
+export const certificateTemplateService = new CertificateTemplateService(certificateTemplateRepository, organizationRepository, platformSettingsRepository);
 export const certificateService = new CertificateService(certificateRepository, participantRepository, certificateTemplateRepository);
 export const contactService = new ContactService(contactRepository, messagingService, certificateService);
 export const submissionService = new SubmissionService(submissionRepository, participantRepository, contestRepository);
@@ -124,7 +125,6 @@ export const quizSession = new QuizSession();
 
 export const opsMetricsService = new OpsMetricsService(quizSession);
 export const opsMetricsController = new OpsMetricsController(opsMetricsService);
-export const platformSettingsRepository = new PlatformSettingsRepository();
 export const platformSettingsService = new PlatformSettingsService(platformSettingsRepository);
 export const platformSettingsController = new PlatformSettingsController(platformSettingsService);
 export const analyticsService = new AnalyticsService(analyticsRepository, quizSession);

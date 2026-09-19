@@ -1,9 +1,15 @@
 import { z } from "zod";
+import { ORG_LOGO_POSITIONS, PAGE_SIZE_KEYS } from "../certificate/certificate.branding";
+
+const orgLogoPosition = z.enum(ORG_LOGO_POSITIONS);
+const pageSize        = z.enum(PAGE_SIZE_KEYS).nullable();
 
 export const createTemplateSchema = z.object({
     name:        z.string().trim().min(1, "Name is required").max(120, "Name must be under 120 characters"),
     description: z.string().trim().max(500, "Description must be under 500 characters").optional().nullable(),
     htmlContent: z.string().min(1, "HTML content is required").max(200_000, "Template HTML must be under 200KB"),
+    orgLogoPosition: orgLogoPosition.optional(),
+    pageSize:        pageSize.optional(),
 });
 
 export const updateTemplateSchema = z
@@ -11,8 +17,10 @@ export const updateTemplateSchema = z
         name:        z.string().trim().min(1).max(120).optional(),
         description: z.string().trim().max(500).optional().nullable(),
         htmlContent: z.string().min(1).max(200_000).optional(),
+        orgLogoPosition: orgLogoPosition.optional(),
+        pageSize:        pageSize.optional(),
     })
-    .refine((d) => d.name !== undefined || d.description !== undefined || d.htmlContent !== undefined, {
+    .refine((d) => Object.values(d).some((v) => v !== undefined), {
         message: "Provide at least one field to update",
     });
 
@@ -20,6 +28,8 @@ export const previewTemplateSchema = z
     .object({
         templateId:  z.string().trim().optional(),
         htmlContent: z.string().min(1).max(200_000).optional(),
+        orgLogoPosition: orgLogoPosition.optional(),
+        pageSize:        pageSize.optional(),
     })
     .refine((d) => !!d.templateId || !!d.htmlContent, {
         message: "Provide either templateId (preview a saved template) or htmlContent (preview a draft)",
