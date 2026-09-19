@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, QrCode, Sparkles } from 'lucide-react';
+import QRCode from 'qrcode';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,188 @@ interface ReferralQrModalProps {
   referralLink: string;
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load ${src}`));
+    img.src = src;
+  });
+}
+
+/** Renders the shareable QR card to a PNG Blob. Built ahead of the tap (see the effect in
+ *  ReferralQrModal) so the Download button can call navigator.share() synchronously inside
+ *  the click — iOS Safari rejects share() once the user-gesture window has lapsed, which an
+ *  async image-load-then-draw inside the click handler always risked. */
+async function renderQrCard({
+  referralLink,
+  referralCode,
+  campaignName,
+  organizationName,
+  ambassadorName,
+}: {
+  referralLink: string;
+  referralCode: string;
+  campaignName: string;
+  organizationName?: string;
+  ambassadorName?: string;
+}): Promise<Blob> {
+  // Drawn straight to a canvas by the `qrcode` lib rather than round-tripping the on-screen
+  // <svg> through a Blob URL: an SVG rasterised via <img> can't load its embedded external
+  // logo <image>, and Safari can taint the canvas over it (toDataURL then throws, silently).
+  const qrCanvas = document.createElement('canvas');
+  await QRCode.toCanvas(qrCanvas, referralLink, {
+    errorCorrectionLevel: 'H',
+    margin: 0,
+    width: 640,
+    color: { dark: '#09090b', light: '#ffffff' },
+  });
+  const logo = await loadImage('/qbfavicon.png').catch(() => null);
+  await document.fonts?.ready;
+
+  const width = 660;
+  const height = 880;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas unsupported');
+
+  // 1. Dark Emerald Gradient Card Background (No blue hues)
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, '#061c14');
+  gradient.addColorStop(1, '#020d09');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Border highlight (Emerald accent tint)
+  ctx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
+
+  // Top Emerald & Amber Dual Accent Bar
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(0, 0, width * 0.6, 8);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(width * 0.6, 0, width * 0.4, 8);
+
+  // QuizBuzz Ambassador Badge (No emojis)
+  ctx.font = 'bold 15px Inter, sans-serif';
+  ctx.fillStyle = '#10b981';
+  ctx.textAlign = 'center';
+  ctx.fillText('QUIZBUZZ AMBASSADOR', width / 2, 48);
+
+  // Campaign Name
+  ctx.font = 'bold 24px Inter, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  let title = campaignName;
+  const maxTitleWidth = width - 80;
+  if (ctx.measureText(title).width > maxTitleWidth) {
+    title = title.substring(0, 28) + '...';
+  }
+  ctx.fillText(title, width / 2, 86);
+
+  // Organization Subtitle
+  if (organizationName) {
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(organizationName, width / 2, 112);
+  }
+
+  // 2. White QR Plate Container Box
+  const qrBoxSize = 380;
+  const qrBoxX = (width - qrBoxSize) / 2;
+  const qrBoxY = 140;
+  const radius = 24;
+
+  ctx.beginPath();
+  ctx.moveTo(qrBoxX + radius, qrBoxY);
+  ctx.arcTo(qrBoxX + qrBoxSize, qrBoxY, qrBoxX + qrBoxSize, qrBoxY + qrBoxSize, radius);
+  ctx.arcTo(qrBoxX + qrBoxSize, qrBoxY + qrBoxSize, qrBoxX, qrBoxY + qrBoxSize, radius);
+  ctx.arcTo(qrBoxX, qrBoxY + qrBoxSize, qrBoxX, qrBoxY, radius);
+  ctx.arcTo(qrBoxX, qrBoxY, qrBoxX + qrBoxSize, qrBoxY, radius);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // 3. Draw QR Code inside white plate
+  const qrPadding = 30;
+  const qrDrawSize = qrBoxSize - qrPadding * 2;
+  const qrDrawX = qrBoxX + qrPadding;
+  const qrDrawY = qrBoxY + qrPadding;
+
+  ctx.drawImage(qrCanvas, qrDrawX, qrDrawY, qrDrawSize, qrDrawSize);
+
+  // Draw centered logo on canvas naturally matching its native shape
+  if (logo) {
+    const logoSize = 64;
+    const logoX = qrDrawX + (qrDrawSize - logoSize) / 2;
+    const logoY = qrDrawY + (qrDrawSize - logoSize) / 2;
+
+    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+  }
+
+  // 4. Instruction text below QR box (No emojis)
+  ctx.font = '500 14px Inter, sans-serif';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.textAlign = 'center';
+  ctx.fillText('Scan with phone camera to register', width / 2, qrBoxY + qrBoxSize + 36);
+
+  // 5. Referral Code Badge (Emerald & Amber theme)
+  let nextY = qrBoxY + qrBoxSize + 66;
+  if (referralCode) {
+    const pillText = `Referral Code: ${referralCode}`;
+    ctx.font = 'bold 16px Inter, sans-serif';
+    const textWidth = ctx.measureText(pillText).width;
+    const pillWidth = textWidth + 40;
+    const pillHeight = 42;
+    const pillX = (width - pillWidth) / 2;
+    const pillRadius = 12;
+
+    ctx.beginPath();
+    ctx.moveTo(pillX + pillRadius, nextY);
+    ctx.arcTo(pillX + pillWidth, nextY, pillX + pillWidth, nextY + pillHeight, pillRadius);
+    ctx.arcTo(pillX + pillWidth, nextY + pillHeight, pillX, nextY + pillHeight, pillRadius);
+    ctx.arcTo(pillX, nextY + pillHeight, pillX, nextY, pillRadius);
+    ctx.arcTo(pillX, nextY, pillX + pillWidth, nextY, pillRadius);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(pillText, width / 2, nextY + 26);
+    nextY += 60;
+  }
+
+  // 6. Ambassador Name Badge (Underneath Referral Code badge)
+  if (ambassadorName) {
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillStyle = '#f59e0b'; // Amber/Gold accent color
+    ctx.textAlign = 'center';
+    ctx.fillText(`Ambassador: ${ambassadorName}`, width / 2, nextY);
+  }
+
+  // 7. Footer Watermark: QuizBuzz / by YSM Info Solution
+  ctx.font = 'bold 18px Inter, sans-serif';
+  ctx.fillStyle = '#10b981';
+  ctx.textAlign = 'center';
+  ctx.fillText('QuizBuzz', width / 2, height - 34);
+
+  ctx.font = '500 12px Inter, sans-serif';
+  ctx.fillStyle = '#94a3b8';
+  ctx.textAlign = 'center';
+  ctx.fillText('by YSM Info Solution', width / 2, height - 16);
+
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG export failed'))), 'image/png'),
+  );
+}
+
 export function ReferralQrModal({
   open,
   onOpenChange,
@@ -30,7 +213,6 @@ export function ReferralQrModal({
   referralLink,
 }: ReferralQrModalProps) {
   const [copied, setCopied] = useState(false);
-  const svgRef = useRef<HTMLDivElement>(null);
 
   const referralCode = useMemo(() => {
     try {
@@ -49,182 +231,47 @@ export function ReferralQrModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadQrCard = () => {
-    try {
-      const svgElement = svgRef.current?.querySelector('svg');
-      if (!svgElement) return;
+  // Pre-render the card whenever the dialog opens (see renderQrCard for why it's not done in the click).
+  const [cardBlob, setCardBlob] = useState<Blob | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setCardBlob(null);
+    renderQrCard({ referralLink, referralCode, campaignName, organizationName, ambassadorName })
+      .then((blob) => !cancelled && setCardBlob(blob))
+      .catch(() => !cancelled && toast.error('Could not prepare the QR card'));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, referralLink, referralCode, campaignName, organizationName, ambassadorName]);
 
-      const svgData = new XMLSerializer().serializeToString(svgElement);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const URL = window.URL || window.webkitURL || window;
-      const blobURL = URL.createObjectURL(svgBlob);
+  const handleDownloadQrCard = async () => {
+    if (!cardBlob) return;
+    const filename = `${campaignName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-qr-card.png`;
+    const file = new File([cardBlob], filename, { type: 'image/png' });
 
-      const logoImg = new Image();
-      logoImg.crossOrigin = 'anonymous';
-      logoImg.src = '/qbfavicon.png';
-
-      const image = new Image();
-      image.onload = () => {
-        const width = 660;
-        const height = 880;
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // 1. Dark Emerald Gradient Card Background (No blue hues)
-        const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, '#061c14');
-        gradient.addColorStop(1, '#020d09');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        // Border highlight (Emerald accent tint)
-        ctx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(1, 1, width - 2, height - 2);
-
-        // Top Emerald & Amber Dual Accent Bar
-        ctx.fillStyle = '#10b981';
-        ctx.fillRect(0, 0, width * 0.6, 8);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(width * 0.6, 0, width * 0.4, 8);
-
-        // QuizBuzz Ambassador Badge (No emojis)
-        ctx.font = 'bold 15px Inter, sans-serif';
-        ctx.fillStyle = '#10b981';
-        ctx.textAlign = 'center';
-        ctx.fillText('QUIZBUZZ AMBASSADOR', width / 2, 48);
-
-        // Campaign Name
-        ctx.font = 'bold 24px Inter, sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        let title = campaignName;
-        const maxTitleWidth = width - 80;
-        if (ctx.measureText(title).width > maxTitleWidth) {
-          title = title.substring(0, 28) + '...';
-        }
-        ctx.fillText(title, width / 2, 86);
-
-        // Organization Subtitle
-        if (organizationName) {
-          ctx.font = '14px Inter, sans-serif';
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillText(organizationName, width / 2, 112);
-        }
-
-        // 2. White QR Plate Container Box
-        const qrBoxSize = 380;
-        const qrBoxX = (width - qrBoxSize) / 2;
-        const qrBoxY = 140;
-        const radius = 24;
-
-        ctx.beginPath();
-        ctx.moveTo(qrBoxX + radius, qrBoxY);
-        ctx.arcTo(qrBoxX + qrBoxSize, qrBoxY, qrBoxX + qrBoxSize, qrBoxY + qrBoxSize, radius);
-        ctx.arcTo(qrBoxX + qrBoxSize, qrBoxY + qrBoxSize, qrBoxX, qrBoxY + qrBoxSize, radius);
-        ctx.arcTo(qrBoxX, qrBoxY + qrBoxSize, qrBoxX, qrBoxY, radius);
-        ctx.arcTo(qrBoxX, qrBoxY, qrBoxX + qrBoxSize, qrBoxY, radius);
-        ctx.closePath();
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-
-        // 3. Draw QR Code inside white plate
-        const qrPadding = 30;
-        const qrDrawSize = qrBoxSize - qrPadding * 2;
-        const qrDrawX = qrBoxX + qrPadding;
-        const qrDrawY = qrBoxY + qrPadding;
-
-        ctx.drawImage(
-          image,
-          qrDrawX,
-          qrDrawY,
-          qrDrawSize,
-          qrDrawSize
-        );
-
-        // Draw centered logo on canvas naturally matching its native shape
-        if (logoImg.complete && logoImg.naturalWidth !== 0) {
-          const logoSize = 64;
-          const logoX = qrDrawX + (qrDrawSize - logoSize) / 2;
-          const logoY = qrDrawY + (qrDrawSize - logoSize) / 2;
-
-          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
-        }
-
-        // 4. Instruction text below QR box (No emojis)
-        ctx.font = '500 14px Inter, sans-serif';
-        ctx.fillStyle = '#cbd5e1';
-        ctx.textAlign = 'center';
-        ctx.fillText('Scan with phone camera to register', width / 2, qrBoxY + qrBoxSize + 36);
-
-        // 5. Referral Code Badge (Emerald & Amber theme)
-        let nextY = qrBoxY + qrBoxSize + 66;
-        if (referralCode) {
-          const pillText = `Referral Code: ${referralCode}`;
-          ctx.font = 'bold 16px Inter, sans-serif';
-          const textWidth = ctx.measureText(pillText).width;
-          const pillWidth = textWidth + 40;
-          const pillHeight = 42;
-          const pillX = (width - pillWidth) / 2;
-          const pillRadius = 12;
-
-          ctx.beginPath();
-          ctx.moveTo(pillX + pillRadius, nextY);
-          ctx.arcTo(pillX + pillWidth, nextY, pillX + pillWidth, nextY + pillHeight, pillRadius);
-          ctx.arcTo(pillX + pillWidth, nextY + pillHeight, pillX, nextY + pillHeight, pillRadius);
-          ctx.arcTo(pillX, nextY + pillHeight, pillX, nextY, pillRadius);
-          ctx.arcTo(pillX, nextY, pillX + pillWidth, nextY, pillRadius);
-          ctx.closePath();
-          ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
-          ctx.fill();
-          ctx.strokeStyle = '#10b981';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.fillText(pillText, width / 2, nextY + 26);
-          nextY += 60;
-        }
-
-        // 6. Ambassador Name Badge (Underneath Referral Code badge)
-        if (ambassadorName) {
-          ctx.font = 'bold 15px Inter, sans-serif';
-          ctx.fillStyle = '#f59e0b'; // Amber/Gold accent color
-          ctx.textAlign = 'center';
-          ctx.fillText(`Ambassador: ${ambassadorName}`, width / 2, nextY);
-        }
-
-        // 7. Footer Watermark: QuizBuzz / by YSM Info Solution
-        ctx.font = 'bold 18px Inter, sans-serif';
-        ctx.fillStyle = '#10b981';
-        ctx.textAlign = 'center';
-        ctx.fillText('QuizBuzz', width / 2, height - 34);
-
-        ctx.font = '500 12px Inter, sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.textAlign = 'center';
-        ctx.fillText('by YSM Info Solution', width / 2, height - 16);
-
-        // Export PNG file download
-        const png = canvas.toDataURL('image/png');
-        const downloadLink = document.createElement('a');
-        downloadLink.href = png;
-        const filename = `${campaignName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-qr-card.png`;
-        downloadLink.download = filename;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        URL.revokeObjectURL(blobURL);
-        toast.success('Downloaded QR share card!');
-      };
-      image.src = blobURL;
-    } catch {
-      toast.error('Failed to download QR code card');
+    // Phones: iOS Safari (and in-app/PWA views) ignore or swallow <a download> for generated
+    // files, so hand the PNG to the OS share sheet instead ("Save Image" / Files / WhatsApp…).
+    // Desktop keeps the plain download.
+    if (window.matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: campaignName });
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return; // user closed the sheet
+        // share refused for another reason — fall through to the download below
+      }
     }
+
+    const blobUrl = URL.createObjectURL(cardBlob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000); // revoking immediately can cancel the save on iOS
+    toast.success('Downloaded QR share card!');
   };
 
   return (
@@ -248,7 +295,6 @@ export function ReferralQrModal({
           {/* Centered QR Card Plate */}
           <div className="flex flex-col items-center justify-center space-y-3 mx-auto">
             <div
-              ref={svgRef}
               className="p-5 rounded-2xl bg-white shadow-xl border border-border/40 transition-transform hover:scale-[1.02] flex items-center justify-center"
             >
               <QRCodeSVG
@@ -306,6 +352,7 @@ export function ReferralQrModal({
               variant="default"
               className="flex-1 gap-2 text-xs font-bold h-10 bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleDownloadQrCard}
+              disabled={!cardBlob}
             >
               <Download className="h-4 w-4" />
               Download QR Card

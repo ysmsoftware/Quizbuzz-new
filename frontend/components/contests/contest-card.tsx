@@ -74,11 +74,6 @@ export function ContestCard({ contest, variant = 'default' }: ContestCardProps) 
         </div>
 
         <div>
-          {topic && (
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {topic}
-            </p>
-          )}
           <h3 className="mt-1 text-lg font-semibold leading-tight text-balance group-hover:text-primary transition-colors">
             {contest.title}
           </h3>
