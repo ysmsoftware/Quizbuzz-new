@@ -10,25 +10,28 @@ import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats } from '@/lib/types/ambassador';
 
 export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
-  const earnedSpeedBonusGoodie = stats.speedBonus?.earned ? stats.speedBonus.tier?.goodie : undefined;
-  const earnedSpeedBonusCard = stats.speedBonus?.earned && stats.speedBonus.tier && (
-    <Card className={`border-warning/40 bg-warning/5 ${earnedSpeedBonusGoodie ? 'cursor-default' : ''}`}>
-      <CardContent className="pt-6 flex items-center gap-3">
-        <Zap className="h-5 w-5 text-warning shrink-0" />
-        {earnedSpeedBonusGoodie?.imageUrl && (
-          <span className="relative inline-block h-8 w-8 shrink-0">
-            <Image src={earnedSpeedBonusGoodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
-          </span>
-        )}
-        <div>
-          <p className="font-semibold text-foreground text-sm">{stats.speedBonus.tier.label}</p>
-          <p className="text-xs text-muted-foreground">
-            Speed bonus earned{earnedSpeedBonusGoodie ? ` — includes ${earnedSpeedBonusGoodie.label}` : ''}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  const earnedSpeedBonusCards = (stats.speedBonus?.tiers ?? []).map((tier, i) => {
+    const goodie = tier.goodie;
+    const card = (
+      <Card className={`border-warning/40 bg-warning/5 ${goodie ? 'cursor-default' : ''}`}>
+        <CardContent className="pt-6 flex items-center gap-3">
+          <Zap className="h-5 w-5 text-warning shrink-0" />
+          {goodie?.imageUrl && (
+            <span className="relative inline-block h-8 w-8 shrink-0">
+              <Image src={goodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+            </span>
+          )}
+          <div>
+            <p className="font-semibold text-foreground text-sm">{tier.label}</p>
+            <p className="text-xs text-muted-foreground">
+              Speed bonus earned{goodie ? ` — includes ${goodie.label}` : ''}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+    return <div key={i}>{goodie ? <GoodieHoverCard goodie={goodie}>{card}</GoodieHoverCard> : card}</div>;
+  });
 
   return (
     <div className="space-y-4">
@@ -41,9 +44,7 @@ export function CampaignStatsPanel({ stats }: { stats: CampaignStats }) {
         </CardContent>
       </Card>
 
-      {earnedSpeedBonusCard && (
-        earnedSpeedBonusGoodie ? <GoodieHoverCard goodie={earnedSpeedBonusGoodie}>{earnedSpeedBonusCard}</GoodieHoverCard> : earnedSpeedBonusCard
-      )}
+      {earnedSpeedBonusCards}
 
       {stats.speedBonus && !stats.speedBonus.earned && stats.speedBonus.daysToMilestone !== null && (
         <Card className="border-border/50">

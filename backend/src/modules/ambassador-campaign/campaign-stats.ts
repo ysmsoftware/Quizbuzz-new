@@ -1,6 +1,6 @@
 import { Ambassador, AmbassadorStatus } from "@prisma/client";
 import { AmbassadorCampaignRepository } from "./ambassador-campaign.repository";
-import { applySpeedBonusCaps, computeMilestoneReward, resolveSpeedBonusStartAt, SpeedBonusCandidate } from "./reward-calculator";
+import { applySpeedBonusCaps, computeMilestoneReward, resolveSpeedBonusStartAt, SpeedBonusCandidate, speedBonusThresholds, speedBonusTotal } from "./reward-calculator";
 import { paisaToRupees } from "../../utils/currency";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
 import { CampaignStatsSummary, LeaderboardCut, LeaderboardScope, MilestoneTier, RewardConfig, SpeedBonusResult, TierBracketBreakdown } from "./ambassador-campaign.types";
@@ -48,12 +48,13 @@ export async function computeSpeedBonusWinners(
     rewardConfig: RewardConfig,
 ): Promise<Map<string, SpeedBonusResult | null>> {
     const speedBonus = rewardConfig.speedBonus;
-    if (!speedBonus?.enabled || speedBonus.milestoneThreshold === undefined) return new Map();
+    if (!speedBonus?.enabled) return new Map();
+    const thresholds = speedBonusThresholds(speedBonus);
+    if (thresholds.length === 0) return new Map();
 
     const cached = speedBonusWinnersCache.get(campaignId);
     if (cached && cached.expires > Date.now()) return cached.value;
 
-    const threshold = speedBonus.milestoneThreshold;
     const enrollments = (await campaignRepo.listEnrollmentsForCampaign(campaignId)).filter(
         (e) => e.status === AmbassadorStatus.APPROVED,
     );
@@ -62,8 +63,11 @@ export async function computeSpeedBonusWinners(
     const candidates: SpeedBonusCandidate[] = await Promise.all(
         enrollments.map(async (e) => {
             const registrationCount = counts.get(e.id) ?? 0;
-            const thresholdReachedAt =
-                registrationCount >= threshold ? await campaignRepo.findNthReferralCreatedAt(e.id, threshold) : null;
+            const thresholdReachedAt = new Map<number, Date>();
+            for (const threshold of thresholds) {
+                const reachedAt = registrationCount >= threshold ? await campaignRepo.findNthReferralCreatedAt(e.id, threshold) : null;
+                if (reachedAt) thresholdReachedAt.set(threshold, reachedAt);
+            }
             return {
                 enrollmentId: e.id,
                 registrationCount,
@@ -90,9 +94,7 @@ export async function computeEnrollmentStats(
     const speedBonus = rewardConfig.speedBonus?.enabled
         ? ((await computeSpeedBonusWinners(campaignRepo, campaignId, rewardConfig)).get(enrollmentId) ?? null)
         : null;
-    const bonusAmount = speedBonus?.earned
-        ? (speedBonus.tier?.bonusAmount ?? 0) + (speedBonus.tier?.goodie?.cashEquivalent ?? 0)
-        : 0;
+    const bonusAmount = speedBonusTotal(speedBonus);
 
     return {
         registrationCount,

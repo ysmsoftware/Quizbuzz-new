@@ -92,6 +92,8 @@ export interface RepeatingRowColumn<T> {
   placeholder?: string;
   minWidth?: string;
   min?: number;
+  /** number columns: render 0 as an empty box (optional fields where blank means "none"/"unlimited"). */
+  blankWhenZero?: boolean;
 }
 
 interface RepeatingRowTableProps<T> {
@@ -188,7 +190,7 @@ export function RepeatingRowTable<T extends Record<string, any>>({
                             type={col.type}
                             min={col.type === 'number' ? (col.min ?? 0) : undefined}
                             placeholder={col.placeholder}
-                            value={row[col.key] ?? ''}
+                            value={col.blankWhenZero && row[col.key] === 0 ? '' : (row[col.key] ?? '')}
                             aria-invalid={!!cellError}
                             onChange={(e) => {
                               if (col.type === 'number') {

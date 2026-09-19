@@ -18,6 +18,7 @@ import type { SpeedBonusConfig, SpeedBonusStartMode } from '@/lib/types/ambassad
  * columns here and reassembled on change. Gives speed-bonus tiers (Fast Starter, Early
  * Finisher, …) the same optional non-cash reward as milestone tiers. */
 interface SpeedBonusRow {
+  milestoneThreshold: number;
   withinDays: number;
   bonusAmount: number;
   label: string;
@@ -28,16 +29,17 @@ interface SpeedBonusRow {
 }
 
 const COLUMNS: RepeatingRowColumn<SpeedBonusRow>[] = [
-  { key: 'withinDays', label: 'Within Days', type: 'number', minWidth: 'w-24' },
-  { key: 'bonusAmount', label: 'Bonus Amount (₹)', type: 'number', minWidth: 'w-28' },
+  { key: 'milestoneThreshold', label: 'Registrations', type: 'number', placeholder: '50', minWidth: 'min-w-[112px]' },
+  { key: 'withinDays', label: 'Within Days', type: 'number', minWidth: 'min-w-[96px]' },
+  { key: 'bonusAmount', label: 'Bonus Amount (₹)', type: 'number', minWidth: 'min-w-[112px]' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Fast Starter', minWidth: 'min-w-[140px]' },
-  { key: 'maxWinners', label: 'Max Winners (optional)', type: 'number', placeholder: '10', minWidth: 'w-28' },
+  { key: 'maxWinners', label: 'Max Winners (blank = unlimited)', type: 'number', placeholder: 'Unlimited', minWidth: 'min-w-[140px]', blankWhenZero: true },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Badge, merch…', minWidth: 'min-w-[160px]' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'w-28' },
-  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'min-w-[112px]' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'min-w-[64px]' },
 ];
 
-const EMPTY: SpeedBonusConfig = { enabled: false, milestoneThreshold: 0, tiers: [] };
+const EMPTY: SpeedBonusConfig = { enabled: false, tiers: [] };
 const PREFIX = 'rewardConfig.speedBonus';
 
 export function SpeedBonusEditor({
@@ -86,6 +88,8 @@ export function SpeedBonusEditor({
   };
 
   const rows: SpeedBonusRow[] = speedBonus.tiers.map((t) => ({
+    // Falls back to the legacy campaign-wide threshold so older campaigns open pre-filled.
+    milestoneThreshold: t.milestoneThreshold ?? speedBonus.milestoneThreshold ?? 0,
     withinDays: t.withinDays,
     bonusAmount: t.bonusAmount,
     label: t.label,
@@ -105,6 +109,7 @@ export function SpeedBonusEditor({
       // to type. Leading/trailing whitespace is trimmed for real at the save boundary by
       // the backend's Zod schema (label: z.string().trim()).
       tiers: nextRows.map((r) => ({
+        milestoneThreshold: Math.max(0, r.milestoneThreshold),
         withinDays: Math.max(0, r.withinDays),
         bonusAmount: Math.max(0, r.bonusAmount),
         label: r.label,
@@ -212,21 +217,12 @@ export function SpeedBonusEditor({
             {errors[`${PREFIX}.campaignStartAt`] && <p className="text-xs text-destructive">{errors[`${PREFIX}.campaignStartAt`]}</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label>Milestone Threshold (Registrations required for speed bonus)</Label>
-            <Input
-              type="number"
-              min={0}
-              value={speedBonus.milestoneThreshold || ''}
-              placeholder="e.g. 100"
-              onChange={(e) => onChange({ ...speedBonus, milestoneThreshold: Math.max(0, Number(e.target.value) || 0) })}
-              aria-invalid={!!errors[`${PREFIX}.milestoneThreshold`]}
-              className={cn('max-w-xs', errors[`${PREFIX}.milestoneThreshold`] && 'border-destructive focus-visible:ring-destructive/20')}
-            />
-            {errors[`${PREFIX}.milestoneThreshold`] && (
-              <p className="text-xs text-destructive">{errors[`${PREFIX}.milestoneThreshold`]}</p>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Each row is its own milestone — e.g. 50 registrations within 8 days, and 80 within 15 days. An
+            ambassador earns every row they hit in time. Rows with the same registration count are alternatives:
+            only the fastest one met is paid. Leave Max Winners blank for no limit — everyone who qualifies gets
+            the bonus; set a number to cap it to the first N ambassadors.
+          </p>
 
           <RepeatingRowTable
             rows={rows}
@@ -246,7 +242,7 @@ export function SpeedBonusEditor({
               }
               return errors[baseKey];
             }}
-            newRow={() => ({ withinDays: 7, bonusAmount: 0, label: '', maxWinners: 0, goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
+            newRow={() => ({ milestoneThreshold: 0, withinDays: 7, bonusAmount: 0, label: '', maxWinners: 0, goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
           />
 
           {rows.length > 0 && (

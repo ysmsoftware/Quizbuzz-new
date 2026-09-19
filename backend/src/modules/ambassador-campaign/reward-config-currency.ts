@@ -95,9 +95,7 @@ function tierBreakdownPaiseToRupees(breakdown: TierBracketBreakdown, convert: (n
 function speedBonusResultPaiseToRupees(result: SpeedBonusResult): SpeedBonusResult {
     return {
         ...result,
-        tier: result.tier
-            ? { ...result.tier, bonusAmount: paisaToRupees(result.tier.bonusAmount), goodie: convertGoodie(result.tier.goodie, paisaToRupees) }
-            : null,
+        tiers: result.tiers.map((t) => ({ ...t, bonusAmount: paisaToRupees(t.bonusAmount), goodie: convertGoodie(t.goodie, paisaToRupees) })),
     };
 }
 

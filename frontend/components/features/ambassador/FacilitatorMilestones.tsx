@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { onImageError } from '@/lib/utils/image';
-import type { CampaignSpeedBonusStatus, MilestoneTier } from '@/lib/types/ambassador';
+import type { CampaignSpeedBonusStatus, MilestoneTier, SpeedBonusTier } from '@/lib/types/ambassador';
 
 interface FacilitatorMilestonesProps {
   speedBonus: CampaignSpeedBonusStatus | null;
@@ -23,7 +23,9 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {speedBonus && <SpeedBonusMilestoneCard speedBonus={speedBonus} />}
+      {speedBonus && (speedBonus.earned
+        ? speedBonus.tiers.map((tier, i) => <SpeedBonusMilestoneCard key={i} speedBonus={speedBonus} tier={tier} />)
+        : <SpeedBonusMilestoneCard speedBonus={speedBonus} tier={null} />)}
       {milestoneTiers.map((tier, i) => {
         const isDone = registrationCount >= tier.minRegistrations && (tier.maxRegistrations === null || registrationCount <= tier.maxRegistrations) && currentTier?.minRegistrations === tier.minRegistrations;
         const isReached = registrationCount >= tier.minRegistrations;
@@ -66,9 +68,9 @@ export function FacilitatorMilestones({ speedBonus, milestoneTiers, currentTier,
   );
 }
 
-function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonusStatus }) {
-  const earned = speedBonus.earned && speedBonus.tier;
-  const goodie = earned ? speedBonus.tier!.goodie : undefined;
+function SpeedBonusMilestoneCard({ speedBonus, tier }: { speedBonus: CampaignSpeedBonusStatus; tier: SpeedBonusTier | null }) {
+  const earned = tier;
+  const goodie = tier?.goodie;
   const card = (
     <div className={`rounded-xl border p-4 ${earned ? 'border-warning/40 bg-warning/5' : 'border-border/50 bg-card'} ${goodie ? 'cursor-default' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2.5">
@@ -79,7 +81,7 @@ function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonu
           {earned ? 'Earned' : speedBonus.daysToMilestone !== null ? `${speedBonus.daysToMilestone.toFixed(1)}d left` : 'Not yet'}
         </span>
       </div>
-      <p className="text-[13px] font-semibold text-foreground">{earned ? speedBonus.tier!.label : 'Speed bonus'}</p>
+      <p className="text-[13px] font-semibold text-foreground">{tier ? tier.label : 'Speed bonus'}</p>
       <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
         {goodie?.imageUrl && (
           <span className="relative inline-block h-4 w-4 shrink-0">
@@ -89,7 +91,7 @@ function SpeedBonusMilestoneCard({ speedBonus }: { speedBonus: CampaignSpeedBonu
         <span>
           {earned ? (
             <>
-              <Rupees amount={speedBonus.tier!.bonusAmount} /> bonus{goodie ? ` · ${goodie.label}` : ''}
+              <Rupees amount={tier!.bonusAmount} /> bonus{goodie ? ` · ${goodie.label}` : ''}
             </>
           ) : (
             'Hit the milestone fast for a bonus'

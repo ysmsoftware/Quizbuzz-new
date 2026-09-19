@@ -236,7 +236,7 @@ export function CampaignPreview({
                               <p className="text-lg font-bold text-foreground mt-0.5">
                                 +<Rupees amount={tier.bonusAmount} />
                               </p>
-                              <p className="text-xs text-muted-foreground mt-0.5">Within {tier.withinDays} days of launch</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{tier.milestoneThreshold ? `${tier.milestoneThreshold} registrations within` : 'Within'} {tier.withinDays} days of launch</p>
                             </div>
                           </div>
                           {tier.goodie && (

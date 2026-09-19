@@ -304,7 +304,7 @@ export default function AmbassadorCampaignDetailPage() {
 
             <SpeedBonusConfigCard
               speedBonus={campaign.speedBonus}
-              earnedTierWithinDays={stats.speedBonus?.earned ? (stats.speedBonus.tier?.withinDays ?? undefined) : undefined}
+              earnedTiers={stats.speedBonus?.tiers}
             />
 
             <ShareCampaignCard

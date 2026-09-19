@@ -82,6 +82,9 @@ export interface MilestoneTier {
 }
 
 export interface SpeedBonusTier {
+  /** Registrations needed for this tier. Tiers with different thresholds pay independently;
+   *  falls back to the legacy campaign-wide SpeedBonusConfig.milestoneThreshold when unset. */
+  milestoneThreshold?: number;
   withinDays: number;
   bonusAmount: number; // rupees
   label: string;
@@ -98,6 +101,7 @@ export interface SpeedBonusConfig {
   campaignStartAtMode?: SpeedBonusStartMode;
   /** Meaningful only when campaignStartAtMode === 'OFFSET_WEEKS'. */
   campaignStartAtOffsetWeeks?: number;
+  /** Legacy campaign-wide threshold — fallback for tiers saved without their own. */
   milestoneThreshold?: number;
   tiers: SpeedBonusTier[]; // min 1 item
 }
@@ -236,7 +240,8 @@ export interface CampaignStatsProgress {
 
 export interface CampaignSpeedBonusStatus {
   earned: boolean;
-  tier: SpeedBonusTier | null;
+  /** Every tier earned (one per milestone hit in time), fastest first. */
+  tiers: SpeedBonusTier[];
   daysToMilestone: number | null;
 }
 

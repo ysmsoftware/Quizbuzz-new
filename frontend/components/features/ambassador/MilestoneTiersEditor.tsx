@@ -18,12 +18,12 @@ interface MilestoneRow {
 
 const COLUMNS: RepeatingRowColumn<MilestoneRow>[] = [
   { key: 'label', label: 'Tier Name', type: 'text', placeholder: 'Level 1', minWidth: 'min-w-[130px]' },
-  { key: 'minRegistrations', label: 'Min Regs', type: 'number', minWidth: 'w-24' },
-  { key: 'maxRegistrations', label: 'Max (blank = uncapped)', type: 'number', minWidth: 'w-32' },
-  { key: 'amountPerRegistration', label: 'Amount / Reg (₹)', type: 'number', minWidth: 'w-28' },
+  { key: 'minRegistrations', label: 'Min Regs', type: 'number', minWidth: 'min-w-[96px]' },
+  { key: 'maxRegistrations', label: 'Max (blank = uncapped)', type: 'number', minWidth: 'min-w-[128px]' },
+  { key: 'amountPerRegistration', label: 'Amount / Reg (₹)', type: 'number', minWidth: 'min-w-[112px]' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Gift voucher, earbuds…', minWidth: 'min-w-[160px]' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹)', type: 'number', minWidth: 'w-28' },
-  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹)', type: 'number', minWidth: 'min-w-[112px]' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'min-w-[64px]' },
 ];
 
 const PREFIX = 'rewardConfig.milestoneTiers';

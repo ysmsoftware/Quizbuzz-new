@@ -31,12 +31,12 @@ interface RankRow {
 }
 
 const RANK_COLUMNS: RepeatingRowColumn<RankRow>[] = [
-  { key: 'rank', label: 'Rank', type: 'number', minWidth: 'w-24' },
-  { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number', minWidth: 'w-32' },
+  { key: 'rank', label: 'Rank', type: 'number', minWidth: 'min-w-[96px]' },
+  { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number', minWidth: 'min-w-[128px]' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner', minWidth: 'min-w-[160px]' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Trophy, merch…', minWidth: 'min-w-[160px]' },
-  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'w-28' },
-  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'w-16' },
+  { key: 'goodieCashEquivalent', label: 'Goodie Value (₹, optional)', type: 'number', minWidth: 'min-w-[112px]' },
+  { key: 'goodieImageUrl', label: 'Image', type: 'image', minWidth: 'min-w-[64px]' },
 ];
 
 const PREFIX = 'rewardConfig.leaderboardPrizes';

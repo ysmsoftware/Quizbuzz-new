@@ -29,6 +29,7 @@ import type {
   ShareKit,
   ShareTemplates,
   SpeedBonusConfig,
+  SpeedBonusTier,
 } from '@/lib/types/ambassador';
 
 // shadcn's Card defaults to py-6/gap-6 — generous enough for a hero card, too generous once
@@ -702,12 +703,12 @@ export function RewardBudgetCard({
 
 export function SpeedBonusConfigCard({
   speedBonus,
-  earnedTierWithinDays,
+  earnedTiers,
 }: {
   speedBonus: SpeedBonusConfig | undefined;
-  /** Ambassador-side only — highlights the tier this viewer already earned (stats.speedBonus.tier.withinDays).
+  /** Ambassador-side only — highlights the tiers this viewer already earned (stats.speedBonus.tiers).
    *  Undefined on the org-admin read of this same card, where there's no single viewer to earn anything. */
-  earnedTierWithinDays?: number;
+  earnedTiers?: SpeedBonusTier[];
 }) {
   if (!speedBonus) return null;
 
@@ -733,20 +734,15 @@ export function SpeedBonusConfigCard({
                 : '—'}
           </span>
         </div>
-        {speedBonus.milestoneThreshold !== undefined && (
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span>Registrations needed</span>
-            <span className="font-medium text-foreground">{speedBonus.milestoneThreshold}</span>
-          </div>
-        )}
         {speedBonus.tiers.length > 0 && (
           <div className="pt-2 border-t border-border/40 space-y-2">
             {speedBonus.tiers.map((t, i) => {
-              const earned = earnedTierWithinDays === t.withinDays;
+              const threshold = t.milestoneThreshold ?? speedBonus.milestoneThreshold;
+              const earned = !!earnedTiers?.some((e) => e.withinDays === t.withinDays && e.milestoneThreshold === threshold);
               return (
                 <div key={i} className="flex items-center justify-between gap-2">
                   <span className={cn('truncate', earned ? 'font-semibold text-warning' : 'text-muted-foreground')}>
-                    {t.label} · within {t.withinDays} {t.withinDays === 1 ? 'day' : 'days'}
+                    {t.label} · {threshold ? `${threshold} registrations ` : ''}within {t.withinDays} {t.withinDays === 1 ? 'day' : 'days'}
                     {t.maxWinners ? ` · up to ${t.maxWinners} winners` : ''}
                     {earned ? ' · Earned' : ''}
                   </span>

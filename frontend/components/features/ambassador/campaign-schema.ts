@@ -18,6 +18,7 @@ const milestoneTierSchema = z
   });
 
 const speedBonusTierSchema = z.object({
+  milestoneThreshold: z.number().optional(),
   withinDays: numberField('Within days').positive('Must be greater than 0'),
   bonusAmount: numberField('Bonus amount').positive('Must be greater than 0'),
   label: z.string().min(1, 'Label is required'),
@@ -31,7 +32,7 @@ const speedBonusSchema = z
     campaignStartAt: z.string().optional(),
     campaignStartAtMode: z.enum(['CONTEST_START', 'OFFSET_WEEKS', 'CUSTOM', 'PER_AMBASSADOR_APPROVAL']).optional(),
     campaignStartAtOffsetWeeks: z.number().optional(),
-    milestoneThreshold: z.number(),
+    milestoneThreshold: z.number().optional(),
     tiers: z.array(speedBonusTierSchema),
   })
   .superRefine((speedBonus, ctx) => {
@@ -41,9 +42,12 @@ const speedBonusSchema = z
     if (speedBonus.campaignStartAtMode !== 'PER_AMBASSADOR_APPROVAL' && !speedBonus.campaignStartAt) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Campaign start date is required', path: ['campaignStartAt'] });
     }
-    if (!(speedBonus.milestoneThreshold > 0)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must be greater than 0', path: ['milestoneThreshold'] });
-    }
+    // Each tier needs its own target (or the legacy campaign-wide one).
+    speedBonus.tiers.forEach((t, i) => {
+      if (!((t.milestoneThreshold ?? speedBonus.milestoneThreshold ?? 0) > 0)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must be greater than 0', path: ['tiers', i, 'milestoneThreshold'] });
+      }
+    });
     if (speedBonus.tiers.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Add at least one bonus tier', path: ['tiers'] });
     }

@@ -60,7 +60,7 @@ function LoadedDashboard({ ambassador }: { ambassador: NonNullable<ReturnType<ty
       registrations: approvedCampaigns.reduce((sum, c) => sum + c.stats.registrationCount, 0),
       earned: approvedCampaigns.reduce((sum, c) => sum + c.stats.accruedAmount, 0),
       speedBonusEarned: approvedCampaigns.reduce(
-        (sum, c) => sum + (c.stats.speedBonus?.earned ? (c.stats.speedBonus.tier?.bonusAmount ?? 0) : 0),
+        (sum, c) => sum + (c.stats.speedBonus?.tiers ?? []).reduce((s, t) => s + t.bonusAmount, 0),
         0
       ),
     }),

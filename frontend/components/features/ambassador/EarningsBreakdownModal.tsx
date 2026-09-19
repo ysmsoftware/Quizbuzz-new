@@ -56,9 +56,8 @@ export function EarningsBreakdownModal({
   leaderboardRanks,
   leaderboardPrizes,
 }: EarningsBreakdownModalProps) {
-  const speedBonusAmount = speedBonus?.earned
-    ? (speedBonus.tier?.bonusAmount ?? 0) + (speedBonus.tier?.goodie?.cashEquivalent ?? 0)
-    : 0;
+  const speedBonusTiers = speedBonus?.tiers ?? [];
+  const speedBonusAmount = speedBonusTiers.reduce((sum, t) => sum + t.bonusAmount + (t.goodie?.cashEquivalent ?? 0), 0);
 
   const campaignEnded = campaignStatus === 'ENDED' || campaignStatus === 'ARCHIVED';
   const cutByScope = new Map(leaderboardPrizes.map((c) => [JSON.stringify(c.scope), c]));
@@ -125,30 +124,32 @@ export function EarningsBreakdownModal({
             </div>
           </div>
 
-          {speedBonus?.earned && speedBonus.tier && (
+          {speedBonusTiers.length > 0 && (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
                 <Zap className="h-3.5 w-3.5 text-warning" />
                 Speed bonus
               </p>
-              {(() => {
-                const goodie = speedBonus.tier.goodie;
-                const row = (
-                  <div className={`flex items-start justify-between gap-3 text-sm ${goodie ? 'cursor-default' : ''}`}>
-                    {goodie?.imageUrl && (
-                      <span className="relative inline-block h-8 w-8 shrink-0">
-                        <Image src={goodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
-                      </span>
-                    )}
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{speedBonus.tier.label}</p>
-                      {goodie && <p className="text-xs text-muted-foreground">Includes {goodie.label}</p>}
+              <div className="space-y-2">
+                {speedBonusTiers.map((tier, i) => {
+                  const goodie = tier.goodie;
+                  const row = (
+                    <div className={`flex items-start justify-between gap-3 text-sm ${goodie ? 'cursor-default' : ''}`}>
+                      {goodie?.imageUrl && (
+                        <span className="relative inline-block h-8 w-8 shrink-0">
+                          <Image src={goodie.imageUrl} alt="" fill sizes="32px" onError={onImageError} className="rounded object-cover border border-border/50" />
+                        </span>
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium text-foreground">{tier.label}</p>
+                        {goodie && <p className="text-xs text-muted-foreground">Includes {goodie.label}</p>}
+                      </div>
+                      <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={tier.bonusAmount + (goodie?.cashEquivalent ?? 0)} /></p>
                     </div>
-                    <p className="font-semibold text-foreground tabular-nums shrink-0"><Rupees amount={speedBonusAmount} /></p>
-                  </div>
-                );
-                return goodie ? <GoodieHoverCard goodie={goodie}>{row}</GoodieHoverCard> : row;
-              })()}
+                  );
+                  return <div key={i}>{goodie ? <GoodieHoverCard goodie={goodie}>{row}</GoodieHoverCard> : row}</div>;
+                })}
+              </div>
             </div>
           )}
 

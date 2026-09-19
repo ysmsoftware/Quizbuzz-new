@@ -1,4 +1,4 @@
-import { applySpeedBonusCaps, computeMilestoneReward, resolveSpeedBonusStartAt, SpeedBonusCandidate } from "./reward-calculator";
+import { applySpeedBonusCaps, computeMilestoneReward, computeSpeedBonus, resolveSpeedBonusStartAt, SpeedBonusCandidate } from "./reward-calculator";
 import { MilestoneTier, SpeedBonusConfig } from "./ambassador-campaign.types";
 
 describe("reward-calculator milestone reward progression", () => {
@@ -124,9 +124,10 @@ describe("applySpeedBonusCaps", () => {
     const candidate = (enrollmentId: string, thresholdDays: number): SpeedBonusCandidate => ({
         enrollmentId,
         registrationCount: 5,
-        thresholdReachedAt: daysAfter(thresholdDays),
+        thresholdReachedAt: new Map([[5, daysAfter(thresholdDays)]]),
         bonusStartAt: T0,
     });
+    const labels = (r: { tiers: { label: string }[] } | null | undefined) => r?.tiers.map((t) => t.label);
 
     it("cascades overflow past a full tier to the next tier the ambassador still qualifies for", () => {
         // All three finish fast enough for "Fast" (<=7 days), but it only has room for 1.
@@ -136,9 +137,9 @@ describe("applySpeedBonusCaps", () => {
             candidate("amb-c", 4), // Fast and Medium both full -> falls to uncapped Slow
         ]);
 
-        expect(results.get("amb-a")?.tier?.label).toBe("Fast");
-        expect(results.get("amb-b")?.tier?.label).toBe("Medium");
-        expect(results.get("amb-c")?.tier?.label).toBe("Slow");
+        expect(labels(results.get("amb-a"))).toEqual(["Fast"]);
+        expect(labels(results.get("amb-b"))).toEqual(["Medium"]);
+        expect(labels(results.get("amb-c"))).toEqual(["Slow"]);
     });
 
     it("marks not-earned once every tier the ambassador qualifies for is full", () => {
@@ -155,11 +156,11 @@ describe("applySpeedBonusCaps", () => {
             candidate("amb-d", 5),
         ]);
 
-        expect(results.get("amb-a")?.tier?.label).toBe("Fast");
-        expect(results.get("amb-b")?.tier?.label).toBe("Medium");
-        expect(results.get("amb-c")?.tier?.label).toBe("Slow");
+        expect(labels(results.get("amb-a"))).toEqual(["Fast"]);
+        expect(labels(results.get("amb-b"))).toEqual(["Medium"]);
+        expect(labels(results.get("amb-c"))).toEqual(["Slow"]);
         expect(results.get("amb-d")?.earned).toBe(false);
-        expect(results.get("amb-d")?.tier).toBeNull();
+        expect(results.get("amb-d")?.tiers).toEqual([]);
     });
 
     it("leaves an unlimited tier's winners uncapped", () => {
@@ -169,26 +170,125 @@ describe("applySpeedBonusCaps", () => {
             candidate("amb-c", 22),
         ]);
 
-        expect(results.get("amb-a")?.tier?.label).toBe("Slow");
-        expect(results.get("amb-b")?.tier?.label).toBe("Slow");
-        expect(results.get("amb-c")?.tier?.label).toBe("Slow");
+        expect(labels(results.get("amb-a"))).toEqual(["Slow"]);
+        expect(labels(results.get("amb-b"))).toEqual(["Slow"]);
+        expect(labels(results.get("amb-c"))).toEqual(["Slow"]);
     });
 
     it("breaks ties on identical thresholdReachedAt by enrollmentId, deterministically", () => {
         const same = daysAfter(2);
         const results = applySpeedBonusCaps(config, [
-            { enrollmentId: "amb-z", registrationCount: 5, thresholdReachedAt: same, bonusStartAt: T0 },
-            { enrollmentId: "amb-a", registrationCount: 5, thresholdReachedAt: same, bonusStartAt: T0 },
+            { enrollmentId: "amb-z", registrationCount: 5, thresholdReachedAt: new Map([[5, same]]), bonusStartAt: T0 },
+            { enrollmentId: "amb-a", registrationCount: 5, thresholdReachedAt: new Map([[5, same]]), bonusStartAt: T0 },
         ]);
 
-        expect(results.get("amb-a")?.tier?.label).toBe("Fast"); // "amb-a" < "amb-z"
-        expect(results.get("amb-z")?.tier?.label).toBe("Medium");
+        expect(labels(results.get("amb-a"))).toEqual(["Fast"]); // "amb-a" < "amb-z"
+        expect(labels(results.get("amb-z"))).toEqual(["Medium"]);
     });
 
     it("passes through ambassadors who never reached the milestone unchanged", () => {
         const results = applySpeedBonusCaps(config, [
-            { enrollmentId: "amb-a", registrationCount: 2, thresholdReachedAt: null, bonusStartAt: T0 },
+            { enrollmentId: "amb-a", registrationCount: 2, thresholdReachedAt: new Map(), bonusStartAt: T0 },
         ]);
-        expect(results.get("amb-a")).toEqual({ earned: false, tier: null, daysToMilestone: null });
+        expect(results.get("amb-a")).toEqual({ earned: false, tiers: [], daysToMilestone: null });
+    });
+});
+
+describe("per-tier speed bonus thresholds", () => {
+    const T0 = new Date("2024-01-01T00:00:00Z");
+    const daysAfter = (n: number) => new Date(T0.getTime() + n * 24 * 60 * 60 * 1000);
+
+    // "50 registrations in 8 days" and "80 registrations in 15 days" — independent milestones.
+    const config: SpeedBonusConfig = {
+        enabled: true,
+        campaignStartAt: T0.toISOString(),
+        tiers: [
+            { milestoneThreshold: 50, withinDays: 8, bonusAmount: 500, label: "50 in 8" },
+            { milestoneThreshold: 80, withinDays: 15, bonusAmount: 1000, label: "80 in 15" },
+        ],
+    };
+    const labels = (r: { tiers: { label: string }[] } | null) => r?.tiers.map((t) => t.label);
+
+    it("pays only the later milestone when the earlier one was missed", () => {
+        // 50th registration on day 10 (too slow for 8d), 80th on day 14 (in time for 15d).
+        const result = computeSpeedBonus(config, 80, new Map([[50, daysAfter(10)], [80, daysAfter(14)]]));
+        expect(labels(result)).toEqual(["80 in 15"]);
+    });
+
+    it("pays both milestones when both were hit in time", () => {
+        const result = computeSpeedBonus(config, 80, new Map([[50, daysAfter(7)], [80, daysAfter(14)]]));
+        expect(labels(result)).toEqual(["50 in 8", "80 in 15"]);
+        expect(result?.earned).toBe(true);
+    });
+
+    it("pays only the reached milestone, and nothing for one not reached yet", () => {
+        expect(labels(computeSpeedBonus(config, 60, new Map([[50, daysAfter(5)]])))).toEqual(["50 in 8"]);
+        expect(computeSpeedBonus(config, 40, new Map())).toEqual({ earned: false, tiers: [], daysToMilestone: null });
+    });
+
+    it("keeps tiers that share a threshold as alternative brackets (fastest met wins)", () => {
+        const legacy: SpeedBonusConfig = {
+            enabled: true,
+            campaignStartAt: T0.toISOString(),
+            milestoneThreshold: 5, // no per-tier threshold -> falls back to this one
+            tiers: [
+                { withinDays: 14, bonusAmount: 300, label: "Medium" },
+                { withinDays: 7, bonusAmount: 500, label: "Fast" },
+            ],
+        };
+        expect(labels(computeSpeedBonus(legacy, 5, new Map([[5, daysAfter(3)]])))).toEqual(["Fast"]);
+        expect(labels(computeSpeedBonus(legacy, 5, new Map([[5, daysAfter(10)]])))).toEqual(["Medium"]);
+    });
+
+    it("applies maxWinners per milestone, so a full 50-tier doesn't block the 80-tier", () => {
+        const capped: SpeedBonusConfig = {
+            ...config,
+            tiers: config.tiers.map((t) => ({ ...t, maxWinners: 1 })),
+        };
+        const both = (id: string) => ({
+            enrollmentId: id,
+            registrationCount: 80,
+            thresholdReachedAt: new Map([[50, daysAfter(2)], [80, daysAfter(5)]]),
+            bonusStartAt: T0,
+        });
+        const results = applySpeedBonusCaps(capped, [both("amb-a"), both("amb-b")]);
+        expect(labels(results.get("amb-a") ?? null)).toEqual(["50 in 8", "80 in 15"]);
+        expect(results.get("amb-b")?.earned).toBe(false); // both tiers' single slot went to amb-a
+    });
+
+    it("blank maxWinners is unlimited — everyone in the window gets it, in every start mode", () => {
+        const unlimited: SpeedBonusConfig = {
+            enabled: true,
+            campaignStartAtMode: "PER_AMBASSADOR_APPROVAL", // each ambassador's own clock
+            tiers: [{ milestoneThreshold: 5, withinDays: 7, bonusAmount: 500, label: "Fast" }], // no maxWinners
+        };
+        // Approved on different days, each hits 5 registrations 3 days after their own approval.
+        const approvedOn = (id: string, day: number): SpeedBonusCandidate => ({
+            enrollmentId: id,
+            registrationCount: 5,
+            thresholdReachedAt: new Map([[5, daysAfter(day + 3)]]),
+            bonusStartAt: daysAfter(day),
+        });
+        const ids = ["a", "b", "c", "d", "e"];
+        const results = applySpeedBonusCaps(unlimited, ids.map((id, i) => approvedOn(id, i * 10)));
+        for (const id of ids) expect(results.get(id)?.tiers.map((t) => t.label)).toEqual(["Fast"]);
+    });
+
+    it("a numeric maxWinners caps that tier to the first N, with per-ambassador clocks too", () => {
+        const capped: SpeedBonusConfig = {
+            enabled: true,
+            campaignStartAtMode: "PER_AMBASSADOR_APPROVAL",
+            tiers: [{ milestoneThreshold: 5, withinDays: 7, bonusAmount: 500, label: "Fast", maxWinners: 2 }],
+        };
+        const approvedOn = (id: string, day: number): SpeedBonusCandidate => ({
+            enrollmentId: id,
+            registrationCount: 5,
+            thresholdReachedAt: new Map([[5, daysAfter(day + 3)]]),
+            bonusStartAt: daysAfter(day),
+        });
+        const results = applySpeedBonusCaps(capped, [approvedOn("a", 0), approvedOn("b", 10), approvedOn("c", 20)]);
+        expect(results.get("a")?.earned).toBe(true);
+        expect(results.get("b")?.earned).toBe(true);
+        expect(results.get("c")?.earned).toBe(false); // first 2 to reach it took both slots
     });
 });

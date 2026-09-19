@@ -31,6 +31,9 @@ const speedBonusFieldsSchema = z.object({
     campaignStartAtOffsetWeeks: z.number().int().min(0).optional(),
     milestoneThreshold: z.number().int().optional(),
     tiers: z.array(z.object({
+        // Lenient (min 0) like the rest of this draft-safe shape — a freshly added row starts at 0;
+        // the strict superRefine below demands >= 1 (own or legacy campaign-wide) at publish.
+        milestoneThreshold: z.number().int().min(0).optional(),
         withinDays: z.number().int().min(1, "Days must be at least 1"),
         bonusAmount: z.number().min(0, "Bonus amount must be 0 or greater"),
         label: z.string().trim().min(1, "Bonus tier label is required"),
@@ -53,13 +56,16 @@ const speedBonusSchema = speedBonusFieldsSchema.superRefine((data, ctx) => {
             path: ["campaignStartAt"],
         });
     }
-    if (data.milestoneThreshold === undefined || data.milestoneThreshold < 1) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Milestone threshold must be at least 1",
-            path: ["milestoneThreshold"],
-        });
-    }
+    // Each tier needs a target: its own, or the legacy campaign-wide one.
+    data.tiers?.forEach((t, i) => {
+        if ((t.milestoneThreshold ?? data.milestoneThreshold ?? 0) < 1) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Registrations required must be at least 1",
+                path: ["tiers", i, "milestoneThreshold"],
+            });
+        }
+    });
     if (!data.tiers || data.tiers.length === 0) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,

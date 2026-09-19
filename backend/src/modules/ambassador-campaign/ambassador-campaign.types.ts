@@ -35,8 +35,13 @@ export interface SpeedBonusConfig {
     campaignStartAtMode?: "CONTEST_START" | "OFFSET_WEEKS" | "CUSTOM" | "PER_AMBASSADOR_APPROVAL" | undefined;
     /** Meaningful only when campaignStartAtMode === "OFFSET_WEEKS". */
     campaignStartAtOffsetWeeks?: number | undefined;
+    /** Legacy campaign-wide threshold — only a fallback for tiers with no milestoneThreshold of
+     *  their own (campaigns saved before per-tier thresholds). */
     milestoneThreshold?: number | undefined;
     tiers: {
+        /** Registrations needed for this tier. Tiers with different thresholds pay independently
+         *  (an ambassador can earn several); tiers sharing one are alternative speed brackets. */
+        milestoneThreshold?: number | undefined;
         withinDays: number;
         bonusAmount: number;
         label: string;
@@ -348,13 +353,17 @@ export interface TierBracketBreakdown {
 }
 
 export interface SpeedBonusResult {
+    /** True when at least one tier was earned. */
     earned: boolean;
-    tier: {
+    /** Every tier earned, fastest first — one per milestone the ambassador hit in time. */
+    tiers: {
+        milestoneThreshold: number;
         withinDays: number;
         bonusAmount: number;
         label: string;
         goodie?: { label: string; cashEquivalent?: number | undefined; imageUrl?: string | undefined } | undefined;
-    } | null;
+    }[];
+    /** Days the fastest reached milestone took; null while no milestone is reached yet. */
     daysToMilestone: number | null;
 }
 
