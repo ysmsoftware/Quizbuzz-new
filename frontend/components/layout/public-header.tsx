@@ -7,6 +7,7 @@ import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 import { useAppLogo } from '@/lib/hooks/useAppLogo';
+import { PWA_ENABLED } from '@/lib/pwa';
 
 /**
  * Minimal header for public contest/quiz flows — no admin Sign In / Create Account.
@@ -18,7 +19,7 @@ export function PublicHeader() {
   const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+    if (!PWA_ENABLED) return;
     if (isStandalone) return;
 
     const ua = window.navigator.userAgent;

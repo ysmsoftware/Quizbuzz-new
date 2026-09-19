@@ -60,6 +60,7 @@
     "embla-carousel-react": "8.6.0",
     "face-api.js": "^0.22.2",
     "framer-motion": "^12.38.0",
+    "grapesjs": "^0.23.6",
     "input-otp": "1.4.2",
     "katex": "^0.18.7",
     "lucide-react": "^0.564.0",

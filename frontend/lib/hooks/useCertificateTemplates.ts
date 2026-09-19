@@ -44,6 +44,18 @@ export function useUpdateCertificateTemplate() {
     });
 }
 
+export function useDuplicateCertificateTemplate() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => certificateTemplatesApi.duplicate(id),
+        onSuccess: (copy) => {
+            toast.success(`Created "${copy.name}"`);
+            queryClient.invalidateQueries({ queryKey: ['certificate-templates'] });
+        },
+        onError: (err: any) => toast.error(err.message || 'Failed to duplicate template'),
+    });
+}
+
 export function useDeleteCertificateTemplate() {
     const queryClient = useQueryClient();
     return useMutation({

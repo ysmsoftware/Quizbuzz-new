@@ -13,6 +13,7 @@ certificateTemplateRouter.get("/",         (req, res, next) => ctrl().list(req, 
 certificateTemplateRouter.get("/:id",      (req, res, next) => ctrl().getById(req, res, next));
 certificateTemplateRouter.patch("/:id",    (req, res, next) => ctrl().update(req, res, next));
 certificateTemplateRouter.delete("/:id",   (req, res, next) => ctrl().remove(req, res, next));
+certificateTemplateRouter.post("/:id/duplicate", (req, res, next) => ctrl().duplicate(req, res, next));
 certificateTemplateRouter.post("/:id/test-generate", (req, res, next) => ctrl().testGenerate(req, res, next));
 
 export { certificateTemplateRouter };

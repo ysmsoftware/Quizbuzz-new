@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     useCreateCertificateTemplate,
     useUpdateCertificateTemplate,
@@ -37,11 +38,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Award, Eye, Upload, CheckCircle2, Copy, Check, FileText, ArrowRight, ArrowLeft, Code, AlertTriangle, Sparkles } from 'lucide-react';
+import { Award, Eye, Upload, CheckCircle2, Copy, Check, FileText, ArrowRight, ArrowLeft, Code, AlertTriangle, Sparkles, Paintbrush } from 'lucide-react';
 import { toast } from 'sonner';
+import { CertificatePreviewFrame } from './CertificatePreviewFrame';
 import { buildCertificateAiPrompt, CERTIFICATE_AVAILABLE_PLACEHOLDERS as AVAILABLE_PLACEHOLDERS } from '@/lib/utils/ai-prompts';
-
-const MM_TO_PX = 96 / 25.4; // CSS px per mm
 
 export interface CertificateTemplateModalProps {
     open: boolean;
@@ -56,6 +56,7 @@ export function CertificateTemplateModal({
     editingId,
     onSuccess,
 }: CertificateTemplateModalProps) {
+    const router = useRouter();
     const createMutation = useCreateCertificateTemplate();
     const updateMutation = useUpdateCertificateTemplate();
     const previewMutation = usePreviewCertificateTemplate();
@@ -75,21 +76,6 @@ export function CertificateTemplateModal({
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [copiedVar, setCopiedVar] = useState<string | null>(null);
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-
-    // The preview iframe is laid out at the certificate's real page size and scaled (CSS
-    // transform) to the panel's width, inside a scrollable box — so the whole page is always
-    // reachable by scrolling, at any page size, instead of being cropped to the panel height.
-    const previewBoxRef = useRef<HTMLDivElement>(null);
-    const [previewBoxWidth, setPreviewBoxWidth] = useState(0);
-    useLayoutEffect(() => {
-        const el = previewBoxRef.current;
-        if (!el) return;
-        const measure = () => setPreviewBoxWidth(el.clientWidth);
-        measure();
-        const ro = new ResizeObserver(measure);
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, [open, step, isLoadingDetail]);
 
     useEffect(() => {
         if (open) {
@@ -322,6 +308,26 @@ export function CertificateTemplateModal({
                             >
                                 {copiedAiPrompt ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                                 {copiedAiPrompt ? 'Copied!' : 'Copy AI Prompt'}
+                            </Button>
+                        </div>
+
+                        {/* Design visually: opens the full-page visual editor */}
+                        <div className="p-3.5 bg-muted/40 border border-border/60 rounded-xl space-y-2">
+                            <div className="flex items-center gap-2 text-foreground font-semibold text-xs">
+                                <Paintbrush className="h-4 w-4 text-primary" />
+                                <span>Prefer to design it visually?</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                                Open the full-page visual editor: start from a simple certificate and drag, drop and restyle everything. No HTML needed.
+                            </p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { onOpenChange(false); router.push('/org/certificates/templates/new'); }}
+                                className="h-8 text-xs gap-1.5"
+                            >
+                                <Paintbrush className="h-3.5 w-3.5" /> Open visual editor
                             </Button>
                         </div>
 
@@ -586,50 +592,28 @@ export function CertificateTemplateModal({
                                 )}
 
                                 {/* Live preview: real page size, scaled to panel width, scrollable */}
-                                <div
-                                    ref={previewBoxRef}
-                                    className="flex-1 min-h-0 overflow-auto rounded-xl border bg-muted/40 p-3"
-                                >
-                                    {previewResult ? (() => {
-                                        const pageWpx = (previewResult.pageWidthMm ?? 297) * MM_TO_PX;
-                                        const pageHpx = (previewResult.pageHeightMm ?? 210) * MM_TO_PX;
-                                        const scale = previewBoxWidth > 24 ? (previewBoxWidth - 24) / pageWpx : 1;
-                                        return (
-                                            <div
-                                                className="relative mx-auto bg-white shadow-md"
-                                                style={{ width: pageWpx * scale, height: pageHpx * scale }}
-                                            >
-                                                <iframe
-                                                    srcDoc={previewResult.html}
-                                                    sandbox="allow-same-origin"
-                                                    title="Certificate Template Preview"
-                                                    scrolling="no"
-                                                    className="absolute top-0 left-0 border-0"
-                                                    style={{
-                                                        width: pageWpx,
-                                                        height: pageHpx,
-                                                        transform: `scale(${scale})`,
-                                                        transformOrigin: 'top left',
-                                                    }}
-                                                />
+                                {previewResult ? (
+                                    <CertificatePreviewFrame
+                                        html={previewResult.html}
+                                        widthMm={previewResult.pageWidthMm ?? 297}
+                                        heightMm={previewResult.pageHeightMm ?? 210}
+                                        className="flex-1 min-h-0"
+                                    />
+                                ) : (
+                                    <div className="flex-1 min-h-0 overflow-auto rounded-xl border bg-muted/40 p-3 flex items-center justify-center">
+                                        <div className="text-center p-6 space-y-3 text-muted-foreground">
+                                            <div className="h-12 w-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto">
+                                                <Eye className="h-6 w-6 text-muted-foreground/60" />
                                             </div>
-                                        );
-                                    })() : (
-                                        <div className="h-full min-h-[200px] flex items-center justify-center">
-                                            <div className="text-center p-6 space-y-3 text-muted-foreground">
-                                                <div className="h-12 w-12 rounded-full bg-muted/60 flex items-center justify-center mx-auto">
-                                                    <Eye className="h-6 w-6 text-muted-foreground/60" />
-                                                </div>
-                                                <div className="space-y-1 max-w-sm">
-                                                    <p className="font-semibold text-sm text-foreground">No Live Preview Generated</p>
-                                                    <p className="text-xs">
-                                                        Enter your template HTML on the left to render an automatic full-fidelity live preview here.
-                                                    </p>
-                                                </div>
+                                            <div className="space-y-1 max-w-sm">
+                                                <p className="font-semibold text-sm text-foreground">No Live Preview Generated</p>
+                                                <p className="text-xs">
+                                                    Enter your template HTML on the left to render an automatic full-fidelity live preview here.
+                                                </p>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
 
                         </div>

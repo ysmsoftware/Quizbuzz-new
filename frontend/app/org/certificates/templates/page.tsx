@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
     useCertificateTemplates,
     useDeleteCertificateTemplate,
+    useDuplicateCertificateTemplate,
 } from '@/lib/hooks/useCertificateTemplates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,7 +26,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Award, ChevronLeft, Plus, Edit2, Trash2, MoreVertical, FlaskConical } from 'lucide-react';
+import { Award, ChevronLeft, Plus, Edit2, Trash2, MoreVertical, FlaskConical, Paintbrush, Copy } from 'lucide-react';
 import { WidgetErrorBoundary } from '@/components/shared/WidgetErrorBoundary';
 import { CertificateTemplateModal } from '@/components/features/certificates/CertificateTemplateModal';
 import { TestGenerateDialog } from '@/components/features/certificates/TestGenerateDialog';
@@ -33,6 +34,7 @@ import { TestGenerateDialog } from '@/components/features/certificates/TestGener
 export default function CertificateTemplatesPage() {
     const { data: templates = [], isLoading } = useCertificateTemplates();
     const deleteMutation = useDeleteCertificateTemplate();
+    const duplicateMutation = useDuplicateCertificateTemplate();
 
     // Dialog state
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -79,16 +81,18 @@ export default function CertificateTemplatesPage() {
                 <div className="space-y-2">
                     <div className="flex items-center gap-3 text-primary">
                         <Award className="h-6 w-6" />
-                        <h1 className="text-3xl font-bold">Certificate Template Library</h1>
+                        <h1 className="text-2xl font-bold">Certificate Template Library</h1>
                     </div>
-                    <p className="text-muted-foreground max-w-2xl">
-                        Upload and manage custom HTML certificate templates for your organization. Saved templates can be selected when issuing certificates for any contest.
-                    </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <Button variant="outline" asChild className="rounded-xl h-11">
                         <Link href="/org/certificates">
                             <ChevronLeft className="mr-2 h-4 w-4" /> Back to Certificates
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild className="rounded-xl h-11 gap-2">
+                        <Link href="/org/certificates/templates/new">
+                            <Paintbrush className="h-4 w-4" /> Design Visually
                         </Link>
                     </Button>
                     <Button onClick={handleOpenCreate} className="rounded-xl h-11 bg-primary text-primary-foreground gap-2">
@@ -164,8 +168,16 @@ export default function CertificateTemplatesPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem asChild className="gap-2 cursor-pointer">
+                                                        <Link href={`/org/certificates/templates/${tpl.id}`}>
+                                                            <Paintbrush className="h-4 w-4 text-muted-foreground" /> Visual Editor
+                                                        </Link>
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => handleOpenEdit(tpl.id)} className="gap-2 cursor-pointer">
-                                                        <Edit2 className="h-4 w-4 text-muted-foreground" /> Edit Template
+                                                        <Edit2 className="h-4 w-4 text-muted-foreground" /> Edit HTML &amp; Details
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => duplicateMutation.mutate(tpl.id)} disabled={duplicateMutation.isPending} className="gap-2 cursor-pointer">
+                                                        <Copy className="h-4 w-4 text-muted-foreground" /> Duplicate
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setTestGenerateId(tpl.id)} className="gap-2 cursor-pointer">
                                                         <FlaskConical className="h-4 w-4 text-muted-foreground" /> Test Generate PDF

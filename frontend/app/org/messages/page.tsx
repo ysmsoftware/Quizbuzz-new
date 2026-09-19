@@ -90,7 +90,7 @@ export default function MessagingLogsPage() {
     const [isMessageDetailOpen, setIsMessageDetailOpen] = useState(false);
 
     const { data: messageDetailData, isLoading: isMessageDetailLoading } = useMessageDetail(
-      selectedMessageId && isMessageDetailOpen ? selectedMessageId : null
+        selectedMessageId && isMessageDetailOpen ? selectedMessageId : null
     );
 
     // Fetch contests list for broadcast selection targeting
@@ -100,33 +100,33 @@ export default function MessagingLogsPage() {
     // For the global log, we might need a different endpoint, but using contest-specific as per rule for now.
     // Assuming if contestId is empty, it might fetch all or we use a fallback ID for demonstration.
     const {
-      messages,
-      pagination,
-      summary,
-      isLoading: isMessagesLoading,
-      retryMessage,
+        messages,
+        pagination,
+        summary,
+        isLoading: isMessagesLoading,
+        retryMessage,
     } = useContestMessages(contestId || 'all', {
-      channel: channel === 'all' ? undefined : channel,
-      status: status === 'all' ? undefined : status,
-      page,
-      limit: 20,
+        channel: channel === 'all' ? undefined : channel,
+        status: status === 'all' ? undefined : status,
+        page,
+        limit: 20,
     });
 
     // Contacts search for direct messaging
     const { contacts: contactsSearchData, isLoading: isContactsSearching } = useContacts(
-      { search: directSearch, limit: 10 },
-      { enabled: directSearch.trim().length > 0 }
+        { search: directSearch, limit: 10 },
+        { enabled: directSearch.trim().length > 0 }
     );
 
     // Mutations
     const retryMutation = useMutation({
-      mutationFn: (msgId: string) => retryMessage(msgId),
-      onSuccess: () => {
-        toast.success('Message re-queued for delivery');
-      },
-      onError: (err: any) => {
-        toast.error(err.message || 'Failed to retry message');
-      },
+        mutationFn: (msgId: string) => retryMessage(msgId),
+        onSuccess: () => {
+            toast.success('Message re-queued for delivery');
+        },
+        onError: (err: any) => {
+            toast.error(err.message || 'Failed to retry message');
+        },
     });
 
     const getStatusBadge = (status: string) => {
@@ -151,12 +151,11 @@ export default function MessagingLogsPage() {
     };
 
     return (
-        <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+        <div className="p-2 md:p-2 space-y-6 animate-in fade-in duration-500">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-bold tracking-tight">Messaging Center</h1>
-                    <p className="text-muted-foreground">Monitor delivery status and broadcast manual announcements.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Messaging Center</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button

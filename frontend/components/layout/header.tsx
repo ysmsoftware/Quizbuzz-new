@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { Menu, X, Download } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 import { useAppLogo } from '@/lib/hooks/useAppLogo';
+import { PWA_ENABLED } from '@/lib/pwa';
 
 const navigation = [
     { name: 'Browse Contests', href: '/contests' },
@@ -23,7 +24,7 @@ export function Header() {
     const [logoFailed, setLogoFailed] = useState(false);
 
     useEffect(() => {
-        if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+        if (!PWA_ENABLED) return;
         if (isStandalone) return;
 
         const ua = window.navigator.userAgent;

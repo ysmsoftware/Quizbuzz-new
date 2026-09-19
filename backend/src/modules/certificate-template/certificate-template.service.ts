@@ -10,6 +10,7 @@ import {
     TestGenerateResult,
 } from "./certificate-template.types";
 import { renderCustomTemplateHtml } from "../certificate/certificate.template";
+import { nextCopyName } from "./certificate-template.naming";
 import { BrandingOptions, OrgLogoPosition, PAGE_SIZE_PRESETS, PageSizePreset, sanitizeTemplateHtml } from "../certificate/certificate.branding";
 import { PlatformSettingsRepository } from "../platform-settings/platform-settings.repository";
 import { CertificateMetadata, CertificateTestJobPayload } from "../certificate/certificate.types";
@@ -216,6 +217,29 @@ export class CertificateTemplateService {
         } catch (err: any) {
             if (err.code === "P2002") throw new ConflictError(`A template named "${input.name}" already exists`);
             throw err;
+        }
+    }
+
+    /** Copies a template (HTML, layout, description) under a free "(copy)" name. Retries on a name race with a concurrent duplicate. */
+    async duplicateTemplate(id: string, organizationId: string): Promise<CertificateTemplateResult> {
+        const src = await this.getTemplate(id, organizationId); // 404 if missing/not owned by this org
+        const taken = new Set((await this.repo.findAllByOrg(organizationId)).map((t) => t.name));
+
+        for (let attempt = 0; ; attempt++) {
+            const name = nextCopyName(src.name, taken);
+            try {
+                return await this.repo.create({
+                    organizationId, name,
+                    description: src.description,
+                    htmlContent: src.htmlContent,
+                    variables: src.variables,
+                    orgLogoPosition: src.orgLogoPosition,
+                    pageSize: src.pageSize,
+                });
+            } catch (err: any) {
+                if (err.code !== "P2002" || attempt >= 3) throw err;
+                taken.add(name);
+            }
         }
     }
 

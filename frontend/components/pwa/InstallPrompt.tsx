@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/drawer';
 import { usePwaStore } from '@/lib/stores/pwa-store';
 import { isRouteExcluded } from '@/lib/constants/pwa-excluded-routes';
+import { PWA_ENABLED } from '@/lib/pwa';
 
 const COOLDOWN_DAYS = 7;
 const DISMISSAL_KEY = 'pwa-install-dismissed-at';
@@ -69,7 +70,14 @@ export function InstallPrompt() {
 
   useEffect(() => {
     setIsMounted(true);
-    if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+    if (!PWA_ENABLED) {
+      // Dev only: drop any service worker + caches an earlier run (or an old build on this origin) left behind.
+      if (process.env.NODE_ENV === 'development') {
+        navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+        caches?.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+      }
+      return;
+    }
 
     // 1. Detect standalone/installed state
     const checkStandalone = () => {
@@ -196,7 +204,7 @@ export function InstallPrompt() {
 
   // Safe guard: check environment flag, mounted state, standalone, and pathname exclusions
   if (!isMounted) return null;
-  if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return null;
+  if (!PWA_ENABLED) return null;
   if (isStandalone) return null;
   if (isRouteExcluded(pathname)) return null;
 

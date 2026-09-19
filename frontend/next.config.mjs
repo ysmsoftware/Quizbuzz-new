@@ -4,7 +4,8 @@ import withSerwistInit from "@serwist/next";
 const withSerwist = withSerwistInit({
     swSrc: "app/sw.ts",
     swDest: "public/sw.js",
-    disable: process.env.NEXT_PUBLIC_ENABLE_PWA !== "true",
+    // Never in `next dev`: the plugin rewrites public/sw.js on every rebuild, Next watches public/, and the dev server loops forever.
+    disable: process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_ENABLE_PWA !== "true",
 });
 
 /** @type {import('next').NextConfig} */
@@ -30,4 +31,4 @@ export default withSentryConfig(
         telemetry: false,
     }
 );
-
+

@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { usePwaStore } from '@/lib/stores/pwa-store';
+import { PWA_ENABLED } from '@/lib/pwa';
 
 export function HeroInstallButton() {
   const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+    if (!PWA_ENABLED) return;
     if (isStandalone) return;
 
     const ua = window.navigator.userAgent;
@@ -43,7 +44,7 @@ export function BottomInstallButton() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+    if (!PWA_ENABLED) return;
     if (isStandalone) return;
 
     const ua = window.navigator.userAgent;
@@ -77,7 +78,7 @@ export function FloatingInstallButton() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_PWA !== 'true') return;
+    if (!PWA_ENABLED) return;
     if (isStandalone) return;
 
     const ua = window.navigator.userAgent;

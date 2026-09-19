@@ -35,6 +35,13 @@ export class CertificateTemplateController {
         } catch (err) { next(err); }
     };
 
+    duplicate = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const data = await this.service.duplicateTemplate(req.params.id as string, req.user!.organizationId as string);
+            res.status(201).json({ success: true, data });
+        } catch (err) { next(err); }
+    };
+
     remove = async (req: Request, res: Response, next: NextFunction) => {
         try {
             await this.service.deleteTemplate(req.params.id as string, req.user!.organizationId as string);

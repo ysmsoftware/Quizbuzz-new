@@ -26,16 +26,13 @@ export default function AdminCertificatesPage() {
     }
 
     return (
-        <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+        <div className="p-2 md:p-2 space-y-6 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div className="space-y-2">
                     <div className="flex items-center gap-3 text-primary">
                         <Award className="h-6 w-6" />
-                        <h1 className="text-3xl font-bold">Certificates</h1>
+                        <h1 className="text-2xl font-bold">Certificates</h1>
                     </div>
-                    <p className="text-muted-foreground max-w-2xl">
-                        Manage certificates by contest. Select a contest below to view existing issued certificates, retry failed generation, and bulk issue new certificates.
-                    </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <Button variant="outline" asChild className="rounded-xl h-11">
