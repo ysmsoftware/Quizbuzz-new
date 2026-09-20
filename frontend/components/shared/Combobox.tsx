@@ -132,6 +132,12 @@ export function Combobox({
         className="w-(--radix-popover-trigger-width) p-0"
         align="start"
         collisionPadding={8}
+        // On touch devices, autofocusing the search box raises the keyboard over the bottom of the
+        // screen, leaving the list a sliver to scroll in. Open with the list fully visible instead;
+        // tapping the search box still focuses it.
+        onOpenAutoFocus={(e) => {
+          if (window.matchMedia('(pointer: coarse)').matches) e.preventDefault();
+        }}
       >
         <Command shouldFilter={false}>
           <CommandInput

@@ -97,7 +97,7 @@ export default function AmbassadorLoginPage() {
   };
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[0.92fr_1.08fr]">
+    <div className="grid min-h-screen grid-cols-1 overflow-x-clip lg:grid-cols-[0.92fr_1.08fr]">
       {/* Brand / onboarding panel */}
       <div
         className="relative hidden overflow-hidden bg-primary lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12"
@@ -148,7 +148,7 @@ export default function AmbassadorLoginPage() {
       </div>
 
       {/* Form panel */}
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
+      <div className="flex min-h-screen min-w-0 flex-col items-center justify-center bg-background px-4 py-8">
         <div className="w-full max-w-sm space-y-4">
           <div className="mb-2 flex items-center justify-between lg:hidden">
             <Image src="/quizBuzz-logo.png" alt="QuizBuzz" width={120} height={34} className="h-7 w-auto" />

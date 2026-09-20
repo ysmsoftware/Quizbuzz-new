@@ -21,6 +21,10 @@ interface FileUploadProps {
   className?: string;
   /** Optional class specifically for preview/dropzone container */
   containerClassName?: string;
+  /** Extra class for the preview container only (e.g. to shrink the thumbnail on phones). */
+  previewClassName?: string;
+  /** Set false when the caller compresses the file itself, so "Max XMB" isn't advertised. */
+  showSizeHint?: boolean;
 }
 
 const ASPECT_RATIO_CLASSES: Record<AspectRatio, string> = {
@@ -47,6 +51,8 @@ export function FileUpload({
   aspectRatio = 'square',
   className,
   containerClassName,
+  previewClassName,
+  showSizeHint = true,
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +138,8 @@ export function FileUpload({
             className={cn(
               'relative w-full bg-muted/30 border border-border/60 rounded-xl overflow-hidden shadow-sm group',
               aspectClass,
-              containerClassName
+              containerClassName,
+              previewClassName
             )}
           >
             {aspectRatio === 'auto' ? (
@@ -217,9 +224,11 @@ export function FileUpload({
               or <span className="text-primary font-medium underline underline-offset-2">browse</span>
             </p>
           </div>
-          <p className="text-[10px] text-muted-foreground/70">
-            Max {formatMaxSize(maxSizeMB)}
-          </p>
+          {showSizeHint && (
+            <p className="text-[10px] text-muted-foreground/70">
+              Max {formatMaxSize(maxSizeMB)}
+            </p>
+          )}
         </div>
       )}
 

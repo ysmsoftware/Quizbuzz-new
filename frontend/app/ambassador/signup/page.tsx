@@ -18,7 +18,22 @@ import { FileUpload } from '@/components/features/shared/FileUpload';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { useAmbassadorSignup } from '@/lib/hooks/useAmbassadorApply';
 import { AmbassadorApiError } from '@/lib/services/ambassador-service';
+import { compressImage } from '@/lib/utils/image-compress';
 import { DynamicApplicationFields, buildZodSchemaFor } from '@/components/features/ambassador/DynamicApplicationFields';
+
+// Any phone photo is accepted; it's downscaled and re-encoded here, before the S3 upload, to stay
+// under this cap — the applicant never has to shrink it themselves. 1600px keeps ID text legible
+// (compressImage's 512px default is meant for avatars).
+const MAX_PROOF_BYTES = 512 * 1024;
+const MAX_PROOF_INPUT_MB = 30; // sanity ceiling on what we'll even try to decode, not a user-facing limit
+
+const readAsDataUrl = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 const identitySchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -115,6 +130,8 @@ export default function AmbassadorSignupPage() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [proofError, setProofError] = useState('');
+  const [proofProcessing, setProofProcessing] = useState(false);
+  const [proofInfo, setProofInfo] = useState('');
   const [submitError, setSubmitError] = useState('');
 
   const profileSchema = useMemo(() => {
@@ -127,6 +144,21 @@ export default function AmbassadorSignupPage() {
 
   const handleTypeChange = (value: string) => {
     setWatchedType(value);
+  };
+
+  const handleProofSelect = async (file: File) => {
+    setProofError('');
+    setProofProcessing(true);
+    try {
+      const compressed = await compressImage(file, { maxDimension: 1600, maxBytes: MAX_PROOF_BYTES });
+      setProofFile(compressed);
+      setProofPreview(await readAsDataUrl(compressed));
+      setProofInfo(`Optimized to ${Math.max(1, Math.round(compressed.size / 1024))} KB`);
+    } catch {
+      setProofError("We couldn't read that image. Please try a JPG or PNG photo.");
+    } finally {
+      setProofProcessing(false);
+    }
   };
 
   const onSubmitProfile = profileForm.handleSubmit(async (applicationData) => {
@@ -166,7 +198,7 @@ export default function AmbassadorSignupPage() {
   });
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[0.92fr_1.08fr]">
+    <div className="grid min-h-screen grid-cols-1 overflow-x-clip lg:grid-cols-[0.92fr_1.08fr]">
       {/* Brand / step-rail panel */}
       <div
         className="relative hidden overflow-hidden bg-primary lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12"
@@ -235,7 +267,7 @@ export default function AmbassadorSignupPage() {
       </div>
 
       {/* Form panel */}
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
+      <div className="flex min-h-screen min-w-0 flex-col items-center justify-center bg-background px-4 py-8">
         <div className="w-full max-w-lg space-y-4">
           <div className="mb-2 flex items-center justify-between lg:hidden">
             <Image src="/quizBuzz-logo.png" alt="QuizBuzz" width={120} height={34} className="h-7 w-auto" />
@@ -390,18 +422,18 @@ export default function AmbassadorSignupPage() {
                       <FileUpload
                         label={`${selectedType.proofFieldLabel} *`}
                         accept="image/*"
-                        maxSizeMB={0.5}
+                        maxSizeMB={MAX_PROOF_INPUT_MB}
+                        showSizeHint={false}
                         preview={proofPreview}
-                        onFileSelect={(file, preview) => {
-                          setProofFile(file);
-                          setProofPreview(preview);
-                          setProofError('');
-                        }}
+                        helperText={proofProcessing ? 'Optimizing your image…' : proofInfo || undefined}
+                        onFileSelect={(file) => void handleProofSelect(file)}
                         onClear={() => {
                           setProofFile(null);
                           setProofPreview(null);
+                          setProofInfo('');
                         }}
                         aspectRatio="auto"
+                        previewClassName="max-w-32 sm:max-w-full"
                       />
                     )}
                     {proofError && <p className="text-sm text-destructive">{proofError}</p>}
@@ -411,7 +443,7 @@ export default function AmbassadorSignupPage() {
                       </div>
                     )}
 
-                    <Button type="submit" className="w-full" disabled={completeLoading || !watchedType}>
+                    <Button type="submit" className="w-full" disabled={completeLoading || proofProcessing || !watchedType}>
                       {completeLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
