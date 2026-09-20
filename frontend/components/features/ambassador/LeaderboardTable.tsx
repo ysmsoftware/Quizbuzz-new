@@ -9,6 +9,9 @@ import type { LeaderboardEntryResult, LeaderboardScope } from '@/lib/types/ambas
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
 
+// On phones the list is trimmed to the top few plus the viewer's own row (desktop shows all rows).
+const MOBILE_TOP_COUNT = 4;
+
 const RANK_COLOR: Record<number, string> = {
   1: 'text-warning',
   2: 'text-muted-foreground',
@@ -50,30 +53,33 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
   return (
     <div className="w-full min-w-0 rounded-lg border border-border/60 overflow-hidden bg-card">
       <div className="max-h-[235px] overflow-y-auto overflow-x-hidden scrollbar-thin">
-        <Table className="w-full text-xs sm:text-sm">
+        <Table className="w-full table-fixed sm:table-auto text-xs sm:text-sm">
           <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-xs z-10 border-b border-border/60">
             <TableRow className="hover:bg-transparent border-b-border/60">
-              <TableHead className="w-12 sm:w-14 px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm">Rank</TableHead>
-              <TableHead className="px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm min-w-0">{label}</TableHead>
-              <TableHead className="w-24 sm:w-28 px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">Registrations</TableHead>
-              <TableHead className="w-24 sm:w-28 px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">Prize</TableHead>
+              <TableHead className="w-11 sm:w-14 px-2 sm:px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm">Rank</TableHead>
+              <TableHead className="px-2 sm:px-2.5 py-2 font-bold text-foreground text-xs sm:text-sm min-w-0 truncate">{label}</TableHead>
+              <TableHead className="w-12 sm:w-28 px-2 sm:px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">
+                <span className="sm:hidden">Regs</span>
+                <span className="hidden sm:inline">Registrations</span>
+              </TableHead>
+              <TableHead className="w-[4.5rem] sm:w-28 px-2 sm:px-2.5 py-2 text-right font-bold text-foreground text-xs sm:text-sm whitespace-nowrap">Prize</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const isYou = scope.kind === 'INDIVIDUAL_AMBASSADOR' && row.groupKey === currentAmbassadorId;
               const goodie = row.prize && !row.prize.cashAmount ? row.prize.goodie : undefined;
               const tableRow = (
-                <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/10 font-semibold', goodie && 'cursor-default')}>
-                  <TableCell className={cn('px-2.5 py-2 font-bold text-xs sm:text-sm', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>
-                  <TableCell className="px-2.5 py-2 text-xs sm:text-sm font-medium min-w-0 truncate max-w-[120px] sm:max-w-[220px]">
+                <TableRow key={row.groupKey} className={cn(isYou && 'bg-primary/10 font-semibold', goodie && 'cursor-default', index >= MOBILE_TOP_COUNT && !isYou && 'max-sm:hidden')}>
+                  <TableCell className={cn('px-2 sm:px-2.5 py-2 font-bold text-xs sm:text-sm', RANK_COLOR[row.rank])}>#{row.rank}</TableCell>
+                  <TableCell className="px-2 sm:px-2.5 py-2 text-xs sm:text-sm font-medium min-w-0 truncate sm:max-w-[220px]">
                     <span className="truncate block" title={row.label}>
                       {row.label}
                       {isYou && <span className="ml-1.5 inline-block text-xs text-primary font-bold">(You)</span>}
                     </span>
                   </TableCell>
-                  <TableCell className="px-2.5 py-2 text-right text-xs sm:text-sm font-medium whitespace-nowrap">{row.registrationCount}</TableCell>
-                  <TableCell className="px-2.5 py-2 text-right text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">
+                  <TableCell className="px-2 sm:px-2.5 py-2 text-right text-xs sm:text-sm font-medium whitespace-nowrap">{row.registrationCount}</TableCell>
+                  <TableCell className="px-2 sm:px-2.5 py-2 text-right text-xs sm:text-sm font-medium text-muted-foreground truncate sm:whitespace-nowrap">
                     {row.prize ? (row.prize.cashAmount ? <Rupees amount={row.prize.cashAmount} /> : row.prize.label ?? row.prize.goodie?.label) : '—'}
                   </TableCell>
                 </TableRow>
@@ -85,6 +91,11 @@ export function LeaderboardTable({ scope, label, rows, currentAmbassadorId, isLo
           </TableBody>
         </Table>
       </div>
+      {rows.length > MOBILE_TOP_COUNT && (
+        <p className="sm:hidden border-t border-border/60 px-2.5 py-1.5 text-center text-[10px] text-muted-foreground">
+          Showing the top {MOBILE_TOP_COUNT} and your position
+        </p>
+      )}
     </div>
   );
 }

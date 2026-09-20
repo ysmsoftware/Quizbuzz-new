@@ -37,28 +37,28 @@ interface PrizeTileProps {
 function PrizeTile({ badge, badgeRank, title, subtitle, imageUrl, cash, worth, isYou }: PrizeTileProps) {
   return (
     <div className={cn('flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-card', isYou && 'ring-2 ring-primary')}>
-      <div className="relative aspect-square w-full bg-accent/10">
+      <div className="relative aspect-[4/3] sm:aspect-square w-full bg-accent/10">
         {imageUrl ? (
-          <Image src={imageUrl} alt={title} fill sizes="(min-width: 640px) 160px, 45vw" loading="lazy" onError={onImageError} className="object-cover" />
+          <Image src={imageUrl} alt={title} fill sizes="(min-width: 640px) 160px, 33vw" loading="lazy" onError={onImageError} className="object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center">
-            <span className="flex size-14 items-center justify-center rounded-full bg-warning/20">
-              <Trophy className="size-7 text-warning" />
+            <span className="flex size-10 sm:size-14 items-center justify-center rounded-full bg-warning/20">
+              <Trophy className="size-5 sm:size-7 text-warning" />
             </span>
           </div>
         )}
-        <span className={cn('absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm', badgeClass(badgeRank))}>{badge}</span>
-        {isYou && <span className="absolute right-2 top-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground shadow-sm">You</span>}
+        <span className={cn('absolute left-1.5 top-1.5 sm:left-2 sm:top-2 rounded-full px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold shadow-sm', badgeClass(badgeRank))}>{badge}</span>
+        {isYou && <span className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 rounded-full bg-primary px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-primary-foreground shadow-sm">You</span>}
       </div>
-      <div className="flex flex-1 flex-col gap-0.5 p-2.5">
-        <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground">{title}</p>
-        {subtitle && <p className="line-clamp-1 text-[11px] text-muted-foreground">{subtitle}</p>}
+      <div className="flex flex-1 flex-col gap-0.5 p-2 sm:p-2.5">
+        <p className="line-clamp-2 text-[11px] sm:text-[13px] font-semibold leading-snug text-foreground">{title}</p>
+        {subtitle && <p className="line-clamp-1 text-[10px] sm:text-[11px] text-muted-foreground">{subtitle}</p>}
         {!!cash && (
-          <p className="mt-auto pt-1 text-sm font-bold text-foreground">
+          <p className="mt-auto pt-0.5 sm:pt-1 text-xs sm:text-sm font-bold text-foreground">
             <Rupees amount={cash} />
           </p>
         )}
-        {!!worth && <p className="text-[11px] text-muted-foreground">Worth ~<Rupees amount={worth} /></p>}
+        {!!worth && <p className="text-[10px] sm:text-[11px] text-muted-foreground">Worth ~<Rupees amount={worth} /></p>}
       </div>
     </div>
   );
@@ -80,7 +80,7 @@ export function LeaderboardPrizes({ cut, ownRank }: { cut: LeaderboardCut; ownRa
   return (
     <div>
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">What each rank wins</p>
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
         {visible.map((r, i) => {
           const from = startRank(r);
           const to = r.rankRange?.[1] ?? from;
