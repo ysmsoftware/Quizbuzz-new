@@ -9,7 +9,7 @@ import { useOrgAmbassadorCampaign } from '@/lib/hooks/useOrgAmbassadorCampaigns'
 import { MilestoneTiersEditor } from '../MilestoneTiersEditor';
 import { SpeedBonusEditor } from '../SpeedBonusEditor';
 import { isFieldEditable } from '../campaign-field-locks';
-import { LockedNotice, SummaryRow } from './ReadOnlySummary';
+import { LiveEditNotice, LockedNotice, SummaryRow } from './ReadOnlySummary';
 import type { CampaignResult, DraftRewardConfig } from '@/lib/types/ambassador';
 
 export function RewardsTab({ campaign }: { campaign: CampaignResult }) {
@@ -36,7 +36,7 @@ export function RewardsTab({ campaign }: { campaign: CampaignResult }) {
     return (
       <div className="space-y-4">
         <LockedNotice>
-          Reward economics lock once a campaign goes live, so nobody&apos;s payout changes mid-campaign. This campaign is {campaign.status.toLowerCase()}.
+          Reward economics lock once a campaign has ended, so settled payouts can&apos;t change. This campaign is {campaign.status.toLowerCase()}.
         </LockedNotice>
         <Card className="border-border/50">
           <CardHeader>
@@ -54,6 +54,11 @@ export function RewardsTab({ campaign }: { campaign: CampaignResult }) {
 
   return (
     <div className="space-y-4">
+      {campaign.status === 'LIVE' && (
+        <LiveEditNotice>
+          This campaign is live. Payouts are calculated from the current tiers, so changing milestone tiers or the speed bonus re-prices what ambassadors have already earned, not just future registrations.
+        </LiveEditNotice>
+      )}
       <MilestoneTiersEditor tiers={rewardConfig.milestoneTiers ?? []} onChange={(milestoneTiers) => setRewardConfig((r) => ({ ...r, milestoneTiers }))} />
       <SpeedBonusEditor value={rewardConfig.speedBonus} onChange={(speedBonus) => setRewardConfig((r) => ({ ...r, speedBonus }))} />
       <Button disabled={!dirty || updateCampaignLoading} onClick={handleSave}>

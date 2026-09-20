@@ -18,11 +18,11 @@ import type { LeaderboardCut } from '@/lib/types/ambassador';
 
 const MAX_GROUP_FIELD_KEYS = 3;
 
-// ponytail: rank rows here only support a single `rank`, not rankRange — no banded-prize
-// editing yet. Add a "range" toggle per row if a campaign actually needs it (e.g. rank 4-10
-// share a reward).
+// A row is one prize: a single `rank`, or a band when "To rank" is set above `rank` (e.g. 1–3
+// share a reward → stored as rankRange [1, 3], the shape templates like the YSM pilot use).
 interface RankRow {
   rank: number;
+  rankTo: number; // 0 = single rank
   cashAmount: number;
   label: string;
   goodieLabel: string;
@@ -32,6 +32,7 @@ interface RankRow {
 
 const RANK_COLUMNS: RepeatingRowColumn<RankRow>[] = [
   { key: 'rank', label: 'Rank', type: 'number', minWidth: 'min-w-[96px]' },
+  { key: 'rankTo', label: 'To Rank (optional)', type: 'number', placeholder: 'e.g. 3', minWidth: 'min-w-[112px]', blankWhenZero: true },
   { key: 'cashAmount', label: 'Cash Amount (₹)', type: 'number', minWidth: 'min-w-[128px]' },
   { key: 'label', label: 'Label', type: 'text', placeholder: 'Winner', minWidth: 'min-w-[160px]' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Trophy, merch…', minWidth: 'min-w-[160px]' },
@@ -55,6 +56,7 @@ function RankEditor({
   const uploadRewardImage = useRewardImageUpload();
   const rankRows: RankRow[] = cut.ranks.map((r) => ({
     rank: r.rank ?? r.rankRange?.[0] ?? 0,
+    rankTo: r.rankRange?.[1] ?? 0,
     cashAmount: r.cashAmount ?? 0,
     label: r.label ?? '',
     goodieLabel: r.goodie?.label ?? '',
@@ -80,7 +82,7 @@ function RankEditor({
         }
         return errors[baseKey];
       }}
-      newRow={() => ({ rank: rankRows.length + 1, cashAmount: 0, label: '', goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
+      newRow={() => ({ rank: rankRows.length + 1, rankTo: 0, cashAmount: 0, label: '', goodieLabel: '', goodieCashEquivalent: 0, goodieImageUrl: '' })}
       onChange={(rows) =>
         onChange({
           // Keep the raw label text — don't trim on every keystroke, which would strip a
@@ -88,7 +90,7 @@ function RankEditor({
           // `cut.ranks` above) and make a multi-word label impossible to type. `.trim()`
           // still decides emptiness; real trimming happens server-side at save time.
           ranks: rows.map((r) => ({
-            rank: r.rank,
+            ...(r.rankTo > r.rank ? { rankRange: [r.rank, r.rankTo] as [number, number] } : { rank: r.rank }),
             cashAmount: r.cashAmount,
             label: r.label.trim() ? r.label : undefined,
             goodie: r.goodieLabel.trim()

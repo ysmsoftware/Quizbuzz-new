@@ -13,7 +13,7 @@ export const CAMPAIGN_FIELD_EDITABLE_STATUSES: Record<string, AmbassadorCampaign
   // ambassador-campaign.service.ts#replaceGroups) but shares rewardConfig's lock window since
   // structure feeds capacity/targets, just as economically meaningful once a campaign is live.
   groups: ['DRAFT', 'PUBLISHED'],
-  rewardConfig: ['DRAFT', 'PUBLISHED'],
+  rewardConfig: ['DRAFT', 'PUBLISHED', 'LIVE'], // locks at ENDED; a LIVE edit re-prices accruals, see LiveEditNotice
   name: ['DRAFT', 'PUBLISHED', 'LIVE'],
   shareTemplates: ['DRAFT', 'PUBLISHED', 'LIVE'],
   // Timeline — same window as rewardConfig/groups: locked once LIVE so phase boundaries don't

@@ -262,9 +262,12 @@ export const CAMPAIGN_FIELD_EDITABLE_STATUSES: Record<string, AmbassadorCampaign
     // after the wizard is done would invalidate campaigns already built around them.
     contestId: [AmbassadorCampaignStatus.DRAFT],
     ambassadorTypesAllowed: [AmbassadorCampaignStatus.DRAFT],
-    // Economics — safe to tune before ambassadors are actively earning against the posted
-    // numbers, locked once LIVE so nobody's rewards change out from under them mid-campaign.
-    rewardConfig: [AmbassadorCampaignStatus.DRAFT, AmbassadorCampaignStatus.PUBLISHED],
+    // Economics — editable through LIVE so a running campaign can add/adjust prizes, locked
+    // once ENDED so settled rewards can't move. Nothing is snapshotted: accrued amounts and
+    // leaderboard prizes are recomputed from the current rewardConfig on every read, so a LIVE
+    // edit to milestoneTiers/speedBonus also re-prices what ambassadors have already earned
+    // (the dashboard warns about this — see LiveEditNotice).
+    rewardConfig: [AmbassadorCampaignStatus.DRAFT, AmbassadorCampaignStatus.PUBLISHED, AmbassadorCampaignStatus.LIVE],
     // Cosmetic/marketing — low risk, stays editable through the whole active lifecycle.
     name: [AmbassadorCampaignStatus.DRAFT, AmbassadorCampaignStatus.PUBLISHED, AmbassadorCampaignStatus.LIVE],
     shareTemplates: [AmbassadorCampaignStatus.DRAFT, AmbassadorCampaignStatus.PUBLISHED, AmbassadorCampaignStatus.LIVE],
