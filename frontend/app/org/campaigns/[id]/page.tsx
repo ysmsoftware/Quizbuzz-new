@@ -43,6 +43,7 @@ import {
   RecordCard,
   formatDate,
 } from './overview-cards';
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 // Campaign-wide totals/tier-counts/recently-joined come from the dedicated stats endpoint
 // (computed over every approved enrollment) — never summed client-side over a report page,
@@ -208,7 +209,7 @@ export default function CampaignOverviewPage() {
     const maxCount = Math.max(...tierCounts.map((t) => t.count), 1);
     return tierCounts.map((t, i) => {
       const tier = milestoneTiers[i];
-      const range = tier ? (tier.maxRegistrations != null ? `${tier.minRegistrations}–${tier.maxRegistrations} regs` : `${tier.minRegistrations}+ regs`) : undefined;
+      const range = tier ? tierRangePhrase(tier) : undefined;
       return { label: t.label, count: t.count, range, percent: Math.round((t.count / maxCount) * 100) };
     });
   }, [stats, milestoneTiers]);

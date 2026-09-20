@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import type { MyCampaignItem } from '@/lib/types/ambassador';
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 function tierLabel(tier: MyCampaignItem['stats']['currentTier']) {
   if (!tier) return 'No tier yet';
-  return tier.label ?? (tier.maxRegistrations ? `${tier.minRegistrations}-${tier.maxRegistrations} regs` : `${tier.minRegistrations}+ regs`);
+  return tier.label ?? tierRangePhrase(tier);
 }
 
 /** One row in "Campaigns at a glance" — name, status/tier subtitle, registration count,

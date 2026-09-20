@@ -24,6 +24,7 @@ import { useOrgAmbassadorCampaignTemplates } from '@/lib/hooks/useOrgAmbassadorC
 import type { CampaignTemplate } from '@/lib/types/ambassador';
 import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 interface ViewTemplateModalProps {
   template: CampaignTemplate | null;
@@ -161,7 +162,7 @@ export function ViewTemplateModal({ template, open, onOpenChange }: ViewTemplate
                             <div>
                               <p className="font-semibold text-foreground">{tier.label || `Tier ${idx + 1}`}</p>
                               <p className="text-muted-foreground text-[11px]">
-                                {tier.minRegistrations} – {tier.maxRegistrations ? `${tier.maxRegistrations} regs` : '∞ regs'}
+                                {tierRangePhrase(tier)}
                               </p>
                             </div>
                             <div className="flex items-center gap-1.5 font-bold text-foreground">

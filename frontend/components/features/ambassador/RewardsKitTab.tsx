@@ -9,10 +9,7 @@ import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats, MilestoneTier, ShareTemplates } from '@/lib/types/ambassador';
-
-function tierRange(tier: MilestoneTier) {
-  return tier.maxRegistrations ? `${tier.minRegistrations}-${tier.maxRegistrations} registrations` : `${tier.minRegistrations}+ registrations`;
-}
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 interface RewardsKitTabProps {
   milestoneTiers: MilestoneTier[];
@@ -75,7 +72,7 @@ export function RewardsKitTab({ milestoneTiers, currentTier, shareTemplates, ref
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{tierRange(tier)}</p>
+                    <p className="text-xs text-muted-foreground">{tierRangePhrase(tier)}</p>
                   </div>
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground text-right shrink-0">
                     {tier.goodie?.imageUrl && (

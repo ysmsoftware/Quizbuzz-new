@@ -9,10 +9,7 @@ import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { GoodieThumb } from './GoodieThumb';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
-
-function tierRange(tier: MilestoneTier) {
-  return tier.maxRegistrations ? `${tier.minRegistrations}–${tier.maxRegistrations}` : `${tier.minRegistrations}+`;
-}
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 interface RewardTiersCardProps {
   milestoneTiers: MilestoneTier[];
@@ -48,7 +45,7 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
           const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
           const row = (
             <div className={cn('flex items-center justify-between gap-3 py-3', tier.goodie && 'cursor-default')}>
-              <div>
+              <div className="min-w-0">
                 <p className="flex items-center gap-2 text-[12.5px] font-semibold text-foreground">
                   {tier.label ?? `Tier ${i + 1}`}
                   {isCurrent && (
@@ -57,15 +54,15 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                     </span>
                   )}
                 </p>
-                <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{tierRange(tier)} registrations</p>
+                <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{tierRangePhrase(tier)}</p>
               </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <div className="text-right">
-                  <p className="text-[12.5px] font-semibold text-foreground tabular-nums">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="min-w-0 text-right">
+                  <p className="text-[12.5px] font-semibold text-foreground tabular-nums whitespace-nowrap">
                     <Rupees amount={tier.amountPerRegistration} />
                     /reg
                   </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{tier.goodie ? tier.goodie.label : '—'}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{tier.goodie ? tier.goodie.label : '—'}</p>
                 </div>
                 {tier.goodie?.imageUrl && <GoodieThumb goodie={tier.goodie} size="sm" />}
               </div>
@@ -104,7 +101,7 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">{tierRange(tier)}</TableCell>
+                  <TableCell className="tabular-nums text-muted-foreground">{tierRangePhrase(tier)}</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
                     <Rupees amount={tier.amountPerRegistration} />
                     /reg

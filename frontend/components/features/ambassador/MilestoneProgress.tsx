@@ -6,17 +6,13 @@ import { Rupees } from './Rupees';
 import { GoodieHoverCard } from './GoodieHoverCard';
 import { onImageError } from '@/lib/utils/image';
 import type { CampaignStats } from '@/lib/types/ambassador';
-
-function tierRange(tier: CampaignStats['currentTier']) {
-  if (!tier) return null;
-  return tier.maxRegistrations ? `${tier.minRegistrations}-${tier.maxRegistrations}` : `${tier.minRegistrations}+`;
-}
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 function tierLabel(tier: CampaignStats['currentTier']) {
   if (!tier) return 'No tier yet';
   // Prefer the admin-set tier name ("Level 3"); fall back to the raw registration
   // range if this tier predates the label field.
-  return tier.label ?? `${tierRange(tier)} registrations`;
+  return tier.label ?? tierRangePhrase(tier);
 }
 
 export function MilestoneProgress({ stats }: { stats: CampaignStats }) {

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RepeatingRowTable, type RepeatingRowColumn } from './RepeatingRowTable';
 import { useRewardImageUpload } from '@/lib/hooks/useRewardImageUpload';
 import type { FieldErrorMap } from './campaign-schema';
+import { withDerivedMins } from '@/lib/utils/milestone-tiers';
 import type { MilestoneTier } from '@/lib/types/ambassador';
 
 interface MilestoneRow {
@@ -18,8 +19,8 @@ interface MilestoneRow {
 
 const COLUMNS: RepeatingRowColumn<MilestoneRow>[] = [
   { key: 'label', label: 'Tier Name', type: 'text', placeholder: 'Level 1', minWidth: 'min-w-[130px]' },
-  { key: 'minRegistrations', label: 'Min Regs', type: 'number', minWidth: 'min-w-[96px]' },
-  { key: 'maxRegistrations', label: 'Max (blank = uncapped)', type: 'number', minWidth: 'min-w-[128px]' },
+  // Only the top of each tier is entered; the bottom is always the previous tier's top + 1 (see withDerivedMins).
+  { key: 'maxRegistrations', label: 'Up to (registrations)', type: 'number', placeholder: 'Blank = no limit', blankWhenZero: true, minWidth: 'min-w-[140px]' },
   { key: 'amountPerRegistration', label: 'Amount / Reg (₹)', type: 'number', minWidth: 'min-w-[112px]' },
   { key: 'goodieLabel', label: 'Goodie (optional)', type: 'text', placeholder: 'Gift voucher, earbuds…', minWidth: 'min-w-[160px]' },
   { key: 'goodieCashEquivalent', label: 'Goodie Value (₹)', type: 'number', minWidth: 'min-w-[112px]' },
@@ -50,7 +51,7 @@ export function MilestoneTiersEditor({
 
   const handleChange = (nextRows: MilestoneRow[]) => {
     onChange(
-      nextRows.map((r) => ({
+      withDerivedMins(nextRows.map((r) => ({
         // Keep the raw text here — don't trim on every keystroke. `rows` above is fed
         // straight back from `tiers`, so this is a controlled input: trimming on every
         // change would strip a trailing space the instant it's typed (typing "Level "
@@ -60,13 +61,14 @@ export function MilestoneTiersEditor({
         // real at the actual save boundary by the backend's Zod schema (label: z.string().trim()).
         label: r.label.trim() ? r.label : undefined,
         minRegistrations: r.minRegistrations,
-        maxRegistrations: r.maxRegistrations,
+        // A cleared number cell arrives as 0 (see RepeatingRowTable) — that means "no limit", not "0".
+        maxRegistrations: r.maxRegistrations || null,
         rewardType: 'PER_REGISTRATION' as const,
         amountPerRegistration: r.amountPerRegistration,
         goodie: r.goodieLabel.trim()
           ? { label: r.goodieLabel, cashEquivalent: r.goodieCashEquivalent || undefined, imageUrl: r.goodieImageUrl || undefined }
           : undefined,
-      })),
+      }))),
     );
   };
 
@@ -74,6 +76,11 @@ export function MilestoneTiersEditor({
     <Card className="border-border/50">
       <CardHeader>
         <CardTitle className="text-base">Milestone Tiers</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Enter each tier&apos;s upper limit, in order — a tier starts right after the previous one ends. A tier&apos;s
+          rate applies to the registrations inside it, and its goodie unlocks once the ambassador reaches its limit.
+          Leave the last tier&apos;s limit blank for no upper limit.
+        </p>
       </CardHeader>
       <CardContent>
         <RepeatingRowTable
@@ -96,7 +103,7 @@ export function MilestoneTiersEditor({
           }}
           newRow={() => ({
             label: '',
-            minRegistrations: 0,
+            minRegistrations: 0, // derived on change
             maxRegistrations: null,
             amountPerRegistration: 0,
             goodieLabel: '',

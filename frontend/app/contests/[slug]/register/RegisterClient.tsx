@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Script from "next/script";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { State, City } from "country-state-city";
+import { toast } from "sonner";
 import { ArrowLeft, Loader2, CreditCard, CheckCircle, Mail, KeyRound } from "lucide-react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
@@ -140,6 +141,15 @@ function RegisterPageInner() {
   } | null>(null);
 
   const { state: paymentState, error: paymentError, initiatePayment, retryPayment } = useRazorpay();
+
+  useEffect(() => {
+    if (paymentState === "failed") toast.error(paymentError || "Your payment was not completed.", { id: "register-error", description: "" });
+  }, [paymentState, paymentError]);
+
+  // An error toast belongs to the step it happened on — clear it when the flow moves on.
+  useEffect(() => {
+    toast.dismiss("register-error");
+  }, [step]);
 
   // Auto-transition to success step when payment is successful
   useEffect(() => {
@@ -296,6 +306,33 @@ function RegisterPageInner() {
     return match ? match.value : OTHER_VALUE;
   };
 
+  // ─── Error surfacing ───────────────────────────────────────────────────────
+  // Every error is shown inline / in the banner as before AND raised as a toast, so it's noticed
+  // even when the field or banner is scrolled off-screen on a phone. One shared toast id makes a
+  // new error replace the previous one instead of stacking.
+  const TOAST_ID = "register-error";
+  // description: "" — a toast updated in place would otherwise keep the previous one's description.
+  const showApiError = (message: string) => {
+    setApiError(message);
+    toast.error(message, { id: TOAST_ID, description: "" });
+  };
+  const showOtpError = (message: string) => {
+    setOtpError(message);
+    toast.error(message, { id: TOAST_ID, description: "" });
+  };
+  // Passed as handleSubmit's second argument: fires when zod validation blocks a submit.
+  const showInvalidFields = (errors: FieldErrors) => {
+    const messages = Object.values(errors)
+      .map((e) => e?.message)
+      .filter((m): m is string => typeof m === "string");
+    if (messages.length === 0) return;
+    const more = messages.length - 1;
+    toast.error(messages[0], {
+      id: TOAST_ID,
+      description: more === 0 ? "" : more === 1 ? "1 more field needs attention" : `${more} more fields need attention`,
+    });
+  };
+
   // ─── Step Handlers ──────────────────────────────────────────────────────────
 
   const handleRequestOtp = async (data: EmailFormData) => {
@@ -306,7 +343,7 @@ function RegisterPageInner() {
       setEmail(data.email);
       setStep("otp");
     } catch (err: any) {
-      setApiError(err.message || "Failed to send OTP");
+      showApiError(err.message || "Failed to send OTP");
     }
     setSubmitting(false);
   };
@@ -314,7 +351,7 @@ function RegisterPageInner() {
   const handleVerifyOtp = async () => {
     const otp = otpDigits.join("");
     if (otp.length !== 6) {
-      setOtpError("Please enter all 6 digits");
+      showOtpError("Please enter all 6 digits");
       return;
     }
 
@@ -365,7 +402,7 @@ function RegisterPageInner() {
         setStep("details");
       }
     } catch (err: any) {
-      setOtpError(err.message || "Invalid OTP. Please try again.");
+      showOtpError(err.message || "Invalid OTP. Please try again.");
     }
     setSubmitting(false);
   };
@@ -427,7 +464,7 @@ function RegisterPageInner() {
       (f) => f.required && !customFieldValues[f.id]?.trim()
     );
     if (missingRequired) {
-      setApiError(`${missingRequired.label} is required`);
+      showApiError(`${missingRequired.label} is required`);
       return;
     }
 
@@ -464,7 +501,7 @@ function RegisterPageInner() {
         setStep("success");
       }
     } catch (err: any) {
-      setApiError(err.message || "Registration failed");
+      showApiError(err.message || "Registration failed");
     }
     setSubmitting(false);
   };
@@ -635,7 +672,7 @@ function RegisterPageInner() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={emailForm.handleSubmit(handleRequestOtp)} className="space-y-6">
+                <form onSubmit={emailForm.handleSubmit(handleRequestOtp, showInvalidFields)} noValidate className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
                     <Input
@@ -835,7 +872,7 @@ function RegisterPageInner() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={detailsForm.handleSubmit(handleRegister)} className="space-y-6">
+                <form onSubmit={detailsForm.handleSubmit(handleRegister, showInvalidFields)} noValidate className="space-y-6">
                   <div className="space-y-4">
                     {/* Name */}
                     <div className="grid grid-cols-2 gap-4">
@@ -886,8 +923,8 @@ function RegisterPageInner() {
                       )}
                     </div>
 
-                    {/* College & Department */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* College & Department — one column on phones so the search box has room to type in */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="college">College / Institution</Label>
                         <Combobox
@@ -932,8 +969,8 @@ function RegisterPageInner() {
                       </div>
                     </div>
 
-                    {/* State & City */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* State & City — one column on phones, same reason */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="state">State</Label>
                         <Combobox

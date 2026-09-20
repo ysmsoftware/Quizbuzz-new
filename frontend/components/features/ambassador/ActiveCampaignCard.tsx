@@ -11,10 +11,11 @@ import { toast } from 'sonner';
 import { Rupees } from './Rupees';
 import { CampaignTimelineStrip } from './CampaignTimelineStrip';
 import type { CampaignStatsDetail, MyCampaignItem } from '@/lib/types/ambassador';
+import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
 
 function tierLabel(tier: MyCampaignItem['stats']['currentTier']) {
   if (!tier) return 'No tier yet';
-  return tier.label ?? (tier.maxRegistrations ? `${tier.minRegistrations}-${tier.maxRegistrations} registrations` : `${tier.minRegistrations}+ registrations`);
+  return tier.label ?? tierRangePhrase(tier);
 }
 
 interface ActiveCampaignCardProps {

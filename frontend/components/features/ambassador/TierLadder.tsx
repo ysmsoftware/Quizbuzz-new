@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { onImageError } from '@/lib/utils/image';
 import { Rupees } from './Rupees';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
+import { tierRangeLabel, tierRangePhrase, unlockPhrase } from '@/lib/utils/milestone-tiers';
 
 interface TierLadderProps {
   milestoneTiers: MilestoneTier[];
@@ -24,10 +25,6 @@ interface TierLadderProps {
    *  renders as locked ("what you'll unlock") instead of "your progress", and the earnings
    *  footer (nothing to total yet) is swapped for an apply nudge. */
   preview?: boolean;
-}
-
-function tierRangeLabel(tier: MilestoneTier): string {
-  return tier.maxRegistrations ? `${tier.minRegistrations}–${tier.maxRegistrations}` : `${tier.minRegistrations}+`;
 }
 
 /** Registrations still needed to finish (not just enter) this tier and actually win its
@@ -302,7 +299,7 @@ export function TierLadder({
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">
-                    {expanded.tier.label ?? 'Tier'} · {tierRangeLabel(expanded.tier)} registrations
+                    {expanded.tier.label ?? 'Tier'} · {tierRangePhrase(expanded.tier)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     <Rupees amount={expanded.tier.amountPerRegistration} />
@@ -325,8 +322,8 @@ export function TierLadder({
                           : "You're on this tier now.";
                       })()
                       : preview
-                        ? `Unlocks once you complete this tier (${tierRangeLabel(expanded.tier)} registrations).`
-                        : `Unlocks at ${expanded.tier.minRegistrations}+ registrations.`}
+                        ? `Unlocks once you complete this tier (${tierRangePhrase(expanded.tier)}).`
+                        : `${unlockPhrase(expanded.tier)}.`}
                 </p>
               </div>
             </>

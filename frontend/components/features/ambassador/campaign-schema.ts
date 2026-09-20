@@ -13,7 +13,7 @@ const milestoneTierSchema = z
     goodie: z.object({ label: z.string(), cashEquivalent: z.number().optional() }).optional(),
   })
   .refine((tier) => tier.maxRegistrations === null || tier.maxRegistrations > tier.minRegistrations, {
-    message: 'Max must be greater than min',
+    message: "Must be higher than the previous tier's limit",
     path: ['maxRegistrations'],
   });
 
@@ -96,7 +96,16 @@ export const campaignFormSchema = z.object({
   ambassadorTypesAllowed: z.array(z.string()).min(1, 'Select at least one ambassador type'),
   rewardConfig: z.object({
     currency: z.string(),
-    milestoneTiers: z.array(milestoneTierSchema).min(1, 'Add at least one milestone tier'),
+    milestoneTiers: z
+      .array(milestoneTierSchema)
+      .min(1, 'Add at least one milestone tier')
+      .superRefine((tiers, ctx) => {
+        tiers.forEach((tier, i) => {
+          if (tier.maxRegistrations === null && i < tiers.length - 1) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Only the last tier can have no limit', path: [i, 'maxRegistrations'] });
+          }
+        });
+      }),
     speedBonus: speedBonusSchema.optional(),
     leaderboardPrizes: z.array(leaderboardCutSchema),
   }),
