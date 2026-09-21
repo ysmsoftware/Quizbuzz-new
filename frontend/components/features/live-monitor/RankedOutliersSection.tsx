@@ -54,9 +54,9 @@ export function RankedOutliersSection({ participants, totalParticipants }: Ranke
       case 'flagged':
         return 'bg-red-500/10 text-red-700 border-red-200';
       case 'disconnected':
-        return 'bg-gray-500/10 text-gray-700 border-gray-200';
+        return 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700';
       default:
-        return 'bg-gray-500/10 text-gray-700 border-gray-200';
+        return 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700';
     }
   };
 

@@ -69,7 +69,7 @@ export function ActiveCampaignCard({ campaign, detail }: ActiveCampaignCardProps
               <p className="text-xs text-muted-foreground mt-0.5">{campaign.organizationName} · {campaign.contestTitle}</p>
             </div>
             {rankEntry && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-foreground bg-accent/30 rounded-full px-3 py-1.5 shrink-0">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-foreground dark:text-accent bg-accent/30 rounded-full px-3 py-1.5 shrink-0">
                 <Trophy className="h-3.5 w-3.5" />
                 Rank #{rankEntry.rank} · {rankEntry.label}
               </span>

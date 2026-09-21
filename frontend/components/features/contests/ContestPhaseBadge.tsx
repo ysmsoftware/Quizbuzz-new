@@ -13,7 +13,7 @@ export function ContestPhaseBadge({ phase, className }: ContestPhaseBadgeProps) 
   const config: Record<ContestPhase, { label: string; className: string; showDot?: boolean }> = {
     DRAFT: {
       label: 'Draft',
-      className: 'bg-transparent border-slate-300 text-slate-600 border',
+      className: 'bg-transparent border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300 border',
     },
     PUBLISHED: {
       label: 'Open for Registration',

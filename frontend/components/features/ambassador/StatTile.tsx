@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 const TONE_CLASSES = {
   primary: 'bg-primary/12 text-primary',
-  accent: 'bg-accent/30 text-accent-foreground',
+  accent: 'bg-accent/30 text-accent-foreground dark:text-accent',
   success: 'bg-success/12 text-success',
 } as const;
 

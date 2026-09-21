@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Layers } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -10,16 +11,22 @@ import { GoodieHoverCard } from './GoodieHoverCard';
 import { GoodieThumb } from './GoodieThumb';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
 import { tierRangePhrase } from '@/lib/utils/milestone-tiers';
+import { getTierStatus, TierGoodieDialog, type ExpandedTier } from './TierGoodieDialog';
 
 interface RewardTiersCardProps {
   milestoneTiers: MilestoneTier[];
   currentTier: CampaignStats['currentTier'];
+  /** Only used to word the goodie dialog's unlock status. */
+  registrationCount?: number;
+  preview?: boolean;
 }
 
 /** What each milestone pays out per registration, in full — the rate table underneath the
  *  ladder's at-a-glance version, separate from the ambassador kit below so reward economics
  *  and share assets aren't mixed together in one long tab. */
-export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCardProps) {
+export function RewardTiersCard({ milestoneTiers, currentTier, registrationCount = 0, preview = false }: RewardTiersCardProps) {
+  const [expanded, setExpanded] = useState<ExpandedTier | null>(null);
+
   if (milestoneTiers.length === 0) {
     return (
       <Card className="border-border/50">
@@ -43,8 +50,10 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
       <CardContent className="px-5 py-1 lg:hidden divide-y divide-border">
         {milestoneTiers.map((tier, i) => {
           const isCurrent = currentTier?.minRegistrations === tier.minRegistrations;
-          const row = (
-            <div className={cn('flex items-center justify-between gap-3 py-3', tier.goodie && 'cursor-default')}>
+          const canExpand = !!tier.goodie?.imageUrl;
+          const rowClass = 'flex w-full items-center justify-between gap-3 py-3 text-left';
+          const rowContent = (
+            <>
               <div className="min-w-0">
                 <p className="flex items-center gap-2 text-[12.5px] font-semibold text-foreground">
                   {tier.label ?? `Tier ${i + 1}`}
@@ -66,12 +75,20 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
                 </div>
                 {tier.goodie?.imageUrl && <GoodieThumb goodie={tier.goodie} size="sm" />}
               </div>
-            </div>
+            </>
           );
-          return (
-            <div key={i}>
-              {tier.goodie ? <GoodieHoverCard goodie={tier.goodie}>{row}</GoodieHoverCard> : row}
-            </div>
+          return canExpand ? (
+            <button
+              key={i}
+              type="button"
+              className={cn(rowClass, 'cursor-pointer')}
+              onClick={() => setExpanded({ tier, ...getTierStatus(tier, { currentTier, registrationCount, preview }) })}
+              aria-label={`See ${tier.goodie!.label} for ${tier.label ?? `Tier ${i + 1}`}`}
+            >
+              {rowContent}
+            </button>
+          ) : (
+            <div key={i} className={rowClass}>{rowContent}</div>
           );
         })}
       </CardContent>
@@ -121,6 +138,8 @@ export function RewardTiersCard({ milestoneTiers, currentTier }: RewardTiersCard
           </TableBody>
         </Table>
       </CardContent>
+
+      <TierGoodieDialog expanded={expanded} registrationCount={registrationCount} preview={preview} onClose={() => setExpanded(null)} />
     </Card>
   );
 }

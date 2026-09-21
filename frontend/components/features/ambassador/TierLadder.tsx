@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Check, Lock, Star } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { onImageError } from '@/lib/utils/image';
 import { Rupees } from './Rupees';
 import type { CampaignStats, MilestoneTier } from '@/lib/types/ambassador';
-import { tierRangeLabel, tierRangePhrase, unlockPhrase } from '@/lib/utils/milestone-tiers';
+import { tierRangeLabel } from '@/lib/utils/milestone-tiers';
+import { getTierStatus, remainingToUnlock, TierGoodieDialog, type ExpandedTier } from './TierGoodieDialog';
 
 interface TierLadderProps {
   milestoneTiers: MilestoneTier[];
@@ -25,20 +25,6 @@ interface TierLadderProps {
    *  renders as locked ("what you'll unlock") instead of "your progress", and the earnings
    *  footer (nothing to total yet) is swapped for an apply nudge. */
   preview?: boolean;
-}
-
-/** Registrations still needed to finish (not just enter) this tier and actually win its
- *  goodie — e.g. a 1–25 tier at 20 registrations reads as 5 more (unlocks at 25, not 26).
- *  Null for an uncapped top tier, which has no ceiling to cross. */
-function remainingToUnlock(tier: MilestoneTier, registrationCount: number): number | null {
-  if (tier.maxRegistrations == null) return null;
-  return Math.max(0, tier.maxRegistrations - registrationCount);
-}
-
-interface ExpandedTier {
-  tier: MilestoneTier;
-  isCurrent: boolean;
-  isReached: boolean;
 }
 
 /** One ladder node — the tier's own goodie photo standing in for the old plain circle, shown
@@ -135,19 +121,7 @@ export function TierLadder({
   const ceiling = milestoneTiers.at(-1)?.maxRegistrations ?? milestoneTiers.at(-1)?.minRegistrations ?? 1;
   const trackPercent = preview ? 0 : Math.min(100, Math.round((registrationCount / Math.max(1, ceiling)) * 100));
 
-  // A tier's goodie is only actually won once its bracket is finished (registrations reach
-  // its max, e.g. 25 for a 1–25 tier) — being "current" (inside the bracket, still climbing
-  // it) is not the same as having earned it, even though both used to render identically as
-  // soon as the count hit the tier's floor. An uncapped top tier (maxRegistrations null)
-  // never flips to "earned" since there's no ceiling to reach; it just stays current.
-  const isTierReached = (tier: MilestoneTier) =>
-    !preview && tier.maxRegistrations != null && registrationCount >= tier.maxRegistrations;
-  // At the exact boundary count (registrationCount === tier.maxRegistrations), the backend's
-  // currentTier can still name this bracket (registrationCount sits inclusively at its top
-  // edge) even though it's just been earned — `isReached` wins that tie so the node shows as
-  // unlocked, not "still in progress".
-  const isTierCurrent = (tier: MilestoneTier) =>
-    !preview && currentTier?.minRegistrations === tier.minRegistrations && !isTierReached(tier);
+  const statusOf = (tier: MilestoneTier) => getTierStatus(tier, { currentTier, registrationCount, preview });
 
   return (
     <Card className="border-border/50">
@@ -173,8 +147,7 @@ export function TierLadder({
         <div className="lg:hidden -mx-1 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
           <div className="flex gap-5 px-1 pt-1">
             {milestoneTiers.map((tier, i) => {
-              const isCurrent = isTierCurrent(tier);
-              const isReached = isTierReached(tier);
+              const { isCurrent, isReached } = statusOf(tier);
               const isFirst = i === 0;
               const isLast = i === milestoneTiers.length - 1;
               return (
@@ -224,8 +197,7 @@ export function TierLadder({
           />
           <div className="relative grid gap-2" style={{ gridTemplateColumns: `repeat(${milestoneTiers.length}, minmax(0, 1fr))` }}>
             {milestoneTiers.map((tier, i) => {
-              const isCurrent = isTierCurrent(tier);
-              const isReached = isTierReached(tier);
+              const { isCurrent, isReached } = statusOf(tier);
               return (
                 <div key={i} className="flex flex-col items-center text-center gap-2">
                   <TierNode tier={tier} isCurrent={isCurrent} isReached={isReached} size="lg" onExpand={setExpanded} />
@@ -281,55 +253,7 @@ export function TierLadder({
         </div>
       </CardContent>
 
-      <Dialog open={!!expanded} onOpenChange={(open) => !open && setExpanded(null)}>
-        <DialogContent className="sm:max-w-sm w-full max-w-[calc(100vw-2rem)]">
-          {expanded && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-lg font-bold pr-6">{expanded.tier.goodie!.label}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="relative w-full aspect-square rounded-2xl overflow-hidden border border-border/50 bg-accent/10">
-                  <Image src={expanded.tier.goodie!.imageUrl!} alt={expanded.tier.goodie!.label} fill sizes="(max-width: 480px) 100vw, 380px" onError={onImageError} className="object-cover" />
-                  {!!expanded.tier.goodie!.cashEquivalent && (
-                    <span className="absolute top-3 right-3 rounded-full bg-background/90 border border-border/50 px-2.5 py-1 text-xs font-semibold shadow-sm">
-                      Worth ~<Rupees amount={expanded.tier.goodie!.cashEquivalent} />
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {expanded.tier.label ?? 'Tier'} · {tierRangePhrase(expanded.tier)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    <Rupees amount={expanded.tier.amountPerRegistration} />
-                    /registration at this tier
-                  </p>
-                </div>
-                <p
-                  className={cn(
-                    'text-xs font-semibold rounded-lg px-3 py-2.5',
-                    expanded.isReached ? 'bg-chart-1/10 text-chart-1' : expanded.isCurrent ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {expanded.isReached
-                    ? "Unlocked — you've already earned this one."
-                    : expanded.isCurrent
-                      ? (() => {
-                        const remaining = remainingToUnlock(expanded.tier, registrationCount);
-                        return remaining != null
-                          ? `${remaining} more registration${remaining === 1 ? '' : 's'} to unlock this reward.`
-                          : "You're on this tier now.";
-                      })()
-                      : preview
-                        ? `Unlocks once you complete this tier (${tierRangePhrase(expanded.tier)}).`
-                        : `${unlockPhrase(expanded.tier)}.`}
-                </p>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <TierGoodieDialog expanded={expanded} registrationCount={registrationCount} preview={preview} onClose={() => setExpanded(null)} />
     </Card>
   );
 }

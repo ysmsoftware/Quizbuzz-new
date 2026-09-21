@@ -251,7 +251,7 @@ export default function AmbassadorCampaignDetailPage() {
                 <h2 className="text-[17px] font-bold text-foreground">Reward tiers</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">What each milestone pays out per registration.</p>
               </div>
-              <RewardTiersCard milestoneTiers={campaign.milestoneTiers} currentTier={stats.currentTier} />
+              <RewardTiersCard milestoneTiers={campaign.milestoneTiers} currentTier={stats.currentTier} registrationCount={stats.registrationCount} />
             </section>
 
             <section className="space-y-3">

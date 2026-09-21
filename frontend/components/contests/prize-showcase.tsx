@@ -115,9 +115,7 @@ function PedestalMedal({
               className="object-cover"
             />
           ) : (
-            <span
-              className={cn("text-xl sm:text-2xl font-extrabold", PODIUM_TEXT)}
-            >
+            <span className="text-xl sm:text-2xl font-extrabold text-foreground">
               {ordinal(rank)}
             </span>
           )}
@@ -171,7 +169,7 @@ function PrizeDetails({
               className="object-cover"
             />
           ) : (
-            <span className={cn("text-4xl font-extrabold", PODIUM_TEXT)}>
+            <span className="text-4xl font-extrabold text-foreground">
               {ordinal(rank)}
             </span>
           )}
@@ -242,12 +240,7 @@ function Pedestal({
               imageUrl={prize.goodieImageUrl}
               label={label}
             />
-            <span
-              className={cn(
-                "text-[11px] font-bold uppercase tracking-wide",
-                PODIUM_TEXT,
-              )}
-            >
+            <span className="text-[11px] font-bold uppercase tracking-wide text-foreground">
               {style.tier}
             </span>
             <span className="mt-0.5 text-center text-sm font-semibold">

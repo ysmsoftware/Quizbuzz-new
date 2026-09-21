@@ -9,7 +9,7 @@ import type { AmbassadorStatus } from '@/lib/types/ambassador';
 
 const STATUS_CHIP: Record<AmbassadorStatus, string> = {
   APPROVED: 'bg-success/10 text-success',
-  PENDING: 'bg-warning/45 text-accent-foreground',
+  PENDING: 'bg-warning/45 text-accent-foreground dark:text-warning',
   REJECTED: 'bg-destructive/10 text-destructive',
   SUSPENDED: 'bg-secondary text-muted-foreground',
 };

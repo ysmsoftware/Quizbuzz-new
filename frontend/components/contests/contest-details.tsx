@@ -68,7 +68,7 @@ const statusColors: Record<string, string> = {
   REGISTRATION_CLOSED: "bg-warning/10 text-warning-foreground",
   LIVE: "bg-success/10 text-success",
   EVALUATION: "bg-secondary text-secondary-foreground",
-  RESULTS_OUT: "bg-accent/10 text-accent-foreground",
+  RESULTS_OUT: "bg-accent/10 text-accent-foreground dark:text-accent",
   COMPLETED: "bg-secondary text-secondary-foreground",
 };
 

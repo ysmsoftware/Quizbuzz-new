@@ -207,7 +207,7 @@ export function CampaignPreview({
                 <h2 className="text-[17px] font-bold text-foreground">Reward tiers</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">What each milestone pays out per registration, from your first referral.</p>
               </div>
-              <RewardTiersCard milestoneTiers={milestoneTiers} currentTier={null} />
+              <RewardTiersCard milestoneTiers={milestoneTiers} currentTier={null} preview />
             </Reveal>
 
             {speedBonusTiers.length > 0 && (
@@ -228,7 +228,7 @@ export function CampaignPreview({
                               <GoodieThumb goodie={tier.goodie} size="md" />
                             ) : (
                               <div className="size-14 sm:size-16 shrink-0 rounded-xl bg-accent/15 border border-border/50 flex items-center justify-center">
-                                <Zap className="h-5 w-5 text-accent-foreground" />
+                                <Zap className="h-5 w-5 text-accent-foreground dark:text-accent" />
                               </div>
                             )}
                             <div className="min-w-0 pt-0.5">

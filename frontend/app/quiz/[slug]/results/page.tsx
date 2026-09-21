@@ -479,7 +479,7 @@ export default function QuizResultsPage() {
 
                                                         <div className="p-4 rounded-2xl bg-secondary/30 border border-border/30 hover:scale-[1.02] transition-transform">
                                                             <div className="flex items-center gap-2 mb-2">
-                                                                <TrendingUp className="h-4 w-4 text-accent-foreground" />
+                                                                <TrendingUp className="h-4 w-4 text-accent-foreground dark:text-accent" />
                                                                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rank Status</span>
                                                             </div>
                                                             <p className="text-xl font-black text-foreground">

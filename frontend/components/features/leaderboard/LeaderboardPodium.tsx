@@ -31,7 +31,7 @@ export function LeaderboardPodium({ topThree }: LeaderboardPodiumProps) {
     if (rank === 1) {
       return <Trophy className="h-5 w-5 text-yellow-600" />;
     }
-    return <Medal className="h-5 w-5 text-gray-700" />;
+    return <Medal className="h-5 w-5 text-gray-700 dark:text-gray-300" />;
   };
 
   // Arrange for podium: 2nd, 1st, 3rd
