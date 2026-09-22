@@ -82,11 +82,11 @@ export function Header() {
 
                 {/* Desktop CTA */}
                 <div className="hidden md:flex md:items-center md:gap-3">
-                    <Link href="/login">
+                    {/* <Link href="/login">
                         <Button size="sm">
                             Organizer Sign In
                         </Button>
-                    </Link>
+                    </Link> */}
                     <ThemeToggle />
                 </div>
 
@@ -136,11 +136,15 @@ export function Header() {
                                     Install App
                                 </Button>
                             )}
-                            <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                            {/*
+                           <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                                 <Button className="w-full">
                                     Organizer Sign In
                                 </Button>
                             </Link>
+                            
+                           */}
+
                         </div>
                     </div>
                 </div>
