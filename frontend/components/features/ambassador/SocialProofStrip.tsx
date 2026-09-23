@@ -52,7 +52,9 @@ export function SocialProofStrip({ campaignId }: { campaignId: string }) {
         </div>
       )}
 
-      <p className="text-sm text-foreground shrink-0">
+      {/* min-w-0, not shrink-0: this sentence must wrap on narrow phones — at max-content width
+          (~375px) it overflowed the card and widened the whole page on ~330px screens. */}
+      <p className="text-sm text-foreground min-w-0">
         <span className="font-bold tabular-nums">{summary.ambassadorCount}</span> ambassador{summary.ambassadorCount === 1 ? '' : 's'} on this
         campaign
         {summary.recentlyJoined[0] && <span className="text-muted-foreground"> · last joined {relativeTime(summary.recentlyJoined[0].createdAt)}</span>}

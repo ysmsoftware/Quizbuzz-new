@@ -10,16 +10,21 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useAmbassadorLogout } from '@/lib/hooks/useAmbassadorLogout';
 import { AmbassadorAvatar } from './AmbassadorAvatar';
 
+const PROFILE_HREF = '/ambassador/dashboard/profile';
+
+// `desktopOnly`: on mobile the header is too tight for three tabs, so My Profile lives only in
+// the avatar menu there (it's in that menu at every width).
 const NAV_ITEMS = [
   { label: 'Overview', href: '/ambassador/dashboard', icon: LayoutDashboard },
   { label: 'My Campaigns', href: '/ambassador/dashboard/campaigns', icon: Megaphone },
-  { label: 'My Profile', href: '/ambassador/dashboard/profile', icon: User },
+  { label: 'My Profile', href: PROFILE_HREF, icon: User, desktopOnly: true },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -57,6 +62,7 @@ export function AmbassadorNav({ firstName, lastName, profileImageUrl, pathname }
                 href={item.href}
                 className={cn(
                   'relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                  item.desktopOnly && 'hidden sm:flex', // after base: tailwind-merge keeps the last display class
                   active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -98,8 +104,15 @@ export function AmbassadorNav({ firstName, lastName, profileImageUrl, pathname }
                 <span className="hidden sm:inline text-sm text-muted-foreground">{firstName}</span>
               )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={isLoggingOut} onClick={() => logout()}>
+            <DropdownMenuContent align="end" className="min-w-40">
+              <DropdownMenuItem asChild>
+                <Link href={PROFILE_HREF}>
+                  <User className="h-4 w-4" />
+                  My Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" disabled={isLoggingOut} onClick={() => logout()}>
                 <LogOut className="h-4 w-4" />
                 {isLoggingOut ? 'Logging out…' : 'Log out'}
               </DropdownMenuItem>
