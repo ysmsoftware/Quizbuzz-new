@@ -51,6 +51,7 @@ import {
     OrgAmbassadorCampaignMembership,
     OrgAmbassadorListItem,
     OrgAmbassadorProfile,
+    AmbassadorFileUrls,
     PaginatedResult,
     ReferralListItem,
     ReplaceGroupsDTO,
@@ -128,17 +129,11 @@ export class AmbassadorCampaignService {
     async getApplication(
         organizationId: string,
         id: string,
-    ): Promise<ApplicationResult & { proofDownloadUrl: string; profileImageDownloadUrl: string | null }> {
+    ): Promise<ApplicationResult & AmbassadorFileUrls> {
         const enrollment = await this.campaignRepo.findApplicationById(id, organizationId);
         if (!enrollment) throw new NotFoundError("Application not found.");
 
-        const { url } = await this.storageProvider.getPresignedGetUrl({
-            storageKey: enrollment.ambassador.proofStorageKey,
-            expiresInSeconds: 3600,
-        });
-        const profileImageDownloadUrl = await this._presignProfileImage(enrollment.ambassador.profileImageStorageKey);
-
-        return { ...this._toApplicationResult(enrollment), proofDownloadUrl: url, profileImageDownloadUrl };
+        return { ...this._toApplicationResult(enrollment), ...(await this._ambassadorFileUrls(enrollment.ambassador)) };
     }
 
     async approveApplication(organizationId: string, id: string, reviewedById: string): Promise<ApplicationResult> {
@@ -233,20 +228,37 @@ export class AmbassadorCampaignService {
 
         const anyEnrollment = enrollments.find((e) => e.ambassadorId === ambassadorId)!;
         const applicationData = (anyEnrollment.ambassador.applicationData ?? {}) as Record<string, unknown>;
-        const { url } = await this.storageProvider.getPresignedGetUrl({
-            storageKey: anyEnrollment.ambassador.proofStorageKey,
-            expiresInSeconds: 3600,
-        });
-        const profileImageDownloadUrl = await this._presignProfileImage(anyEnrollment.ambassador.profileImageStorageKey);
-
-        return { ...row, applicationData, proofDownloadUrl: url, profileImageDownloadUrl };
+        return { ...row, applicationData, ...(await this._ambassadorFileUrls(anyEnrollment.ambassador)) };
     }
 
-    /** ambassador-profile/ is a private prefix (see AmbassadorService._toResult) — presign like the proof. */
-    private async _presignProfileImage(storageKey: string | null): Promise<string | null> {
-        if (!storageKey) return null;
-        const { url } = await this.storageProvider.getPresignedGetUrl({ storageKey, expiresInSeconds: 3600 });
-        return url;
+    /**
+     * Presigned URLs for the ambassador's private files (ambassador-proof/ and ambassador-profile/
+     * aren't public — see AmbassadorService._toResult): a view URL for <img>/open-in-tab, and an
+     * attachment URL that downloads as "First-Last-ID-Proof.png" / "First-Last-Profile-Image.jpg".
+     * Cross-origin S3 links ignore <a download="…">, so the filename has to come from S3's
+     * Content-Disposition.
+     */
+    private async _ambassadorFileUrls(a: {
+        firstName: string;
+        lastName: string | null;
+        proofStorageKey: string;
+        profileImageStorageKey: string | null;
+    }): Promise<AmbassadorFileUrls> {
+        const base = `${a.firstName} ${a.lastName ?? ""}`.trim().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "") || "ambassador";
+        const ext = (key: string) => (/\.[a-z0-9]{1,5}$/i.exec(key)?.[0] ?? "").toLowerCase();
+        const presign = (storageKey: string, downloadFilename?: string) =>
+            this.storageProvider
+                .getPresignedGetUrl({ storageKey, expiresInSeconds: 3600, ...(downloadFilename && { downloadFilename }) })
+                .then((r) => r.url);
+
+        const profileKey = a.profileImageStorageKey;
+        const [proofDownloadUrl, proofAttachmentUrl, profileImageDownloadUrl, profileImageAttachmentUrl] = await Promise.all([
+            presign(a.proofStorageKey),
+            presign(a.proofStorageKey, `${base}-ID-Proof${ext(a.proofStorageKey)}`),
+            profileKey ? presign(profileKey) : null,
+            profileKey ? presign(profileKey, `${base}-Profile-Image${ext(profileKey)}`) : null,
+        ]);
+        return { proofDownloadUrl, proofAttachmentUrl, profileImageDownloadUrl, profileImageAttachmentUrl };
     }
 
     private async _buildOrgAmbassadorRows(enrollments: EnrollmentWithAmbassadorAndCampaignSummary[]): Promise<OrgAmbassadorListItem[]> {

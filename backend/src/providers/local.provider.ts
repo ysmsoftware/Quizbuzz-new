@@ -75,6 +75,7 @@ export class LocalStorageProvider implements FileStorageProvider {
     async getPresignedGetUrl(params: {
         storageKey: string;
         expiresInSeconds?: number;
+        downloadFilename?: string; // ignored — local dev serves static files as-is
     }): Promise<{ url: string }> {
         // Local storage is served as static files — just return the direct URL
         const appUrl = config.app.baseUrl || `http://localhost:${config.app.port}`;

@@ -10,6 +10,7 @@ import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from './campaign-status';
 import { Rupees } from './Rupees';
 import { AmbassadorAvatar } from './AmbassadorAvatar';
+import { FileDownloadButton } from './FileDownloadButton';
 
 /**
  * Org-admin's read-only view of one ambassador's full profile — opened from a row in
@@ -41,7 +42,7 @@ export function AmbassadorProfileSheet({ ambassadorId, onClose }: { ambassadorId
                   profileImageUrl={ambassador.profileImageDownloadUrl}
                   size={64}
                 />
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-lg font-semibold">
                       {ambassador.firstName} {ambassador.lastName}
@@ -54,6 +55,9 @@ export function AmbassadorProfileSheet({ ambassadorId, onClose }: { ambassadorId
                     Joined the platform {new Date(ambassador.joinedPlatformAt).toLocaleDateString()}
                   </p>
                 </div>
+                {ambassador.profileImageAttachmentUrl && (
+                  <FileDownloadButton href={ambassador.profileImageAttachmentUrl} label="Download profile image" />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -122,7 +126,10 @@ export function AmbassadorProfileSheet({ ambassadorId, onClose }: { ambassadorId
               )}
 
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Proof Document</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Proof Document</p>
+                  <FileDownloadButton href={ambassador.proofAttachmentUrl} label="Download ID proof" />
+                </div>
                 <a
                   href={ambassador.proofDownloadUrl}
                   target="_blank"

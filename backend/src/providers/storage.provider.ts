@@ -28,6 +28,8 @@ export interface FileStorageProvider {
     getPresignedGetUrl(params: {
         storageKey: string;
         expiresInSeconds?: number;
+        /** When set, the URL downloads as an attachment with this filename (S3 response-content-disposition). */
+        downloadFilename?: string;
     }): Promise<{ url: string }>;
 }
 

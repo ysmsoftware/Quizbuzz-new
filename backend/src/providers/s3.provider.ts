@@ -94,10 +94,14 @@ export class S3StorageProvider implements FileStorageProvider {
     async getPresignedGetUrl(params: {
         storageKey: string;
         expiresInSeconds?: number;
+        downloadFilename?: string;
     }): Promise<{ url: string }> {
         const command = new GetObjectCommand({
             Bucket: this.bucket,
             Key: params.storageKey,
+            ...(params.downloadFilename && {
+                ResponseContentDisposition: `attachment; filename="${params.downloadFilename.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(params.downloadFilename)}`,
+            }),
         });
 
         const url = await getSignedUrl(this.client, command, {

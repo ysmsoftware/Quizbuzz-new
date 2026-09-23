@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { useOrgAmbassadorApplication } from '@/lib/hooks/useOrgAmbassadorApplications';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { AmbassadorAvatar } from './AmbassadorAvatar';
+import { FileDownloadButton } from './FileDownloadButton';
 
 interface ProofReviewSheetProps {
   applicationId: string | null;
@@ -41,10 +42,13 @@ export function ProofReviewSheet({ applicationId, onClose, onApprove, onReject, 
                   profileImageUrl={application.profileImageDownloadUrl}
                   size={56}
                 />
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Campaign</p>
                   <p className="text-sm font-medium">{application.campaignName}</p>
                 </div>
+                {application.profileImageAttachmentUrl && (
+                  <FileDownloadButton href={application.profileImageAttachmentUrl} label="Download profile image" />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -87,7 +91,10 @@ export function ProofReviewSheet({ applicationId, onClose, onApprove, onReject, 
               )}
 
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Proof Document</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Proof Document</p>
+                  <FileDownloadButton href={application.proofAttachmentUrl} label="Download ID proof" />
+                </div>
                 <a
                   href={application.proofDownloadUrl}
                   target="_blank"

@@ -563,10 +563,17 @@ export interface OrgAmbassadorListItem {
  *  every row: raw application-form answers, and a presigned (private-bucket) download URL
  *  for the ID-proof document — same "generate the signed URL only on the single-item read"
  *  pattern as ApplicationResult -> getApplication's proofDownloadUrl. */
-export interface OrgAmbassadorProfile extends OrgAmbassadorListItem {
-    applicationData: Record<string, unknown>;
+/** Presigned URLs for an ambassador's private files: `*DownloadUrl` to view, `*AttachmentUrl`
+ *  to download under a "First-Last-ID-Proof.ext"-style filename. */
+export interface AmbassadorFileUrls {
     proofDownloadUrl: string;
+    proofAttachmentUrl: string;
     profileImageDownloadUrl: string | null;
+    profileImageAttachmentUrl: string | null;
+}
+
+export interface OrgAmbassadorProfile extends OrgAmbassadorListItem, AmbassadorFileUrls {
+    applicationData: Record<string, unknown>;
 }
 
 // ─── Campaign target (§5) ───────────────────────────────────────────────────

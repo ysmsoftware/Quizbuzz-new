@@ -88,7 +88,7 @@ export const ambassadorCampaignApi = {
     get<PaginatedResult<ApplicationResult>>('/org/ambassadors/applications', { params: params as Record<string, string | number | boolean | undefined> }),
 
   getApplication: (id: string) =>
-    get<ApplicationResult & { proofDownloadUrl: string; profileImageDownloadUrl: string | null }>(`/org/ambassadors/applications/${id}`),
+    get<ApplicationResult & { proofDownloadUrl: string; proofAttachmentUrl: string; profileImageDownloadUrl: string | null; profileImageAttachmentUrl: string | null }>(`/org/ambassadors/applications/${id}`),
 
   approveApplication: (id: string) =>
     post<ApplicationResult>(`/org/ambassadors/applications/${id}/approve`),
