@@ -1,4 +1,5 @@
-import { Worker as BullMQWorker } from "bullmq";
+import { Worker as BullMQWorker, DelayedError } from "bullmq";
+import { EmailScheduledError } from "../providers/email.provider";
 
 import { MessageWorkerService } from "./message.worker.service";
 import { redis } from "../config/redis";
@@ -21,10 +22,23 @@ export class MessageWorker implements Worker {
     start() {
         const worker = new BullMQWorker(
             "message-queue",
-            async (job) => {
+            async (job, token) => {
                 switch (job.name) {
                     case "send-message":
-                        await this.workerService.process(job.data.messageLogId, job.id ?? job.data.messageLogId, job.attemptsMade, job.timestamp);
+                        try {
+                            await this.workerService.process(job.data.messageLogId, job.id ?? job.data.messageLogId, job.attemptsMade, job.timestamp, job.data.slot);
+                        } catch (err) {
+                            if (err instanceof EmailScheduledError && token) {
+                                // Sleep exactly until the booked slot, then run once on it — no
+                                // polling, and FIFO is held by the slot order itself.
+                                await job.updateData({ ...job.data, slot: err.slot });
+                                await job.moveToDelayed(err.slot.at, token);
+                                throw new DelayedError();
+                            }
+                            // Any other failure: a retry must book a fresh slot (this one was used).
+                            if (job.data.slot) await job.updateData({ ...job.data, slot: undefined });
+                            throw err;
+                        }
                         break;
                     case "bulk-notify":
                         await this.workerService.processBulkNotify(job.data);

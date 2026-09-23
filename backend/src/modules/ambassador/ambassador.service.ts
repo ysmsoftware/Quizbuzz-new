@@ -12,6 +12,8 @@ import { FileStorageProvider } from "../../providers/storage.provider";
 import { getActiveAmbassadorTypeByKey, getAllActiveAmbassadorTypes, getEnabledAmbassadorTypes, AmbassadorTypeDefinition, ApplicationFieldDef } from "../../common/ambassador-types";
 import { redis } from "../../config/redis";
 import { config } from "../../config";
+import { NotificationService } from "../notification/notification.service";
+import { MessagingService } from "../messaging/messaging.service";
 import { generateotp, hashOtp, compareOtp } from "../../utils/otp";
 import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
@@ -70,6 +72,10 @@ export class AmbassadorService {
         private readonly organizationRepo: OrganizationRepository,
         private readonly emailProvider: EmailProvider,
         private readonly storageProvider: FileStorageProvider,
+        private readonly notificationService: NotificationService,
+        // Org-scoped emails go through the messaging queue (logged + capped); only the
+        // no-org OTP emails above still use emailProvider directly.
+        private readonly messagingService: MessagingService,
     ) { }
 
     // ─── Public catalog + upload ─────────────────────────────────────────────────
@@ -587,6 +593,7 @@ export class AmbassadorService {
         // means this has to reset the same row rather than create a new one.
         if (existing && existing.status === AmbassadorStatus.REJECTED) {
             const reset = await this.campaignRepo.resetEnrollmentToPending(existing.id);
+            void this._notifyOrgOfApplication(ambassador, campaign, reset.id, true);
             return this._toEnrollmentResult(reset);
         }
 
@@ -606,16 +613,48 @@ export class AmbassadorService {
         if (!enrollment) throw new ConflictError("Could not generate a unique referral code. Please try again.");
 
         const organization = await this.organizationRepo.findById(campaign.organizationId);
-        this.emailProvider
-            .send(MessageTemplate.AMBASSADOR_APPLICATION_RECEIVED, ambassador.email, {
-                name: ambassador.firstName,
-                orgName: organization?.name ?? "the organization",
+        this.messagingService
+            .enqueueMessage(campaign.organizationId, {
+                template: MessageTemplate.AMBASSADOR_APPLICATION_RECEIVED,
+                recipient: ambassador.email,
+                params: { name: ambassador.firstName, orgName: organization?.name ?? "the organization" },
             })
             .catch((err) => {
                 logger.error(`[ambassador] Failed to send application-received email: ${(err as Error).message}`);
             });
+        void this._notifyOrgOfApplication(ambassador, campaign, enrollment.id, false);
 
         return this._toEnrollmentResult(enrollment);
+    }
+
+    /** Emails the campaign org's opted-in owners/admins (NotificationService handles prefs,
+     *  feature flag and delivery errors — never throws). */
+    private async _notifyOrgOfApplication(
+        ambassador: Ambassador,
+        campaign: { id: string; name: string; organizationId: string },
+        enrollmentId: string,
+        isReapplication: boolean,
+    ): Promise<void> {
+        const [organization, type] = await Promise.all([
+            this.organizationRepo.findById(campaign.organizationId).catch(() => null),
+            getActiveAmbassadorTypeByKey(ambassador.ambassadorType).catch(() => null),
+        ]);
+        const ambassadorName = `${ambassador.firstName} ${ambassador.lastName ?? ""}`.trim();
+        await this.notificationService.notifyOrg(
+            campaign.organizationId,
+            "AMBASSADOR_APPLICATION_SUBMITTED",
+            MessageTemplate.AMBASSADOR_APPLICATION_SUBMITTED_ADMIN,
+            (recipient) => ({
+                name: recipient.firstName,
+                ambassadorName,
+                ambassadorEmail: ambassador.email,
+                ambassadorType: type?.label ?? ambassador.ambassadorType,
+                campaignName: campaign.name,
+                orgName: organization?.name ?? "your organization",
+                reviewLink: `${config.app.frontendUrl}/org/ambassadors?tab=applications&review=${enrollmentId}`,
+                isReapplication,
+            }),
+        );
     }
 
     /**

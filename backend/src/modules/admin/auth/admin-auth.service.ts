@@ -315,9 +315,21 @@ export class AdminAuthService {
 
         await redis.setex(`auth:pwd-reset:${tokenHash}`, ttlSeconds, admin.id);
 
-        // Send password reset email directly (auth-critical — not queued)
+        // Through the messaging queue under the admin's first org (logged in MessageLog; the
+        // mailbox cap serves PASSWORD_RESET from its auth reserve, so it isn't delayed by bulk
+        // sends). An admin with no org has nothing to log it under — send directly (still capped).
         const resetLink = `${config.app.frontendUrl}/reset-password?token=${resetToken}`;
-        await sendResetPasswordEmail(admin.email, admin.firstName, resetLink);
+        const memberships = await this.organizationService.listMemberships(admin.id);
+        const orgId = memberships[0]?.organizationId;
+        if (orgId) {
+            await this.messagingService.enqueueMessage(orgId, {
+                template: MessageTemplate.PASSWORD_RESET,
+                recipient: admin.email,
+                params: { name: admin.firstName, resetLink },
+            });
+        } else {
+            await sendResetPasswordEmail(admin.email, admin.firstName, resetLink);
+        }
     }
 
     async resetPassword(token: string, newPassword: string): Promise<void> {

@@ -29,6 +29,9 @@ export function AmbassadorAvatar({ firstName, lastName, profileImageUrl, size = 
         width={size}
         height={size}
         onError={() => setImgError(true)}
+        // Inline size: preflight's `img { height: auto }` otherwise wins over the height attr
+        // and a non-square upload renders as a pill instead of a circle.
+        style={{ width: size, height: size }}
         className={cn('rounded-full object-cover shrink-0 border border-border/50', className)}
       />
     );

@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { ScheduledSendBadge, isAwaitingSlot } from '@/components/features/messaging/ScheduledSendBadge';
 import { useMessageTemplates } from '@/lib/hooks/useMessageTemplates';
 import { useMessageSending } from '@/lib/hooks/useMessageSending';
 import { useRecipientFilter } from '@/lib/hooks/useRecipientFilter';
@@ -317,7 +318,7 @@ export default function MessagesPage() {
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{msg.template}</p>
                         </td>
                         <td className="px-4 py-3">
-                          {getStatusBadge(msg.status)}
+                          {isAwaitingSlot(msg) ? <ScheduledSendBadge message={msg} /> : getStatusBadge(msg.status)}
                           {msg.retryCount > 0 && (
                             <p className="text-[9px] text-muted-foreground mt-1">Retried {msg.retryCount}×</p>
                           )}

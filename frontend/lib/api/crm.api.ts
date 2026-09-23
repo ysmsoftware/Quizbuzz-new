@@ -70,6 +70,10 @@ export interface MessageRecord {
   body?: string;
   parameters?: Record<string, string>;
   status: 'QUEUED' | 'PROCESSING' | 'SENT' | 'DELIVERED' | 'FAILED';
+  /** Booked send time while QUEUED behind the mailbox's hourly cap. */
+  scheduledFor?: string | null;
+  /** Why it's waiting (e.g. hourly email limit reached). */
+  statusReason?: string | null;
   sentAt?: string;
   deliveredAt?: string;
   retryCount: number;

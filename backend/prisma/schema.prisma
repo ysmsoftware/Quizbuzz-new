@@ -326,11 +326,29 @@ model OrgMember {
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   admin        Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  notificationPreferences OrgMemberNotificationPreference[]
 
   @@unique([organizationId, adminId]) // one membership per admin per org
   @@index([organizationId])
   @@index([adminId])
   @@map("org_members")
+}
+
+// Per-member overrides of org notification defaults. Sparse: a row exists only once a member
+// flips a toggle — no row = the default from backend/src/modules/notification/notification.registry.ts.
+// `type` is a registry key (String, not enum) so adding a notification type needs no migration.
+model OrgMemberNotificationPreference {
+  id          String   @id @default(ulid())
+  orgMemberId String
+  type        String
+  email       Boolean
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orgMember OrgMember @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([orgMemberId, type])
+  @@map("org_member_notification_preferences")
 }
 
 // ADMIN  (platform users who create/manage contests)
@@ -991,6 +1009,8 @@ model MessageLog {
   sentAt         DateTime?
   deliveredAt    DateTime?
   failureReason  String?
+  scheduledFor   DateTime? // set while QUEUED behind the per-mailbox hourly email cap — the booked send slot
+  statusReason   String? // human-readable why it's waiting (e.g. hourly limit reached); cleared on SENT
   retryCount     Int            @default(0)
   attemptCount   Int            @default(1)
   createdAt      DateTime       @default(now())

@@ -9,12 +9,14 @@ import { useOrganization } from '@/lib/hooks/useOrganization';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Globe, Palette, Loader2, Building2, CreditCard, Users } from 'lucide-react';
+import { ArrowLeft, Globe, Palette, Loader2, Building2, CreditCard, Users, Bell } from 'lucide-react';
 import { PlanBillingTabContent } from '@/components/features/organization/PlanBillingTabContent';
 import { MembersTabContent } from '@/components/features/organization/MembersTabContent';
 import { GeneralSettingsTabContent } from '@/components/features/organization/GeneralSettingsTabContent';
 import { ProfileDetailsTabContent } from '@/components/features/organization/ProfileDetailsTabContent';
 import { AppearanceSettingsTabContent } from '@/components/features/organization/AppearanceSettingsTabContent';
+import { NotificationsTabContent } from '@/components/features/organization/NotificationsTabContent';
+import { useNotificationPreferences } from '@/lib/hooks/useNotificationPreferences';
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -25,6 +27,11 @@ export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [activeTab, setActiveTab] = useState('general');
+    // Tab only exists when the backend returns something this admin can configure (role +
+    // org feature flags are applied server-side) — e.g. hidden for orgs without the ambassador program.
+    const { preferences: notificationPrefs, isLoading: notificationPrefsLoading } = useNotificationPreferences(orgId);
+    const hasNotifications = notificationPrefs.length > 0;
+    const currentTab = activeTab === 'notifications' && !notificationPrefsLoading && !hasNotifications ? 'general' : activeTab;
 
     const [formData, setFormData] = useState({
         orgName: '',
@@ -216,7 +223,7 @@ export default function SettingsPage() {
             </header>
 
             <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:flex-row gap-8 items-start">
+                <Tabs value={currentTab} onValueChange={setActiveTab} className="flex flex-col md:flex-row gap-8 items-start">
                     <TabsList className="flex flex-col w-full md:w-64 h-auto p-2 bg-card/60 rounded-xl border border-border/50 gap-1 shrink-0 sticky top-20">
                         <TabsTrigger
                             value="general"
@@ -253,6 +260,15 @@ export default function SettingsPage() {
                             <Palette className="h-4 w-4 shrink-0" />
                             <span>Appearance</span>
                         </TabsTrigger>
+                        {hasNotifications && (
+                            <TabsTrigger
+                                value="notifications"
+                                className="w-full justify-start gap-3 px-3.5 py-2.5 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm cursor-pointer"
+                            >
+                                <Bell className="h-4 w-4 shrink-0" />
+                                <span>Notifications</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
 
                     <div className="flex-1 w-full min-w-0">
@@ -290,6 +306,12 @@ export default function SettingsPage() {
                         <TabsContent value="appearance" className="mt-0 space-y-6 focus-visible:outline-none">
                             <AppearanceSettingsTabContent />
                         </TabsContent>
+
+                        {hasNotifications && (
+                            <TabsContent value="notifications" className="mt-0 space-y-6 focus-visible:outline-none">
+                                <NotificationsTabContent orgId={orgId} />
+                            </TabsContent>
+                        )}
                     </div>
                 </Tabs>
             </main>

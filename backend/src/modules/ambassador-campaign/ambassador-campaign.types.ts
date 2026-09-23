@@ -566,6 +566,7 @@ export interface OrgAmbassadorListItem {
 export interface OrgAmbassadorProfile extends OrgAmbassadorListItem {
     applicationData: Record<string, unknown>;
     proofDownloadUrl: string;
+    profileImageDownloadUrl: string | null;
 }
 
 // ─── Campaign target (§5) ───────────────────────────────────────────────────

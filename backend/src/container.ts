@@ -60,6 +60,9 @@ import { AmbassadorController } from './modules/ambassador/ambassador.controller
 import { AmbassadorCampaignRepository } from './modules/ambassador-campaign/ambassador-campaign.repository.js';
 import { AmbassadorCampaignService } from './modules/ambassador-campaign/ambassador-campaign.service.js';
 import { AmbassadorCampaignController } from './modules/ambassador-campaign/ambassador-campaign.controller.js';
+import { NotificationRepository } from './modules/notification/notification.repository.js';
+import { NotificationService } from './modules/notification/notification.service.js';
+import { NotificationController } from './modules/notification/notification.controller.js';
 import { getStorageProvider } from './providers/storage.provider.js';
 import { DurabilityRepository } from './modules/durability/durability.repository.js';
 import { DurabilityService } from './modules/durability/durability.service.js';
@@ -105,6 +108,7 @@ export const dashboardRepository = new DashboardRepository();
 export const ambassadorRepository = new AmbassadorRepository();
 export const ambassadorCampaignRepository = new AmbassadorCampaignRepository();
 export const durabilityRepository = new DurabilityRepository();
+export const notificationRepository = new NotificationRepository();
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 export const messagingService = new MessagingService(messagingRepository, participantRepository);
@@ -131,8 +135,9 @@ export const analyticsService = new AnalyticsService(analyticsRepository, quizSe
 export const durabilityService = new DurabilityService(durabilityRepository, quizSession);
 export const onboardingService = new OnboardingService(onboardingRepository);
 export const dashboardService = new DashboardService(dashboardRepository);
-export const ambassadorService = new AmbassadorService(ambassadorRepository, ambassadorCampaignRepository, organizationRepository, emailProvider, storageProvider);
-export const ambassadorCampaignService = new AmbassadorCampaignService(ambassadorCampaignRepository, ambassadorRepository, organizationRepository, emailProvider, storageProvider);
+export const notificationService = new NotificationService(notificationRepository, organizationRepository, messagingService);
+export const ambassadorService = new AmbassadorService(ambassadorRepository, ambassadorCampaignRepository, organizationRepository, emailProvider, storageProvider, notificationService, messagingService);
+export const ambassadorCampaignService = new AmbassadorCampaignService(ambassadorCampaignRepository, ambassadorRepository, organizationRepository, messagingService, storageProvider);
 export const proctoringService = new ProctoringService(prisma, quizSession);
 export const quizService = new QuizService(quizSession, proctoringService, submissionService, quizSchedulerService, durabilityService);
 export const quizAuthService = new QuizAuthService(prisma, quizSession, messagingService);
@@ -198,3 +203,4 @@ export const payoutController = new PayoutController(payoutService);
 export const dashboardController = new DashboardController(dashboardService);
 export const ambassadorController = new AmbassadorController(ambassadorService);
 export const ambassadorCampaignController = new AmbassadorCampaignController(ambassadorCampaignService);
+export const notificationController = new NotificationController(notificationService);

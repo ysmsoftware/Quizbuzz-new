@@ -182,6 +182,12 @@ const envSchema = z.object({
     SMTP_PORT: z.coerce.number(),
     SMTP_USER: z.string(),
     SMTP_PASS: z.string(),
+    // Per-mailbox rolling-hour send cap (provider limit) — see providers/email-rate-limiter.ts
+    SMTP_HOURLY_LIMIT: z.coerce.number().int().positive().default(300),
+    // Of that cap, slots held back for auth emails (OTP, password reset, invites)
+    EMAIL_CRITICAL_RESERVE: z.coerce.number().int().nonnegative().default(50),
+    // Extra spacing past the 1h window when booking a future slot, to absorb worker lag
+    EMAIL_RATE_SAFETY_MARGIN_MS: z.coerce.number().int().nonnegative().default(60_000),
     EMAIL_FROM: z.string().email(),
 
     AISENSY_API_URL: z.string(),
@@ -511,6 +517,9 @@ export const config = {
             port: env.SMTP_PORT,
             user: env.SMTP_USER,
             pass: env.SMTP_PASS,
+            hourlyLimit: env.SMTP_HOURLY_LIMIT,
+            criticalReserve: env.EMAIL_CRITICAL_RESERVE,
+            safetyMarginMs: env.EMAIL_RATE_SAFETY_MARGIN_MS,
             from: env.EMAIL_FROM,
         },
         whatsapp: {

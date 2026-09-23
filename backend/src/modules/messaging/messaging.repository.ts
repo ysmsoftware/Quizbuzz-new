@@ -154,6 +154,15 @@ export class MessagingRepository {
      * State can only move forward: QUEUED -> PROCESSING -> SENT/FAILED.
      * Once SENT or DELIVERED, it cannot go back to PROCESSING or QUEUED.
      */
+    /** Back to QUEUED with a booked send time — the one sanctioned PROCESSING → QUEUED move,
+     *  used when the per-mailbox hourly cap defers an email (see providers/email-rate-limiter.ts). */
+    async markScheduled(id: string, scheduledFor: Date, statusReason: string) {
+        await prisma.messageLog.updateMany({
+            where: { id, status: { in: ["QUEUED", "PROCESSING"] } },
+            data: { status: "QUEUED", scheduledFor, statusReason, updatedAt: new Date() },
+        });
+    }
+
     async updateStatus(id: string, toStatus: MessageLog["status"], additionalData: any = {}) {
         const message = await prisma.messageLog.findFirst({
             where: { id },

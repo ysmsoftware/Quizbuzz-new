@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { ScheduledSendBadge, isAwaitingSlot } from '@/components/features/messaging/ScheduledSendBadge';
 import {
     Table,
     TableBody,
@@ -332,7 +333,7 @@ export default function MessagingLogsPage() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="space-y-1">
-                                                {getStatusBadge(msg.status)}
+                                                {isAwaitingSlot(msg) ? <ScheduledSendBadge message={msg} /> : getStatusBadge(msg.status)}
                                                 {msg.retryCount > 0 && (
                                                     <p className="text-[9px] text-muted-foreground font-bold">Retried {msg.retryCount} times</p>
                                                 )}
@@ -536,6 +537,12 @@ export default function MessagingLogsPage() {
                                 <p className="text-sm"><strong>Recipient:</strong> {messageDetailData.data.recipient}</p>
                                 <p className="text-sm"><strong>Channel:</strong> {messageDetailData.data.channel}</p>
                                 <p className="text-sm"><strong>Status:</strong> {messageDetailData.data.status}</p>
+                                {messageDetailData.data.statusReason && (
+                                    <p className="text-sm"><strong>Waiting:</strong> {messageDetailData.data.statusReason}</p>
+                                )}
+                                {messageDetailData.data.scheduledFor && (
+                                    <p className="text-sm"><strong>Scheduled for:</strong> {new Date(messageDetailData.data.scheduledFor).toLocaleString()}</p>
+                                )}
                                 <p className="text-sm"><strong>Template:</strong> {messageDetailData.data.template}</p>
                                 <div className="pt-2">
                                     <p className="text-sm font-semibold">Body</p>

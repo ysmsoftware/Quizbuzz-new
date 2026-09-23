@@ -5,7 +5,7 @@
  * Base path: /org
  */
 
-import { del, get, patch, post } from './apiClient';
+import { del, get, patch, post, put } from './apiClient';
 import type { ApiResponse } from './apiClient';
 import type { TeamRole } from '../types';
 
@@ -140,4 +140,28 @@ export async function acceptInvite(body: {
   password?: string;
 }): Promise<ApiResponse<any>> {
   return post('/org/invite/accept', body);
+}
+
+export interface NotificationPreference {
+  type: string;
+  category: string;
+  label: string;
+  description: string;
+  email: boolean;
+}
+
+/**
+ * GET /org/:orgId/notification-preferences — the requesting admin's own toggles. The backend
+ * already drops types their role or the org's feature flags don't allow, so an empty list
+ * means "nothing to configure" (Settings hides the tab).
+ */
+export async function getNotificationPreferences(orgId: string): Promise<ApiResponse<NotificationPreference[]>> {
+  return get(`/org/${orgId}/notification-preferences`);
+}
+
+export async function updateNotificationPreferences(
+  orgId: string,
+  preferences: { type: string; email: boolean }[],
+): Promise<ApiResponse<NotificationPreference[]>> {
+  return put(`/org/${orgId}/notification-preferences`, { preferences });
 }

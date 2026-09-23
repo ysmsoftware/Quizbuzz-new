@@ -356,7 +356,7 @@ function AmbassadorKitDetailModal({
                     fill
                     sizes="(max-width: 640px) 100vw, 112px"
                     onError={onImageError}
-                    className="object-cover border border-border/50 rounded-lg shadow-sm"
+                    className="object-contain border border-border/50 rounded-lg shadow-sm"
                   />
                 </div>
                 <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">

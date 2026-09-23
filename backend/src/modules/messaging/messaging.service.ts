@@ -249,6 +249,10 @@ export class MessagingService {
         return this.messagingRepo.updateStatus(id, status, additionalData);
     }
 
+    async markScheduled(id: string, scheduledFor: Date, statusReason: string) {
+        return this.messagingRepo.markScheduled(id, scheduledFor, statusReason);
+    }
+
     async incrementAttempt(id: string) {
         const message = await this.messagingRepo.findById(id);
         if (!message) {

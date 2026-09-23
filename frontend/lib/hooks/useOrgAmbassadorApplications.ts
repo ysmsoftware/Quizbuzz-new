@@ -16,6 +16,7 @@ export function useOrgAmbassadorApplications(filters: ApplicationsFilters = {}) 
     mutationFn: (id: string) => ambassadorCampaignApi.approveApplication(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-ambassador-applications'] });
+      queryClient.invalidateQueries({ queryKey: ['org-ambassador-application'] });
     },
   });
 
@@ -24,6 +25,7 @@ export function useOrgAmbassadorApplications(filters: ApplicationsFilters = {}) 
       ambassadorCampaignApi.rejectApplication(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-ambassador-applications'] });
+      queryClient.invalidateQueries({ queryKey: ['org-ambassador-application'] });
     },
   });
 

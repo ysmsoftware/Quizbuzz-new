@@ -1,13 +1,24 @@
 'use client';
 
 import Image from 'next/image';
+import { Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { useOrgAmbassadorApplication } from '@/lib/hooks/useOrgAmbassadorApplications';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
+import { AmbassadorAvatar } from './AmbassadorAvatar';
 
-export function ProofReviewSheet({ applicationId, onClose }: { applicationId: string | null; onClose: () => void }) {
+interface ProofReviewSheetProps {
+  applicationId: string | null;
+  onClose: () => void;
+  /** When provided and the application is PENDING, the footer shows Approve / Reject. */
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
+  approveLoading?: boolean;
+}
+
+export function ProofReviewSheet({ applicationId, onClose, onApprove, onReject, approveLoading }: ProofReviewSheetProps) {
   const { application, isLoading } = useOrgAmbassadorApplication(applicationId ?? '');
   const { types } = usePlatformAmbassadorTypes();
   const ambassadorType = types.find((t) => t.key === application?.ambassador.ambassadorType);
@@ -23,9 +34,17 @@ export function ProofReviewSheet({ applicationId, onClose }: { applicationId: st
             <Skeleton className="h-64 w-full rounded-lg" />
           ) : (
             <>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Campaign</p>
-                <p className="text-sm font-medium">{application.campaignName}</p>
+              <div className="flex items-center gap-3">
+                <AmbassadorAvatar
+                  firstName={application.ambassador.firstName}
+                  lastName={application.ambassador.lastName}
+                  profileImageUrl={application.profileImageDownloadUrl}
+                  size={56}
+                />
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Campaign</p>
+                  <p className="text-sm font-medium">{application.campaignName}</p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -90,6 +109,16 @@ export function ProofReviewSheet({ applicationId, onClose }: { applicationId: st
           )}
         </div>
         <SheetFooter>
+          {application?.status === 'PENDING' && onApprove && onReject && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => onReject(application.id)} className="text-destructive">
+                <X className="h-4 w-4" /> Reject
+              </Button>
+              <Button onClick={() => onApprove(application.id)} disabled={approveLoading}>
+                {approveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve
+              </Button>
+            </div>
+          )}
           <Button variant="outline" onClick={onClose} className="w-full">
             Close
           </Button>

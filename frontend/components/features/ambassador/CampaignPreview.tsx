@@ -305,7 +305,7 @@ export function CampaignPreview({
                         fill
                         sizes="112px"
                         onError={onImageError}
-                        className="object-cover border border-border/50 rounded-xl"
+                        className="object-contain border border-border/50 rounded-xl"
                       />
                     </div>
                     <div className="min-w-0">

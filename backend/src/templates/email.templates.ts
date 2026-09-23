@@ -392,6 +392,26 @@ export const EmailTemplates: {
             }),
         }),
     },
+    [MessageTemplate.AMBASSADOR_APPLICATION_SUBMITTED_ADMIN]: {
+        build: (params) => ({
+            subject: `New ambassador application — ${params.campaignName}`,
+            html: renderEmailLayout({
+                preheader: `${params.ambassadorName} applied to ${params.campaignName}`,
+                heading: params.isReapplication ? "Ambassador reapplication" : "New ambassador application",
+                bodyHtml: `
+                    <p style="${P}">Hi ${params.name},</p>
+                    <p style="${P}"><strong>${params.ambassadorName}</strong> has ${params.isReapplication ? "reapplied" : "applied"} to be an ambassador for <strong>${params.campaignName}</strong> (${params.orgName}).</p>
+                    ${calloutBox(`<strong>Email:</strong> ${params.ambassadorEmail}<br/><strong>Ambassador type:</strong> ${params.ambassadorType}`, "info")}
+                    ${params.isReapplication ? `<p style="${P}">This applicant was previously rejected for this campaign and has applied again.</p>` : ""}
+                    <p style="${P}">Review their profile and ID proof, then approve or reject the application.</p>
+                    ${emailButton("Review application", params.reviewLink)}
+                    ${linkFallback(params.reviewLink)}
+                    <p style="${SMALL}">You can turn these emails off under Settings → Notifications.</p>
+                    ${signOff("QuizBuzz")}
+                `,
+            }),
+        }),
+    },
     [MessageTemplate.CUSTOM]: {
         build: (params) => ({
             subject: params.subject || `Notification from QuizBuzz`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, X, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,13 @@ export function ApplicationsQueue() {
 
   const { applications, pagination, isLoading, approve, approveLoading, reject, rejectLoading } =
     useOrgAmbassadorApplications({ status, page, limit: 20 });
+
+  // Deep link from the "new ambassador application" email: ?review=<enrollmentId> opens that
+  // application's review sheet. window.location (not useSearchParams) — same as settings/page.tsx.
+  useEffect(() => {
+    const review = new URLSearchParams(window.location.search).get('review');
+    if (review) setReviewId(review);
+  }, []);
 
   const handleApprove = async (id: string) => {
     try {
@@ -152,7 +159,20 @@ export function ApplicationsQueue() {
         />
       )}
 
-      <ProofReviewSheet applicationId={reviewId} onClose={() => setReviewId(null)} />
+      <ProofReviewSheet
+        applicationId={reviewId}
+        onClose={() => setReviewId(null)}
+        approveLoading={approveLoading}
+        onApprove={async (id) => {
+          await handleApprove(id);
+          setReviewId(null);
+        }}
+        onReject={(id) => {
+          setReviewId(null);
+          setRejectId(id);
+          setRejectError('');
+        }}
+      />
 
       <Dialog
         open={!!rejectId}

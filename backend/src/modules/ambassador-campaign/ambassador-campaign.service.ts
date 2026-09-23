@@ -7,7 +7,7 @@ import {
 } from "./ambassador-campaign.repository";
 import { AmbassadorRepository } from "../ambassador/ambassador.repository";
 import { OrganizationRepository } from "../organization/organization.repository";
-import { EmailProvider } from "../../providers/email.provider";
+import { MessagingService } from "../messaging/messaging.service";
 import { FileStorageProvider } from "../../providers/storage.provider";
 import { MessageTemplate } from "../../types/message-template.enum";
 import { config } from "../../config";
@@ -65,7 +65,7 @@ export class AmbassadorCampaignService {
         private readonly campaignRepo: AmbassadorCampaignRepository,
         private readonly ambassadorRepo: AmbassadorRepository,
         private readonly organizationRepo: OrganizationRepository,
-        private readonly emailProvider: EmailProvider,
+        private readonly messagingService: MessagingService,
         private readonly storageProvider: FileStorageProvider,
     ) { }
 
@@ -125,7 +125,10 @@ export class AmbassadorCampaignService {
         };
     }
 
-    async getApplication(organizationId: string, id: string): Promise<ApplicationResult & { proofDownloadUrl: string }> {
+    async getApplication(
+        organizationId: string,
+        id: string,
+    ): Promise<ApplicationResult & { proofDownloadUrl: string; profileImageDownloadUrl: string | null }> {
         const enrollment = await this.campaignRepo.findApplicationById(id, organizationId);
         if (!enrollment) throw new NotFoundError("Application not found.");
 
@@ -133,8 +136,9 @@ export class AmbassadorCampaignService {
             storageKey: enrollment.ambassador.proofStorageKey,
             expiresInSeconds: 3600,
         });
+        const profileImageDownloadUrl = await this._presignProfileImage(enrollment.ambassador.profileImageStorageKey);
 
-        return { ...this._toApplicationResult(enrollment), proofDownloadUrl: url };
+        return { ...this._toApplicationResult(enrollment), proofDownloadUrl: url, profileImageDownloadUrl };
     }
 
     async approveApplication(organizationId: string, id: string, reviewedById: string): Promise<ApplicationResult> {
@@ -148,11 +152,15 @@ export class AmbassadorCampaignService {
         });
 
         const organization = await this.organizationRepo.findById(organizationId);
-        this.emailProvider
-            .send(MessageTemplate.AMBASSADOR_APPLICATION_APPROVED, updated.ambassador.email, {
-                name: updated.ambassador.firstName,
-                orgName: organization?.name ?? "the organization",
-                link: `${config.app.frontendUrl}/ambassador/dashboard`,
+        this.messagingService
+            .enqueueMessage(organizationId, {
+                template: MessageTemplate.AMBASSADOR_APPLICATION_APPROVED,
+                recipient: updated.ambassador.email,
+                params: {
+                    name: updated.ambassador.firstName,
+                    orgName: organization?.name ?? "the organization",
+                    link: `${config.app.frontendUrl}/ambassador/dashboard`,
+                },
             })
             .catch((err) => logger.error(`[ambassador-campaign] Failed to send approval email: ${(err as Error).message}`));
 
@@ -170,11 +178,15 @@ export class AmbassadorCampaignService {
         });
 
         const organization = await this.organizationRepo.findById(organizationId);
-        this.emailProvider
-            .send(MessageTemplate.AMBASSADOR_APPLICATION_REJECTED, updated.ambassador.email, {
-                name: updated.ambassador.firstName,
-                orgName: organization?.name ?? "the organization",
-                reason,
+        this.messagingService
+            .enqueueMessage(organizationId, {
+                template: MessageTemplate.AMBASSADOR_APPLICATION_REJECTED,
+                recipient: updated.ambassador.email,
+                params: {
+                    name: updated.ambassador.firstName,
+                    orgName: organization?.name ?? "the organization",
+                    reason,
+                },
             })
             .catch((err) => logger.error(`[ambassador-campaign] Failed to send rejection email: ${(err as Error).message}`));
 
@@ -225,8 +237,16 @@ export class AmbassadorCampaignService {
             storageKey: anyEnrollment.ambassador.proofStorageKey,
             expiresInSeconds: 3600,
         });
+        const profileImageDownloadUrl = await this._presignProfileImage(anyEnrollment.ambassador.profileImageStorageKey);
 
-        return { ...row, applicationData, proofDownloadUrl: url };
+        return { ...row, applicationData, proofDownloadUrl: url, profileImageDownloadUrl };
+    }
+
+    /** ambassador-profile/ is a private prefix (see AmbassadorService._toResult) — presign like the proof. */
+    private async _presignProfileImage(storageKey: string | null): Promise<string | null> {
+        if (!storageKey) return null;
+        const { url } = await this.storageProvider.getPresignedGetUrl({ storageKey, expiresInSeconds: 3600 });
+        return url;
     }
 
     private async _buildOrgAmbassadorRows(enrollments: EnrollmentWithAmbassadorAndCampaignSummary[]): Promise<OrgAmbassadorListItem[]> {

@@ -252,7 +252,7 @@ export default function PublicRegistrationPage() {
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
                 {/* Contest Banner Image */}
                 {(contest as any).bannerImage && (
-                    <div className="relative mb-10 w-full overflow-hidden rounded-2xl border border-border/30 shadow-md aspect-[3/1] max-h-[300px]">
+                    <div className="relative mb-10 w-full overflow-hidden rounded-2xl border border-border/30 shadow-md aspect-[3/1]">
                         <Image
                             src={(contest as any).bannerImage}
                             alt={(contest as any).title}

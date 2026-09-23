@@ -9,6 +9,7 @@ import { useOrgAmbassador } from '@/lib/hooks/useOrgAmbassadors';
 import { usePlatformAmbassadorTypes } from '@/lib/hooks/useAmbassadorTypes';
 import { CAMPAIGN_STATUS_BADGE_VARIANT } from './campaign-status';
 import { Rupees } from './Rupees';
+import { AmbassadorAvatar } from './AmbassadorAvatar';
 
 /**
  * Org-admin's read-only view of one ambassador's full profile — opened from a row in
@@ -33,18 +34,26 @@ export function AmbassadorProfileSheet({ ambassadorId, onClose }: { ambassadorId
             <Skeleton className="h-64 w-full rounded-lg" />
           ) : (
             <>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-lg font-semibold">
-                    {ambassador.firstName} {ambassador.lastName}
+              <div className="flex items-center gap-3">
+                <AmbassadorAvatar
+                  firstName={ambassador.firstName}
+                  lastName={ambassador.lastName}
+                  profileImageUrl={ambassador.profileImageDownloadUrl}
+                  size={64}
+                />
+                <div className="space-y-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-lg font-semibold">
+                      {ambassador.firstName} {ambassador.lastName}
+                    </p>
+                    <Badge variant="secondary" className="font-normal">
+                      {typeLabel}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Joined the platform {new Date(ambassador.joinedPlatformAt).toLocaleDateString()}
                   </p>
-                  <Badge variant="secondary" className="font-normal">
-                    {typeLabel}
-                  </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Joined the platform {new Date(ambassador.joinedPlatformAt).toLocaleDateString()}
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">

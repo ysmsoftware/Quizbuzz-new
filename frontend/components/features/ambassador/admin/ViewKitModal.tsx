@@ -78,7 +78,7 @@ export function ViewKitModal({ kit, open, onOpenChange, contestTitle, onEdit }: 
                     fill
                     sizes="80px"
                     onError={onImageError}
-                    className="object-cover border border-border/50 rounded-lg"
+                    className="object-contain border border-border/50 rounded-lg"
                   />
                 </div>
                 <div className="flex-1 min-w-0 space-y-2">

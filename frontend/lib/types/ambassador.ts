@@ -378,6 +378,7 @@ export interface OrgAmbassadorListItem {
 export interface OrgAmbassadorProfile extends OrgAmbassadorListItem {
   applicationData: Record<string, unknown>;
   proofDownloadUrl: string;
+  profileImageDownloadUrl: string | null;
 }
 
 // ── Org-admin: campaign management (/api/v1/org/campaigns) ─────────────────────────────

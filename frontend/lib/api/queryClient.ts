@@ -41,6 +41,7 @@ export const queryKeys = {
     detail: (orgId: string) => ['org', orgId],
     members: (orgId: string) => ['org', orgId, 'members'],
     usage: (orgId: string) => ['org', orgId, 'usage'],
+    notificationPreferences: (orgId: string) => ['org', orgId, 'notification-preferences'],
   },
 
   dashboard: {

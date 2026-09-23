@@ -129,6 +129,16 @@ export type TemplateParamsMap = {
         orgName: string,
         reason: string,
     },
+    [MessageTemplate.AMBASSADOR_APPLICATION_SUBMITTED_ADMIN]: {
+        name: string,
+        ambassadorName: string,
+        ambassadorEmail: string,
+        ambassadorType: string,
+        campaignName: string,
+        orgName: string,
+        reviewLink: string,
+        isReapplication: boolean,
+    },
 
     [MessageTemplate.CUSTOM]: {
         name: string,

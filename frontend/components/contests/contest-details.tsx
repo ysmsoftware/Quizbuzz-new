@@ -167,14 +167,15 @@ export function ContestDetails({
 
   return (
     <div className={`bg-secondary/10${showCta ? " pb-24" : ""}`}>
-      {/* Hero. Banner (when present) carries the status badge + title as an
-          overlay; below it the content splits asymmetrically at lg — story
+      {/* Hero. Banner (when present) is shown uncropped at its native 3:1
+          (1200×400) with nothing overlaid, since banner art carries its own
+          text; below it the content splits asymmetrically at lg — story
           (org/description/CTA) on the left, the quick-facts panel as a
           distinct "data" column on the right — instead of a plain stacked
           grid-of-4 stat boxes. See public-contest-page redesign. */}
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
-        {contest.bannerImage ? (
-          <div className="relative overflow-hidden rounded-2xl border border-border/30 shadow-sm h-[180px] sm:h-[240px] lg:h-[320px] w-full">
+        {contest.bannerImage && (
+          <div className="relative mb-4 overflow-hidden rounded-2xl border border-border/30 shadow-sm aspect-[3/1] w-full">
             <Image
               src={contest.bannerImage}
               alt={contest.title}
@@ -184,53 +185,25 @@ export function ContestDetails({
               onError={onImageError}
               className="object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            <Reveal
-              mode="mount"
-              className="absolute left-4 top-4 flex flex-wrap items-center gap-2 sm:left-6 sm:top-5"
-            >
-              <Badge
-                variant="outline"
-                className={`${banner.className} border-transparent bg-background/85 backdrop-blur-sm`}
-              >
-                {phase === "live" && <PulseDot className="mr-1.5" />}
-                {banner.label}
-              </Badge>
-            </Reveal>
-            <Reveal
-              mode="mount"
-              delay={0.08}
-              className="absolute inset-x-4 bottom-4 sm:inset-x-6 sm:bottom-5"
-            >
-              <h1 className="text-3xl font-bold tracking-tighter leading-[0.95] text-white text-balance drop-shadow-sm sm:text-4xl lg:text-6xl">
-                {contest.title}
-              </h1>
-            </Reveal>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2 pt-2">
-            {phase === "live" && <PulseDot className="text-success" />}
-            <Badge variant="outline" className={banner.className}>
-              {banner.label}
-            </Badge>
           </div>
         )}
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          {phase === "live" && <PulseDot className="text-success" />}
+          <Badge variant="outline" className={banner.className}>
+            {banner.label}
+          </Badge>
+        </div>
 
         <div className="mt-6 lg:grid lg:grid-cols-[1.6fr_1fr] lg:items-start lg:gap-10">
           {/* Left — story */}
           <Reveal mode="mount" delay={0.05}>
-            {!contest.bannerImage && (
-              <h1 className="text-3xl font-bold tracking-tighter leading-[0.95] sm:text-4xl lg:text-6xl text-balance">
-                {contest.title}
-              </h1>
-            )}
+            <h1 className="text-3xl font-bold tracking-tighter leading-[0.95] sm:text-4xl lg:text-6xl text-balance">
+              {contest.title}
+            </h1>
 
             {contest.organization?.name && (
               <p
-                className={cn(
-                  "flex items-center gap-1.5 text-sm font-medium text-muted-foreground",
-                  !contest.bannerImage && "mt-3",
-                )}
+                className="mt-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground"
               >
                 <span className="grid size-5 place-items-center rounded-md bg-gradient-to-br from-accent to-accent/70 text-[10px] font-bold text-accent-foreground">
                   {contest.organization.name.charAt(0)}

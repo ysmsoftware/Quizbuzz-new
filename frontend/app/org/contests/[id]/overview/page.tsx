@@ -336,7 +336,7 @@ export default function ContestOverviewPage() {
                         <Card className="border-border/50 overflow-hidden">
                             <CardContent className="p-6 space-y-6">
                                 <div className="flex flex-col md:flex-row gap-6">
-                                    <div className="relative group shrink-0 w-full md:w-[200px] aspect-video" onClick={handleBannerClick}>
+                                    <div className="relative group shrink-0 w-full md:w-[240px] aspect-[3/1]" onClick={handleBannerClick}>
                                         <input
                                             type="file"
                                             ref={fileInputRef}

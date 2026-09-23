@@ -2,6 +2,8 @@ import { MessageTemplate } from "../types/message-template.enum";
 import logger from "../config/logger";
 import { MessagingService } from "../modules/messaging/messaging.service";
 import { MessageProvider } from "../providers/message.provider";
+import { EmailProvider, EmailScheduledError } from "../providers/email.provider";
+import type { SlotBooking } from "../providers/email-rate-limiter";
 import { TemplateParamsMap } from "../types/message-template";
 import { prisma } from "../config/db";
 import { config } from "../config";
@@ -14,7 +16,12 @@ export class MessageWorkerService {
 
     constructor(private messageService: MessagingService) { }
 
-    async process(messageLogId: string, jobId: string, attemptsMade: number, enqueuedAt?: number) {
+    /**
+     * Throws EmailScheduledError (after marking the log QUEUED + scheduledFor/statusReason) when
+     * the mailbox cap deferred this email — the caller moves the job to that booked slot. `slot`
+     * is the slot a previous run booked; the email is sent on it without booking again.
+     */
+    async process(messageLogId: string, jobId: string, attemptsMade: number, enqueuedAt?: number, slot?: SlotBooking) {
         const log = await this.messageService.getMessageById(messageLogId)
 
         if (!log) {
@@ -65,16 +72,22 @@ export class MessageWorkerService {
                 params: log.params,
             });
 
+            const template = log.template as MessageTemplate;
+            const params = log.params as unknown as TemplateParamsMap[MessageTemplate];
+            // A cap deferral is returned (not thrown) through the checkpoint so it isn't recorded
+            // as a send_provider ERROR, then rethrown for the catch below.
             const response = await withCheckpoint(checkpointMeta, "send_provider", () =>
-                provider.send(
-                    log.template as MessageTemplate,
-                    destination,
-                    log.params as unknown as TemplateParamsMap[MessageTemplate],
-                )
+                provider instanceof EmailProvider
+                    ? provider.send(template, destination, params, { slot, allowSchedule: true })
+                        .catch((e) => { if (e instanceof EmailScheduledError) return e; throw e; })
+                    : provider.send(template, destination, params)
             );
+            if (response instanceof EmailScheduledError) throw response;
 
             await withCheckpoint(checkpointMeta, "mark_sent", () =>
                 this.messageService.updateMessageStatus(log.id, "SENT", {
+                    scheduledFor: null,
+                    statusReason: null,
                     providerMsgId: (response as any)?.messageId ?? null,
                     sentAt: new Date(),
                     metadata: response ?? null,
@@ -94,6 +107,13 @@ export class MessageWorkerService {
             });
 
         } catch (error) {
+            // Not a failure: the hourly cap booked a later slot. No attempt spent, not FAILED.
+            if (error instanceof EmailScheduledError) {
+                await this.messageService.markScheduled(log.id, new Date(error.slot.at), error.reason);
+                logger.info(`[message-worker] Message ${log.id} scheduled for ${new Date(error.slot.at).toISOString()} (mailbox cap)`);
+                throw error;
+            }
+
             const errMessage = (error as Error).message;
 
             logger.error(`[message-worker] Failed to send message ${log.id}: ${errMessage}`);

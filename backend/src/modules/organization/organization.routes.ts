@@ -30,6 +30,14 @@ organizationRouter.post("/:orgId/members/invite",          authenticatedOrgMiddl
 organizationRouter.patch("/:orgId/members/:memberId/role", authenticatedOrgMiddleware, (req, res, next) => ctrl().updateMemberRole(req, res, next));
 organizationRouter.delete("/:orgId/members/:memberId",     authenticatedOrgMiddleware, (req, res, next) => ctrl().removeMember(req, res, next));
 
+// Notification preferences — the requesting admin's own, per-org (see modules/notification)
+function notificationCtrl() {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("../../container").notificationController;
+}
+organizationRouter.get("/:orgId/notification-preferences",  authenticatedOrgMiddleware, (req, res, next) => notificationCtrl().getPreferences(req, res, next));
+organizationRouter.put("/:orgId/notification-preferences",  authenticatedOrgMiddleware, (req, res, next) => notificationCtrl().updatePreferences(req, res, next));
+
 // Public
 organizationRouter.get("/invite/details", (req, res, next) => ctrl().getInviteDetails(req, res, next));
 organizationRouter.post("/invite/accept", (req, res, next) => ctrl().acceptInvite(req, res, next));
