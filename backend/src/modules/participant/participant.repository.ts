@@ -90,12 +90,14 @@ export class ParticipantRepository implements IParticipantRepository {
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: "asc" },
+                orderBy: { createdAt: "desc" }, // newest registration first
                 include: {
                     contact: {
                         select: { firstName: true, lastName: true, email: true, phone: true, college: true, department: true, city: true, state: true },
                     },
                     payment: { select: { id: true, status: true, amount: true, razorpayPaymentId: true, paidAt: true, provider: true } },
+                    // Set when they registered through an ambassador's referral link/code
+                    referredByEnrollment: { select: { ambassador: { select: { firstName: true, lastName: true } } } },
                 },
                 // customFields is a scalar column on Participant, included by default
             }),

@@ -157,7 +157,9 @@ export default function AmbassadorCampaignDetailPage() {
 
   const { campaign } = stats;
   const frontendUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const referralLink = `${frontendUrl}/contests/${campaign.contestSlug}/register?ref=${campaign.referralCode}`;
+  // Contest details page (not /register) so visitors can read about it first; its Register
+  // buttons carry ?ref= forward.
+  const referralLink = `${frontendUrl}/contests/${campaign.contestSlug}?ref=${campaign.referralCode}`;
   // {referralLink}/{ambassadorName}/{contestName} are the tokens an admin can drop into a
   // template (see ShareTemplatesEditor.tsx) — resolved here to this ambassador's real values
   // so every message on this page shows exactly what gets sent, not raw placeholder text.

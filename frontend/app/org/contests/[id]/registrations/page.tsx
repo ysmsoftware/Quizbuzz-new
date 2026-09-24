@@ -359,7 +359,7 @@ export default function RegistrationsTabPage() {
                     />
                 </div>
 
-                <div className="flex items-center gap-3 w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-9 whitespace-nowrap">
@@ -703,9 +703,9 @@ export default function RegistrationsTabPage() {
                         initial={{ y: 100 }}
                         animate={{ y: 0 }}
                         exit={{ y: 100 }}
-                        className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-6 px-6 py-3 bg-foreground text-background rounded-2xl shadow-2xl"
+                        className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] sm:w-auto flex flex-wrap items-center justify-center gap-3 sm:gap-6 px-4 sm:px-6 py-3 bg-foreground text-background rounded-2xl shadow-2xl"
                     >
-                        <div className="flex items-center gap-2 pr-6 border-r border-background/20">
+                        <div className="flex items-center gap-2 sm:pr-6 sm:border-r border-background/20">
                             <span className="text-sm font-black">{selectedIds.length}</span>
                             <span className="text-xs font-medium text-background/60">selected</span>
                             <button
@@ -716,7 +716,7 @@ export default function RegistrationsTabPage() {
                             </button>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                             <Button
                                 variant="ghost"
                                 size="sm"

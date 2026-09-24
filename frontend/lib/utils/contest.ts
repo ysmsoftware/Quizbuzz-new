@@ -165,7 +165,9 @@ export function adaptServerContest(server: ServerContest): Contest {
     // Content
     rules: server.rules || [],
     prizes,
-    registrationFields: [],
+    // Organizer-defined extra form fields (id → label) — needed to label Participant.customFields,
+    // which are keyed by field id.
+    registrationFields: server.registrationFields ?? [],
 
     // Lifecycle
     publishedAt: server.status !== 'DRAFT' ? server.createdAt : null,

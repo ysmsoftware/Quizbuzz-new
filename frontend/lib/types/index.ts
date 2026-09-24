@@ -174,6 +174,8 @@ export interface Registration {
 
     // Custom Fields
     customFields?: Record<string, string>;
+    /** The ambassador whose referral link/code this registration came through, if any. */
+    referredBy?: { name: string } | null;
 
     // Quiz Status (for LIVE/ENDED). normalizeRegistration sets this to the raw
     // backend ParticipantStatus (e.g. 'DISQUALIFIED') when available, falling
@@ -494,6 +496,7 @@ export interface ServerContest {
     details?: string;
     topics?: string[];
     rules?: string[];
+    registrationFields?: RegistrationField[] | null;
     paymentEnabled: boolean;
     paymentConfig?: {
         amount: number;

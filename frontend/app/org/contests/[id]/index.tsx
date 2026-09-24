@@ -149,8 +149,8 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
 
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
-                    <div className="relative h-14 w-14 rounded-lg overflow-hidden border border-border/50 shadow-sm">
+                <div className="flex items-center gap-4 min-w-0">
+                    <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-border/50 shadow-sm">
                         {contest.coverImage ? (
                             <Image src={contest.coverImage} alt={contest.title} fill sizes="56px" onError={onImageError} className="object-cover" />
                         ) : (
@@ -159,8 +159,8 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
                             </div>
                         )}
                     </div>
-                    <div className="space-y-1">
-                        <h1 className="text-2xl font-bold tracking-tight">{contest.title}</h1>
+                    <div className="space-y-1 min-w-0">
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight break-words">{contest.title}</h1>
                         <div className="flex items-center gap-2">
                             <ContestPhaseBadge phase={contestPhase} />
                         </div>
@@ -211,7 +211,7 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
 
             {/* Stats Row */}
             <WidgetErrorBoundary name="Contest Summary Stats">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard
                         label="Registered"
                         value={snapshot?.totalParticipants || contest?._count?.participants || 0}
@@ -237,14 +237,15 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
             </WidgetErrorBoundary>
 
             {/* Tabs Navigation */}
-            <div className="border-b border-border/50">
-                <div className="flex items-center">
+            {/* Scrolls sideways on narrow screens instead of widening the page (9 tabs ≈ 900px) */}
+            <div className="border-b border-border/50 -mx-2 sm:mx-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex items-center w-max px-2 sm:px-0">
                     {tabs.map((tab) => (
                         <Link
                             key={tab.id}
                             href={`/org/contests/${contestId}${tab.id === 'overview' ? '' : '/' + tab.id}`}
                             className={cn(
-                                "relative px-4 py-2 text-sm font-medium transition-colors hover:text-primary",
+                                "relative shrink-0 whitespace-nowrap px-3 sm:px-4 py-3 sm:py-2 text-sm font-medium transition-colors hover:text-primary",
                                 activeTab === tab.id ? "text-primary border-b-2 border-primary" : "text-muted-foreground"
                             )}
                         >
@@ -291,7 +292,7 @@ function PageSkeleton() {
                 <div className="flex items-center gap-4">
                     <Skeleton className="h-14 w-14 rounded-lg" />
                     <div className="space-y-2">
-                        <Skeleton className="h-8 w-64" />
+                        <Skeleton className="h-8 w-40 sm:w-64" />
                         <div className="flex gap-2">
                             <Skeleton className="h-5 w-20" />
                             <Skeleton className="h-5 w-32" />
@@ -303,10 +304,10 @@ function PageSkeleton() {
                     <Skeleton className="h-9 w-24" />
                 </div>
             </div>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
             </div>
-            <div className="flex gap-4 border-b border-border/50 pb-px">
+            <div className="flex gap-4 border-b border-border/50 pb-px overflow-hidden">
                 {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-24" />)}
             </div>
             <div className="space-y-4">

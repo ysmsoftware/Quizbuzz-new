@@ -41,7 +41,7 @@ export function ActiveCampaignCard({ campaign, detail }: ActiveCampaignCardProps
   const [copied, setCopied] = useState(false);
   const [referralLink, setReferralLink] = useState('');
   useEffect(() => {
-    setReferralLink(`${window.location.origin}/contests/${campaign.contestSlug}/register?ref=${campaign.referralCode}`);
+    setReferralLink(`${window.location.origin}/contests/${campaign.contestSlug}?ref=${campaign.referralCode}`);
   }, [campaign.contestSlug, campaign.referralCode]);
 
   const copyLink = () => {

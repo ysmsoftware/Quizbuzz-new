@@ -52,6 +52,9 @@ const CARD_SURFACE = "rounded-2xl shadow-[0_20px_40px_-24px_rgba(0,0,0,0.18)]";
 
 interface ContestDetailsProps {
   contest: PublicContestDetail;
+  /** Ambassador referral code from the shared link (?ref=) — carried into every Register link
+   *  so it survives someone reading the contest details before registering. */
+  referralCode?: string | undefined;
 }
 
 const statusLabels: Record<string, string> = {
@@ -93,6 +96,7 @@ function formatCurrency(amount: number): string {
 
 export function ContestDetails({
   contest: initialContest,
+  referralCode,
 }: ContestDetailsProps) {
   const [contest, setContest] = useState(initialContest);
   const [phase, setPhase] = useState<PublicContestPhase>(() =>
@@ -152,8 +156,9 @@ export function ContestDetails({
   // (email/phone/registration ref), so no participantId is needed here.
   // See contest-detail page audit.
   const showCta = isRegistrationOpen || canJoinQuiz || phase === "ended";
+  const registerHref = `/contests/${contest.slug}/register${referralCode ? `?ref=${encodeURIComponent(referralCode)}` : ""}`;
   const ctaHref = isRegistrationOpen
-    ? `/contests/${contest.slug}/register`
+    ? registerHref
     : phase === "ended"
       ? `/quiz/${contest.slug}/results`
       : `/quiz/${contest.slug}/join`;
@@ -552,7 +557,7 @@ export function ContestDetails({
                   {/* CTA */}
                   {isRegistrationOpen ? (
                     <Link
-                      href={`/contests/${contest.slug}/register`}
+                      href={registerHref}
                       className="block"
                     >
                       <Button

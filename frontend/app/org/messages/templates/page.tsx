@@ -45,7 +45,7 @@ export default function TemplatesPage() {
           <Button 
             variant="outline" 
             onClick={() => router.push('/org/messages')} 
-            className="gap-2 rounded-xl border-slate-200 hover:bg-slate-50 transition-all hover:scale-[1.02] shadow-sm"
+            className="gap-2 rounded-xl border-border hover:bg-muted transition-all hover:scale-[1.02] shadow-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Message Logs
@@ -91,7 +91,7 @@ export default function TemplatesPage() {
                       <span className="truncate max-w-[120px]">{template.id}</span>
                       <button 
                         onClick={() => handleCopyId(template.id)}
-                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
                         title="Copy Template ID"
                       >
                         {copiedId === template.id ? (

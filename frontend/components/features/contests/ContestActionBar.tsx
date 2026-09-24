@@ -22,7 +22,8 @@ import {
   Loader2,
   Zap,
   ChevronRight,
-  CalendarClock
+  CalendarClock,
+  MoreHorizontal,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { RescheduleContestModal } from './RescheduleContestModal';
@@ -55,6 +56,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Contest, ContestPhase } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -76,6 +84,25 @@ interface ContestActionBarProps {
   onCancel?: (reason: string) => void;
   onArchive?: () => void;
   onDelete?: () => void;
+}
+
+// Phones: secondary actions collapse into a ⋯ menu (MobileMoreMenu) and only the phase's
+// primary action stays a button; from `sm` up every action is its own button again.
+const DESKTOP_ONLY = 'hidden sm:inline-flex';
+
+function MobileMoreMenu({ children }: { children: React.ReactNode }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon" className="sm:hidden h-10 w-10" aria-label="More actions">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function ContestActionBar({
@@ -241,7 +268,7 @@ export function ContestActionBar({
   const renderStartNowAction = () => {
     if (!showStartNow) return null;
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         {!isPastStartTime && <StartNowCountdown startTime={contest.startTime} />}
         <AlertDialog open={isStartNowModalOpen} onOpenChange={setIsStartNowModalOpen}>
           <TooltipProvider>
@@ -253,7 +280,7 @@ export function ContestActionBar({
                       variant="outline"
                       size="sm"
                       disabled={!isPastStartTime}
-                      className="text-green-700 border-green-200 hover:bg-green-50 disabled:opacity-50"
+                      className="text-green-700 dark:text-green-400 border-green-500/30 hover:bg-green-500/10 hover:text-green-700 dark:hover:text-green-400 disabled:opacity-50"
                     >
                       <Zap className="mr-2 h-4 w-4" />
                       Start Now
@@ -304,7 +331,7 @@ export function ContestActionBar({
   };
 
   const renderDraftActions = () => (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -371,63 +398,76 @@ export function ContestActionBar({
   );
 
   const renderPublishedActions = () => (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       {renderStartNowAction()}
-      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
+      <Button variant="ghost" size="sm" className={cn(DESKTOP_ONLY, 'text-destructive hover:bg-destructive/10')} onClick={() => setIsCancelModalOpen(true)}>
         Cancel Contest
       </Button>
-      <Button variant="outline" size="sm" onClick={copyLink}>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} onClick={copyLink}>
         <Copy className="mr-2 h-4 w-4" />
         Copy Link
       </Button>
-      <Button variant="outline" size="sm" onClick={() => setIsRescheduleOpen(true)}>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} onClick={() => setIsRescheduleOpen(true)}>
         <CalendarClock className="mr-2 h-4 w-4" />
         Reschedule
       </Button>
-      <Button variant="outline" size="sm" onClick={() => setIsEditDetailsOpen(true)}>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} onClick={() => setIsEditDetailsOpen(true)}>
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
       </Button>
-      <Button size="sm" className="bg-primary shadow-lg shadow-primary/20" onClick={handleShare}>
+      <Button size="sm" className="bg-primary shadow-lg shadow-primary/20 max-sm:h-10" onClick={handleShare}>
         <Share2 className="mr-2 h-4 w-4" />
         Share
       </Button>
+      <MobileMoreMenu>
+        <DropdownMenuItem onClick={copyLink}><Copy className="h-4 w-4" />Copy Link</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setIsRescheduleOpen(true)}><CalendarClock className="h-4 w-4" />Reschedule</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setIsEditDetailsOpen(true)}><Settings className="h-4 w-4" />Edit Details</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => setIsCancelModalOpen(true)}><XCircle className="h-4 w-4" />Cancel Contest</DropdownMenuItem>
+      </MobileMoreMenu>
     </div>
   );
 
   const renderRegistrationClosedActions = () => (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       {renderStartNowAction()}
-      <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setIsCancelModalOpen(true)}>
+      <Button variant="ghost" size="sm" className={cn(DESKTOP_ONLY, 'text-destructive hover:bg-destructive/10')} onClick={() => setIsCancelModalOpen(true)}>
         Cancel Contest
       </Button>
-      <Button variant="outline" size="sm" onClick={() => setIsRescheduleOpen(true)}>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} onClick={() => setIsRescheduleOpen(true)}>
         <CalendarClock className="mr-2 h-4 w-4" />
         Reschedule
       </Button>
-      <Button variant="outline" size="sm" onClick={() => setIsEditDetailsOpen(true)}>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} onClick={() => setIsEditDetailsOpen(true)}>
         <Settings className="mr-2 h-4 w-4" />
         Edit Details
       </Button>
       <Button
         size="sm"
-        className="bg-primary shadow-lg shadow-primary/20"
+        className="bg-primary shadow-lg shadow-primary/20 max-sm:h-10"
         onClick={() => setIsSendMessageOpen(true)}
       >
         <Send className="mr-2 h-4 w-4" />
         Send Message
       </Button>
+      <MobileMoreMenu>
+        <DropdownMenuItem onClick={() => setIsRescheduleOpen(true)}><CalendarClock className="h-4 w-4" />Reschedule</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setIsEditDetailsOpen(true)}><Settings className="h-4 w-4" />Edit Details</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => setIsCancelModalOpen(true)}><XCircle className="h-4 w-4" />Cancel Contest</DropdownMenuItem>
+      </MobileMoreMenu>
     </div>
   );
 
   const renderLiveActions = () => (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       {/* No "Cancel Contest" here — a running contest must be force-ended so
           participants' in-progress answers are submitted, not discarded. */}
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" className="text-amber-600 border-amber-200 hover:bg-amber-50">
+          <Button variant="outline" size="sm" className="text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400">
             <Power className="mr-2 h-4 w-4" />
             End Contest Now
           </Button>
@@ -503,8 +543,8 @@ export function ContestActionBar({
     };
 
     return (
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <Button variant="ghost" size="sm" className={cn(DESKTOP_ONLY, 'text-muted-foreground hover:bg-muted')} onClick={onArchive}>
           <Archive className="mr-2 h-4 w-4" />
           Archive
         </Button>
@@ -515,7 +555,7 @@ export function ContestActionBar({
             size="sm"
             onClick={handleEvaluateClick}
             disabled={isEvaluating}
-            className="text-amber-600 border-amber-200 hover:bg-amber-50"
+            className="hidden sm:inline-flex text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400"
           >
             {isEvaluating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
             Trigger Evaluation
@@ -527,7 +567,7 @@ export function ContestActionBar({
             size="sm"
             onClick={handleDeclareResultsClick}
             disabled={isDeclaringResults || localIsDeclaringResults}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-green-600 hover:bg-green-700 max-sm:h-10"
           >
             {(isDeclaringResults || localIsDeclaringResults) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
             Declare Results
@@ -535,35 +575,50 @@ export function ContestActionBar({
         )}
 
         {!onDeclareResults && (
-          <Button size="sm" className="bg-green-600 hover:bg-green-700" asChild>
+          <Button size="sm" className="bg-green-600 hover:bg-green-700 max-sm:h-10" asChild>
             <Link href={`/org/contests/${contest.id}/results`}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Publish Results
             </Link>
           </Button>
         )}
+
+        <MobileMoreMenu>
+          {onEvaluate && (
+            <DropdownMenuItem onClick={handleEvaluateClick} disabled={isEvaluating}>
+              <Zap className="h-4 w-4" />Trigger Evaluation
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onArchive}><Archive className="h-4 w-4" />Archive</DropdownMenuItem>
+        </MobileMoreMenu>
       </div>
     );
   };
 
   const renderResultsPublishedActions = () => (
-    <div className="flex items-center gap-3">
-      <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted" onClick={onArchive}>
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <Button variant="ghost" size="sm" className={cn(DESKTOP_ONLY, 'text-muted-foreground hover:bg-muted')} onClick={onArchive}>
         <Archive className="mr-2 h-4 w-4" />
         Archive
       </Button>
-      <Button variant="outline" size="sm" asChild>
+      <Button variant="outline" size="sm" className={DESKTOP_ONLY} asChild>
         <Link href={`/org/contests/${contest.id}/certificates`}>
           <ShieldAlert className="mr-2 h-4 w-4" />
           Issue Certificates
         </Link>
       </Button>
-      <Button size="sm" className="bg-primary" asChild>
+      <Button size="sm" className="bg-primary max-sm:h-10" asChild>
         <Link href={`/quiz/${contest.slug}/leaderboard`} target="_blank" rel="noopener noreferrer">
           <ExternalLink className="mr-2 h-4 w-4" />
           View Public Leaderboard
         </Link>
       </Button>
+      <MobileMoreMenu>
+        <DropdownMenuItem asChild>
+          <Link href={`/org/contests/${contest.id}/certificates`}><ShieldAlert className="h-4 w-4" />Issue Certificates</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onArchive}><Archive className="h-4 w-4" />Archive</DropdownMenuItem>
+      </MobileMoreMenu>
     </div>
   );
 
@@ -571,7 +626,7 @@ export function ContestActionBar({
     const isOld = new Date(Date.now() - (new Date(contest.cancelledAt || Date.now()).getTime())) > new Date(1000 * 60 * 60 * 24 * 30);
 
     return (
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <Badge variant="outline" className="border-destructive text-destructive px-3 py-1 flex items-center gap-2">
           <XCircle className="h-4 w-4" />
           Cancelled on {format(new Date(contest.cancelledAt || Date.now()), 'PP')}
@@ -587,7 +642,7 @@ export function ContestActionBar({
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       {contestPhase === 'DRAFT' && renderDraftActions()}
       {contestPhase === 'PUBLISHED' && renderPublishedActions()}
       {contestPhase === 'REGISTRATION_CLOSED' && renderRegistrationClosedActions()}

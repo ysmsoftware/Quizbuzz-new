@@ -658,7 +658,7 @@ export default function ContestOverviewPage() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="ghost"
-                                                                    className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                                    className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-500/10"
                                                                     onClick={() => handleDeleteRule(idx)}
                                                                 >
                                                                     <Trash2 className="h-3 w-3" />

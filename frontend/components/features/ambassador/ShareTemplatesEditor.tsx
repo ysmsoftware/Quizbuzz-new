@@ -25,7 +25,7 @@ const DEFAULT_TEMPLATE_TEXT =
   "*{contestName}* is live!\n\nI'm an ambassador for it — join using my link and I'll see you on the leaderboard!\n\n_Registration link:_\n{referralLink}\n\n— {ambassadorName}";
 
 const SAMPLE_VALUES = {
-  referralLink: 'https://quizbuzz.app/contests/sample-quiz/register?ref=ABC123',
+  referralLink: 'https://quizbuzz.app/contests/sample-quiz?ref=ABC123',
   ambassadorName: 'Priya',
 };
 

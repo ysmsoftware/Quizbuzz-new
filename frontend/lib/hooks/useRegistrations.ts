@@ -76,6 +76,11 @@ export function normalizeRegistration(raw: any): Registration {
     paymentMethod: raw.payment?.method || raw.payment?.provider || raw.paymentMethod,
     participantDetails,
     customFields: raw.customFields || {},
+    referredBy: raw.referredByEnrollment
+      ? {
+          name: [raw.referredByEnrollment.ambassador?.firstName, raw.referredByEnrollment.ambassador?.lastName].filter(Boolean).join(' ') || 'Ambassador',
+        }
+      : null,
     quizStatus: raw.status || raw.quizStatus,
     currentQuestionIndex: raw.currentQuestionIndex,
     totalQuestions: raw.totalQuestions,

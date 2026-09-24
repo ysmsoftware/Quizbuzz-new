@@ -8,11 +8,15 @@ import { SITE_URL } from '@/lib/seo/config';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ ref?: string }>;
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+/** Ambassador referral links point here (/contests/[slug]?ref=CODE), not at /register, so a
+ *  visitor can read the details first — the code rides along on every Register button. */
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const result = await contestService.getContestBySlug(slug);
+  const { ref } = await searchParams;
+  const result = await contestService.getContestBySlug(slug, { ref });
 
   if (!result.success || !result.data) {
     return {
@@ -22,35 +26,40 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const contest = result.data;
-  const description =
-    contest.description ?? `Join ${contest.title}, a live quiz contest on QuizBuzz.`;
+  // A valid ambassador ?ref= gets the campaign's own link-preview card (poster + invite line),
+  // same as /register used to when referral links pointed there.
+  const preview = contest.referralPreview;
+  const title = preview ? `Join ${preview.campaignName}` : contest.title;
+  const description = preview
+    ? `${preview.ambassadorFirstName} invited you to ${contest.title} — register now and climb the leaderboard!`
+    : (contest.description ?? `Join ${contest.title}, a live quiz contest on QuizBuzz.`);
+  const image = preview?.posterImageUrl || contest.bannerImage;
 
   return {
-    title: contest.title,
+    title,
     description,
     alternates: {
       canonical: `/contests/${slug}`,
     },
     openGraph: {
-      title: contest.title,
+      title,
       description,
       url: `${SITE_URL}/contests/${slug}`,
       type: 'website',
-      ...(contest.bannerImage
-        ? { images: [{ url: contest.bannerImage, alt: contest.title }] }
-        : {}),
+      ...(image ? { images: [{ url: image, alt: title }] } : {}),
     },
     twitter: {
       card: 'summary_large_image',
-      title: contest.title,
+      title,
       description,
-      ...(contest.bannerImage ? { images: [contest.bannerImage] } : {}),
+      ...(image ? { images: [image] } : {}),
     },
   };
 }
 
-export default async function ContestPage({ params }: PageProps) {
+export default async function ContestPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const { ref } = await searchParams;
   const result = await contestService.getContestBySlug(slug);
 
   if (!result.success || !result.data) {
@@ -77,7 +86,7 @@ export default async function ContestPage({ params }: PageProps) {
         organizationName={contest.organization?.name}
         bannerImage={contest.bannerImage}
       />
-      <ContestDetails contest={contest} />
+      <ContestDetails contest={contest} referralCode={ref} />
       <Footer />
     </>
   );

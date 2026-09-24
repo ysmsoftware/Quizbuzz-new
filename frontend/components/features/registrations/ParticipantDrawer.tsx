@@ -8,7 +8,6 @@ import {
     ExternalLink,
     MessageCircle,
     Mail,
-    X,
     Loader2,
     Trash2,
     ShieldAlert,
@@ -20,7 +19,7 @@ import {
     Sheet,
     SheetContent,
     SheetHeader,
-    SheetClose,
+    SheetTitle,
     SheetFooter,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -66,15 +65,16 @@ export function DetailItem({
     copyable?: boolean;
 }) {
     return (
-        <div className="flex flex-col gap-0.5 group">
+        <div className="flex flex-col gap-0.5 group min-w-0">
             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
                 {label}
             </span>
-            <div className="flex items-center gap-2">
-                <span className={cn('text-sm font-medium', mono && 'font-mono')}>{value}</span>
+            <div className="flex items-center gap-2 min-w-0">
+                {/* overflow-wrap:anywhere — long unbroken IDs/emails wrap only when they don't fit, never widen the drawer */}
+                <span className={cn('text-sm font-medium min-w-0 [overflow-wrap:anywhere]', mono && 'font-mono')}>{value}</span>
                 {copyable && typeof value === 'string' && (
                     <button
-                        className="p-1 rounded-md hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded-md hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                         onClick={() => {
                             navigator.clipboard.writeText(value);
                             toast.success(`${label} copied!`);
@@ -86,6 +86,15 @@ export function DetailItem({
             </div>
         </div>
     );
+}
+
+/** e.g. "16 Sep '26, 4:42 PM" */
+const SHORT_DATE_TIME = "d MMM ''yy, h:mm a";
+
+/** customFields are keyed by the contest's registration-field id (e.g. "field_1789…_0") —
+ *  show the organizer's label for it; fall back to the key for fields since deleted. */
+function customFieldLabel(contest: any, key: string): string {
+    return contest?.registrationFields?.find((f: { id: string; label: string }) => f.id === key)?.label ?? key;
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -124,8 +133,8 @@ export function ParticipantDrawer({
     return (
         <>
             <Sheet open={isOpen} onOpenChange={onClose}>
-                <SheetContent className="w-full sm:max-w-120 p-0 flex flex-col">
-                    <SheetHeader className="p-6 pb-0 space-y-4">
+                <SheetContent className="w-full sm:max-w-2xl p-0 flex flex-col gap-0 overflow-hidden">
+                    <SheetHeader className="p-6 pb-4 space-y-4 shrink-0">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <Avatar className="h-16 w-16 border-2 border-primary/20 p-0.5">
@@ -147,9 +156,9 @@ export function ParticipantDrawer({
                                         </div>
                                     ) : (
                                         <>
-                                            <h3 className="text-xl font-black tracking-tight">
+                                            <SheetTitle className="text-xl font-black tracking-tight">
                                                 {registration?.participantDetails?.fullName || 'Participant'}
-                                            </h3>
+                                            </SheetTitle>
                                             <Badge
                                                 variant="outline"
                                                 className={cn(
@@ -165,12 +174,8 @@ export function ParticipantDrawer({
                                     )}
                                 </div>
                             </div>
-                            <SheetClose asChild>
-                                <Button variant="ghost" size="icon" className="rounded-full">
-                                    <X className="h-5 w-5" />
-                                </Button>
-                            </SheetClose>
                         </div>
+                    </SheetHeader>
 
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center py-16 gap-4 text-muted-foreground">
@@ -178,8 +183,8 @@ export function ParticipantDrawer({
                                 <p className="text-sm">Fetching participant data...</p>
                             </div>
                         ) : registration ? (
-                            <Tabs defaultValue="overview" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 h-9 bg-muted/50 p-1">
+                            <Tabs defaultValue="overview" className="w-full flex-1 min-h-0 flex flex-col gap-0">
+                                <TabsList className="grid w-[calc(100%-3rem)] mx-6 shrink-0 grid-cols-2 h-9 bg-muted/50 p-1">
                                     <TabsTrigger value="overview" className="text-xs">
                                         Overview
                                     </TabsTrigger>
@@ -188,7 +193,7 @@ export function ParticipantDrawer({
                                     </TabsTrigger>
                                 </TabsList>
 
-                                <div className="flex-1 overflow-auto mt-6 space-y-8 pb-20 px-1">
+                                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden mt-6 space-y-8 pb-6 px-6">
                                     <TabsContent value="overview" className="space-y-8 m-0">
                                         <DetailSection
                                             title="Contact Information"
@@ -240,11 +245,14 @@ export function ParticipantDrawer({
                                                     mono
                                                     copyable
                                                 />
+                                                {registration.referredBy && (
+                                                    <DetailItem label="Referred By" value={registration.referredBy.name} />
+                                                )}
                                                 <DetailItem
                                                     label="Registered At"
                                                     value={
                                                         registeredAtDate
-                                                            ? format(registeredAtDate, 'PPP p')
+                                                            ? format(registeredAtDate, SHORT_DATE_TIME)
                                                             : '—'
                                                     }
                                                 />
@@ -271,7 +279,7 @@ export function ParticipantDrawer({
                                                 {Object.entries(
                                                     registration.customFields || {},
                                                 ).map(([key, value]) => (
-                                                    <DetailItem key={key} label={key} value={value as any} />
+                                                    <DetailItem key={key} label={customFieldLabel(contest, key)} value={value as any} />
                                                 ))}
                                             </div>
                                         </DetailSection>
@@ -347,7 +355,7 @@ export function ParticipantDrawer({
                                                             label="Transaction Date"
                                                             value={
                                                                 paidAtDate
-                                                                    ? format(paidAtDate, 'PPP p')
+                                                                    ? format(paidAtDate, SHORT_DATE_TIME)
                                                                     : '—'
                                                             }
                                                         />
@@ -391,10 +399,9 @@ export function ParticipantDrawer({
                                 </div>
                             </Tabs>
                         ) : null}
-                    </SheetHeader>
 
                     {!isLoading && registration && (
-                        <SheetFooter className="mt-auto p-6 border-t bg-muted/5 grid grid-cols-2 gap-3">
+                        <SheetFooter className="mt-auto shrink-0 p-6 border-t bg-muted/5 grid grid-cols-2 gap-3">
                             <Button
                                 className="bg-[#25D366] hover:bg-[#20ba5a] text-white"
                                 onClick={() => {
@@ -406,7 +413,7 @@ export function ParticipantDrawer({
                             </Button>
                             <Button
                                 variant="outline"
-                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                                className="text-blue-600 dark:text-blue-400 border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
                                 onClick={() => {
                                     if (registration) onSendMessage(registration.id);
                                 }}

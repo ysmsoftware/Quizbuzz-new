@@ -240,7 +240,7 @@ export default function QuestionsTabPage() {
                 </WidgetErrorBoundary>
 
                 {canAdd && (
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2 sm:gap-3">
                         <Button variant="outline" onClick={() => setIsSettingsOpen(true)}>
                             <Settings className="mr-2 h-4 w-4" />
                             Default Scoring
@@ -272,8 +272,8 @@ export default function QuestionsTabPage() {
             </div>
 
             {/* FILTER + SEARCH BAR */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <div className="relative flex-1">
+            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                <div className="relative flex-1 w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Search questions..."

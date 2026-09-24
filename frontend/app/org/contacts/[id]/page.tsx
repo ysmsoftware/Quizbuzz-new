@@ -71,6 +71,14 @@ export default function ContactProfilePage() {
         isDeleting,
     } = useContact(contactId, { loadHistory: true });
 
+    // The section only exists after the contact loads, so the browser's own #hash jump fires
+    // too early — scroll once it's rendered.
+    useEffect(() => {
+        if (!isLoadingContact && contact && window.location.hash === '#participation-history') {
+            document.getElementById('participation-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, [isLoadingContact, contact]);
+
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -378,8 +386,8 @@ export default function ContactProfilePage() {
                     </SectionErrorBoundary>
                 </div>
 
-                {/* Participation History */}
-                <div className="lg:col-span-2 space-y-6">
+                {/* Participation History — target of /org/contacts/[id]/history (#participation-history) */}
+                <div id="participation-history" className="lg:col-span-2 space-y-6 scroll-mt-24">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-black flex items-center gap-3">
                             <div className="h-10 w-10 rounded-2xl bg-secondary flex items-center justify-center">

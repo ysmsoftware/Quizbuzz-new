@@ -15,7 +15,7 @@ interface ShareCampaignCardProps {
   organizationName?: string;
   contestTitle?: string;
   isLive?: boolean;
-  referralLink: string; // {frontendUrl}/contests/{slug}/register?ref={code}
+  referralLink: string; // {frontendUrl}/contests/{slug}?ref={code}
   whatsappText: string; // from campaign.shareTemplates, {referralLink} already interpolated
   /** Shown as the card's header image when set — the actual campaign poster, not a generic
    *  icon, so "quick share" previews what you're actually about to send. */
