@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Rupees } from '@/components/features/ambassador/Rupees';
-import type { CampaignReportSummary } from '@/lib/types/ambassador';
+import type { CampaignReportSummary, LiabilityGoodie } from '@/lib/types/ambassador';
 import { cn } from '@/lib/utils';
 
 /**
@@ -39,27 +39,39 @@ function Stat({ label, value, context }: { label: string; value: React.ReactNode
 
 export function ReportSummaryStrip({ summary, periodActive }: SummaryProps & { periodActive: boolean }) {
   if (!summary) return <Skeleton className="h-[74px] w-full rounded-lg" />;
-  const { period, liability, allTimePaid, approvedAmbassadors } = summary;
-  const costPerPaid = allTimePaid > 0 ? liability.total / allTimePaid : null;
+  const { period, contestPaid, liability, approvedAmbassadors } = summary;
+  // Earned so far — milestone + speed-bonus cash. Leaderboard prizes are only decided at the
+  // end, so they stay in the Payout liability card as a projection, not here.
+  const earnedPayout = liability.milestone.cash + liability.speedBonus.cash;
   const periodLabel = periodActive ? 'in period' : 'all time';
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Stat label={`Paid registrations · ${periodLabel}`} value={contestPaid.paid} context={<>Whole contest · <Rupees amount={contestPaid.revenue} /></>} />
       <Stat label={`Referred registrations · ${periodLabel}`} value={period.registrations} />
-      <Stat label={`Paid registrations · ${periodLabel}`} value={period.paid} context={<Rupees amount={period.revenue} />} />
-      <Stat label="Cost per paid registration" value={costPerPaid === null ? '—' : <Rupees amount={costPerPaid} />} context="All-time payout ÷ paid" />
+      <Stat label="Ambassador payout · all time" value={<Rupees amount={earnedPayout} />} context="Milestone + speed-bonus cash earned" />
       <Stat label={`Active ambassadors · ${periodLabel}`} value={period.activeAmbassadors} context={`of ${approvedAmbassadors} approved`} />
     </div>
   );
 }
 
-function LiabilityRow({ label, detail, amount, strong }: { label: string; detail?: string; amount: number; strong?: boolean }) {
+function LiabilitySection({ label, detail, cash, goodies }: { label: string; detail: string; cash: number; goodies: LiabilityGoodie[] }) {
   return (
-    <div className={cn('flex items-baseline justify-between gap-3 text-sm', strong && 'font-semibold border-t border-border/50 pt-2')}>
-      <span className="min-w-0">
-        <span className={strong ? undefined : 'text-muted-foreground'}>{label}</span>
-        {detail && <span className="block text-[11px] text-muted-foreground">{detail}</span>}
-      </span>
-      <Rupees amount={amount} className="tabular-nums shrink-0" />
+    <div className="text-sm space-y-1">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0">
+          <span className="text-muted-foreground">{label}</span>
+          <span className="block text-[11px] text-muted-foreground">{detail}</span>
+        </span>
+        <span className="shrink-0 tabular-nums">{cash > 0 ? <Rupees amount={cash} /> : <span className="text-muted-foreground">No cash</span>}</span>
+      </div>
+      {goodies.map((g) => (
+        <div key={`${g.label}-${g.worthEach}`} className="flex items-baseline justify-between gap-3 pl-3 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate" title={g.label}>
+            {g.count} × {g.label}
+          </span>
+          <span className="shrink-0 tabular-nums">{g.worthEach > 0 ? <>worth <Rupees amount={g.worthEach} /> each</> : 'no worth set'}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -67,20 +79,36 @@ function LiabilityRow({ label, detail, amount, strong }: { label: string; detail
 export function PayoutLiabilityCard({ summary }: SummaryProps) {
   if (!summary) return <Skeleton className="h-48 w-full rounded-xl" />;
   const l = summary.liability;
-  const pct = l.budget > 0 ? Math.min(100, Math.round((l.total / l.budget) * 100)) : null;
+  const committed = l.cashTotal + l.goodieWorthTotal;
+  const pct = l.budget > 0 ? Math.min(100, Math.round((committed / l.budget) * 100)) : null;
   return (
     <Panel title="Payout liability" aside="If the campaign ended now">
-      <div className="space-y-2">
-        <LiabilityRow label="Milestone tiers" detail={`${l.milestoneReached} ambassador${l.milestoneReached === 1 ? '' : 's'} reached a tier`} amount={l.milestoneAmount} />
-        <LiabilityRow label="Speed bonus" detail={`${l.speedBonusWinners} winner${l.speedBonusWinners === 1 ? '' : 's'}`} amount={l.speedBonusAmount} />
-        {l.leaderboardCuts.length > 0 ? (
-          l.leaderboardCuts.map((c) => (
-            <LiabilityRow key={c.label} label={`${c.label} prizes`} detail={`Projected · ${c.rankedGroups} placed`} amount={c.projected} />
-          ))
-        ) : (
-          <LiabilityRow label="Leaderboard prizes" amount={0} />
-        )}
-        <LiabilityRow label="Total" amount={l.total} strong />
+      <div className="space-y-3">
+        <LiabilitySection
+          label="Milestone tiers"
+          detail={`${l.milestone.reached} ambassador${l.milestone.reached === 1 ? '' : 's'} reached a tier`}
+          cash={l.milestone.cash}
+          goodies={l.milestone.goodies}
+        />
+        <LiabilitySection
+          label="Speed bonus"
+          detail={`${l.speedBonus.winners} winner${l.speedBonus.winners === 1 ? '' : 's'}`}
+          cash={l.speedBonus.cash}
+          goodies={l.speedBonus.goodies}
+        />
+        {l.leaderboardCuts.map((c) => (
+          <LiabilitySection key={c.label} label={`${c.label} prizes`} detail={`Projected · ${c.placed} placed`} cash={c.cash} goodies={c.goodies} />
+        ))}
+      </div>
+      <div className="border-t border-border/50 pt-2 space-y-1 text-sm">
+        <div className="flex items-baseline justify-between gap-3 font-semibold">
+          <span>Cash payout</span>
+          <Rupees amount={l.cashTotal} className="tabular-nums" />
+        </div>
+        <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
+          <span>Goodies (total worth)</span>
+          <Rupees amount={l.goodieWorthTotal} className="tabular-nums" />
+        </div>
       </div>
       {pct !== null && (
         <div className="space-y-1">
@@ -88,7 +116,7 @@ export function PayoutLiabilityCard({ summary }: SummaryProps) {
             <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {pct}% of <Rupees amount={l.budget} />{' '}prize budget · milestones aren&apos;t budgeted
+            Cash + goodie worth is {pct}% of the <Rupees amount={l.budget} />{' '}reward budget
           </p>
         </div>
       )}

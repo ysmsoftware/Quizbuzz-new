@@ -604,6 +604,18 @@ export class AmbassadorCampaignRepository {
         return row!;
     }
 
+    /** Every paid registration for the campaign's contest in [from, to) — referred or not. */
+    async getContestPaidStats(contestId: string, from?: Date, to?: Date): Promise<{ paid: number; revenue: number }> {
+        const inPeriod = periodCondition(from, to);
+        const [row] = await prisma.$queryRaw<{ paid: number; revenue: number }[]>`
+            SELECT COUNT(*)::int AS paid, COALESCE(SUM(pay.amount), 0)::int AS revenue
+            FROM participants p
+            JOIN payments pay ON pay."participantId" = p.id AND pay.status = 'SUCCESS'
+            WHERE p."contestId" = ${contestId} AND ${inPeriod}
+        `;
+        return row!;
+    }
+
     async countEnrollmentsByStatus(campaignId: string): Promise<Map<AmbassadorStatus, number>> {
         const grouped = await prisma.ambassadorCampaignEnrollment.groupBy({ by: ["status"], where: { campaignId }, _count: { _all: true } });
         return new Map(grouped.map((g) => [g.status, g._count._all]));

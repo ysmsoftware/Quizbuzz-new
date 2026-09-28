@@ -512,6 +512,13 @@ export interface ApplicationReportRow {
     createdAt: Date;
 }
 
+/** One kind of goodie owed — `count` copies, each worth `worthEach`. */
+export interface LiabilityGoodie {
+    label: string;
+    count: number;
+    worthEach: number;
+}
+
 /** Report-page-only aggregates — deliberately nothing the campaign detail page's
  *  CampaignStatsSummary already shows. `period` follows from/to; the rest is all-time. */
 export interface CampaignReportSummary {
@@ -523,6 +530,8 @@ export interface CampaignReportSummary {
         disqualified: number;
         activeAmbassadors: number;
     };
+    /** All paid registrations for the campaign's contest in the period — referred or not. */
+    contestPaid: { paid: number; revenue: number };
     approvedAmbassadors: number;
     allTimePaid: number;
     applications: {
@@ -531,14 +540,14 @@ export interface CampaignReportSummary {
         rejected: number;
         recent: { enrollmentId: string; firstName: string; lastName: string | null; status: string; appliedAt: Date; reviewedAt: Date | null; rejectionReason: string | null }[];
     };
+    /** Cash and goodies are kept apart on purpose: a goodie's `cashEquivalent` is what the
+     *  item is worth, not money paid out, so it never goes into a cash total. */
     liability: {
-        milestoneAmount: number;
-        milestoneReached: number;
-        speedBonusAmount: number;
-        speedBonusWinners: number;
-        leaderboardProjected: number;
-        leaderboardCuts: { label: string; projected: number; rankedGroups: number }[];
-        total: number;
+        milestone: { cash: number; goodies: LiabilityGoodie[]; reached: number };
+        speedBonus: { cash: number; goodies: LiabilityGoodie[]; winners: number };
+        leaderboardCuts: { label: string; cash: number; goodies: LiabilityGoodie[]; placed: number }[];
+        cashTotal: number;
+        goodieWorthTotal: number;
         budget: number;
     };
 }

@@ -493,10 +493,17 @@ export interface ApplicationReportRow {
   createdAt: string;
 }
 
+export interface LiabilityGoodie {
+  label: string;
+  count: number;
+  worthEach: number; // rupees
+}
+
 /** Report-page-only aggregates (GET /org/campaigns/:id/report/summary) — `period` follows
  *  the from/to filter; everything else is all-time. Amounts in rupees. */
 export interface CampaignReportSummary {
   period: { registrations: number; paid: number; revenue: number; attended: number; disqualified: number; activeAmbassadors: number };
+  contestPaid: { paid: number; revenue: number }; // whole contest, referred or not
   approvedAmbassadors: number;
   allTimePaid: number;
   applications: {
@@ -505,14 +512,13 @@ export interface CampaignReportSummary {
     rejected: number;
     recent: { enrollmentId: string; firstName: string; lastName: string | null; status: string; appliedAt: string; reviewedAt: string | null; rejectionReason: string | null }[];
   };
+  /** Cash and goodies kept apart — a goodie's worth is not money paid out. */
   liability: {
-    milestoneAmount: number;
-    milestoneReached: number;
-    speedBonusAmount: number;
-    speedBonusWinners: number;
-    leaderboardProjected: number;
-    leaderboardCuts: { label: string; projected: number; rankedGroups: number }[];
-    total: number;
+    milestone: { cash: number; goodies: LiabilityGoodie[]; reached: number };
+    speedBonus: { cash: number; goodies: LiabilityGoodie[]; winners: number };
+    leaderboardCuts: { label: string; cash: number; goodies: LiabilityGoodie[]; placed: number }[];
+    cashTotal: number;
+    goodieWorthTotal: number;
     budget: number;
   };
 }

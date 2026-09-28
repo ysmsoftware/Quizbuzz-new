@@ -19,6 +19,22 @@ import { ReportRowRecord } from "./ambassador-campaign.repository";
 
 // Latest pending/rejected applications shown in the report's applications log.
 const RECENT_APPLICATIONS_LIMIT = 5;
+
+/** Counts goodies by label + worth (in paise) for the payout-liability breakdown. */
+class GoodieTally {
+    private readonly byKey = new Map<string, LiabilityGoodie>();
+
+    add(label: string, worthEach: number): void {
+        const key = `${label}::${worthEach}`;
+        const existing = this.byKey.get(key);
+        if (existing) existing.count++;
+        else this.byKey.set(key, { label, count: 1, worthEach });
+    }
+
+    toRupees(): LiabilityGoodie[] {
+        return [...this.byKey.values()].map((g) => ({ ...g, worthEach: paisaToRupees(g.worthEach) }));
+    }
+}
 import { calculateCampaignCapacity } from "./campaign-capacity";
 import { generateCampaignPhases } from "./campaign-timeline";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
@@ -39,6 +55,7 @@ import {
     CampaignPhase,
     CampaignPhaseTemplateEntry,
     CampaignReportSummary,
+    LiabilityGoodie,
     CampaignResult,
     CampaignStatsSummary,
     CampaignTarget,
@@ -835,33 +852,41 @@ export class AmbassadorCampaignService {
         if (!campaign) throw new NotFoundError("Campaign not found.");
         const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
 
-        const [periodStats, statusCounts, recent, enrollments] = await Promise.all([
+        const [periodStats, contestPaid, statusCounts, recent, enrollments] = await Promise.all([
             this.campaignRepo.getReportPeriodStats(campaign.id, from, to),
+            campaign.contestId ? this.campaignRepo.getContestPaidStats(campaign.contestId, from, to) : { paid: 0, revenue: 0 },
             this.campaignRepo.countEnrollmentsByStatus(campaign.id),
             this.campaignRepo.listRecentUnapprovedEnrollments(campaign.id, RECENT_APPLICATIONS_LIMIT),
             this.campaignRepo.listEnrollmentsForCampaign(campaign.id).then((all) => all.filter((e) => e.status === AmbassadorStatus.APPROVED)),
         ]);
 
-        // Milestones + speed bonus — all-time, over every approved enrollment.
+        // Milestones + speed bonus — all-time, over every approved enrollment. Cash and goodie
+        // worth are tallied separately (see CampaignReportSummary.liability).
         const counts = await this.campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
-        let milestoneAmount = 0;
-        let milestoneReached = 0;
+        const milestone = { cash: 0, goodies: new GoodieTally(), reached: 0 };
         for (const e of enrollments) {
             const m = computeMilestoneReward(rewardConfig.milestoneTiers ?? [], counts.get(e.id) ?? 0);
-            milestoneAmount += m.accruedAmount;
-            if (m.currentTier) milestoneReached++;
+            if (m.currentTier) milestone.reached++;
+            for (const b of m.tierBreakdown) {
+                const goodieWorth = b.goodieCashEquivalent ?? 0;
+                milestone.cash += b.subtotal - goodieWorth;
+                if (b.goodieLabel) milestone.goodies.add(b.goodieLabel, goodieWorth);
+            }
         }
         const speedWinners = await computeSpeedBonusWinners(this.campaignRepo, campaign.id, rewardConfig);
-        let speedBonusAmount = 0;
-        let speedBonusWinnerCount = 0;
+        const speed = { cash: 0, goodies: new GoodieTally(), winners: 0 };
         for (const result of speedWinners.values()) {
-            const amount = speedBonusTotal(result);
-            speedBonusAmount += amount;
-            if (amount > 0) speedBonusWinnerCount++;
+            if (!result?.tiers.length) continue;
+            speed.winners++;
+            for (const t of result.tiers) {
+                speed.cash += t.bonusAmount;
+                if (t.goodie) speed.goodies.add(t.goodie.label, t.goodie.cashEquivalent ?? 0);
+            }
         }
 
-        // Leaderboard prizes, projected from current standings. A dependent cut (Department
-        // under College) awards per parent value, so project it once per distinct parent.
+        // Leaderboard prizes, projected from current standings: every group with at least one
+        // registration whose rank has a prize configured. A dependent cut (Department under
+        // College) awards per parent value, so it's projected once per distinct parent.
         const leaderboardCuts: CampaignReportSummary["liability"]["leaderboardCuts"] = [];
         for (const cut of rewardConfig.leaderboardPrizes ?? []) {
             const parentKey = await findLeaderboardScopeParentKey(organizationId, campaign.ambassadorTypesAllowed, cut.scope);
@@ -872,22 +897,25 @@ export class AmbassadorCampaignService {
                   })).values()].filter(Boolean).map((value) => ({ fieldKey: parentKey, value }))
                 : [undefined];
 
-            let projected = 0;
-            let rankedGroups = 0;
+            let cash = 0;
+            let placed = 0;
+            const goodies = new GoodieTally();
             for (const filter of filters) {
                 const groups = await computeLeaderboardGroups(this.campaignRepo, campaign.id, cut.scope, cut.rankedBy, filter);
                 groups.filter((g) => g.registrationCount > 0).forEach((_, i) => {
                     const prize = findPrizeForRank(cut, i + 1);
                     if (!prize) return;
-                    rankedGroups++;
-                    projected += (prize.cashAmount ?? 0) + ("goodie" in prize ? (prize.goodie?.cashEquivalent ?? 0) : 0);
+                    const goodie = "goodie" in prize ? prize.goodie : undefined;
+                    if (!prize.cashAmount && !goodie) return;
+                    placed++;
+                    cash += prize.cashAmount ?? 0;
+                    if (goodie) goodies.add(goodie.label, goodie.cashEquivalent ?? 0);
                 });
             }
-            leaderboardCuts.push({ label: cut.label, projected: paisaToRupees(projected), rankedGroups });
+            leaderboardCuts.push({ label: cut.label, cash: paisaToRupees(cash), goodies: goodies.toRupees(), placed });
         }
-        const leaderboardProjected = leaderboardCuts.reduce((sum, c) => sum + c.projected, 0);
 
-        // Same budget formula as the campaign detail page's Reward Budget card.
+        // Same budget formula as the campaign detail page's Reward Budget card (cash + goodie worth).
         const speedBudget = rewardConfig.speedBonus?.enabled
             ? (rewardConfig.speedBonus.tiers ?? []).reduce((acc, t) => acc + (t.maxWinners ? t.maxWinners * t.bonusAmount : t.bonusAmount), 0)
             : 0;
@@ -896,10 +924,13 @@ export class AmbassadorCampaignService {
             0,
         );
 
-        const milestone = paisaToRupees(milestoneAmount);
-        const speed = paisaToRupees(speedBonusAmount);
+        const milestoneGoodies = milestone.goodies.toRupees();
+        const speedGoodies = speed.goodies.toRupees();
+        const allGoodies = [...milestoneGoodies, ...speedGoodies, ...leaderboardCuts.flatMap((c) => c.goodies)];
+        const cashTotal = paisaToRupees(milestone.cash) + paisaToRupees(speed.cash) + leaderboardCuts.reduce((sum, c) => sum + c.cash, 0);
         return {
             period: { ...periodStats, revenue: paisaToRupees(periodStats.revenue) },
+            contestPaid: { paid: contestPaid.paid, revenue: paisaToRupees(contestPaid.revenue) },
             approvedAmbassadors: enrollments.length,
             allTimePaid: periodStats.allTimePaid,
             applications: {
@@ -917,13 +948,11 @@ export class AmbassadorCampaignService {
                 })),
             },
             liability: {
-                milestoneAmount: milestone,
-                milestoneReached,
-                speedBonusAmount: speed,
-                speedBonusWinners: speedBonusWinnerCount,
-                leaderboardProjected,
+                milestone: { cash: paisaToRupees(milestone.cash), goodies: milestoneGoodies, reached: milestone.reached },
+                speedBonus: { cash: paisaToRupees(speed.cash), goodies: speedGoodies, winners: speed.winners },
                 leaderboardCuts,
-                total: milestone + speed + leaderboardProjected,
+                cashTotal,
+                goodieWorthTotal: allGoodies.reduce((sum, g) => sum + g.count * g.worthEach, 0),
                 budget: paisaToRupees(speedBudget + leaderboardBudget),
             },
         };
