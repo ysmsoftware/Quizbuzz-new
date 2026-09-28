@@ -8,6 +8,39 @@ import { prisma } from "../../config/db";
  *  failed/abandoned paid registration can't inflate an ambassador's count or reward payout. */
 const COUNTED_REFERRAL_STATUS: Prisma.ParticipantWhereInput = { status: { not: ParticipantStatus.PENDING_PAYMENT } };
 
+/** SQL fragment restricting participant `p` to referrals created in [from, to) — TRUE when unbounded. */
+function periodCondition(from?: Date, to?: Date): Prisma.Sql {
+    const parts: Prisma.Sql[] = [];
+    if (from) parts.push(Prisma.sql`p."createdAt" >= ${from}`);
+    if (to) parts.push(Prisma.sql`p."createdAt" < ${to}`);
+    return parts.length ? Prisma.join(parts, " AND ") : Prisma.sql`TRUE`;
+}
+
+export interface ReportRowRecord {
+    enrollmentId: string;
+    ambassadorId: string;
+    referralCode: string;
+    createdAt: Date;
+    firstName: string;
+    lastName: string | null;
+    email: string;
+    phone: string | null;
+    applicationData: Record<string, unknown> | null;
+    totalRegistrations: number;
+    registrationCount: number;
+    paidCount: number;
+}
+
+export interface ReportPeriodStatsRecord {
+    registrations: number;
+    paid: number;
+    revenue: number; // paise
+    attended: number;
+    disqualified: number;
+    activeAmbassadors: number;
+    allTimePaid: number;
+}
+
 export interface FindCampaignsFilter {
     organizationId: string;
     statuses?: AmbassadorCampaignStatus[] | undefined;
@@ -496,6 +529,101 @@ export class AmbassadorCampaignRepository {
             select: { createdAt: true },
         });
         return rows.map((r) => r.createdAt);
+    }
+
+    /**
+     * One report page, counted/sorted/paginated in Postgres rather than by loading every
+     * enrollment into memory. registrationCount/paidCount are windowed to [from, to);
+     * totalRegistrations is always all-time (tier and owed are computed from it). Omit
+     * limit to get every row (CSV export).
+     *
+     * ponytail: "accruedAmount" sorts by all-time registrations — milestone reward is
+     * monotonic in that, but a capped speed bonus can reorder near-ties. Exact sort would
+     * mean computing speed-bonus winners in SQL; do that if anyone notices the drift.
+     */
+    async listReportRows(
+        campaignId: string,
+        opts: { from?: Date | undefined; to?: Date | undefined; sortBy: string; sortOrder: "asc" | "desc"; limit?: number; offset?: number },
+    ): Promise<ReportRowRecord[]> {
+        const inPeriod = periodCondition(opts.from, opts.to);
+        const dir = opts.sortOrder === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+        const orderBy = {
+            registrationCount: Prisma.sql`"registrationCount" ${dir}, "totalRegistrations" DESC`,
+            paidCount: Prisma.sql`"paidCount" ${dir}, "registrationCount" DESC`,
+            accruedAmount: Prisma.sql`"totalRegistrations" ${dir}`,
+            createdAt: Prisma.sql`e."createdAt" ${dir}`,
+            name: Prisma.sql`lower(a."firstName") ${dir}, lower(coalesce(a."lastName", '')) ${dir}`,
+        }[opts.sortBy] ?? Prisma.sql`"registrationCount" DESC`;
+        const page = opts.limit !== undefined ? Prisma.sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : Prisma.empty;
+
+        return prisma.$queryRaw<ReportRowRecord[]>`
+            SELECT e.id AS "enrollmentId", e."ambassadorId", e."referralCode", e."createdAt",
+                   a."firstName", a."lastName", a.email, a.phone, a."applicationData",
+                   COALESCE(c.all_regs, 0)::int    AS "totalRegistrations",
+                   COALESCE(c.period_regs, 0)::int AS "registrationCount",
+                   COALESCE(c.period_paid, 0)::int AS "paidCount"
+            FROM ambassador_campaign_enrollments e
+            JOIN ambassadors a ON a.id = e."ambassadorId"
+            LEFT JOIN (
+                SELECT p."referredByEnrollmentId" AS eid,
+                       COUNT(*) AS all_regs,
+                       COUNT(*) FILTER (WHERE ${inPeriod}) AS period_regs,
+                       COUNT(*) FILTER (WHERE ${inPeriod} AND pay.status = 'SUCCESS') AS period_paid
+                FROM participants p
+                JOIN ambassador_campaign_enrollments pe ON pe.id = p."referredByEnrollmentId" AND pe."campaignId" = ${campaignId}
+                LEFT JOIN payments pay ON pay."participantId" = p.id
+                WHERE p.status <> 'PENDING_PAYMENT'
+                GROUP BY p."referredByEnrollmentId"
+            ) c ON c.eid = e.id
+            WHERE e."campaignId" = ${campaignId} AND e.status = 'APPROVED'
+            ORDER BY ${orderBy}, e.id
+            ${page}
+        `;
+    }
+
+    async countApprovedEnrollments(campaignId: string): Promise<number> {
+        return prisma.ambassadorCampaignEnrollment.count({ where: { campaignId, status: AmbassadorStatus.APPROVED } });
+    }
+
+    /** Referral-quality aggregates for the report summary, windowed to [from, to). allTimePaid ignores the window. */
+    async getReportPeriodStats(campaignId: string, from?: Date, to?: Date): Promise<ReportPeriodStatsRecord> {
+        const inPeriod = periodCondition(from, to);
+        const [row] = await prisma.$queryRaw<ReportPeriodStatsRecord[]>`
+            SELECT COUNT(*) FILTER (WHERE ${inPeriod})::int AS registrations,
+                   COUNT(*) FILTER (WHERE ${inPeriod} AND pay.status = 'SUCCESS')::int AS paid,
+                   COALESCE(SUM(pay.amount) FILTER (WHERE ${inPeriod} AND pay.status = 'SUCCESS'), 0)::int AS revenue,
+                   COUNT(*) FILTER (WHERE ${inPeriod} AND (p."joinedAt" IS NOT NULL OR p.status IN ('IN_QUIZ', 'SUBMITTED')))::int AS attended,
+                   COUNT(*) FILTER (WHERE ${inPeriod} AND p.status = 'DISQUALIFIED')::int AS disqualified,
+                   COUNT(DISTINCT p."referredByEnrollmentId") FILTER (WHERE ${inPeriod})::int AS "activeAmbassadors",
+                   COUNT(*) FILTER (WHERE pay.status = 'SUCCESS')::int AS "allTimePaid"
+            FROM participants p
+            JOIN ambassador_campaign_enrollments e ON e.id = p."referredByEnrollmentId" AND e."campaignId" = ${campaignId} AND e.status = 'APPROVED'
+            LEFT JOIN payments pay ON pay."participantId" = p.id
+            WHERE p.status <> 'PENDING_PAYMENT'
+        `;
+        return row!;
+    }
+
+    async countEnrollmentsByStatus(campaignId: string): Promise<Map<AmbassadorStatus, number>> {
+        const grouped = await prisma.ambassadorCampaignEnrollment.groupBy({ by: ["status"], where: { campaignId }, _count: { _all: true } });
+        return new Map(grouped.map((g) => [g.status, g._count._all]));
+    }
+
+    /** Latest non-approved applications — the audit-trail half the report shows beside approved ambassadors. */
+    async listRecentUnapprovedEnrollments(campaignId: string, limit: number) {
+        return prisma.ambassadorCampaignEnrollment.findMany({
+            where: { campaignId, status: { not: AmbassadorStatus.APPROVED } },
+            orderBy: { updatedAt: "desc" },
+            take: limit,
+            select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                reviewedAt: true,
+                rejectionReason: true,
+                ambassador: { select: { firstName: true, lastName: true } },
+            },
+        });
     }
 
     /** All enrollments for a campaign with ambassador info — report + leaderboard source. Pilot scale: cheap to load whole. */

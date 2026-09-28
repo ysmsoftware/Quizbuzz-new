@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { ambassadorCampaignApi, type ReportFilters } from '@/lib/api/ambassador-campaign.api';
+import { ambassadorCampaignApi, type ReportFilters, type ReportPeriodFilters } from '@/lib/api/ambassador-campaign.api';
 
 export function useOrgAmbassadorReport(campaignId: string, filters: ReportFilters = {}) {
   const query = useQuery({
@@ -16,8 +16,19 @@ export function useOrgAmbassadorReport(campaignId: string, filters: ReportFilter
     pagination: query.data?.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    exportUrl: ambassadorCampaignApi.getReportExportUrl(campaignId),
+    exportUrl: ambassadorCampaignApi.getReportExportUrl(campaignId, { from: filters.from, to: filters.to, sortBy: filters.sortBy, sortOrder: filters.sortOrder }),
   };
+}
+
+/** Report-page aggregates — referral quality for the period, applications, payout liability. */
+export function useOrgAmbassadorReportSummary(campaignId: string, period: ReportPeriodFilters) {
+  const query = useQuery({
+    queryKey: ['org-ambassador-report-summary', campaignId, period],
+    queryFn: () => ambassadorCampaignApi.getReportSummary(campaignId, period),
+    enabled: !!campaignId,
+    placeholderData: keepPreviousData,
+  });
+  return { summary: query.data?.data, isLoading: query.isLoading };
 }
 
 /** Drill-down behind one report row's registrationCount — the individual registrations that

@@ -55,6 +55,16 @@ describe("computeLeaderboardGroups scoping", () => {
         expect(groups[0]!.ambassadorIds).toEqual(["a1"]);
     });
 
+    it("merges values that differ only by whitespace/case into one group", async () => {
+        const repo = fakeRepo([
+            fakeEnrollment("e1", "a1", { college: "SRM", department: "Computer Science" }, 1),
+            fakeEnrollment("e2", "a2", { college: "SRM ", department: "computer  science\u00a0" }, 1),
+        ]);
+        const groups = await computeLeaderboardGroups(repo, "c-ws", deptScope, undefined, { fieldKey: "college", value: "SRM" });
+        expect(groups).toHaveLength(1);
+        expect(groups[0]).toMatchObject({ label: "Computer Science", registrationCount: 2 });
+    });
+
     it("caches results per campaign+scope+filter — a second call skips the repo entirely", async () => {
         const repo = fakeRepo([fakeEnrollment("e1", "a1", { college: "SRM", department: "CSE" }, 10)]);
         await computeLeaderboardGroups(repo, "campaign-cache-1", deptScope);

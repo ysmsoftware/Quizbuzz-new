@@ -409,9 +409,13 @@ export const ListOrgAmbassadorsQuerySchema = z.object({
 export const ListReportQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
-    sortBy: z.enum(["registrationCount", "createdAt"]).default("registrationCount"),
+    sortBy: z.enum(["registrationCount", "createdAt", "paidCount", "accruedAmount", "name"]).default("registrationCount"),
     sortOrder: z.enum(["asc", "desc"]).default("desc"),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
 });
+
+export const ReportPeriodQuerySchema = ListReportQuerySchema.pick({ from: true, to: true, sortBy: true, sortOrder: true });
 
 export const ListReferralsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),

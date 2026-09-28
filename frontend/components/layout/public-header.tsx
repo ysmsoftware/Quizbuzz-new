@@ -12,7 +12,7 @@ import { PWA_ENABLED } from '@/lib/pwa';
 /**
  * Minimal header for public contest/quiz flows — no admin Sign In / Create Account.
  */
-export function PublicHeader() {
+export function PublicHeader({ hideBrowseContests = false }: { hideBrowseContests?: boolean } = {}) {
   const { deferredPrompt, isStandalone, setShowInstallPrompt } = usePwaStore();
   const [showInstallBtn, setShowInstallBtn] = useState(false);
   const appLogoUrl = useAppLogo();
@@ -70,12 +70,13 @@ export function PublicHeader() {
               Install App
             </Button>
           )}
-          <Link
+          {/* Temporarily hidden on the contest detail page — see app/contests/[slug]/layout.tsx */}
+          {!hideBrowseContests && <Link
             href="/contests"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Browse Contests
-          </Link>
+          </Link>}
         </div>
       </nav>
     </header>

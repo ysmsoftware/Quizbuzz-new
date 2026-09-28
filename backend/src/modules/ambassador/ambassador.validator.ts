@@ -29,10 +29,15 @@ export const SignupVerifyOtpSchema = z.object({
     otp: z.string().length(6, "OTP must be 6 digits").regex(/^\d{6}$/, "OTP must be numeric"),
 });
 
+// Trims every string value — dropdown picks (college/department) are later matched and grouped
+// by exact string, so a stray trailing space would split one department into two leaderboard rows.
+const trimStringValues = (data: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]));
+
 export const SignupCompleteSchema = z.object({
     email: emailField,
     ambassadorType: z.string().min(1),
-    applicationData: z.record(z.string(), z.any()).default({}),
+    applicationData: z.record(z.string(), z.any()).default({}).transform(trimStringValues),
     proofStorageKey: z.string().min(1),
     proofUrl: z.string().min(1),
 });
@@ -51,7 +56,7 @@ export const UpdateProfileSchema = z.object({
     // Keyed by whatever fields the ambassador's *current* type definition asks for (see
     // ambassador-types.ts) — validated against that definition in the service, not here,
     // since this schema has no way to know which type this ambassador is.
-    applicationData: z.record(z.string(), z.string()).optional(),
+    applicationData: z.record(z.string(), z.string().trim()).optional(),
 }).refine((data) => Object.keys(data).length > 0, { message: "At least one field must be provided" });
 
 export const UpdateProofSchema = z.object({

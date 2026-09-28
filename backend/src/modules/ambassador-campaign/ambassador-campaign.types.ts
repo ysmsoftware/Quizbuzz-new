@@ -245,10 +245,19 @@ export interface ListApplicationsQueryDTO {
     sortOrder: "asc" | "desc";
 }
 
-export interface ListReportQueryDTO {
+export type ReportSortBy = "registrationCount" | "createdAt" | "paidCount" | "accruedAmount" | "name";
+
+/** `from`/`to` window the per-row registrationCount/paidCount (by referral createdAt); tier,
+ *  bonus and owed always stay all-time — payouts are earned on the running total. */
+export interface ReportPeriod {
+    from?: Date | undefined;
+    to?: Date | undefined;
+}
+
+export interface ListReportQueryDTO extends ReportPeriod {
     page: number;
     limit: number;
-    sortBy: "registrationCount" | "createdAt";
+    sortBy: ReportSortBy;
     sortOrder: "asc" | "desc";
 }
 
@@ -487,10 +496,51 @@ export interface ApplicationReportRow {
     firstName: string;
     lastName: string | null;
     email: string;
+    phone: string | null;
+    referralCode: string;
+    applicationData: Record<string, unknown>;
+    /** Within the requested period (all-time when none). */
     registrationCount: number;
+    /** Within the requested period — referrals whose payment succeeded. */
+    paidCount: number;
+    /** All-time, regardless of period — what tier/owed are computed from. */
+    totalRegistrations: number;
     currentTierLabel: string | null;
+    milestoneAmount: number;
+    speedBonusAmount: number;
     accruedAmount: number;
     createdAt: Date;
+}
+
+/** Report-page-only aggregates — deliberately nothing the campaign detail page's
+ *  CampaignStatsSummary already shows. `period` follows from/to; the rest is all-time. */
+export interface CampaignReportSummary {
+    period: {
+        registrations: number;
+        paid: number;
+        revenue: number;
+        attended: number;
+        disqualified: number;
+        activeAmbassadors: number;
+    };
+    approvedAmbassadors: number;
+    allTimePaid: number;
+    applications: {
+        approved: number;
+        pending: number;
+        rejected: number;
+        recent: { enrollmentId: string; firstName: string; lastName: string | null; status: string; appliedAt: Date; reviewedAt: Date | null; rejectionReason: string | null }[];
+    };
+    liability: {
+        milestoneAmount: number;
+        milestoneReached: number;
+        speedBonusAmount: number;
+        speedBonusWinners: number;
+        leaderboardProjected: number;
+        leaderboardCuts: { label: string; projected: number; rankedGroups: number }[];
+        total: number;
+        budget: number;
+    };
 }
 
 /** One registration referred by an ambassador — the drill-down behind registrationCount.

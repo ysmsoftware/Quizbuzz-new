@@ -152,6 +152,13 @@ export async function findLeaderboardScopeParentKey(
  * scope ranks by raw registrationCount. Upgrade path: once a denominator
  * field exists on the ambassador type or campaign, rank by rate here instead.
  */
+/** Free-typed / "Other" entries and catalog names can differ only by invisible whitespace or
+ *  case ("Computer Science " vs "Computer Science") — without this they'd split into two
+ *  identical-looking groups. NFKC also folds non-breaking spaces into plain ones. */
+export function normalizeFieldValue(value: unknown): string {
+    return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+
 function groupKeyAndLabel(scope: LeaderboardScope, ambassador: Ambassador): { key: string; label: string } {
     if (scope.kind === "INDIVIDUAL_AMBASSADOR") {
         return { key: ambassador.id, label: `${ambassador.firstName} ${ambassador.lastName ?? ""}`.trim() };
@@ -159,9 +166,9 @@ function groupKeyAndLabel(scope: LeaderboardScope, ambassador: Ambassador): { ke
 
     const data = (ambassador.applicationData ?? {}) as Record<string, unknown>;
     const keys = scope.groupByFieldKeys ?? [];
-    const values = keys.map((k) => String(data[k] ?? "Unknown"));
+    const values = keys.map((k) => normalizeFieldValue(data[k]) || "Unknown");
 
-    return { key: values.join("::"), label: values.join(" / ") };
+    return { key: values.join("::").toLowerCase(), label: values.join(" / ") };
 }
 
 // ponytail: in-memory per-process cache — fine at current scale (one backend instance).
@@ -197,9 +204,10 @@ export async function computeLeaderboardGroups(
         (e) => e.status === AmbassadorStatus.APPROVED,
     );
     if (filter) {
+        const wanted = normalizeFieldValue(filter.value).toLowerCase();
         enrollments = enrollments.filter((e) => {
             const data = (e.ambassador.applicationData ?? {}) as Record<string, unknown>;
-            return String(data[filter.fieldKey] ?? "") === filter.value;
+            return normalizeFieldValue(data[filter.fieldKey]).toLowerCase() === wanted;
         });
     }
     const counts = await campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));

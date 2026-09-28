@@ -213,8 +213,8 @@ export const RegisterParticipantSchema = z.object({
 
     firstName: z.string().min(1, "First name is required").max(100),
     lastName: z.string().min(1, "Last name is required").max(100),
-    college: z.string().max(300).optional(),
-    department: z.string().max(200).optional(),
+    college: z.string().max(300).trim().optional(),
+    department: z.string().max(200).trim().optional(),
     // Set when college/department were picked from the catalog (see src/common/colleges.ts)
     // rather than typed as "Other" free text — college/department above always carry the name.
     collegeId: z.string().optional(),

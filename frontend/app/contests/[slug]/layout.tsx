@@ -7,7 +7,7 @@ export default function PublicContestSlugLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <PublicHeader />
+      <PublicHeader hideBrowseContests />
       <main className="flex-1">{children}</main>
     </div>
   );

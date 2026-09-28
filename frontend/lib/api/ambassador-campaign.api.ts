@@ -25,6 +25,7 @@ import type {
   LeaderboardScope,
   LeaderboardEntryResult,
   ApplicationReportRow,
+  CampaignReportSummary,
   ReferralListItem,
   CampaignStatsSummary,
   OrgAmbassadorListItem,
@@ -60,10 +61,17 @@ export interface CampaignsFilters {
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface ReportFilters {
+/** `from`/`to` are ISO timestamps windowing registrationCount/paidCount (and the summary's
+ *  period block); omit both for all-time. */
+export interface ReportPeriodFilters {
+  from?: string;
+  to?: string;
+}
+
+export interface ReportFilters extends ReportPeriodFilters {
   page?: number;
   limit?: number;
-  sortBy?: 'registrationCount' | 'createdAt';
+  sortBy?: 'registrationCount' | 'createdAt' | 'paidCount' | 'accruedAmount' | 'name';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -204,8 +212,13 @@ export const ambassadorCampaignApi = {
 
   // Returns a raw CSV file (Content-Disposition: attachment), not the JSON
   // envelope — used directly as an <a href> download link, never fetched via apiClient.
-  getReportExportUrl: (id: string) =>
-    `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'}/org/campaigns/${id}/report/export`,
+  getReportExportUrl: (id: string, filters: Omit<ReportFilters, 'page' | 'limit'> = {}) => {
+    const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== undefined) as [string, string][]).toString();
+    return `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'}/org/campaigns/${id}/report/export${qs ? `?${qs}` : ''}`;
+  },
+
+  getReportSummary: (id: string, params?: ReportPeriodFilters) =>
+    get<CampaignReportSummary>(`/org/campaigns/${id}/report/summary`, { params: params as Record<string, string | undefined> }),
 
   // `parentValue` is required when the cut's field depends on another (e.g. a Department cut
   // depends on College) — see the Report page's use of `useAmbassadorTypes` to detect that.

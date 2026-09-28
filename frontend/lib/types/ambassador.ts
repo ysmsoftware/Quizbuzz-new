@@ -480,10 +480,41 @@ export interface ApplicationReportRow {
   firstName: string;
   lastName: string | null;
   email: string;
-  registrationCount: number;
+  phone: string | null;
+  referralCode: string;
+  applicationData: Record<string, unknown>;
+  registrationCount: number; // within the requested period (all-time when none)
+  paidCount: number; // within the requested period
+  totalRegistrations: number; // all-time — what tier/owed are computed from
   currentTierLabel: string | null;
+  milestoneAmount: number; // rupees
+  speedBonusAmount: number; // rupees
   accruedAmount: number; // rupees
   createdAt: string;
+}
+
+/** Report-page-only aggregates (GET /org/campaigns/:id/report/summary) — `period` follows
+ *  the from/to filter; everything else is all-time. Amounts in rupees. */
+export interface CampaignReportSummary {
+  period: { registrations: number; paid: number; revenue: number; attended: number; disqualified: number; activeAmbassadors: number };
+  approvedAmbassadors: number;
+  allTimePaid: number;
+  applications: {
+    approved: number;
+    pending: number;
+    rejected: number;
+    recent: { enrollmentId: string; firstName: string; lastName: string | null; status: string; appliedAt: string; reviewedAt: string | null; rejectionReason: string | null }[];
+  };
+  liability: {
+    milestoneAmount: number;
+    milestoneReached: number;
+    speedBonusAmount: number;
+    speedBonusWinners: number;
+    leaderboardProjected: number;
+    leaderboardCuts: { label: string; projected: number; rankedGroups: number }[];
+    total: number;
+    budget: number;
+  };
 }
 
 /** Admin drill-down behind one ambassador's registrationCount — full contact detail. */

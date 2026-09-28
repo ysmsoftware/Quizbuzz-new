@@ -10,6 +10,7 @@ import {
     ListOrgAmbassadorsQuerySchema,
     RejectApplicationSchema,
     ListReportQuerySchema,
+    ReportPeriodQuerySchema,
     ListReferralsQuerySchema,
     LeaderboardQuerySchema,
     ReplaceGroupsSchema,
@@ -328,10 +329,22 @@ export class AmbassadorCampaignController {
         }
     };
 
+    getCampaignReportSummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const organizationId = req.user!.organizationId;
+            const { from, to } = ReportPeriodQuerySchema.parse(req.query);
+            const result = await this.service.getCampaignReportSummary(organizationId, req.params.id as string, from, to);
+            res.status(200).json({ success: true, data: result, requestId: req.id });
+        } catch (err) {
+            next(err);
+        }
+    };
+
     exportCampaignReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const organizationId = req.user!.organizationId;
-            const csv = await this.service.exportCampaignReportCsv(organizationId, req.params.id as string);
+            const query = ReportPeriodQuerySchema.parse(req.query);
+            const csv = await this.service.exportCampaignReportCsv(organizationId, req.params.id as string, query);
             res.status(200)
                 .header("Content-Type", "text/csv")
                 .header("Content-Disposition", `attachment; filename="ambassador-report-${req.params.id}.csv"`)

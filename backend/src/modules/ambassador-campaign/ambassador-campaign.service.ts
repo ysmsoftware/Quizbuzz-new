@@ -13,7 +13,12 @@ import { MessageTemplate } from "../../types/message-template.enum";
 import { config } from "../../config";
 import logger from "../../config/logger";
 import { BadRequestError, ConflictError, NotFoundError } from "../../error/http-errors";
-import { computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, findLeaderboardScopeParentKey, findPrizeForRank, leaderboardScopeEquals } from "./campaign-stats";
+import { computeCampaignStatsSummary, computeEnrollmentStats, computeLeaderboardGroups, computeSpeedBonusWinners, findLeaderboardScopeParentKey, findPrizeForRank, leaderboardScopeEquals, normalizeFieldValue } from "./campaign-stats";
+import { computeMilestoneReward, speedBonusTotal } from "./reward-calculator";
+import { ReportRowRecord } from "./ambassador-campaign.repository";
+
+// Latest pending/rejected applications shown in the report's applications log.
+const RECENT_APPLICATIONS_LIMIT = 5;
 import { calculateCampaignCapacity } from "./campaign-capacity";
 import { generateCampaignPhases } from "./campaign-timeline";
 import { getAmbassadorTypeByKey } from "../../common/ambassador-types";
@@ -33,6 +38,7 @@ import {
     CampaignListItem,
     CampaignPhase,
     CampaignPhaseTemplateEntry,
+    CampaignReportSummary,
     CampaignResult,
     CampaignStatsSummary,
     CampaignTarget,
@@ -57,6 +63,7 @@ import {
     ReplaceGroupsDTO,
     RewardConfig,
     ShareTemplates,
+    SpeedBonusResult,
     TemplateResult,
     UpdateCampaignDTO,
 } from "./ambassador-campaign.types";
@@ -757,42 +764,169 @@ export class AmbassadorCampaignService {
         const campaign = await this.campaignRepo.findById(campaignId, organizationId);
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
-        const rows = await this._buildReportRows(campaign.id, campaign.rewardConfig as unknown as RewardConfig);
-
-        rows.sort((a, b) => {
-            const dir = query.sortOrder === "asc" ? 1 : -1;
-            if (query.sortBy === "registrationCount") return (a.registrationCount - b.registrationCount) * dir;
-            return (a.createdAt.getTime() - b.createdAt.getTime()) * dir;
-        });
-
-        const total = rows.length;
         const skip = (query.page - 1) * query.limit;
-        const data = rows.slice(skip, skip + query.limit);
+        const [records, total] = await Promise.all([
+            this.campaignRepo.listReportRows(campaign.id, { ...query, limit: query.limit, offset: skip }),
+            this.campaignRepo.countApprovedEnrollments(campaign.id),
+        ]);
+        const data = await this._toReportRows(campaign.id, campaign.rewardConfig as unknown as RewardConfig, records);
 
         return { data, total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) };
     }
 
     /** Note: synchronous in-memory CSV — pilot-scale row counts, no BullMQ export worker needed. Upgrade when campaigns regularly exceed a few thousand ambassadors. */
-    async exportCampaignReportCsv(organizationId: string, campaignId: string): Promise<string> {
+    async exportCampaignReportCsv(
+        organizationId: string,
+        campaignId: string,
+        query: Pick<ListReportQueryDTO, "from" | "to" | "sortBy" | "sortOrder">,
+    ): Promise<string> {
         const campaign = await this.campaignRepo.findById(campaignId, organizationId);
         if (!campaign) throw new NotFoundError("Campaign not found.");
 
-        const rows = await this._buildReportRows(campaign.id, campaign.rewardConfig as unknown as RewardConfig);
+        const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
+        const records = await this.campaignRepo.listReportRows(campaign.id, query);
+        const rows = await this._toReportRows(campaign.id, rewardConfig, records);
 
-        const header = ["Ambassador", "Email", "Registrations", "Current Tier", "Amount Owed (₹)"];
+        // The application fields the org actually ranks by (college, department, ...) — the
+        // same keys the leaderboards group on, so the export lines up with them.
+        const fieldKeys = [...new Set((rewardConfig.leaderboardPrizes ?? []).flatMap((c) => c.scope.groupByFieldKeys ?? []))];
+        const period = query.from || query.to
+            ? `${query.from?.toISOString() ?? "start"} to ${query.to?.toISOString() ?? "now"}`
+            : "All time";
+
+        const header = [
+            "Ambassador", "Email", "Phone", "Referral Code", "Joined",
+            ...fieldKeys.map((k) => k.charAt(0).toUpperCase() + k.slice(1)),
+            "Registrations (period)", "Paid (period)", "Registrations (all time)",
+            "Current Tier", "Milestone (₹)", "Speed Bonus (₹)", "Amount Owed (₹)",
+        ];
         const lines = rows.map((r) =>
             [
                 `${r.firstName} ${r.lastName ?? ""}`.trim(),
                 r.email,
+                r.phone ?? "",
+                r.referralCode,
+                r.createdAt.toISOString().slice(0, 10),
+                ...fieldKeys.map((k) => String(r.applicationData[k] ?? "")),
                 String(r.registrationCount),
+                String(r.paidCount),
+                String(r.totalRegistrations),
                 r.currentTierLabel ?? "",
+                r.milestoneAmount.toFixed(2),
+                r.speedBonusAmount.toFixed(2),
                 r.accruedAmount.toFixed(2),
             ]
                 .map((cell) => `"${cell.replace(/"/g, '""')}"`)
                 .join(","),
         );
 
-        return [header.join(","), ...lines].join("\n");
+        const meta = [`"Campaign","${campaign.name.replace(/"/g, '""')}"`, `"Period","${period}"`, `"Generated","${new Date().toISOString()}"`, ""];
+        return [...meta, header.join(","), ...lines].join("\n");
+    }
+
+    /**
+     * Report-page aggregates the campaign detail page doesn't show: referral quality for the
+     * requested period, the full applications picture (not just APPROVED), and payout
+     * liability broken down by source — milestones, speed bonus, and leaderboard prizes as
+     * they'd pay out if the campaign ended right now.
+     */
+    async getCampaignReportSummary(organizationId: string, campaignId: string, from?: Date, to?: Date): Promise<CampaignReportSummary> {
+        const campaign = await this.campaignRepo.findById(campaignId, organizationId);
+        if (!campaign) throw new NotFoundError("Campaign not found.");
+        const rewardConfig = campaign.rewardConfig as unknown as RewardConfig;
+
+        const [periodStats, statusCounts, recent, enrollments] = await Promise.all([
+            this.campaignRepo.getReportPeriodStats(campaign.id, from, to),
+            this.campaignRepo.countEnrollmentsByStatus(campaign.id),
+            this.campaignRepo.listRecentUnapprovedEnrollments(campaign.id, RECENT_APPLICATIONS_LIMIT),
+            this.campaignRepo.listEnrollmentsForCampaign(campaign.id).then((all) => all.filter((e) => e.status === AmbassadorStatus.APPROVED)),
+        ]);
+
+        // Milestones + speed bonus — all-time, over every approved enrollment.
+        const counts = await this.campaignRepo.countReferralsForEnrollments(enrollments.map((e) => e.id));
+        let milestoneAmount = 0;
+        let milestoneReached = 0;
+        for (const e of enrollments) {
+            const m = computeMilestoneReward(rewardConfig.milestoneTiers ?? [], counts.get(e.id) ?? 0);
+            milestoneAmount += m.accruedAmount;
+            if (m.currentTier) milestoneReached++;
+        }
+        const speedWinners = await computeSpeedBonusWinners(this.campaignRepo, campaign.id, rewardConfig);
+        let speedBonusAmount = 0;
+        let speedBonusWinnerCount = 0;
+        for (const result of speedWinners.values()) {
+            const amount = speedBonusTotal(result);
+            speedBonusAmount += amount;
+            if (amount > 0) speedBonusWinnerCount++;
+        }
+
+        // Leaderboard prizes, projected from current standings. A dependent cut (Department
+        // under College) awards per parent value, so project it once per distinct parent.
+        const leaderboardCuts: CampaignReportSummary["liability"]["leaderboardCuts"] = [];
+        for (const cut of rewardConfig.leaderboardPrizes ?? []) {
+            const parentKey = await findLeaderboardScopeParentKey(organizationId, campaign.ambassadorTypesAllowed, cut.scope);
+            const filters = parentKey
+                ? [...new Map(enrollments.map((e) => {
+                      const v = normalizeFieldValue((e.ambassador.applicationData as Record<string, unknown> | null)?.[parentKey]);
+                      return [v.toLowerCase(), v] as const;
+                  })).values()].filter(Boolean).map((value) => ({ fieldKey: parentKey, value }))
+                : [undefined];
+
+            let projected = 0;
+            let rankedGroups = 0;
+            for (const filter of filters) {
+                const groups = await computeLeaderboardGroups(this.campaignRepo, campaign.id, cut.scope, cut.rankedBy, filter);
+                groups.filter((g) => g.registrationCount > 0).forEach((_, i) => {
+                    const prize = findPrizeForRank(cut, i + 1);
+                    if (!prize) return;
+                    rankedGroups++;
+                    projected += (prize.cashAmount ?? 0) + ("goodie" in prize ? (prize.goodie?.cashEquivalent ?? 0) : 0);
+                });
+            }
+            leaderboardCuts.push({ label: cut.label, projected: paisaToRupees(projected), rankedGroups });
+        }
+        const leaderboardProjected = leaderboardCuts.reduce((sum, c) => sum + c.projected, 0);
+
+        // Same budget formula as the campaign detail page's Reward Budget card.
+        const speedBudget = rewardConfig.speedBonus?.enabled
+            ? (rewardConfig.speedBonus.tiers ?? []).reduce((acc, t) => acc + (t.maxWinners ? t.maxWinners * t.bonusAmount : t.bonusAmount), 0)
+            : 0;
+        const leaderboardBudget = (rewardConfig.leaderboardPrizes ?? []).reduce(
+            (acc, cut) => acc + cut.ranks.reduce((a, r) => a + (r.cashAmount ?? 0) + (r.goodie?.cashEquivalent ?? 0), 0) + (cut.consolation?.cashAmount ?? 0),
+            0,
+        );
+
+        const milestone = paisaToRupees(milestoneAmount);
+        const speed = paisaToRupees(speedBonusAmount);
+        return {
+            period: { ...periodStats, revenue: paisaToRupees(periodStats.revenue) },
+            approvedAmbassadors: enrollments.length,
+            allTimePaid: periodStats.allTimePaid,
+            applications: {
+                approved: statusCounts.get(AmbassadorStatus.APPROVED) ?? 0,
+                pending: statusCounts.get(AmbassadorStatus.PENDING) ?? 0,
+                rejected: statusCounts.get(AmbassadorStatus.REJECTED) ?? 0,
+                recent: recent.map((e) => ({
+                    enrollmentId: e.id,
+                    firstName: e.ambassador.firstName,
+                    lastName: e.ambassador.lastName,
+                    status: e.status,
+                    appliedAt: e.createdAt,
+                    reviewedAt: e.reviewedAt,
+                    rejectionReason: e.rejectionReason,
+                })),
+            },
+            liability: {
+                milestoneAmount: milestone,
+                milestoneReached,
+                speedBonusAmount: speed,
+                speedBonusWinners: speedBonusWinnerCount,
+                leaderboardProjected,
+                leaderboardCuts,
+                total: milestone + speed + leaderboardProjected,
+                budget: paisaToRupees(speedBudget + leaderboardBudget),
+            },
+        };
     }
 
     /** Full-detail drill-down behind one ambassador's registrationCount on the report — the
@@ -868,28 +1002,36 @@ export class AmbassadorCampaignService {
         return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     }
 
-    private async _buildReportRows(campaignId: string, rewardConfig: RewardConfig): Promise<ApplicationReportRow[]> {
-        const allEnrollments = await this.campaignRepo.listEnrollmentsForCampaign(campaignId);
-        // Only APPROVED applications actually promote/earn (see findEnrollmentByReferralCodeForContest) —
-        // PENDING/REJECTED ones have no live referral link, so they'd just be zero-rows noise here.
-        const enrollments = allEnrollments.filter((e) => e.status === AmbassadorStatus.APPROVED);
+    /** Adds tier/milestone/speed-bonus/owed to one page of SQL rows — computed for that page
+     *  only (speed-bonus winners are a cached campaign-wide pass, see computeSpeedBonusWinners). */
+    private async _toReportRows(campaignId: string, rewardConfig: RewardConfig, records: ReportRowRecord[]): Promise<ApplicationReportRow[]> {
+        const speedWinners = rewardConfig.speedBonus?.enabled
+            ? await computeSpeedBonusWinners(this.campaignRepo, campaignId, rewardConfig)
+            : new Map<string, SpeedBonusResult | null>();
 
-        return Promise.all(
-            enrollments.map(async (enrollment) => {
-                const stats = await computeEnrollmentStats(this.campaignRepo, campaignId, enrollment.id, rewardConfig);
-                return {
-                    ambassadorId: enrollment.ambassadorId,
-                    enrollmentId: enrollment.id,
-                    firstName: enrollment.ambassador.firstName,
-                    lastName: enrollment.ambassador.lastName,
-                    email: enrollment.ambassador.email,
-                    registrationCount: stats.registrationCount,
-                    currentTierLabel: stats.currentTier?.label ?? stats.currentTier?.goodie?.label ?? (stats.currentTier ? `${stats.currentTier.minRegistrations}+` : null),
-                    accruedAmount: paisaToRupees(stats.accruedAmount),
-                    createdAt: enrollment.createdAt,
-                };
-            }),
-        );
+        return records.map((r) => {
+            const milestone = computeMilestoneReward(rewardConfig.milestoneTiers ?? [], r.totalRegistrations);
+            const bonus = speedBonusTotal(speedWinners.get(r.enrollmentId) ?? null);
+            const tier = milestone.currentTier;
+            return {
+                ambassadorId: r.ambassadorId,
+                enrollmentId: r.enrollmentId,
+                firstName: r.firstName,
+                lastName: r.lastName,
+                email: r.email,
+                phone: r.phone,
+                referralCode: r.referralCode,
+                applicationData: r.applicationData ?? {},
+                registrationCount: r.registrationCount,
+                paidCount: r.paidCount,
+                totalRegistrations: r.totalRegistrations,
+                currentTierLabel: tier?.label ?? tier?.goodie?.label ?? (tier ? `${tier.minRegistrations}+` : null),
+                milestoneAmount: paisaToRupees(milestone.accruedAmount),
+                speedBonusAmount: paisaToRupees(bonus),
+                accruedAmount: paisaToRupees(milestone.accruedAmount + bonus),
+                createdAt: r.createdAt,
+            };
+        });
     }
 
     private _toApplicationResult(e: EnrollmentWithAmbassadorAndCampaignName): ApplicationResult {
