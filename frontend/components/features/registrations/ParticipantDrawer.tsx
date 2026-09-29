@@ -106,9 +106,6 @@ interface ParticipantDrawerProps {
     phase: string;
     isLoading?: boolean;
     isRevoking?: boolean;
-    /** @deprecated unused — manual settlement now goes through "Verify with Razorpay". */
-    onMarkAsPaid?: (ref: string) => void;
-    onAllowFree: () => void;
     onRevoke: (reason: string) => void;
     onSendMessage: (participantId: string) => void;
 }
@@ -121,7 +118,6 @@ export function ParticipantDrawer({
     phase,
     isLoading = false,
     isRevoking = false,
-    onAllowFree,
     onRevoke,
     onSendMessage,
 }: ParticipantDrawerProps) {
@@ -340,7 +336,6 @@ export function ParticipantDrawer({
                                             <ParticipantPaymentPanel
                                                 participantId={registration.id}
                                                 contestId={contest.id}
-                                                onAllowFree={onAllowFree}
                                             />
                                         )}
                                     </TabsContent>

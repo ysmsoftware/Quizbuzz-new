@@ -84,6 +84,27 @@ describe("PaymentService.verifyRazorpayPaymentForParticipant", () => {
     await expect(verify("pay_rzp_A")).rejects.toThrow(/already linked/);
   });
 
+  // Step 1 of the admin flow: show what Razorpay has, change nothing.
+  it("preview returns Razorpay's details and checks without writing or emailing", async () => {
+    const preview = await service.previewRazorpayPaymentForParticipant({ participantId: "part_1", organizationId: "org_1", reference: "pay_rzp_A" });
+
+    expect(preview.canConfirm).toBe(true);
+    expect(preview.razorpay).toMatchObject({ paymentId: "pay_rzp_A", orderId: "order_A", status: "captured", amount: 9900 });
+    expect(preview.checks.every((c) => c.ok)).toBe(true);
+    expect(repo.recordOrder).not.toHaveBeenCalled();
+    expect(repo.markSuccess).not.toHaveBeenCalled();
+    expect(participants.confirmPaymentRegistration).not.toHaveBeenCalled();
+  });
+
+  it("preview reports failing checks instead of throwing", async () => {
+    razorpay.fetchPayment.mockResolvedValue({ ...captured, status: "failed", error_description: "Payment timed out" });
+
+    const preview = await service.previewRazorpayPaymentForParticipant({ participantId: "part_1", organizationId: "org_1", reference: "pay_rzp_A" });
+
+    expect(preview.canConfirm).toBe(false);
+    expect(preview.checks.find((c) => c.label === "Captured by Razorpay")).toMatchObject({ ok: false });
+  });
+
   it("does not expose another organization's registration", async () => {
     await expect(verify("pay_rzp_A", "org_2")).rejects.toThrow(/No payment record/);
     expect(razorpay.fetchPayment).not.toHaveBeenCalled();

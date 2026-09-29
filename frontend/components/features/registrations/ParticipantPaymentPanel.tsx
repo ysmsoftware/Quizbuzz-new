@@ -3,11 +3,19 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CreditCard, Loader2, ShieldAlert, ShieldCheck, History, Search } from 'lucide-react';
+import { CreditCard, Loader2, ShieldAlert, ShieldCheck, History, Search, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import * as paymentApi from '@/lib/api/payment.api';
 import { queryKeys } from '@/lib/api/queryClient';
@@ -28,37 +36,49 @@ const STATUS_CLASS: Record<string, string> = {
 /**
  * Drawer "Payment" tab body for paid contests: the real payment record, every
  * Razorpay order ever created for this registration, and — when the payment
- * isn't settled — a "verify with Razorpay" form that settles it from a
- * Razorpay payment/order ID after the backend checks it live with Razorpay.
+ * isn't settled — a two-step "verify with Razorpay" flow: look the ID up on
+ * Razorpay and review what came back (changes nothing), then explicitly
+ * confirm, which settles the registration and emails the participant. The
+ * backend re-runs every check on confirm.
  */
 export function ParticipantPaymentPanel({
     participantId,
     contestId,
-    onAllowFree,
 }: {
     participantId: string;
     contestId: string;
-    onAllowFree: () => void;
 }) {
     const queryClient = useQueryClient();
     const [reference, setReference] = React.useState('');
+    // The review dialog: what Razorpay returned for `reference`, or why the lookup failed.
+    const [review, setReview] = React.useState<
+        { reference: string; preview?: paymentApi.RazorpayVerificationPreview; error?: string } | null
+    >(null);
 
     const detailsQuery = useQuery({
         queryKey: queryKeys.payments.details(participantId),
         queryFn: () => paymentApi.getParticipantPaymentDetails(participantId),
     });
 
-    const verifyMutation = useMutation({
+    const lookupMutation = useMutation({
+        mutationFn: (ref: string) => paymentApi.previewRazorpayPayment(participantId, ref),
+        onSuccess: (res, ref) => setReview({ reference: ref, preview: res.data }),
+        onError: (err: any, ref) =>
+            setReview({ reference: ref, error: err?.message || 'Could not look this ID up on Razorpay.' }),
+    });
+
+    const confirmMutation = useMutation({
         mutationFn: (ref: string) => paymentApi.verifyRazorpayPayment(participantId, ref),
         onSuccess: (res) => {
             queryClient.setQueryData(queryKeys.payments.details(participantId), res);
             queryClient.invalidateQueries({ queryKey: ['contests', contestId, 'participants'] });
             queryClient.invalidateQueries({ queryKey: ['contest-status-summary', contestId] });
             setReference('');
-            toast.success('Payment verified with Razorpay — registration confirmed and the participant has been emailed.');
+            setReview(null);
+            toast.success('Registration confirmed — the participant has been emailed.');
         },
         onError: (err: any) => {
-            toast.error(err?.message || 'Could not verify this payment with Razorpay.');
+            toast.error(err?.message || 'Could not confirm this payment.');
         },
     });
 
@@ -100,7 +120,7 @@ export function ParticipantPaymentPanel({
                     <DetailItem label="Paid At" value={fmt(payment.paidAt)} />
                     <DetailItem label="First Attempt" value={fmt(payment.createdAt)} />
                     <DetailItem label="Last Update" value={fmt(payment.updatedAt)} />
-                    <DetailItem label="Orders Created" value={String(details.orders.length || payment.attempts)} />
+                    <DetailItem label="Orders Created" value={String(Math.max(details.orders.length, payment.attempts))} />
                 </div>
             </DetailSection>
 
@@ -164,15 +184,15 @@ export function ParticipantPaymentPanel({
                     </div>
                     <p className="text-xs text-muted-foreground">
                         Enter the Razorpay payment ID (<span className="font-mono">pay_…</span>) or order ID (
-                        <span className="font-mono">order_…</span>) from their receipt or your Razorpay dashboard. We check it live with Razorpay —
-                        it must be captured, for this amount, and for this registration — then confirm the registration and email the participant.
+                        <span className="font-mono">order_…</span>) from their receipt or your Razorpay dashboard. We’ll fetch it from Razorpay
+                        and show you what we found — nothing changes until you confirm.
                     </p>
                     <form
                         className="flex flex-col sm:flex-row gap-2"
                         onSubmit={(e) => {
                             e.preventDefault();
                             const ref = reference.trim();
-                            if (ref) verifyMutation.mutate(ref);
+                            if (ref) lookupMutation.mutate(ref);
                         }}
                     >
                         <Input
@@ -181,29 +201,122 @@ export function ParticipantPaymentPanel({
                             placeholder="pay_… or order_…"
                             className="font-mono text-sm"
                             aria-label="Razorpay payment or order ID"
-                            disabled={verifyMutation.isPending}
+                            disabled={lookupMutation.isPending}
                         />
-                        <Button type="submit" disabled={!reference.trim() || verifyMutation.isPending} className="shrink-0">
-                            {verifyMutation.isPending ? (
+                        <Button type="submit" disabled={!reference.trim() || lookupMutation.isPending} className="shrink-0">
+                            {lookupMutation.isPending ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                                 <>
-                                    <Search className="mr-2 h-4 w-4" /> Verify with Razorpay
+                                    <Search className="mr-2 h-4 w-4" /> Look up on Razorpay
                                 </>
                             )}
                         </Button>
                     </form>
-                    {payment.status === 'FAILED' && (
-                        <Button
-                            variant="outline"
-                            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-                            onClick={onAllowFree}
-                        >
-                            Allow Free Entry
-                        </Button>
-                    )}
                 </div>
             )}
+
+            <Dialog open={!!review} onOpenChange={(open) => !open && !confirmMutation.isPending && setReview(null)}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {review?.preview ? 'Payment found on Razorpay' : 'Payment not found'}
+                        </DialogTitle>
+                        <DialogDescription className="font-mono text-xs [overflow-wrap:anywhere]">
+                            {review?.reference}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {review?.error && (
+                        <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 text-sm text-destructive flex gap-2">
+                            <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span>{review.error}</span>
+                        </div>
+                    )}
+
+                    {review?.preview && (
+                        <RazorpayPreview preview={review.preview} expectedAmount={payment.amount} expectedCurrency={payment.currency} />
+                    )}
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setReview(null)} disabled={confirmMutation.isPending}>
+                            {review?.preview?.canConfirm ? 'Cancel' : 'Close'}
+                        </Button>
+                        {review?.preview?.canConfirm && (
+                            <Button
+                                onClick={() => confirmMutation.mutate(review.reference)}
+                                disabled={confirmMutation.isPending}
+                            >
+                                {confirmMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    'Confirm registration & send email'
+                                )}
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+/** Razorpay's own record for the looked-up payment, plus each acceptance check — for the admin to cross-check. */
+function RazorpayPreview({
+    preview,
+    expectedAmount,
+    expectedCurrency,
+}: {
+    preview: paymentApi.RazorpayVerificationPreview;
+    expectedAmount: number;
+    expectedCurrency: string;
+}) {
+    const r = preview.razorpay;
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border/60 bg-muted/20">
+                <DetailItem
+                    label="Razorpay status"
+                    value={
+                        <Badge className={cn('uppercase text-[10px] text-white', r.status === 'captured' ? 'bg-green-500' : 'bg-destructive')}>
+                            {r.status}
+                        </Badge>
+                    }
+                />
+                <DetailItem
+                    label="Amount"
+                    value={`₹${(r.amount / 100).toFixed(2)} ${r.currency} (expected ₹${(expectedAmount / 100).toFixed(2)} ${expectedCurrency})`}
+                />
+                <DetailItem label="Payment ID" value={r.paymentId} mono copyable />
+                <DetailItem label="Order ID" value={r.orderId} mono copyable />
+                <DetailItem label="Paid on" value={fmt(r.createdAt)} />
+                <DetailItem label="Method" value={[r.method?.toUpperCase(), r.vpa].filter(Boolean).join(' · ') || '—'} />
+                <DetailItem label="Bank RRN" value={r.bankRrn || '—'} mono copyable />
+                <DetailItem label="Payer" value={[r.contact, r.email].filter(Boolean).join(' · ') || '—'} />
+                {r.errorDescription && <DetailItem label="Razorpay error" value={r.errorDescription} />}
+            </div>
+
+            <ul className="space-y-2">
+                {preview.checks.map((c) => (
+                    <li key={c.label} className="flex items-start gap-2 text-sm">
+                        {c.ok ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+                        ) : (
+                            <XCircle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+                        )}
+                        <span>
+                            <span className="font-medium">{c.label}</span>
+                            <span className="text-muted-foreground"> — {c.detail}</span>
+                        </span>
+                    </li>
+                ))}
+            </ul>
+
+            <p className={cn('text-xs', preview.canConfirm ? 'text-muted-foreground' : 'text-destructive')}>
+                {preview.canConfirm
+                    ? 'Confirming marks this registration paid, confirms the seat and emails the payment confirmation and joining details to the participant.'
+                    : 'This payment can’t be accepted for this registration.'}
+            </p>
         </div>
     );
 }

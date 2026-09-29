@@ -41,6 +41,32 @@ export type CreateOrderResult =
     // The registration is already paid (possibly just discovered via Razorpay) — no checkout needed.
     | { alreadyPaid: true; paymentId: string };
 
+export interface RazorpayVerificationCheck {
+    label: string;
+    ok: boolean;
+    detail: string;
+}
+
+/** What Razorpay returned for an admin-entered ID, shown for review before confirming. */
+export interface RazorpayVerificationPreview {
+    razorpay: {
+        paymentId: string;
+        orderId: string;
+        status: string;
+        amount: number; // paise
+        currency: string;
+        method: string | null;
+        vpa: string | null;
+        bankRrn: string | null;
+        email: string | null;
+        contact: string | null;
+        createdAt: Date;
+        errorDescription: string | null;
+    };
+    checks: RazorpayVerificationCheck[];
+    canConfirm: boolean;
+}
+
 export interface ParticipantPaymentDetails {
     payment: {
         id: string;

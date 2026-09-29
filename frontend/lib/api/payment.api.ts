@@ -144,8 +144,33 @@ export async function getParticipantPaymentDetails(participantId: string): Promi
     return get<ParticipantPaymentDetails>(`/payments/participants/${participantId}/details`);
 }
 
+/** POST /payments/participants/:participantId/razorpay-lookup — mirrors backend RazorpayVerificationPreview. */
+export interface RazorpayVerificationPreview {
+    razorpay: {
+        paymentId: string;
+        orderId: string;
+        status: string;
+        amount: number; // paise
+        currency: string;
+        method: string | null;
+        vpa: string | null;
+        bankRrn: string | null;
+        email: string | null;
+        contact: string | null;
+        createdAt: string;
+        errorDescription: string | null;
+    };
+    checks: { label: string; ok: boolean; detail: string }[];
+    canConfirm: boolean;
+}
+
+/** Admin step 1: what Razorpay has for this ID and whether it can be accepted. Changes nothing. */
+export async function previewRazorpayPayment(participantId: string, reference: string): Promise<ApiResponse<RazorpayVerificationPreview>> {
+    return post<RazorpayVerificationPreview>(`/payments/participants/${participantId}/razorpay-lookup`, { reference });
+}
+
 /**
- * Admin: settle a registration from a Razorpay payment ID (pay_…) or order ID (order_…).
+ * Admin step 2: settle a registration from a Razorpay payment ID (pay_…) or order ID (order_…).
  * The backend verifies it live with Razorpay (captured, amount, belongs to this participant).
  */
 export async function verifyRazorpayPayment(participantId: string, reference: string): Promise<ApiResponse<ParticipantPaymentDetails>> {

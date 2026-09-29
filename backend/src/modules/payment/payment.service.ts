@@ -10,7 +10,7 @@ import { MessageTemplate } from "../../types/message-template.enum";
 import logger from "../../config/logger";
 
 
-import { PaymentListResult, PaymentDetailResult, CreateOrderResult, ParticipantPaymentDetails } from "./payment.types";
+import { PaymentListResult, PaymentDetailResult, CreateOrderResult, ParticipantPaymentDetails, RazorpayVerificationCheck, RazorpayVerificationPreview } from "./payment.types";
 import { PayoutService } from "../payout/payout.service";
 import { OrganizationRepository } from "../organization/organization.repository";
 import { routeTransferQueue, RouteTransferJobPayload, paymentCleanupQueue } from "../../queues";
@@ -558,22 +558,19 @@ export class PaymentService {
     }
 
     /**
-     * Admin "verify Razorpay payment": looks the payment/order up on Razorpay and,
-     * only if it is captured, for the right amount, and belongs to this
-     * participant, settles the registration exactly like the webhook would
-     * (confirm seat + emails). Nothing is trusted from the admin but the ID.
+     * Looks a Razorpay payment/order ID up on Razorpay and runs every check a
+     * manual settlement needs. Read-only. Used by the admin preview (so they can
+     * cross-check what Razorpay returned) and re-run in full by the confirm step —
+     * the confirm never trusts the preview.
      */
-    async verifyRazorpayPaymentForParticipant(params: {
+    private async inspectRazorpayReference(params: {
         participantId: string;
         organizationId: string;
         reference: string;
-    }): Promise<ParticipantPaymentDetails> {
+    }): Promise<{ payment: Payment; entity: RazorpayPaymentEntity; checks: RazorpayVerificationCheck[] }> {
         const payment = await this.paymentRepo.findByParticipantId(params.participantId);
         if (!payment || payment.organizationId !== params.organizationId) {
             throw new NotFoundError("No payment record found for this participant");
-        }
-        if (payment.status === PaymentStatus.SUCCESS) {
-            throw new BadRequestError("This registration is already marked as paid");
         }
 
         const reference = params.reference.trim();
@@ -594,15 +591,8 @@ export class PaymentService {
             throw new BadRequestError("Razorpay could not find this ID on our account — check it and try again");
         }
 
-        if (entity.status !== "captured") {
-            const why = entity.error_description ? `: ${entity.error_description}` : "";
-            throw new BadRequestError(`Razorpay reports this payment as "${entity.status}"${why}. Only captured payments can be accepted.`);
-        }
-        if (entity.amount !== payment.amount || entity.currency !== payment.currency) {
-            throw new BadRequestError(
-                `Amount mismatch: Razorpay captured ${entity.currency} ${(entity.amount / 100).toFixed(2)}, this registration expects ${payment.currency} ${(payment.amount / 100).toFixed(2)}`
-            );
-        }
+        const expected = `${payment.currency} ${(payment.amount / 100).toFixed(2)}`;
+        const got = `${entity.currency} ${(entity.amount / 100).toFixed(2)}`;
 
         // Must belong to this registration — otherwise any captured payment on the
         // account could be used to confirm someone else.
@@ -616,15 +606,90 @@ export class PaymentService {
                 || order.receipt === receipts.original
                 || order.receipt === receipts.retry;
         }
-        if (!owned) {
-            throw new BadRequestError("This Razorpay payment belongs to a different registration");
-        }
 
         const linkedPayment = await this.paymentRepo.findByRazorpayPaymentId(entity.id);
         const linkedOrder = await this.paymentRepo.findOrder(entity.order_id);
-        if ((linkedPayment && linkedPayment.id !== payment.id) || (linkedOrder && linkedOrder.paymentId !== payment.id)) {
-            throw new BadRequestError("This Razorpay payment is already linked to another registration");
+        const linkedElsewhere = (!!linkedPayment && linkedPayment.id !== payment.id) || (!!linkedOrder && linkedOrder.paymentId !== payment.id);
+
+        const why = entity.error_description ? `: ${entity.error_description}` : "";
+        const checks: RazorpayVerificationCheck[] = [
+            {
+                label: "Captured by Razorpay",
+                ok: entity.status === "captured",
+                detail: entity.status === "captured"
+                    ? "Razorpay has received this money"
+                    : `Razorpay reports this payment as "${entity.status}"${why}. Only captured payments can be accepted.`,
+            },
+            {
+                label: "Amount matches",
+                ok: entity.amount === payment.amount && entity.currency === payment.currency,
+                detail: entity.amount === payment.amount && entity.currency === payment.currency
+                    ? got
+                    : `Amount mismatch: Razorpay captured ${got}, this registration expects ${expected}`,
+            },
+            {
+                label: "Belongs to this registration",
+                ok: owned,
+                detail: owned ? "Order was created for this participant" : "This Razorpay payment belongs to a different registration",
+            },
+            {
+                label: "Not used by another registration",
+                ok: !linkedElsewhere,
+                detail: linkedElsewhere ? "This Razorpay payment is already linked to another registration" : "Not linked anywhere else",
+            },
+            {
+                label: "Registration still unpaid",
+                ok: payment.status !== PaymentStatus.SUCCESS,
+                detail: payment.status === PaymentStatus.SUCCESS ? "This registration is already marked as paid" : `Currently ${payment.status}`,
+            },
+        ];
+
+        return { payment, entity, checks };
+    }
+
+    /** Admin step 1: what Razorpay has for this ID, and whether it can be accepted. No writes. */
+    async previewRazorpayPaymentForParticipant(params: {
+        participantId: string;
+        organizationId: string;
+        reference: string;
+    }): Promise<RazorpayVerificationPreview> {
+        const { entity, checks } = await this.inspectRazorpayReference(params);
+        return {
+            razorpay: {
+                paymentId: entity.id,
+                orderId: entity.order_id,
+                status: entity.status,
+                amount: entity.amount,
+                currency: entity.currency,
+                method: entity.method ?? null,
+                vpa: entity.vpa ?? null,
+                bankRrn: entity.acquirer_data?.rrn ?? null,
+                email: entity.email ?? null,
+                contact: entity.contact ?? null,
+                createdAt: new Date(entity.created_at * 1000),
+                errorDescription: entity.error_description ?? null,
+            },
+            checks,
+            canConfirm: checks.every((c) => c.ok),
+        };
+    }
+
+    /**
+     * Admin step 2: settle the registration from a Razorpay payment exactly like the
+     * webhook would (confirm seat + emails). Re-runs every check itself — only the
+     * ID comes from the admin.
+     */
+    async verifyRazorpayPaymentForParticipant(params: {
+        participantId: string;
+        organizationId: string;
+        reference: string;
+    }): Promise<ParticipantPaymentDetails> {
+        const { payment, entity, checks } = await this.inspectRazorpayReference(params);
+        const failed = checks.find((c) => !c.ok);
+        if (failed) {
+            throw new BadRequestError(failed.detail);
         }
+        const reference = params.reference.trim();
 
         await this.paymentRepo.recordOrder({ paymentId: payment.id, razorpayOrderId: entity.order_id, amount: entity.amount });
         await this.applyCapture(payment, entity, "manual");

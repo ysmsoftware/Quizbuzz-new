@@ -153,38 +153,6 @@ export function useRegistrations(
   });
 
   /**
-   * Mark as paid mutation
-   */
-  const markAsPaidMutation = useMutation({
-    mutationFn: ({ id, reference }: { id: string; reference: string }) =>
-      // This endpoint is not in the docs but needed for the UI. 
-      // Mapping to a generic participant update or specific payment update if it exists.
-      // For now, using patch on participant if possible or stubbing.
-      Promise.resolve({ success: true }), 
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.contests.participants(contestId, params),
-      });
-      toast.success('Payment marked as completed');
-    },
-  });
-
-  /**
-   * Allow free entry mutation
-   */
-  const allowFreeEntryMutation = useMutation({
-    mutationFn: (id: string) =>
-      // Stubbing for now as not in docs
-      Promise.resolve({ success: true }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.contests.participants(contestId, params),
-      });
-      toast.success('Free entry allowed');
-    },
-  });
-
-  /**
    * Participant status summary query
    */
   const statusSummaryQuery = useQuery({
@@ -231,8 +199,6 @@ export function useRegistrations(
     // Mutations
     revokeRegistrations: (args: { ids: string[], reason: string }) => revokeMutation.mutateAsync(args),
     isRevoking: revokeMutation.isPending,
-    markAsPaid: (args: { id: string, reference: string }) => markAsPaidMutation.mutateAsync(args),
-    allowFreeEntry: (id: string) => allowFreeEntryMutation.mutateAsync(id),
     disqualifyParticipant: (id: string, reason: string) => disqualifyMutation.mutateAsync({ participantId: id, reason }),
     // 'DISQUALIFIED' is intentionally not accepted here anymore — the backend
     // rejects it too. Bulk/single disqualify always goes through revokeRegistrations

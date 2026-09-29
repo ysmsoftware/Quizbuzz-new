@@ -760,8 +760,6 @@ export default function AdminLiveDashboard() {
         contest={contest}
         phase={contest ? deriveContestPhase(contest) : 'LIVE'}
         isLoading={isLoadingParticipant}
-        onMarkAsPaid={() => {}}
-        onAllowFree={() => {}}
         onRevoke={(reason) => {
           if (selectedRegistration) {
             toast.info(`Revoke requested for ${selectedRegistration.participantDetails?.fullName}. Use the Registrations tab to confirm.`);

@@ -129,6 +129,8 @@ export interface RazorpayPaymentEntity {
     currency: string;
     status: "created" | "authorized" | "captured" | "refunded" | "failed";
     method?: string;
+    vpa?: string | null;
+    acquirer_data?: { rrn?: string | null; upi_transaction_id?: string | null };
     email?: string;
     contact?: string;
     created_at: number;

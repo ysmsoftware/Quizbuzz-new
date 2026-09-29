@@ -137,8 +137,6 @@ export default function RegistrationsTabPage() {
         isFetching,
         revokeRegistrations,
         isRevoking,
-        markAsPaid,
-        allowFreeEntry,
         bulkUpdateStatus,
         statusSummary,
         triggerExport,
@@ -823,8 +821,6 @@ export default function RegistrationsTabPage() {
                 registration={selectedRegistration}
                 contest={contest}
                 phase={phase}
-                onMarkAsPaid={(ref) => markAsPaid({ id: selectedRegistration!.id, reference: ref })}
-                onAllowFree={() => allowFreeEntry(selectedRegistration!.id)}
                 onRevoke={(reason) => revokeRegistrations({ ids: [selectedRegistration!.id], reason })}
                 isRevoking={isRevoking}
                 onSendMessage={(participantId) => {
