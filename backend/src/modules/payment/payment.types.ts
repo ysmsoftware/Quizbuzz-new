@@ -35,3 +35,38 @@ export interface VerifyPaymentInput {
     razorpayOrderId: string;
     razorpaySignature: string;
 }
+
+export type CreateOrderResult =
+    | { alreadyPaid?: false; orderId: string; amount: number; currency: string; keyId: string; paymentId: string }
+    // The registration is already paid (possibly just discovered via Razorpay) — no checkout needed.
+    | { alreadyPaid: true; paymentId: string };
+
+export interface ParticipantPaymentDetails {
+    payment: {
+        id: string;
+        status: PaymentStatus;
+        amount: number; // paise
+        currency: string;
+        razorpayOrderId: string | null;
+        razorpayPaymentId: string | null;
+        failureReason: string | null;
+        attempts: number;
+        webhookConfirmed: boolean;
+        paidAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+    } | null;
+    orders: {
+        razorpayOrderId: string;
+        status: PaymentStatus;
+        razorpayPaymentId: string | null;
+        method: string | null;
+        failureReason: string | null;
+        errorCode: string | null;
+        errorReason: string | null;
+        isCurrent: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+    }[];
+    razorpayReceipts: { original: string; retry: string };
+}

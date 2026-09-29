@@ -49,6 +49,21 @@ export class RazorpayProvider {
     }
 
 
+    // Read-only lookups — Razorpay is the source of truth when our webhook-fed
+    // state is in doubt (reconciliation, admin "verify payment").
+    async fetchPayment(paymentId: string): Promise<RazorpayPaymentEntity> {
+        return (await this.client.payments.fetch(paymentId)) as unknown as RazorpayPaymentEntity;
+    }
+
+    async fetchOrder(orderId: string): Promise<{ id: string; amount: number; currency: string; receipt?: string; status: string; notes?: Record<string, string> }> {
+        return (await this.client.orders.fetch(orderId)) as any;
+    }
+
+    async fetchOrderPayments(orderId: string): Promise<RazorpayPaymentEntity[]> {
+        const res = await this.client.orders.fetchPayments(orderId);
+        return (res.items ?? []) as unknown as RazorpayPaymentEntity[];
+    }
+
     // verify payment signature
     verifyPaymentSignature(params: {
         razorpayOrderId: string;
@@ -105,4 +120,20 @@ export class RazorpayProvider {
             ],
         });
     }
+}
+/** The subset of Razorpay's payment entity we read (webhook payload.payment.entity has the same shape). */
+export interface RazorpayPaymentEntity {
+    id: string;
+    order_id: string;
+    amount: number;
+    currency: string;
+    status: "created" | "authorized" | "captured" | "refunded" | "failed";
+    method?: string;
+    email?: string;
+    contact?: string;
+    created_at: number;
+    notes?: Record<string, string> | string[];
+    error_code?: string | null;
+    error_description?: string | null;
+    error_reason?: string | null;
 }

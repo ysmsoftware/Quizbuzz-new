@@ -19,6 +19,8 @@ export interface RazorpayOrderResult {
   currency: string;
   keyId: string;
   paymentId: string; // our DB payment record id
+  // Already paid (possibly just confirmed with Razorpay by this call) — skip checkout.
+  alreadyPaid?: boolean;
 }
 
 export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REFUNDED';

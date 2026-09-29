@@ -17,6 +17,8 @@ function PaymentCallbackContent() {
 
   const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
   const [errorReason, setErrorReason] = useState("");
+  // Bumped by "Check again" to restart polling.
+  const [pollRun, setPollRun] = useState(0);
 
   useEffect(() => {
     if (!participantId) {
@@ -25,43 +27,55 @@ function PaymentCallbackContent() {
       return;
     }
 
-    let attempts = 0;
-    const maxAttempts = 36; // 90 seconds
+    // UPI can report "failed" and then "captured" seconds later, so a FAILED
+    // status is only shown after it has held for FAILED_GRACE_MS (the backend
+    // re-checks with Razorpay while we poll).
     const interval = 2500;
+    const maxMs = 3 * 60 * 1000;
+    const FAILED_GRACE_MS = 45 * 1000;
+    const startedAt = Date.now();
+    let failedSince: number | null = null;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    setStatus("loading");
 
     const poll = async () => {
-      attempts++;
+      if (cancelled) return;
       try {
         const result = await registrationService.checkPaymentStatus(participantId);
+        if (cancelled) return;
         if (result.status === "SUCCESS") {
           setStatus("success");
           return;
         }
         if (result.status === "FAILED" || result.status === "CANCELLED") {
-          setStatus("failed");
-          setErrorReason(result.failureReason || "Payment failed or was cancelled.");
-          return;
+          failedSince ??= Date.now();
+          if (Date.now() - failedSince >= FAILED_GRACE_MS) {
+            setStatus("failed");
+            setErrorReason(result.failureReason || "The payment was not completed.");
+            return;
+          }
+        } else {
+          failedSince = null;
         }
-
-        if (attempts >= maxAttempts) {
-          setStatus("failed");
-          setErrorReason("Payment verification timed out. If money was debited, it will be refunded or confirmed later.");
-          return;
-        }
-
-        setTimeout(poll, interval);
-      } catch (err) {
-        if (attempts >= maxAttempts) {
-          setStatus("failed");
-          setErrorReason("Failed to verify payment status.");
-          return;
-        }
-        setTimeout(poll, interval);
+      } catch {
+        // transient — keep polling
       }
+      if (Date.now() - startedAt >= maxMs) {
+        setStatus("failed");
+        setErrorReason("We couldn't confirm the payment yet.");
+        return;
+      }
+      timer = setTimeout(poll, interval);
     };
 
     poll();
-  }, [participantId]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [participantId, pollRun]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
@@ -123,17 +137,26 @@ function PaymentCallbackContent() {
 
         {status === "failed" && (
           <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
-            <XCircle className="h-16 w-16 text-destructive" />
+            <XCircle className="h-16 w-16 text-muted-foreground" />
             <div>
-              <h2 className="text-2xl font-bold text-destructive mb-2">
-                Payment Failed
+              <h2 className="text-2xl font-bold mb-2">
+                Payment not completed
               </h2>
               <p className="text-muted-foreground">
                 {errorReason}
               </p>
+              <p className="text-sm text-muted-foreground mt-3">
+                If money was debited from your account, please don’t pay again — tap “Check again” and we’ll confirm it
+                with Razorpay. Any amount debited for an unsuccessful payment is refunded to you automatically.
+              </p>
             </div>
-            
+
             <div className="w-full flex flex-col gap-3">
+              {participantId && (
+                <Button variant="outline" onClick={() => setPollRun((n) => n + 1)} className="w-full">
+                  Check again
+                </Button>
+              )}
               {returnUrl && (
                 <Button 
                   onClick={() => router.push(returnUrl)} 

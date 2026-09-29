@@ -10,8 +10,6 @@ import {
     Mail,
     Loader2,
     Trash2,
-    ShieldAlert,
-    CreditCard,
     User,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -30,6 +28,7 @@ import { DisqualifyDialog } from '@/components/contests/disqualify-dialog';
 import { cn, toDateOrNull } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Registration } from '@/lib/types';
+import { ParticipantPaymentPanel } from './ParticipantPaymentPanel';
 
 // ─── Helper Sub-components ─────────────────────────────────────────────────────
 
@@ -107,7 +106,8 @@ interface ParticipantDrawerProps {
     phase: string;
     isLoading?: boolean;
     isRevoking?: boolean;
-    onMarkAsPaid: (ref: string) => void;
+    /** @deprecated unused — manual settlement now goes through "Verify with Razorpay". */
+    onMarkAsPaid?: (ref: string) => void;
     onAllowFree: () => void;
     onRevoke: (reason: string) => void;
     onSendMessage: (participantId: string) => void;
@@ -121,13 +121,11 @@ export function ParticipantDrawer({
     phase,
     isLoading = false,
     isRevoking = false,
-    onMarkAsPaid,
     onAllowFree,
     onRevoke,
     onSendMessage,
 }: ParticipantDrawerProps) {
     const registeredAtDate = toDateOrNull(registration?.registeredAt);
-    const paidAtDate = toDateOrNull(registration?.paidAt);
     const [isDisqualifyDialogOpen, setIsDisqualifyDialogOpen] = React.useState(false);
 
     return (
@@ -339,61 +337,11 @@ export function ParticipantDrawer({
                                         </div>
 
                                         {contest?.fee && contest.fee > 0 && (
-                                            <>
-                                                <DetailSection
-                                                    title="Transaction History"
-                                                    icon={<CreditCard className="h-4 w-4" />}
-                                                >
-                                                    <div className="space-y-4">
-                                                        <DetailItem
-                                                            label="Payment ID"
-                                                            value={registration.paymentId || '—'}
-                                                            mono
-                                                            copyable
-                                                        />
-                                                        <DetailItem
-                                                            label="Transaction Date"
-                                                            value={
-                                                                paidAtDate
-                                                                    ? format(paidAtDate, SHORT_DATE_TIME)
-                                                                    : '—'
-                                                            }
-                                                        />
-                                                    </div>
-                                                </DetailSection>
-
-                                                {registration.paymentStatus === 'failed' && (
-                                                    <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 space-y-4">
-                                                        <div className="flex items-center gap-3 text-destructive">
-                                                            <ShieldAlert className="h-5 w-5" />
-                                                            <span className="text-sm font-bold">
-                                                                Reason: Payment declined by bank
-                                                            </span>
-                                                        </div>
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-                                                            onClick={onAllowFree}
-                                                        >
-                                                            Allow Free Entry
-                                                        </Button>
-                                                    </div>
-                                                )}
-
-                                                {registration.paymentStatus === 'pending' && (
-                                                    <Button
-                                                        className="w-full"
-                                                        onClick={() => {
-                                                            const ref = prompt(
-                                                                'Enter reference (Cash/Cheque ID):',
-                                                            );
-                                                            if (ref) onMarkAsPaid(ref);
-                                                        }}
-                                                    >
-                                                        Mark as Manually Paid
-                                                    </Button>
-                                                )}
-                                            </>
+                                            <ParticipantPaymentPanel
+                                                participantId={registration.id}
+                                                contestId={contest.id}
+                                                onAllowFree={onAllowFree}
+                                            />
                                         )}
                                     </TabsContent>
                                 </div>

@@ -68,11 +68,17 @@ describe("Payment Registration Flow — Resume or Fresh", () => {
       findByParticipantId: jest.fn(),
       create: jest.fn(),
       updateForRetry: jest.fn(),
+      listOrders: jest.fn().mockResolvedValue([]),
+      reopen: jest.fn().mockResolvedValue(undefined),
+      recordOrder: jest.fn().mockResolvedValue(undefined),
+      updateOrder: jest.fn().mockResolvedValue(undefined),
+      markSuccess: jest.fn().mockResolvedValue(undefined),
     };
 
     mockRazorpayProvider = {
       getPublicKey: jest.fn().mockReturnValue("rzp_test_key"),
       createOrder: jest.fn(),
+      fetchOrderPayments: jest.fn().mockResolvedValue([]),
     };
 
     contestService = new ContestService(
@@ -244,7 +250,7 @@ describe("Payment Registration Flow — Resume or Fresh", () => {
         participantId: "part_1",
       });
 
-      expect(result.orderId).toBe("order_existing_123");
+      expect(result).toMatchObject({ orderId: "order_existing_123" });
       expect(mockRazorpayProvider.createOrder).not.toHaveBeenCalled();
     });
 
@@ -281,12 +287,87 @@ describe("Payment Registration Flow — Resume or Fresh", () => {
         participantId: "part_1",
       });
 
-      expect(result.orderId).toBe("order_fresh_456");
+      expect(result).toMatchObject({ orderId: "order_fresh_456" });
       expect(mockRazorpayProvider.createOrder).toHaveBeenCalled();
       expect(mockPaymentRepo.updateForRetry).toHaveBeenCalledWith({
         participantId: "part_1",
         razorpayOrderId: "order_fresh_456",
       });
+    });
+
+    const setupPayable = () => {
+      mockParticipantService.getParticipantById.mockResolvedValue({
+        id: "part_1", contestId: "c_1", organizationId: "org_1", contactId: "cnt_1",
+      });
+      mockContestRepo.findById.mockResolvedValue({
+        id: "c_1", organizationId: "org_1", paymentEnabled: true,
+        paymentConfig: { amount: 100, currency: "INR" }, title: "Test Contest",
+        startTime: new Date(Date.now() + 3600_000),
+      });
+    };
+
+    // A failed attempt no longer forces a new order: same order until the window expires.
+    it("reuses the same order after a FAILED attempt inside the window, and reopens the row", async () => {
+      setupPayable();
+      mockPaymentRepo.findByParticipantId.mockResolvedValue({
+        id: "pay_1", razorpayOrderId: "order_A", amount: 10000, currency: "INR",
+        status: PaymentStatus.FAILED, createdAt: new Date(),
+      });
+
+      const result = await paymentService.createOrder({ contestId: "c_1", participantId: "part_1" });
+
+      expect(result).toMatchObject({ orderId: "order_A" });
+      expect(mockRazorpayProvider.createOrder).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.reopen).toHaveBeenCalledWith("pay_1");
+    });
+
+    // After a retry the row is old but its current order is fresh — the window follows the order.
+    it("measures the reuse window from the current order, not the payment row", async () => {
+      setupPayable();
+      mockPaymentRepo.findByParticipantId.mockResolvedValue({
+        id: "pay_1", razorpayOrderId: "order_B", amount: 10000, currency: "INR",
+        status: PaymentStatus.CREATED, createdAt: new Date(Date.now() - 60 * 60 * 1000),
+      });
+      mockPaymentRepo.listOrders.mockResolvedValue([
+        { razorpayOrderId: "order_A", createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+        { razorpayOrderId: "order_B", createdAt: new Date() },
+      ]);
+
+      const result = await paymentService.createOrder({ contestId: "c_1", participantId: "part_1" });
+
+      expect(result).toMatchObject({ orderId: "order_B" });
+      expect(mockRazorpayProvider.createOrder).not.toHaveBeenCalled();
+    });
+
+    // The Mansi/Chetan/Shahnida case: money captured on order A, our row says FAILED.
+    // Clicking Pay again must settle it, not hand out a second order.
+    it("returns alreadyPaid instead of a new order when Razorpay shows a capture on an earlier order", async () => {
+      setupPayable();
+      const row = {
+        id: "pay_1", participantId: "part_1", contestId: "c_1", organizationId: "org_1",
+        razorpayOrderId: "order_A", amount: 10000, currency: "INR",
+        status: PaymentStatus.FAILED, createdAt: new Date(Date.now() - 60 * 60 * 1000),
+      };
+      mockPaymentRepo.findByParticipantId.mockResolvedValue(row);
+      mockPaymentRepo.listOrders.mockResolvedValue([{ razorpayOrderId: "order_A", createdAt: row.createdAt }]);
+      mockRazorpayProvider.fetchOrderPayments.mockResolvedValue([
+        { id: "pay_rzp_failed", order_id: "order_A", amount: 10000, currency: "INR", status: "failed", created_at: 1 },
+        { id: "pay_rzp_ok", order_id: "order_A", amount: 10000, currency: "INR", status: "captured", created_at: 2 },
+      ]);
+      mockParticipantService.confirmPaymentRegistration = jest.fn().mockResolvedValue(undefined);
+      mockParticipantService.getParticipantById.mockResolvedValue({
+        id: "part_1", contestId: "c_1", organizationId: "org_1", contactId: "cnt_1",
+        contact: { firstName: "T", email: "t@example.com" }, contest: { title: "Test", slug: "t" },
+      });
+
+      const result = await paymentService.createOrder({ contestId: "c_1", participantId: "part_1" });
+
+      expect(result).toEqual({ alreadyPaid: true, paymentId: "pay_1" });
+      expect(mockRazorpayProvider.createOrder).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.markSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentId: "pay_1", razorpayOrderId: "order_A", razorpayPaymentId: "pay_rzp_ok" }),
+      );
+      expect(mockParticipantService.confirmPaymentRegistration).toHaveBeenCalledWith("part_1");
     });
   });
 });

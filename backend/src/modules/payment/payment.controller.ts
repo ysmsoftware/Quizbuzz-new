@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { PaymentService } from "./payment.service";
 import logger from "../../config/logger";
 import { PaymentStatus } from "@prisma/client";
-import { createOrderSchema, retryPaymentSchema, listPaymentsSchema, verifyPaymentSchema } from "./payment.validator";
+import { createOrderSchema, retryPaymentSchema, listPaymentsSchema, verifyPaymentSchema, verifyRazorpayReferenceSchema } from "./payment.validator";
 
 export class PaymentController {
 
@@ -87,12 +87,40 @@ export class PaymentController {
 
     retryPayment = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { participantId, contestId, organizationId } = retryPaymentSchema.parse(req.body);
+            const { participantId, contestId } = retryPaymentSchema.parse(req.body);
 
             logger.info("Retry payment request", { participantId, requestId: req.id });
 
-            const result = await this.paymentService.retryPayment(participantId, contestId, organizationId);
+            const result = await this.paymentService.retryPayment(participantId, contestId);
 
+            return res.status(200).json({ success: true, data: result });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // Admin: full payment picture for one registration (drawer "Payment" tab).
+    getParticipantPaymentDetails = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { organizationId } = req.user!;
+            const participantId = req.params.participantId as string;
+            const result = await this.paymentService.getParticipantPaymentDetails(participantId, organizationId);
+            return res.status(200).json({ success: true, data: result });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // Admin: settle a registration from a Razorpay payment/order ID, verified live against Razorpay.
+    verifyRazorpayPayment = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { organizationId } = req.user!;
+            const participantId = req.params.participantId as string;
+            const { reference } = verifyRazorpayReferenceSchema.parse(req.body);
+
+            logger.info("Manual Razorpay verification request", { participantId, reference, requestId: req.id });
+
+            const result = await this.paymentService.verifyRazorpayPaymentForParticipant({ participantId, organizationId, reference });
             return res.status(200).json({ success: true, data: result });
         } catch (error) {
             next(error);

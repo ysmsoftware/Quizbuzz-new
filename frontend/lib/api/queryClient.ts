@@ -83,6 +83,7 @@ export const queryKeys = {
 
   payments: {
     status: (participantId: string) => ['payments', 'status', participantId],
+    details: (participantId: string) => ['payments', 'details', participantId],
     list: (contestId: string, filters?: any) => ['payments', 'list', contestId, filters],
   },
 

@@ -140,11 +140,9 @@ function RegisterPageInner() {
     description: string;
   } | null>(null);
 
-  const { state: paymentState, error: paymentError, initiatePayment, retryPayment } = useRazorpay();
-
-  useEffect(() => {
-    if (paymentState === "failed") toast.error(paymentError || "Your payment was not completed.", { id: "register-error", description: "" });
-  }, [paymentState, paymentError]);
+  // No error toast on a failed payment: the inline panel below explains what
+  // happens to any debited money — a red "failed" toast alone made people panic.
+  const { state: paymentState, error: paymentError, initiatePayment, recheckStatus } = useRazorpay();
 
   // An error toast belongs to the step it happened on — clear it when the flow moves on.
   useEffect(() => {
@@ -517,6 +515,10 @@ function RegisterPageInner() {
       contactPhone: detailsForm.getValues("phone") ?? "",
       callbackQueryParams: { ref: registrationRef }
     });
+  };
+
+  const handleCheckStatus = () => {
+    if (participantId) recheckStatus(participantId);
   };
 
   const handleRetryPayment = async () => {
@@ -1147,18 +1149,23 @@ function RegisterPageInner() {
                 )}
 
                 {paymentState === "failed" && (
-                  <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4 space-y-3">
-                    <p className="font-medium text-destructive">Payment failed</p>
+                  <div className="rounded-lg bg-muted/50 border p-4 space-y-3">
+                    <p className="font-medium text-foreground">Payment not completed</p>
+                    {paymentError && (
+                      <p className="text-sm text-muted-foreground">Reason from the payment gateway: {paymentError}</p>
+                    )}
                     <p className="text-sm text-muted-foreground">
-                      {paymentError || "Your payment was not completed."}
+                      If money was debited from your account, please don’t pay again — tap “Check payment status” and we’ll
+                      confirm it with Razorpay. Any amount debited for an unsuccessful payment is refunded to you automatically.
                     </p>
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={handleRetryPayment}
-                    >
-                      Try Again
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button className="flex-1" variant="outline" onClick={handleCheckStatus}>
+                        Check payment status
+                      </Button>
+                      <Button className="flex-1" onClick={handleRetryPayment}>
+                        Try again
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -1166,12 +1173,12 @@ function RegisterPageInner() {
                   <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4 space-y-3">
                     <p className="font-medium text-yellow-800">Taking longer than expected</p>
                     <p className="text-sm text-yellow-700">
-                      Your payment may still be processing. If the amount was debited from your account, it will be confirmed automatically within a few minutes. You can safely close this page.
+                      Your payment may still be processing. If the amount was debited from your account, it will be confirmed automatically within a few minutes — please don’t pay again. You can safely close this page.
                     </p>
                     <Button
                       className="w-full"
                       variant="outline"
-                      onClick={handleRetryPayment}
+                      onClick={handleCheckStatus}
                     >
                       Check Again
                     </Button>

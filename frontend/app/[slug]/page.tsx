@@ -78,7 +78,7 @@ export default function PublicRegistrationPage() {
     });
 
     // Payment Hooks (Conditional)
-    const { verifyMutation, retryMutation } = usePayment(participantId);
+    const { verifyMutation, retryMutation } = usePayment(participantId, (contest as any)?.id);
 
     const phase = useMemo(() => {
         if (!contest) return 'DRAFT' as const;
@@ -170,6 +170,12 @@ export default function PublicRegistrationPage() {
 
     // Logic: Step 4 (Payment)
     const handlePayment = async (paymentData: any, pId: string) => {
+        // Backend confirmed this registration is already paid — never open a second checkout.
+        if (paymentData?.alreadyPaid) {
+            toast.success('Payment already received. You are registered.');
+            router.push(`/quiz/registration-success?ref=${registrationRef}`);
+            return;
+        }
         const success = await loadRazorpay();
         if (!success) {
             toast.error('Failed to load payment gateway');

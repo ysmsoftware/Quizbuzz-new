@@ -32,7 +32,9 @@ export interface UseRazorpayReturn {
     state: PaymentFlowState;
     error: string | null;
     initiatePayment: (contestId: string, participantId: string, config: RazorpayConfig) => Promise<void>;
-    retryPayment: (participantId: string, config: RazorpayConfig) => Promise<void>;
+    retryPayment: (contestId: string, participantId: string, config: RazorpayConfig) => Promise<void>;
+    /** Re-poll (the backend re-checks with Razorpay) without opening checkout again. */
+    recheckStatus: (participantId: string) => void;
     openCheckout: (config: RazorpayConfig, orderData: RazorpayOrderResult, participantId: string) => Promise<void>;
     loadRazorpay: () => Promise<boolean>;
 }
@@ -74,27 +76,44 @@ function loadRazorpayScript(): Promise<void> {
 }
 
 // ── Polling helper ────────────────────────────────────────────────────────
+// UPI routinely reports a payment as failed and then captured seconds later
+// (seen in production: 9–17s apart). So FAILED is not trusted immediately: we
+// keep polling for FAILED_GRACE_MS — the backend re-checks with Razorpay on
+// these polls — and only then report failure.
+const POLL_INTERVAL_MS = 2500;
+const POLL_MAX_MS = 3 * 60 * 1000;
+const FAILED_GRACE_MS = 45 * 1000;
+
 function pollPaymentStatus(
     participantId: string,
     onSuccess: () => void,
     onFailed: (reason: string) => void,
     onTimeout: () => void,
-    maxAttempts = 36, // 90 seconds total at 2.5s interval
-    intervalMs = 2500
+    maxMs = POLL_MAX_MS,
 ): () => void {
-    let attempts = 0;
+    const startedAt = Date.now();
+    let failedSince: number | null = null;
     const id = setInterval(async () => {
-        attempts++;
+        const elapsed = Date.now() - startedAt;
         try {
             const result = await registrationService.checkPaymentStatus(participantId);
             const status = result.status;
             if (status === "SUCCESS") { clearInterval(id); onSuccess(); return; }
-            if (status === "FAILED" || status === "CANCELLED") { clearInterval(id); onFailed(result.failureReason || "Payment failed"); return; }
-            if (attempts >= maxAttempts) { clearInterval(id); onTimeout(); return; }
+            if (status === "FAILED" || status === "CANCELLED") {
+                failedSince ??= Date.now();
+                if (Date.now() - failedSince >= FAILED_GRACE_MS) {
+                    clearInterval(id);
+                    onFailed(result.failureReason || "Payment failed");
+                    return;
+                }
+            } else {
+                failedSince = null;
+            }
         } catch {
-            if (attempts >= maxAttempts) { clearInterval(id); onTimeout(); }
+            // transient — keep polling
         }
-    }, intervalMs);
+        if (elapsed >= maxMs) { clearInterval(id); onTimeout(); }
+    }, POLL_INTERVAL_MS);
     // Return cleanup function
     return () => clearInterval(id);
 }
@@ -110,6 +129,14 @@ export function useRazorpay(): UseRazorpayReturn {
         orderData: RazorpayOrderResult,
         participantId: string
     ) => {
+        // Backend found this registration already paid (e.g. an earlier attempt
+        // whose confirmation we missed) — never open a second checkout.
+        if (orderData.alreadyPaid) {
+            checkoutOpenRef.current = false;
+            setState("success");
+            return;
+        }
+
         // Load Razorpay script — guaranteed before opening modal
         try {
             await loadRazorpayScript();
@@ -187,7 +214,7 @@ export function useRazorpay(): UseRazorpayReturn {
                     participantId,
                     () => setState("success"),
                     (reason) => { setState("failed"); setError(reason || "Payment failed. Please try again."); },
-                    () => setState("success") // timeout = still show success, webhook will confirm
+                    () => setState("timeout") // still unconfirmed — show "processing", never a fake success
                 );
             },
         };
@@ -219,24 +246,25 @@ export function useRazorpay(): UseRazorpayReturn {
         }
     }, [openCheckout]);
 
-    const retryPayment = useCallback(async (
-        participantId: string,
-        config: RazorpayConfig
-    ) => {
-        if (checkoutOpenRef.current) return;
-        checkoutOpenRef.current = true;
+    // Same resume-or-fresh rules as a first attempt (the backend reuses the live
+    // order and checks Razorpay for an existing capture first).
+    const retryPayment = useCallback(
+        (contestId: string, participantId: string, config: RazorpayConfig) => initiatePayment(contestId, participantId, config),
+        [initiatePayment]
+    );
+
+    const recheckStatus = useCallback((participantId: string) => {
+        stopPollingRef.current?.();
         setError(null);
-        setState("creating_order");
-        try {
-            const res = await paymentApi.retryPayment(participantId, `retry-${participantId}-${Date.now()}`);
-            const orderData = res.data as RazorpayOrderResult;
-            await openCheckout(config, orderData, participantId);
-        } catch (err: any) {
-            checkoutOpenRef.current = false;
-            setState("failed");
-            setError(err.message ?? "Failed to retry payment.");
-        }
-    }, [openCheckout]);
+        setState("polling");
+        stopPollingRef.current = pollPaymentStatus(
+            participantId,
+            () => setState("success"),
+            (reason) => { setState("failed"); setError(reason); },
+            () => setState("timeout"),
+            60 * 1000
+        );
+    }, []);
 
     const loadRazorpay = useCallback(async () => {
         try {
@@ -247,13 +275,13 @@ export function useRazorpay(): UseRazorpayReturn {
         }
     }, []);
 
-    return { state, error, initiatePayment, retryPayment, openCheckout, loadRazorpay };
+    return { state, error, initiatePayment, retryPayment, recheckStatus, openCheckout, loadRazorpay };
 }
 
 /**
  * Hook for payment status and operations (Legacy/Simple hook)
  */
-export function usePayment(participantId?: string) {
+export function usePayment(participantId?: string, contestId?: string) {
   const statusQuery = useQuery({
     queryKey: queryKeys.payments.status(participantId || ''),
     queryFn: () => paymentApi.getPaymentStatus(participantId!),
@@ -280,7 +308,7 @@ export function usePayment(participantId?: string) {
 
   const retryMutation = useMutation({
     mutationFn: () => 
-      paymentApi.retryPayment(participantId!, `retry-${participantId}-${Date.now()}`),
+      paymentApi.retryPayment(participantId!, contestId!, `retry-${participantId}-${Date.now()}`),
   });
 
   return {

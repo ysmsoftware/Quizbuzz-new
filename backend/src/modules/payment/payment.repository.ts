@@ -1,4 +1,4 @@
-import { Payment, PaymentStatus } from "@prisma/client";
+import { Payment, PaymentOrder, PaymentStatus } from "@prisma/client";
 import { prisma } from "../../config/db";
 
 
@@ -19,8 +19,9 @@ export interface IPaymentRepository {
     findByRazorpayPaymentId(orderId: string): Promise<Payment | null>;
 
     markPending(orderId: string): Promise<Payment>;
-    markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment>;
-    markFailed(razorpayOrderId: string, reason?: string): Promise<Payment>;
+    markSuccess(data: { paymentId: string; razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment>;
+    markFailed(razorpayOrderId: string, reason?: string): Promise<void>;
+    reopen(paymentId: string): Promise<void>;
     markCancelled(paymentId: string): Promise<Payment>;
     closeAbandoned(olderThanMs: number): Promise<number>;
 
@@ -44,6 +45,14 @@ export interface IPaymentRepository {
     }): Promise<{ items: Payment[]; nextCursor: string | null }>;
 
     updateForRetry(data: { participantId: string; razorpayOrderId: string; }): Promise<Payment>;
+
+    // ── Order history (payment_orders) ──
+    findOrder(razorpayOrderId: string): Promise<(PaymentOrder & { payment: Payment }) | null>;
+    listOrders(paymentId: string): Promise<PaymentOrder[]>;
+    recordOrder(data: { paymentId: string; razorpayOrderId: string; amount: number; status?: PaymentStatus }): Promise<PaymentOrder>;
+    updateOrder(razorpayOrderId: string, data: Partial<Pick<PaymentOrder, "status" | "razorpayPaymentId" | "method" | "failureReason" | "errorCode" | "errorReason">>): Promise<void>;
+    /** Non-SUCCESS payments touched since `sinceMs` ago — reconciliation sweep candidates. */
+    findUnsettledSince(sinceMs: number, limit?: number): Promise<Payment[]>;
 
     /**
      * Reconciliation query: SUCCESS payments with no PaymentRouteTransfer row at all,
@@ -76,9 +85,8 @@ export class PaymentRepository implements IPaymentRepository {
                 amount: params.amount,
                 currency: params.currency,
                 razorpayOrderId: params.razorpayOrderId,
-                status: PaymentStatus.CREATED
-
-
+                status: PaymentStatus.CREATED,
+                orders: { create: { razorpayOrderId: params.razorpayOrderId, amount: params.amount } },
             }
         })
     }
@@ -115,39 +123,49 @@ export class PaymentRepository implements IPaymentRepository {
         });
     }
 
-    // webhook success — guarded the same way markFailed already is: only write if the
-    // row isn't already SUCCESS. Two concurrent webhook redeliveries for the same order
-    // (Razorpay does redeliver) can both read PENDING before either writes; without this
-    // guard both would proceed to markSuccess, both fire the confirmation email and the
-    // registration-confirm side effect a second time. Prisma throws P2025 ("record not
-    // found") when the WHERE clause matches zero rows — the caller treats that as "a
-    // concurrent delivery already won this", not an error.
-    async markSuccess(data: { razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment> {
+    // Capture success — keyed by our payment id, NOT the order id: the capture may
+    // land on an older order than the one currently on the row (a retry replaced
+    // it), and the captured order must win. Guarded on status != SUCCESS so two
+    // concurrent deliveries can't both run the side effects: Prisma throws P2025
+    // when the WHERE matches nothing — callers treat that as "someone else won".
+    async markSuccess(data: { paymentId: string; razorpayOrderId: string; razorpayPaymentId: string; paidAt: Date; metadata?: any }): Promise<Payment> {
         return await prisma.payment.update({
-            where: { razorpayOrderId: data.razorpayOrderId, status: { not: PaymentStatus.SUCCESS } },
+            where: { id: data.paymentId, status: { not: PaymentStatus.SUCCESS } },
             data: {
+                razorpayOrderId: data.razorpayOrderId,
                 razorpayPaymentId: data.razorpayPaymentId,
                 paidAt: data.paidAt,
                 status: PaymentStatus.SUCCESS,
+                failureReason: null,
                 webhookConfirmed: true,
                 ...(data.metadata && { metadata: data.metadata })
-
             }
         });
     }
 
-    async markFailed(razorpayOrderId: string, reason?: string): Promise<Payment> {
-        return await prisma.payment.update({
+    // Only the row's current order, and never over SUCCESS. FAILED is included so
+    // the latest attempt's reason replaces an older one. No-op if nothing matches.
+    async markFailed(razorpayOrderId: string, reason?: string): Promise<void> {
+        await prisma.payment.updateMany({
             where: {
                 razorpayOrderId,
                 status: {
-                    in: [PaymentStatus.CREATED, PaymentStatus.PENDING]
+                    in: [PaymentStatus.CREATED, PaymentStatus.PENDING, PaymentStatus.FAILED]
                 }
             },
             data: {
                 status: PaymentStatus.FAILED,
                 ...(reason && { failureReason: reason })
             }
+        });
+    }
+
+    // The same order is being handed out again for a fresh attempt: clear the
+    // previous attempt's failure so status polling doesn't report it as this one's.
+    async reopen(paymentId: string): Promise<void> {
+        await prisma.payment.updateMany({
+            where: { id: paymentId, status: { in: [PaymentStatus.FAILED, PaymentStatus.CANCELLED] } },
+            data: { status: PaymentStatus.CREATED, failureReason: null },
         });
     }
 
@@ -211,19 +229,71 @@ export class PaymentRepository implements IPaymentRepository {
     }
 
 
+    // A new order for an existing payment: becomes the row's current order AND is
+    // appended to payment_orders — the previous order stays in history so a late
+    // capture on it can still be matched.
     async updateForRetry(data: {
         participantId: string;
         razorpayOrderId: string;
     }): Promise<Payment> {
-        return prisma.payment.update({
-            where: { participantId: data.participantId },
-            data: {
-                razorpayOrderId: data.razorpayOrderId,
-                status: PaymentStatus.CREATED,
-                attempts: { increment: 1 },
-                failureReason: null
-            }
-        })
+        return prisma.$transaction(async (tx) => {
+            const payment = await tx.payment.update({
+                where: { participantId: data.participantId },
+                data: {
+                    razorpayOrderId: data.razorpayOrderId,
+                    status: PaymentStatus.CREATED,
+                    attempts: { increment: 1 },
+                    failureReason: null
+                }
+            });
+            await tx.paymentOrder.create({
+                data: { paymentId: payment.id, razorpayOrderId: data.razorpayOrderId, amount: payment.amount },
+            });
+            return payment;
+        });
+    }
+
+    async findOrder(razorpayOrderId: string) {
+        return prisma.paymentOrder.findUnique({
+            where: { razorpayOrderId },
+            include: { payment: true },
+        });
+    }
+
+    async listOrders(paymentId: string) {
+        return prisma.paymentOrder.findMany({
+            where: { paymentId },
+            orderBy: { createdAt: "asc" },
+        });
+    }
+
+    async recordOrder(data: { paymentId: string; razorpayOrderId: string; amount: number; status?: PaymentStatus }) {
+        return prisma.paymentOrder.upsert({
+            where: { razorpayOrderId: data.razorpayOrderId },
+            create: { ...data },
+            update: {},
+        });
+    }
+
+    async updateOrder(razorpayOrderId: string, data: Partial<Pick<PaymentOrder, "status" | "razorpayPaymentId" | "method" | "failureReason" | "errorCode" | "errorReason">>) {
+        // A SUCCESS order is final — a later failed attempt event must not downgrade it.
+        await prisma.paymentOrder.updateMany({
+            where: { razorpayOrderId, status: { not: PaymentStatus.SUCCESS } },
+            data,
+        });
+    }
+
+    async findUnsettledSince(sinceMs: number, limit = 200) {
+        return prisma.payment.findMany({
+            where: {
+                status: { in: [PaymentStatus.CREATED, PaymentStatus.PENDING, PaymentStatus.FAILED] },
+                razorpayOrderId: { not: null },
+                isDeleted: false,
+                updatedAt: { gte: new Date(Date.now() - sinceMs) },
+            },
+            orderBy: { updatedAt: "desc" },
+            take: limit,
+        });
     }
 
     async findSuccessPaymentsMissingTransfer(olderThanMs: number, limit = 200): Promise<Payment[]> {

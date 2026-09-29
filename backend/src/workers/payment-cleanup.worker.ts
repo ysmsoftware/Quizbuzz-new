@@ -30,9 +30,11 @@ import { workerRegistry } from "./worker.registry";
 import { Worker } from "./worker.interface";
 
 async function processPaymentCleanup(job: Job): Promise<void> {
-    logger.info(`[payment-cleanup-worker] Job ${job.id} started — sweeping abandoned payments`);
+    logger.info(`[payment-cleanup-worker] Job ${job.id} started — reconciling with Razorpay, then sweeping abandoned payments`);
+    // Reconcile first: anything Razorpay actually captured must never be closed as abandoned.
+    const reconciled = await paymentService.reconcileRecentPayments();
     const result = await paymentService.closeAbandonedPayments();
-    logger.info(`[payment-cleanup-worker] Job ${job.id} complete — closed=${result.closedCount}`);
+    logger.info(`[payment-cleanup-worker] Job ${job.id} complete — reconciled=${reconciled.settled}/${reconciled.checked} closed=${result.closedCount}`);
 }
 
 export class PaymentCleanupWorker implements Worker {

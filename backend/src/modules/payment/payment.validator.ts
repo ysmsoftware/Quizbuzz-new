@@ -14,7 +14,11 @@ export const verifyPaymentSchema = z.object({
 export const retryPaymentSchema = z.object({
     participantId: z.string().min(1),
     contestId: z.string().min(1),
-    organizationId: z.string().min(1),
+});
+
+export const verifyRazorpayReferenceSchema = z.object({
+    // A Razorpay payment ID (pay_…) or order ID (order_…).
+    reference: z.string().trim().regex(/^(pay|order)_[A-Za-z0-9]+$/, "Enter a Razorpay payment ID (pay_…) or order ID (order_…)"),
 });
 
 export const listPaymentsSchema = z.object({

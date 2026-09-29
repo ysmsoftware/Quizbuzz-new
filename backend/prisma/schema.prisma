@@ -324,8 +324,8 @@ model OrgMember {
   updatedAt      DateTime      @updatedAt
 
   // Relations
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  admin        Admin        @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  organization            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  admin                   Admin                             @relation(fields: [adminId], references: [id], onDelete: Cascade)
   notificationPreferences OrgMemberNotificationPreference[]
 
   @@unique([organizationId, adminId]) // one membership per admin per org
@@ -441,19 +441,19 @@ model Contest {
 
   // Relations
   certificateTemplate CertificateTemplate? @relation(fields: [certificateTemplateId], references: [id], onDelete: SetNull)
-  organization       Organization        @relation(fields: [organizationId], references: [id])
-  createdBy          Admin               @relation("ContestCreatedBy", fields: [createdById], references: [id])
-  prizes             Prize[]
-  questions          ContestQuestion[]
-  participants       Participant[]
-  submissions        Submission[]
-  leaderboard        LeaderboardEntry[]
-  certificates       Certificate[]
-  messageLog         MessageLog[]
-  scheduledJobs      ScheduledJob[]
-  payments           Payment[]
-  proctoringScores   ProctoringScore[]
-  exportLogs         ExportLog[]
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  createdBy           Admin                @relation("ContestCreatedBy", fields: [createdById], references: [id])
+  prizes              Prize[]
+  questions           ContestQuestion[]
+  participants        Participant[]
+  submissions         Submission[]
+  leaderboard         LeaderboardEntry[]
+  certificates        Certificate[]
+  messageLog          MessageLog[]
+  scheduledJobs       ScheduledJob[]
+  payments            Payment[]
+  proctoringScores    ProctoringScore[]
+  exportLogs          ExportLog[]
   ambassadorCampaigns AmbassadorCampaign[]
 
   @@unique([organizationId, slug]) // slug is unique within an org, not globally
@@ -477,19 +477,19 @@ model PaymentConfig {
 }
 
 model Prize {
-  id             String   @id @default(ulid())
-  organizationId String
-  contestId      String
-  rankFrom       Int // e.g. 1
-  rankTo         Int // e.g. 3  (rankFrom=1, rankTo=3 = "1st to 3rd place")
-  amount         Decimal  @db.Decimal(10, 2)
-  currency       String   @default("INR")
-  label          String? // e.g. "Gold", "Silver", "Participation"
-  benefits       String[] // e.g. ["Certificate", "Internship opportunity"]
+  id                   String   @id @default(ulid())
+  organizationId       String
+  contestId            String
+  rankFrom             Int // e.g. 1
+  rankTo               Int // e.g. 3  (rankFrom=1, rankTo=3 = "1st to 3rd place")
+  amount               Decimal  @db.Decimal(10, 2)
+  currency             String   @default("INR")
+  label                String? // e.g. "Gold", "Silver", "Participation"
+  benefits             String[] // e.g. ["Certificate", "Internship opportunity"]
   goodieLabel          String? // e.g. "Gift voucher", "Bluetooth speaker"
   goodieCashEquivalent Decimal? @db.Decimal(10, 2) // optional estimated value of the goodie
   goodieImageUrl       String? // optional photo of the goodie
-  createdAt      DateTime @default(now())
+  createdAt            DateTime @default(now())
 
   // Relations
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -682,6 +682,7 @@ model Payment {
   participant   Participant           @relation(fields: [participantId], references: [id])
   contact       Contact               @relation(fields: [contactId], references: [id])
   routeTransfer PaymentRouteTransfer?
+  orders        PaymentOrder[]
 
   @@index([organizationId])
   @@index([contactId])
@@ -693,6 +694,31 @@ model Payment {
   @@index([razorpayPaymentId])
   @@index([status, createdAt])
   @@map("payments")
+}
+
+// Every Razorpay order ever created for a Payment. Payment.razorpayOrderId only
+// tracks the *current* order; a retry used to overwrite it, which lost any
+// capture that landed on the older order. Webhooks, reconciliation and the
+// admin "verify Razorpay payment" flow all resolve orders through this table.
+model PaymentOrder {
+  id                String        @id @default(ulid())
+  paymentId         String
+  razorpayOrderId   String        @unique
+  amount            Int // in paise
+  status            PaymentStatus @default(CREATED) // CREATED | FAILED | SUCCESS on this order
+  // Latest Razorpay payment (attempt) seen on this order — the captured one once SUCCESS.
+  razorpayPaymentId String?
+  method            String?
+  failureReason     String?
+  errorCode         String?
+  errorReason       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_orders")
 }
 
 model OrganizationPayoutAccount {
@@ -919,16 +945,16 @@ model Certificate {
 }
 
 model CertificateTemplate {
-  id             String   @id @default(ulid())
-  organizationId String
-  name           String
-  description    String?
-  htmlContent    String // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
-  variables      Json // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
-  orgLogoPosition String  @default("none") // none | top-left | top-center | top-right | bottom-left | bottom-center | bottom-right — where the server injects the org logo ("none" = template places {{orgLogoUrl}} itself)
-  pageSize       String? // a4-landscape | a4-portrait | letter-landscape | letter-portrait; null = auto (template's own @page, else A4 landscape)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(ulid())
+  organizationId  String
+  name            String
+  description     String?
+  htmlContent     String // raw HTML containing {{variable}} placeholders — stored inline, no S3 round trip needed to render
+  variables       Json // string[] — placeholder names detected at upload/update time; informational + used for the "unknown placeholder" warning in preview
+  orgLogoPosition String   @default("none") // none | top-left | top-center | top-right | bottom-left | bottom-center | bottom-right — where the server injects the org logo ("none" = template places {{orgLogoUrl}} itself)
+  pageSize        String? // a4-landscape | a4-portrait | letter-landscape | letter-portrait; null = auto (template's own @page, else A4 landscape)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contests     Contest[]
@@ -1260,18 +1286,18 @@ enum CheckpointStatus {
 }
 
 model JobCheckpoint {
-  id         String            @id // ULID generated at Redis write time — idempotency key for the drain worker's createMany(skipDuplicates)
+  id         String           @id // ULID generated at Redis write time — idempotency key for the drain worker's createMany(skipDuplicates)
   jobId      String // BullMQ job id
   queue      String // e.g. "certificate-queue"
   requestId  String?
   entityType String? // e.g. "CERTIFICATE" — plain string, not FK'd to AuditTargetType
   entityId   String?
   stage      String // e.g. "render_html", "generate_pdf", "upload_storage"
-  status     CheckpointStatus  @default(OK)
+  status     CheckpointStatus @default(OK)
   startedAt  DateTime
   endedAt    DateTime
   durationMs Int
-  createdAt  DateTime          @default(now()) // when this row was flushed, not when the stage ran
+  createdAt  DateTime         @default(now()) // when this row was flushed, not when the stage ran
 
   @@index([jobId])
   @@index([requestId])
