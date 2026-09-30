@@ -33,9 +33,15 @@ export interface ListContactsQueryDTO {
   city?:      string | undefined;
   state?:     string | undefined;
   college?:   string | undefined;
+  collegeId?: string | undefined;
+  letter?:    string | undefined;
+  sortBy?:    ContactSortField;
+  sortOrder?: "asc" | "desc";
   page?:      number;
   limit?:     number;
 }
+
+export type ContactSortField = "firstName" | "lastName" | "email" | "college" | "city" | "createdAt";
 
 export interface ContactLookupQueryDTO {
   organizationId: string;
@@ -70,8 +76,6 @@ export interface ContactListItem {
   college:   string | null;
   city:      string | null;
   state:     string | null;
-  
-  totalContests: number;
   createdAt: Date;
 }
 
@@ -91,23 +95,57 @@ export interface ContactContestSummary {
   contestId:        string;
   contestTitle:     string;
   contestSlug:      string;
+  contestStartTime?: Date | null;
   status:           string;   // ParticipantStatus enum value
   registeredAt:     Date;
+  checkedInAt?:     Date | null;
+  joinedAt?:        Date | null;
+  disqualificationReason?: string | null;
   contestPrice?:    number | undefined;
   payment?: {
+    id:             string;
     status:         string;
-    amount?:        number;
+    amount?:        number;   // rupees
+    currency:       string;
+    razorpayOrderId?:   string | null;
+    razorpayPaymentId?: string | null;
+    paidAt?:        Date | null;
+    attempts:       number;
+    failureReason?: string | null;
+    createdAt:      Date;
+    orders: {
+      id:              string;
+      razorpayOrderId: string;
+      razorpayPaymentId?: string | null;
+      amount:          number;   // rupees
+      status:          string;
+      method?:         string | null;
+      failureReason?:  string | null;
+      errorReason?:    string | null;
+      createdAt:       Date;
+    }[];
   } | undefined;
   certificate?: {
     id:             string;
     status:         string;
     generatedAt?:   Date | null;
+    deliveredAt?:   Date | null;
     fileUrl?:       string | null;
   } | undefined;
   submission?: {
+    id:             string;
+    status:         string;
+    submittedAt?:   Date | null;
     score:          string;
     percentage:     string;
     rank:           number;
+    totalQuestions?: number | null;
+    attempted?:     number | null;
+    correct?:       number | null;
+    wrong?:         number | null;
+    skipped?:       number | null;
+    isPassed?:      boolean | null;
+    timeTakenSecs?: number | null;
   } | undefined;
 }
 
@@ -117,7 +155,10 @@ export interface ContactMessageItem {
   template:    string;   // MessageTemplate enum value
   status:      string;   // MessageStatus enum value
   recipient:   string;
+  subject:     string | null;
+  failureReason: string | null;
   sentAt:      Date | null;
+  deliveredAt: Date | null;
   contestId:   string | null;
   contestTitle: string | null;
   createdAt:   Date;
@@ -166,6 +207,10 @@ export interface FindContactsFilter {
   city?:          string;
   state?:         string;
   college?:       string;
+  collegeId?:     string;
+  letter?:        string;
+  sortBy?:        ContactSortField;
+  sortOrder?:     "asc" | "desc";
   skip:           number;
   take:           number;
 }

@@ -318,7 +318,8 @@ export default function RegistrationsTabPage() {
 
             {/* TOP STATS STRIP */}
             <WidgetErrorBoundary name="Registration Summary Stats">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {/* Chips share one row and only wrap when they truly can't fit. */}
+                <div className="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-32">
                     <StatChip label="Total" value={stats?.total || 0} color="neutral" />
                     <StatChip label="Confirmed" value={stats?.confirmed || 0} color="green" />
 
@@ -337,9 +338,9 @@ export default function RegistrationsTabPage() {
                     )}
 
                     {contest?.fee && contest.fee > 0 && (
-                        <div className="col-span-2 md:col-span-1 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col justify-center">
+                        <div className="basis-44! px-4 py-3 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col gap-0.5">
                             <span className="text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400 opacity-70">Revenue Collected</span>
-                            <span className="text-2xl font-black text-green-600 dark:text-green-400">₹{stats?.revenue.toLocaleString()}</span>
+                            <span className="text-xl font-black text-green-600 dark:text-green-400 whitespace-nowrap">₹{stats?.revenue.toLocaleString()}</span>
                         </div>
                     )}
                 </div>
@@ -420,7 +421,6 @@ export default function RegistrationsTabPage() {
                     <DateRangePicker
                         value={dateRange}
                         onChange={setDateRange}
-                        label="Date"
                     />
 
                     <Button variant="outline" size="sm" className="h-9" onClick={() => setIsExportModalOpen(true)}>

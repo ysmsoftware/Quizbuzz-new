@@ -53,7 +53,7 @@ export function useContact(contactId: string, options: UseContactOptions = {}) {
     refetch: refetchMessages,
   } = useQuery({
     queryKey: ['contact-messages', contactId],
-    queryFn: () => crmApi.getContactMessages(contactId).then(res => res.data),
+    queryFn: () => crmApi.getContactMessages(contactId, { limit: 200 }).then(res => res.data),
     enabled: isEnabled && loadMessages,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

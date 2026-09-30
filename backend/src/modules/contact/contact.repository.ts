@@ -2,6 +2,8 @@ import { Contact, Prisma } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { FindContactsFilter, UpdateContactInput, UpsertContactInput, } from "./contact.types";
 
+const NULLABLE_SORT = new Set(["lastName", "college", "city"]);
+
 export class ContactRepository {
 
     async findById(id: string, organizationId: string): Promise<Contact | null> {
@@ -42,21 +44,25 @@ export class ContactRepository {
         });
     }
 
-    async findAll(filter: FindContactsFilter): Promise<{
-        rows: (Contact & { _count: { participants: number } })[];
-        total: number;
-    }> {
+    async findAll(filter: FindContactsFilter): Promise<{ rows: Contact[]; total: number }> {
         const where = this._buildWhereClause(filter);
+        const dir = filter.sortOrder ?? "asc";
+        const sortBy = filter.sortBy ?? "firstName";
+        // Phone-book order: the chosen field, then full name, then id so pages never shuffle between requests.
+        const orderBy: Prisma.ContactOrderByWithRelationInput[] = [
+            // Prisma only accepts `nulls` on optional columns — firstName/email are required.
+            NULLABLE_SORT.has(sortBy) ? { [sortBy]: { sort: dir, nulls: "last" } } : { [sortBy]: dir },
+            { firstName: dir },
+            { lastName: { sort: dir, nulls: "last" } },
+            { id: "asc" },
+        ];
 
         const [rows, total] = await prisma.$transaction([
             prisma.contact.findMany({
                 where,
                 skip: filter.skip,
                 take: filter.take,
-                orderBy: { createdAt: "desc" },
-                include: {
-                    _count: { select: { participants: true } },
-                },
+                orderBy,
             }),
             prisma.contact.count({ where }),
         ]);
@@ -169,11 +175,15 @@ export class ContactRepository {
                         registrationRef: true,
                         status: true,
                         createdAt: true,
+                        checkedInAt: true,
+                        joinedAt: true,
+                        disqualificationReason: true,
                         contest: {
                             select: {
                                 id: true,
                                 title: true,
                                 slug: true,
+                                startTime: true,
                                 paymentConfig: {
                                     select: {
                                         amount: true
@@ -183,8 +193,30 @@ export class ContactRepository {
                         },
                         payment: {
                             select: {
+                                id: true,
                                 status: true,
-                                amount: true
+                                amount: true,
+                                currency: true,
+                                razorpayOrderId: true,
+                                razorpayPaymentId: true,
+                                paidAt: true,
+                                attempts: true,
+                                failureReason: true,
+                                createdAt: true,
+                                orders: {
+                                    orderBy: { createdAt: "desc" },
+                                    select: {
+                                        id: true,
+                                        razorpayOrderId: true,
+                                        razorpayPaymentId: true,
+                                        amount: true,
+                                        status: true,
+                                        method: true,
+                                        failureReason: true,
+                                        errorReason: true,
+                                        createdAt: true,
+                                    },
+                                },
                             }
                         },
                         certificate: {
@@ -192,13 +224,24 @@ export class ContactRepository {
                                 id: true,
                                 status: true,
                                 generatedAt: true,
+                                deliveredAt: true,
                                 fileUrl: true
                             }
                         },
                         submission: {
                             select: {
+                                id: true,
+                                status: true,
+                                submittedAt: true,
                                 score: true,
-                                percentage: true
+                                percentage: true,
+                                totalQuestions: true,
+                                attempted: true,
+                                correct: true,
+                                wrong: true,
+                                skipped: true,
+                                isPassed: true,
+                                timeTakenSecs: true,
                             }
                         },
                         leaderboard: {
@@ -224,7 +267,25 @@ export class ContactRepository {
 
         if (filter.city) where.city = { equals: filter.city, mode: "insensitive" };
         if (filter.state) where.state = { equals: filter.state, mode: "insensitive" };
-        if (filter.college) where.college = { equals: filter.college, mode: "insensitive" };
+        // Catalog pick: match by id, plus older/free-text rows that carry the same name.
+        if (filter.collegeId) {
+            where.AND = [{
+                OR: [
+                    { collegeId: filter.collegeId },
+                    ...(filter.college ? [{ college: { equals: filter.college, mode: "insensitive" as const } }] : []),
+                ],
+            }];
+        } else if (filter.college) {
+            where.college = { contains: filter.college, mode: "insensitive" };
+        }
+
+        if (filter.letter === "#") {
+            where.NOT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((l) => ({
+                firstName: { startsWith: l, mode: "insensitive" as const },
+            }));
+        } else if (filter.letter) {
+            where.firstName = { startsWith: filter.letter, mode: "insensitive" };
+        }
 
         if (filter.search) {
             where.OR = [

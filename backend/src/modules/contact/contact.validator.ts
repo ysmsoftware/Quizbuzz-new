@@ -71,6 +71,11 @@ export const ListContactsQuerySchema = z.object({
   city:    z.string().trim().optional(),
   state:   z.string().trim().optional(),
   college: z.string().trim().optional(),
+  collegeId: z.string().trim().optional(),
+  // Phone-book jump: first letter of first name ("#" = anything not A–Z).
+  letter:  z.string().trim().regex(/^([a-zA-Z]|#)$/).optional(),
+  sortBy:  z.enum(["firstName", "lastName", "email", "college", "city", "createdAt"]).default("firstName"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
   page:    z.coerce.number().int().min(1).default(1),
   limit:   z.coerce.number().int().min(1).max(100).default(20),
 });

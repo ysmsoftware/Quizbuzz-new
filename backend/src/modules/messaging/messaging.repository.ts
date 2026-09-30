@@ -19,7 +19,10 @@ export class MessagingRepository {
                 template: true,
                 status: true,
                 recipient: true,
+                subject: true,
+                failureReason: true,
                 sentAt: true,
+                deliveredAt: true,
                 createdAt: true,
                 contest: {
                     select: { id: true, title: true },

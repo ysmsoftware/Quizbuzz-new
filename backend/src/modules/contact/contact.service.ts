@@ -91,6 +91,10 @@ export class ContactService {
             ...(query.city !== undefined ? { city: query.city } : {}),
             ...(query.state !== undefined ? { state: query.state } : {}),
             ...(query.college !== undefined ? { college: query.college } : {}),
+            ...(query.collegeId !== undefined ? { collegeId: query.collegeId } : {}),
+            ...(query.letter !== undefined ? { letter: query.letter } : {}),
+            ...(query.sortBy !== undefined ? { sortBy: query.sortBy } : {}),
+            ...(query.sortOrder !== undefined ? { sortOrder: query.sortOrder } : {}),
         };
 
         const { rows, total } = await this.contactRepo.findAll(filter);
@@ -104,7 +108,6 @@ export class ContactService {
             college: row.college,
             city: row.city,
             state: row.state,
-            totalContests: row._count.participants,
             createdAt: row.createdAt,
         }));
 
@@ -159,30 +162,54 @@ export class ContactService {
         }
 
         return result.participants.map((p) => {
-            const contestPrice = p.contest.paymentConfig?.amount ? p.contest.paymentConfig.amount / 100 : 0;
+            const contestPrice = p.contest.paymentConfig?.amount ?? 0; // PaymentConfig.amount is rupees
             return {
                 participantId: p.id,
                 registrationRef: p.registrationRef,
                 contestId: p.contest.id,
                 contestTitle: p.contest.title,
                 contestSlug: p.contest.slug,
+                contestStartTime: p.contest.startTime,
                 status: p.status,
                 registeredAt: p.createdAt,
+                checkedInAt: p.checkedInAt,
+                joinedAt: p.joinedAt,
+                disqualificationReason: p.disqualificationReason,
                 contestPrice,
                 payment: p.payment ? {
+                    id: p.payment.id,
                     status: p.payment.status,
                     amount: p.payment.amount / 100,
+                    currency: p.payment.currency,
+                    razorpayOrderId: p.payment.razorpayOrderId,
+                    razorpayPaymentId: p.payment.razorpayPaymentId,
+                    paidAt: p.payment.paidAt,
+                    attempts: p.payment.attempts,
+                    failureReason: p.payment.failureReason,
+                    createdAt: p.payment.createdAt,
+                    orders: p.payment.orders.map((o) => ({ ...o, amount: o.amount / 100 })),
                 } : undefined,
                 certificate: p.certificate ? {
                     id: p.certificate.id,
                     status: p.certificate.status,
                     generatedAt: p.certificate.generatedAt,
+                    deliveredAt: p.certificate.deliveredAt,
                     fileUrl: p.certificate.fileUrl,
                 } : undefined,
                 submission: p.submission ? {
+                    id: p.submission.id,
+                    status: p.submission.status,
+                    submittedAt: p.submission.submittedAt,
                     score: p.submission.score ? p.submission.score.toString() : '0',
                     percentage: p.submission.percentage ? p.submission.percentage.toString() : '0',
                     rank: p.leaderboard ? p.leaderboard.rank : 0,
+                    totalQuestions: p.submission.totalQuestions,
+                    attempted: p.submission.attempted,
+                    correct: p.submission.correct,
+                    wrong: p.submission.wrong,
+                    skipped: p.submission.skipped,
+                    isPassed: p.submission.isPassed,
+                    timeTakenSecs: p.submission.timeTakenSecs,
                 } : undefined,
             };
         });

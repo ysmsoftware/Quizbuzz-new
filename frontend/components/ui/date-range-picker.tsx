@@ -24,7 +24,7 @@ interface DateRangePickerProps {
 export function DateRangePicker({
   value,
   onChange,
-  label = 'Date',
+  label,
   className
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false)
@@ -72,9 +72,11 @@ export function DateRangePicker({
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="text-[9px] font-black tracking-widest text-muted-foreground/80 uppercase select-none">
-        {label}
-      </span>
+      {label && (
+        <span className="text-[9px] font-black tracking-widest text-muted-foreground/80 uppercase select-none">
+          {label}
+        </span>
+      )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button

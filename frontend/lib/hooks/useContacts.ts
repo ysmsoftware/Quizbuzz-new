@@ -1,14 +1,9 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { crmApi, Contact } from '@/lib/api/crm.api';
+import { crmApi, Contact, type ContactListParams } from '@/lib/api/crm.api';
 
-export type ContactFilters = {
-  search?: string;
-  college?: string;
-  page?: number;
-  limit?: number;
-};
+export type ContactFilters = ContactListParams;
 
 export function useContacts(filters: ContactFilters = {}, options?: { enabled?: boolean }) {
   const queryClient = useQueryClient();

@@ -119,12 +119,13 @@ export function Combobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            'w-full justify-between font-normal bg-background text-left shadow-xs transition-colors',
+            'w-full min-w-0 justify-between font-normal bg-background text-left shadow-xs transition-colors',
             !value && 'text-muted-foreground',
             className
           )}
         >
-          <span className="truncate">{selectedOption ? selectedOption.label : value || placeholder}</span>
+          {/* w-0 + flex-1: a long label (3k-row college catalog) must truncate, never widen the parent (e.g. a dialog grid). */}
+          <span className="w-0 flex-1 truncate">{selectedOption ? selectedOption.label : value || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

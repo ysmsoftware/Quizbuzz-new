@@ -22,31 +22,101 @@ export interface Contact {
   };
 }
 
+export interface ContactPaymentOrder {
+  id: string;
+  razorpayOrderId: string;
+  razorpayPaymentId?: string | null;
+  amount: number;
+  status: string;
+  method?: string | null;
+  failureReason?: string | null;
+  errorReason?: string | null;
+  createdAt: string;
+}
+
 export interface ContactHistoryItem {
   participantId: string;
   registrationRef: string;
   status: string;
   registeredAt: string;
+  checkedInAt?: string | null;
+  joinedAt?: string | null;
+  disqualificationReason?: string | null;
   contestId: string;
   contestTitle: string;
   contestSlug: string;
+  contestStartTime?: string | null;
+  /** Rupees; 0 = free contest. */
   contestPrice?: number;
   payment?: {
+    id: string;
     status: string;
+    /** Rupees. */
     amount?: number;
+    currency: string;
+    razorpayOrderId?: string | null;
+    razorpayPaymentId?: string | null;
+    paidAt?: string | null;
+    attempts: number;
+    failureReason?: string | null;
+    createdAt: string;
+    orders: ContactPaymentOrder[];
   };
   certificate?: {
     id: string;
-    status: 'GENERATED' | 'FAILED' | 'QUEUED' | 'GENERATING';
-    generatedAt?: string;
-    fileUrl?: string;
+    status: 'PENDING' | 'GENERATED' | 'FAILED' | 'QUEUED' | 'GENERATING' | string;
+    generatedAt?: string | null;
+    deliveredAt?: string | null;
+    fileUrl?: string | null;
   };
   submission?: {
+    id: string;
+    status: string;
+    submittedAt?: string | null;
     score: string;
     percentage: string;
     rank: number;
+    totalQuestions?: number | null;
+    attempted?: number | null;
+    correct?: number | null;
+    wrong?: number | null;
+    skipped?: number | null;
+    isPassed?: boolean | null;
+    timeTakenSecs?: number | null;
   };
 }
+
+/** Row from GET /contacts/:id/messages (only messages tied to one of the contact's registrations). */
+export interface ContactMessageItem {
+  id: string;
+  channel: 'WHATSAPP' | 'EMAIL' | string;
+  template: string;
+  status: string;
+  recipient: string;
+  subject: string | null;
+  failureReason: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  contestId: string | null;
+  contestTitle: string | null;
+  createdAt: string;
+}
+
+export type ContactSortField = 'firstName' | 'lastName' | 'email' | 'college' | 'city' | 'createdAt';
+
+export type ContactListParams = {
+  search?: string;
+  college?: string;
+  collegeId?: string;
+  /** First letter of first name, or "#" for non A–Z. */
+  letter?: string;
+  city?: string;
+  state?: string;
+  sortBy?: ContactSortField;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+};
 
 export interface ContactsListResponse {
   data: Contact[];
@@ -112,8 +182,15 @@ export interface MessagesListResponse {
  */
 export const crmApi = {
   // Contacts
-  getContacts: (params?: { search?: string; college?: string; page?: number; limit?: number }) =>
-    get<ContactsListResponse>('/contacts', { params }),
+  // Server returns { data, total, page, limit, totalPages } — reshape to the { data, pagination } the UI reads.
+  getContacts: async (params?: ContactListParams) => {
+    const response = await get<any>('/contacts', { params });
+    const { data, total = 0, page = 1, limit = params?.limit ?? 20, totalPages = 0 } = response.data ?? {};
+    return {
+      ...response,
+      data: { data: (data ?? []) as Contact[], pagination: { page, limit, total, totalPages } } as ContactsListResponse,
+    };
+  },
 
   getContactDetail: (contactId: string) =>
     get<Contact>(`/contacts/${contactId}`),
@@ -126,8 +203,8 @@ export const crmApi = {
   getContactRegistrations: (contactId: string) =>
     get<ContactHistoryItem[]>(`/contacts/${contactId}/contests`),
 
-  getContactMessages: (contactId: string) =>
-    get<MessagesListResponse>(`/contacts/${contactId}/messages`),
+  getContactMessages: (contactId: string, params?: { page?: number; limit?: number }) =>
+    get<{ data: ContactMessageItem[]; total: number; totalPages: number }>(`/contacts/${contactId}/messages`, { params }),
 
   getContactCertificates: (contactId: string) =>
     get<any>(`/contacts/${contactId}/certificates`),
