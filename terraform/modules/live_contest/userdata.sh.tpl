@@ -207,11 +207,11 @@ INSTANCE_COUNT=1
 # hardcoded default above if not set in SSM — see OPS_BASE_URL just above.
 OPS_BASE_URL=$OPS_BASE_URL
 
-# Node.js heap — must be set explicitly or Node defaults to ~512MB
-# which OOMs at ~500 concurrent WebSocket connections per instance.
-# t3.medium has 4GB RAM; backend gets 3G container limit, we give Node
-# 2GB heap leaving 1GB headroom for native/Buffer/V8 allocations and OS.
-NODE_OPTIONS=--max-old-space-size=2048
+# Node.js heap (NODE_OPTIONS) is deliberately NOT set here: backend and
+# worker both read this file but have different container memory limits
+# (3G vs 1G), so each sets its own --max-old-space-size in the compose file
+# below. Previously a shared 2048MB here gave the worker a heap TWICE its
+# 1G hard container limit — it would be OOM-killed before V8 ever GC'd.
 
 # ── DATABASE ─────────────────────────────────────────────────────────────────
 DATABASE_URL=$DATABASE_URL
@@ -257,8 +257,8 @@ WS_CONNECTION_TIMEOUT=30000
 # mechanism — see quiz.gateway.ts's handleDisconnect).
 #
 # This was previously 700, computed against a since-outdated 1536MB heap
-# figure at an assumed ~1.8MB/session. Heap is now 2048MB (NODE_OPTIONS
-# above), and full-duration load tests show actual usage is far below that
+# figure at an assumed ~1.8MB/session. Heap is now 2048MB (backend's
+# NODE_OPTIONS in the compose file below), and full-duration load tests show actual usage is far below that
 # estimate — ~500 connections/instance used only 5-8% of a 2096MB heap
 # (~0.2-0.3MB/session, not 1.8MB). 1000 is still conservative against
 # observed real usage.
@@ -415,6 +415,10 @@ services:
     container_name: quizbuzz_backend
     restart: unless-stopped
     env_file: /app/.env
+    # Heap ≈ 67% of the 3G hard container limit — the rest is headroom for
+    # Buffers/sockets/native memory. Worker below follows the same rule.
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=2048"
     ports:
       - "3005:3005"
     deploy:
@@ -444,6 +448,8 @@ services:
     restart: unless-stopped
     env_file: /app/.env
     command: ["node", "dist/worker.js"]
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=704"
     depends_on:
       backend:
         condition: service_healthy

@@ -10,6 +10,8 @@ export interface InstanceHeartbeat {
         externalMb: number;
         heapLimitMb: number;
         heapUsedPct: number;
+        /** Hard container memory limit (cgroup). null = unlimited. */
+        containerLimitMb: number | null;
     };
     ws?: {
         activeConnections: number;

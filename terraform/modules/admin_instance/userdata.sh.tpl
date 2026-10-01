@@ -169,11 +169,12 @@ INSTANCE_COUNT=1
 # hardcoded default above if not set in SSM — see OPS_BASE_URL just above.
 OPS_BASE_URL=$OPS_BASE_URL
 
-# Node.js heap — default is ~512MB which OOMs under load.
-# t3.small has 2GB RAM; backend gets 800M container limit, we give Node
-# 1.5GB to match the quiz instances (container limit is a soft ceiling,
-# not a hard kill — the OS will OOM-kill before Docker's soft limit).
-NODE_OPTIONS=--max-old-space-size=1536
+# Node.js heap (NODE_OPTIONS) is deliberately NOT set here: backend, worker
+# and frontend all read this one file but have different container memory
+# limits, so each service sets its own --max-old-space-size in the compose
+# file below (`environment:` overrides env_file). The Docker memory limit is
+# a HARD cgroup limit — the container is OOM-killed at it — so the heap must
+# sit ~70% under it, leaving room for Buffers/sockets/native memory.
 
 # ── DATABASE ─────────────────────────────────────────────────────────────────
 # DATABASE_URL comes from SSM — points to RDS PostgreSQL
@@ -207,8 +208,11 @@ WS_NAMESPACE=/quiz
 WS_PATH=/socket.io
 WS_HEARTBEAT_INTERVAL=15000
 WS_CONNECTION_TIMEOUT=30000
-# Conservative for t2.small — increase to 1000 on t3.medium in live mode
-WS_MAX_CONNECTIONS_PER_INSTANCE=200
+# Sized for the backend's 1600M container / 1152MB heap on this t3.medium.
+# Load tests measured ~0.2-0.3MB heap per session, so 800 is well inside
+# the heap; kept below the live-mode 1000 until a 1-hour soak test on this
+# box confirms more.
+WS_MAX_CONNECTIONS_PER_INSTANCE=800
 WS_RECONNECT_ATTEMPTS=5
 WS_RECONNECT_DELAY=2000
 
@@ -355,7 +359,7 @@ services:
       - --requirepass
       - REDIS_PASSWORD_PLACEHOLDER
       - --maxmemory
-      - 256mb
+      - 384mb
       - --maxmemory-policy
       - noeviction
       - --save
@@ -374,6 +378,13 @@ services:
     container_name: quizbuzz_backend
     restart: unless-stopped
     env_file: /app/.env
+    # Memory budget (t3.medium, 4GB): backend 1600M + worker 500M +
+    # frontend 500M + redis ~450M + OS/docker/nginx ~500M ≈ 3.5GB.
+    # Heap = ~70% of each container limit. This file is the single source
+    # of truth: changes reach a running box only by replacing the instance
+    # (terraform apply -replace=module.admin_instance.aws_instance.admin).
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=1152"
     ports:
       - "3005:3005"
     depends_on:
@@ -383,7 +394,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 800M
+          memory: 1600M
     logging:
       <<: *default-logging
       options:
@@ -406,6 +417,8 @@ services:
     restart: unless-stopped
     env_file: /app/.env
     command: ["node", "dist/worker.js"]
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=352"
     depends_on:
       redis:
         condition: service_healthy
@@ -431,6 +444,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=352"
     ports:
       - "3000:3000"
     depends_on:

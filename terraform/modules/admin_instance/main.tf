@@ -215,8 +215,17 @@ resource "aws_instance" "admin" {
 
   tags = { Name = "quizbuzz-admin", Role = "admin", Mode = "idle" }
 
+  # ignore_changes: userdata only ever runs on FIRST boot, yet a changed
+  # user_data makes the AWS provider stop/start this instance in place, and a
+  # newer AL2023 AMI (most_recent = true) forces a full replacement. Either
+  # would take the site down and wipe the non-persistent Redis container
+  # (queued jobs, live sessions) on what should be a routine apply.
+  # Config changes reach the running instance via deploy.yml instead; to
+  # deliberately roll a fresh instance from the current template + AMI:
+  #   terraform apply -replace=module.admin_instance.aws_instance.admin
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [ami, user_data_base64]
   }
 }
 

@@ -1,4 +1,5 @@
 import v8 from "v8";
+import fs from "fs";
 import { redis, redisReader } from "../../config/redis";
 import { config } from "../../config";
 import { prisma } from "../../config/db";
@@ -14,6 +15,26 @@ const HEARTBEAT_KEY_PREFIX = "ops:instance:";
 // the fleet view — but a genuinely dead/replaced instance still ages out
 // within a bounded window instead of lingering forever in SCAN results.
 const HEARTBEAT_TTL_SEC = Math.max(15, Math.ceil((config.opsMetrics.heartbeatIntervalMs / 1000) * 3));
+
+/**
+ * The container's hard memory ceiling (Docker `deploy.resources.limits.memory`),
+ * read once from the cgroup — the number the kernel OOM-kills at, which is
+ * what RSS must stay under. heap_size_limit alone is NOT that number: it's
+ * just whatever --max-old-space-size says, and can be set higher than the
+ * container limit. null when the process isn't memory-limited (local dev).
+ */
+function readContainerLimitMb(): number | null {
+    for (const file of ["/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"]) {
+        try {
+            const bytes = Number(fs.readFileSync(file, "utf8").trim()); // "max" → NaN
+            // cgroup v1 reports "unlimited" as a huge sentinel (~2^63).
+            return Number.isFinite(bytes) && bytes < 2 ** 50 ? Math.round(bytes / 1024 / 1024) : null;
+        } catch { /* not this cgroup version */ }
+    }
+    return null;
+}
+
+export const containerLimitMb = readContainerLimitMb();
 
 export class OpsMetricsService {
     constructor(private readonly session: QuizSession) { }
@@ -45,6 +66,7 @@ export class OpsMetricsService {
                 externalMb: Math.round(mem.external / 1024 / 1024),
                 heapLimitMb: Math.round(heapLimit / 1024 / 1024),
                 heapUsedPct: heapLimit > 0 ? Math.round((mem.heapUsed / heapLimit) * 100) : 0,
+                containerLimitMb,
             },
             redisHost: config.redis.host,
         };

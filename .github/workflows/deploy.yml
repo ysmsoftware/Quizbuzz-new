@@ -239,7 +239,7 @@ jobs:
   # decodes and executes it. This avoids JSON-array quoting entirely.
   #
   # The script on EC2:
-  #   1. Patches NODE_OPTIONS + HEALTH_HEAP_THRESHOLD_PCT + OPS_BASE_URL
+  #   1. Patches HEALTH_HEAP_THRESHOLD_PCT + OPS_BASE_URL
   #      into /app/.env (the file Terraform's userdata script generated at
   #      boot and docker-compose's env_file actually loads)
   #   2. Saves current tag as PREV_TAG for rollback
@@ -327,16 +327,15 @@ jobs:
           echo "New tag : $NEW_TAG"
           echo ""
 
-          # 1. Patch .env — ensure NODE_OPTIONS and heap threshold are set correctly
-          #    Runs on every deploy so even old instances that booted before these
-          #    vars existed get them applied automatically.
-          grep -q '^NODE_OPTIONS=' /app/.env \
-            && sed -i 's|^NODE_OPTIONS=.*|NODE_OPTIONS=--max-old-space-size=1536|' /app/.env \
-            || echo 'NODE_OPTIONS=--max-old-space-size=1536' >> /app/.env
+          # 1. Patch .env — heap-usage health threshold.
+          #    Memory limits, per-service heap (NODE_OPTIONS) and the WS ceiling
+          #    are NOT patched here: their single source of truth is the compose
+          #    + .env written by terraform/modules/admin_instance/userdata.sh.tpl,
+          #    applied by replacing the instance (see the ignore_changes comment
+          #    in terraform/modules/admin_instance/main.tf).
           grep -q '^HEALTH_HEAP_THRESHOLD_PCT=' /app/.env \
             && sed -i 's|^HEALTH_HEAP_THRESHOLD_PCT=.*|HEALTH_HEAP_THRESHOLD_PCT=80|' /app/.env \
             || echo 'HEALTH_HEAP_THRESHOLD_PCT=80' >> /app/.env
-          echo "NODE_OPTIONS   : $(grep NODE_OPTIONS /app/.env)"
           echo "Heap threshold : $(grep HEALTH_HEAP_THRESHOLD_PCT /app/.env)"
           echo ""
 
