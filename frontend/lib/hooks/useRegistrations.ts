@@ -104,6 +104,7 @@ export function useRegistrations(
     status?: string;
     search?: string;
     payment?: string;
+    referral?: string;
   }
 ) {
   const queryClient = useQueryClient();

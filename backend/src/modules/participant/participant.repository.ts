@@ -48,7 +48,7 @@ export interface IParticipantRepository {
 
     findOrganizationIdByParticipantId(participantId: string): Promise<string | null>;
 
-    getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>>;
+    getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus | "PAYMENT_FAILED" | "REFERRED", number>>;
 
     updateStatuses(participantIds: string[], status: ParticipantStatus, organizationId: string): Promise<number>;
 
@@ -62,16 +62,32 @@ export interface IParticipantRepository {
 
 
 
+// Payment filter → participant where. "Paid" is a SUCCESS payment; "failed" is an unconfirmed
+// registration whose latest attempt failed/was cancelled; "pending" is unconfirmed and not failed
+// (no attempt yet, or checkout still open).
+const PAYMENT_FILTER: Record<"completed" | "pending" | "failed", Prisma.ParticipantWhereInput> = {
+    completed: { payment: { is: { status: "SUCCESS" } } },
+    failed: { status: "PENDING_PAYMENT", payment: { is: { status: { in: ["FAILED", "CANCELLED"] } } } },
+    pending: {
+        status: "PENDING_PAYMENT",
+        OR: [{ payment: { is: null } }, { payment: { is: { status: { in: ["CREATED", "PENDING"] } } } }],
+    },
+};
+
 export class ParticipantRepository implements IParticipantRepository {
     async findAll(
         organizationId: string,
         contestId: string,
-        { status, search, page, limit }: FindAllParticipantsOptions
+        { status, search, payment, referral, page, limit }: FindAllParticipantsOptions
     ): Promise<{ participants: ParticipantListRecord[]; total: number }> {
         const where: Prisma.ParticipantWhereInput = {
             organizationId,
             contestId,
             ...(status ? { status } : {}),
+            // AND-wrapped: "pending" carries its own OR, which must not clobber the search OR below.
+            ...(payment ? { AND: [PAYMENT_FILTER[payment]] } : {}),
+            ...(referral === "referred" ? { referredByEnrollmentId: { not: null } } : {}),
+            ...(referral === "direct" ? { referredByEnrollmentId: null } : {}),
             ...(search
                 ? {
                     OR: [
@@ -263,7 +279,7 @@ export class ParticipantRepository implements IParticipantRepository {
         });
     }
 
-    async getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus, number>> {
+    async getStatusSummary(contestId: string, organizationId: string): Promise<Record<ParticipantStatus | "PAYMENT_FAILED" | "REFERRED", number>> {
         const counts = await prisma.participant.groupBy({
             by: ["status"],
             where: { contestId, organizationId },
@@ -285,7 +301,14 @@ export class ParticipantRepository implements IParticipantRepository {
             summary[item.status] = item._count.status;
         }
 
-        return summary;
+        // Extra counters for the registrations tab: unpaid split into failed vs still-pending,
+        // and how many came in through an ambassador referral.
+        const [paymentFailed, referred] = await prisma.$transaction([
+            prisma.participant.count({ where: { contestId, organizationId, ...PAYMENT_FILTER.failed } }),
+            prisma.participant.count({ where: { contestId, organizationId, referredByEnrollmentId: { not: null } } }),
+        ]);
+
+        return { ...summary, PAYMENT_FAILED: paymentFailed, REFERRED: referred };
     }
 
     async updateStatuses(participantIds: string[], status: ParticipantStatus, organizationId: string): Promise<number> {

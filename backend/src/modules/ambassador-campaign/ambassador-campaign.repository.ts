@@ -486,7 +486,7 @@ export class AmbassadorCampaignRepository {
      *  decides what to select/return, this just does the paginated fetch). Same counted-status
      *  filter as the aggregate numbers, so the list and the count an ambassador sees always
      *  agree. */
-    async listReferrals(enrollmentId: string, params: { skip: number; take: number }): Promise<{ rows: Array<{ id: string; registrationRef: string; status: ParticipantStatus; createdAt: Date; contact: { firstName: string; lastName: string | null; email: string | null; phone: string | null; college: string | null } }>; total: number }> {
+    async listReferrals(enrollmentId: string, params: { skip: number; take: number }): Promise<{ rows: Array<{ id: string; registrationRef: string; status: ParticipantStatus; createdAt: Date; contact: { firstName: string; lastName: string | null; email: string | null; phone: string | null; college: string | null; department: string | null } }>; total: number }> {
         const where: Prisma.ParticipantWhereInput = { referredByEnrollmentId: enrollmentId, ...COUNTED_REFERRAL_STATUS };
 
         const [rows, total] = await prisma.$transaction([
@@ -500,7 +500,7 @@ export class AmbassadorCampaignRepository {
                     registrationRef: true,
                     status: true,
                     createdAt: true,
-                    contact: { select: { firstName: true, lastName: true, email: true, phone: true, college: true } },
+                    contact: { select: { firstName: true, lastName: true, email: true, phone: true, college: true, department: true } },
                 },
             }),
             prisma.participant.count({ where }),

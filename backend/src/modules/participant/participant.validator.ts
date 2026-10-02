@@ -6,6 +6,8 @@ export const ListParticipantsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(10000).default(1000),
     search: z.string().optional(),
+    payment: z.enum(["completed", "pending", "failed"]).optional(),
+    referral: z.enum(["referred", "direct"]).optional(),
 });
 
 export const DisqualifyParticipantSchema = z.object({

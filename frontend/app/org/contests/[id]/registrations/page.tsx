@@ -87,6 +87,8 @@ import { PaginationBar } from '@/components/ui/pagination-bar';
 import { ParticipantDrawer } from '@/components/features/registrations/ParticipantDrawer';
 import { DisqualifyDialog } from '@/components/contests/disqualify-dialog';
 
+const PAYMENT_LABEL: Record<string, string> = { all: 'All', completed: 'Paid', pending: 'Pending', failed: 'Failed' };
+
 export default function RegistrationsTabPage() {
     const { id } = useParams() as { id: string };
     const router = useRouter();
@@ -95,6 +97,8 @@ export default function RegistrationsTabPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
     const [paymentFilter, setPaymentFilter] = useState<'all' | string>('all');
+    const [referralFilter, setReferralFilter] = useState<'all' | 'referred' | 'direct'>('all');
+    const [hydrated, setHydrated] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [disqualifyIds, setDisqualifyIds] = useState<string[] | null>(null);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
@@ -118,18 +122,53 @@ export default function RegistrationsTabPage() {
 
     const PAGE_LIMIT = 25;
 
-    // Reset to page 1 whenever search/status/payment filters change
+    // Filters live in the URL (?search=&status=&payment=&referral=&from=&to=&page=) so a refresh,
+    // back-navigation or shared link restores the same view. Read once on mount…
     useEffect(() => {
-        setPage(1);
-    }, [searchQuery, statusFilter, paymentFilter]);
+        const q = new URLSearchParams(window.location.search);
+        setSearchQuery(q.get('search') ?? '');
+        setStatusFilter(q.get('status') ?? 'all');
+        setPaymentFilter(q.get('payment') ?? 'all');
+        const ref = q.get('referral');
+        setReferralFilter(ref === 'referred' || ref === 'direct' ? ref : 'all');
+        const from = q.get('from'), to = q.get('to');
+        setDateRange(from || to ? { start: from ?? '', end: to ?? '' } : null);
+        setPage(Math.max(1, Number(q.get('page')) || 1));
+        setHydrated(true);
+    }, []);
+
+    // …and written back on every change.
+    useEffect(() => {
+        if (!hydrated) return;
+        const q = new URLSearchParams();
+        if (searchQuery) q.set('search', searchQuery);
+        if (statusFilter !== 'all') q.set('status', statusFilter);
+        if (paymentFilter !== 'all') q.set('payment', paymentFilter);
+        if (referralFilter !== 'all') q.set('referral', referralFilter);
+        if (dateRange?.start) q.set('from', dateRange.start);
+        if (dateRange?.end) q.set('to', dateRange.end);
+        if (page > 1) q.set('page', String(page));
+        const qs = q.toString();
+        window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+    }, [hydrated, searchQuery, statusFilter, paymentFilter, referralFilter, dateRange, page]);
+
+    // Back to page 1 when a filter changes — but not for the values just restored from the URL.
+    const filterSig = JSON.stringify([searchQuery, statusFilter, paymentFilter, referralFilter, dateRange]);
+    const lastFilterSig = useRef<string | null>(null);
+    useEffect(() => {
+        if (!hydrated) return;
+        if (lastFilterSig.current !== null && lastFilterSig.current !== filterSig) setPage(1);
+        lastFilterSig.current = filterSig;
+    }, [hydrated, filterSig]);
 
     const filters = useMemo(() => ({
         search: searchQuery,
         status: statusFilter === 'all' ? undefined : statusFilter,
         payment: paymentFilter === 'all' ? undefined : paymentFilter,
+        referral: referralFilter === 'all' ? undefined : referralFilter,
         page,
         limit: PAGE_LIMIT,
-    }), [searchQuery, statusFilter, paymentFilter, page]);
+    }), [searchQuery, statusFilter, paymentFilter, referralFilter, page]);
 
     const {
         data: registrations,
@@ -189,9 +228,11 @@ export default function RegistrationsTabPage() {
             (sum.DISQUALIFIED || 0) + 
             (sum.ABSENT || 0);
 
-        const pendingCount = sum.PENDING_PAYMENT || 0;
+        // Unconfirmed registrations split by why: a failed/cancelled checkout vs. not paid yet.
+        const failedCount = (sum as Record<string, number>).PAYMENT_FAILED || 0;
+        const pendingCount = Math.max(0, (sum.PENDING_PAYMENT || 0) - failedCount);
+        // Paid contests only confirm on a successful payment, so confirmed == paid.
         const paidCount = confirmedCount;
-        const failedCount = 0;
         const freeCount = confirmedCount;
         const total = contest?._count?.participants || (confirmedCount + pendingCount);
 
@@ -203,6 +244,7 @@ export default function RegistrationsTabPage() {
             failed: failedCount,
             free: freeCount,
             submitted: contest?._count?.submissions || 0,
+            referred: (sum as Record<string, number>).REFERRED || 0,
             revenue: paidCount * (contest.fee || 0)
         };
     }, [contest, statusSummary]);
@@ -220,6 +262,7 @@ export default function RegistrationsTabPage() {
                 search: searchQuery,
                 status: statusFilter === 'all' ? undefined : statusFilter,
                 payment: paymentFilter === 'all' ? undefined : paymentFilter,
+                referral: referralFilter === 'all' ? undefined : referralFilter,
                 startDate: dateRange?.start,
                 endDate: dateRange?.end
             } : {};
@@ -320,24 +363,20 @@ export default function RegistrationsTabPage() {
             <WidgetErrorBoundary name="Registration Summary Stats">
                 {/* Chips share one row and only wrap when they truly can't fit. */}
                 <div className="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-32">
-                    <StatChip label="Total" value={stats?.total || 0} color="neutral" />
                     <StatChip label="Confirmed" value={stats?.confirmed || 0} color="green" />
 
-                    {contest?.fee && contest.fee > 0 ? (
+                    {(contest?.fee ?? 0) > 0 ? (
                         <>
-                            <StatChip label="Paid" value={stats?.paid || 0} color="green" />
                             <StatChip label="Pending" value={stats?.pending || 0} color="amber" />
                             <StatChip label="Failed" value={stats?.failed || 0} color="red" />
                         </>
-                    ) : (
-                        <StatChip label="Free Contest" value={stats?.free || 0} color="blue" />
-                    )}
+                    ) : null}
 
                     {(phase === 'ENDED' || phase === 'RESULTS_PUBLISHED') && (
                         <StatChip label="Submitted" value={stats?.submitted || 0} color="blue" />
                     )}
 
-                    {contest?.fee && contest.fee > 0 && (
+                    {(contest?.fee ?? 0) > 0 && (
                         <div className="basis-44! px-4 py-3 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col gap-0.5">
                             <span className="text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400 opacity-70">Revenue Collected</span>
                             <span className="text-xl font-black text-green-600 dark:text-green-400 whitespace-nowrap">₹{stats?.revenue.toLocaleString()}</span>
@@ -401,11 +440,11 @@ export default function RegistrationsTabPage() {
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    {contest?.fee && contest.fee > 0 && (
+                    {(contest?.fee ?? 0) > 0 && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm" className="h-9 whitespace-nowrap">
-                                    Payment: {paymentFilter}
+                                    Payment: {PAYMENT_LABEL[paymentFilter] ?? 'All'}
                                     <ChevronDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -417,6 +456,27 @@ export default function RegistrationsTabPage() {
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
+
+                    <div className="inline-flex h-9 items-center rounded-md border border-input bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Filter by referral">
+                        {([
+                            ['all', 'All'],
+                            ['referred', `Referral (${stats?.referred ?? 0})`],
+                            ['direct', 'Direct'],
+                        ] as const).map(([value, label]) => (
+                            <button
+                                key={value}
+                                type="button"
+                                aria-pressed={referralFilter === value}
+                                onClick={() => setReferralFilter(value)}
+                                className={cn(
+                                    'h-full px-2.5 rounded-[5px] whitespace-nowrap transition-colors',
+                                    referralFilter === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
 
                     <DateRangePicker
                         value={dateRange}
@@ -501,7 +561,7 @@ export default function RegistrationsTabPage() {
                                                         No participants match the search query "{searchQuery}" or selected filters.
                                                     </p>
                                                 </div>
-                                                {(searchQuery || statusFilter !== 'all' || paymentFilter !== 'all' || dateRange) && (
+                                                {(searchQuery || statusFilter !== 'all' || paymentFilter !== 'all' || referralFilter !== 'all' || dateRange) && (
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -510,6 +570,7 @@ export default function RegistrationsTabPage() {
                                                             setSearchQuery('');
                                                             setStatusFilter('all');
                                                             setPaymentFilter('all');
+                                                            setReferralFilter('all');
                                                             setDateRange(null);
                                                         }}
                                                     >
@@ -598,7 +659,7 @@ export default function RegistrationsTabPage() {
                                                                     {reg.paymentStatus === 'completed' ? 'Paid' : reg.paymentStatus === 'pending' ? 'Pending' : 'Failed'}
                                                                 </Badge>
                                                             )}
-                                                            {contest?.fee && contest.fee > 0 && reg.amount && <span className="text-[10px] font-medium text-muted-foreground">₹{reg.amount}</span>}
+                                                            {(contest?.fee ?? 0) > 0 && !!reg.amount && <span className="text-[10px] font-medium text-muted-foreground">₹{reg.amount}</span>}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 text-center">
@@ -760,7 +821,7 @@ export default function RegistrationsTabPage() {
             </AnimatePresence>
 
             {/* PAYMENT SUMMARY GRID */}
-            {contest?.fee && contest.fee > 0 && (
+            {(contest?.fee ?? 0) > 0 && (
                 <WidgetErrorBoundary name="Payment Summary">
                     <CollapsibleSection title="Payment Summary" expanded={isPaymentsExpanded} onToggle={() => setIsPaymentsExpanded(!isPaymentsExpanded)}>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -772,7 +833,7 @@ export default function RegistrationsTabPage() {
                             />
                             <PaymentCard
                                 label="Pending"
-                                value={`₹${(stats?.pending || 0) * contest.fee}`}
+                                value={`₹${(stats?.pending || 0) * (contest?.fee ?? 0)}`}
                                 subtitle={`${stats?.pending} payments pending`}
                                 note="Participants can still complete payment"
                                 action={{ label: "Send Reminder", onClick: () => toast.success("Reminders sent!") }}
@@ -780,7 +841,7 @@ export default function RegistrationsTabPage() {
                             />
                             <PaymentCard
                                 label="Failed"
-                                value={`₹${(stats?.failed || 0) * contest.fee} missed`}
+                                value={`₹${(stats?.failed || 0) * (contest?.fee ?? 0)} missed`}
                                 subtitle={`${stats?.failed} failed payments`}
                                 action={{ label: "Review Failed", onClick: () => setStatusFilter('failed') }}
                                 color="red"

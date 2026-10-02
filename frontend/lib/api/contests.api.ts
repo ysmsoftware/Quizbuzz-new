@@ -180,6 +180,8 @@ export async function listParticipants(
     limit?: number;
     status?: string;
     search?: string;
+    payment?: string;
+    referral?: string;
   }
 ): Promise<ApiResponse<{ participants: Registration[]; pagination?: any }>> {
   const query = new URLSearchParams();
@@ -187,6 +189,8 @@ export async function listParticipants(
   if (params?.limit) query.append('limit', String(params.limit));
   if (params?.status) query.append('status', params.status);
   if (params?.search) query.append('search', params.search);
+  if (params?.payment) query.append('payment', params.payment);
+  if (params?.referral) query.append('referral', params.referral);
 
   const path = `/contests/${contestId}/participants${
     query.toString() ? '?' + query.toString() : ''

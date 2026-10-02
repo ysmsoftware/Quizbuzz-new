@@ -22,7 +22,9 @@ export class ParticipantController {
                     status: query.status as any,
                     page: query.page,
                     limit: query.limit,
-                    search: req.query.search as string | undefined
+                    search: req.query.search as string | undefined,
+                    payment: query.payment,
+                    referral: query.referral,
                 }
             );
 

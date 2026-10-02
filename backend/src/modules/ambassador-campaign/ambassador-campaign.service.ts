@@ -986,6 +986,7 @@ export class AmbassadorCampaignService {
             email: r.contact.email,
             phone: r.contact.phone,
             college: r.contact.college,
+            department: r.contact.department,
         }));
 
         return { data, total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) };

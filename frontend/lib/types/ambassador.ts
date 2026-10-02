@@ -534,6 +534,7 @@ export interface ReferralListItem {
   email: string | null;
   phone: string | null;
   college: string | null;
+  department: string | null;
 }
 
 /** Ambassador-facing referral list — name + college only, no other contact detail. */

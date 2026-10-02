@@ -27,6 +27,8 @@ export type ParticipantCertificateEligibleRecord = Prisma.ParticipantGetPayload<
 export interface FindAllParticipantsOptions {
     status?: ParticipantStatus | null | undefined;
     search?: string | null | undefined;
+    payment?: "completed" | "pending" | "failed" | undefined;
+    referral?: "referred" | "direct" | undefined;
     page: number;
     limit: number;
 }

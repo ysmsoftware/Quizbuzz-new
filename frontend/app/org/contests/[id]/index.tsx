@@ -5,7 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { archiveContest } from '@/lib/api/contests.api';
+import { useQuery } from '@tanstack/react-query';
+import { archiveContest, getParticipantStatusSummary } from '@/lib/api/contests.api';
 import {
     Users,
     CheckCircle2,
@@ -70,14 +71,29 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
         if (!contest) return 'DRAFT';
         return deriveContestPhase(contest);
     }, [contest]);
+    const showQuizStats = contestPhase === 'LIVE' || contestPhase === 'ENDED' || contestPhase === 'RESULTS_PUBLISHED';
 
-    const { snapshot, live, loading: isAnalyticsLoading } = useContestAnalytics(contestId);
+    // GET /analytics/:id returns { snapshot, live } — `analytics` is that whole envelope.
+    const { snapshot: analytics, live, loading: isAnalyticsLoading } = useContestAnalytics(contestId);
+    const avgScore = analytics?.snapshot?.avgScore;
+    // Same query key as the Registrations tab, so both share one cached summary.
+    const { data: statusSummary } = useQuery({
+        queryKey: ['contest-status-summary', contestId],
+        queryFn: () => getParticipantStatusSummary(contestId),
+        enabled: !!contestId,
+        select: (res) => res.data,
+    });
+    // Confirmed = every registration past payment (PENDING_PAYMENT is the only unconfirmed state).
+    const confirmedCount = statusSummary
+        ? ['REGISTERED', 'CHECKED_IN', 'IN_WAITING', 'IN_QUIZ', 'SUBMITTED', 'DISQUALIFIED', 'ABSENT']
+            .reduce((sum, k) => sum + (statusSummary[k] || 0), 0)
+        : null;
 
     // Admin WebSocket lives only on the /live page — removed from shell to prevent
     // the dual-connection reconnect storm (shell + live page both connecting).
     // Tab counts use the REST analytics snapshot instead.
-    const liveActiveCount = snapshot?.inQuizCount ?? 0;
-    const liveFlaggedCount = snapshot?.flaggedCount ?? 0;
+    const liveActiveCount = analytics?.live?.activeNow ?? 0;
+    const liveFlaggedCount = analytics?.flaggedCount ?? 0;
 
     const tabs = useMemo(() => {
         const status = contest?.serverStatus || 'DRAFT';
@@ -211,25 +227,32 @@ export function AdminContestDetailShell({ children }: AdminContestDetailShellPro
 
             {/* Stats Row */}
             <WidgetErrorBoundary name="Contest Summary Stats">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className={cn('grid grid-cols-2 gap-3', showQuizStats && 'lg:grid-cols-4')}>
                     <StatCard
                         label="Registered"
-                        value={snapshot?.totalParticipants || contest?._count?.participants || 0}
+                        value={confirmedCount ?? contest?._count?.participants ?? 0}
                         icon={Users}
                     />
-                    <StatCard
-                        label="Completed"
-                        value={snapshot?.completionCount || contest?._count?.submissions || 0}
-                        icon={CheckCircle2}
-                    />
-                    <StatCard
-                        label="Avg Score"
-                        value={snapshot?.averageScore?.toFixed(1) || '0.0'}
-                        icon={FileText}
-                    />
+                    {/* Completion/score only mean something once the quiz has run. */}
+                    {showQuizStats && (
+                        <>
+                            <StatCard
+                                label="Completed"
+                                value={analytics?.live?.totalSubmitted ?? contest?._count?.submissions ?? 0}
+                                icon={CheckCircle2}
+                            />
+                            <StatCard
+                                label="Avg Score"
+                                // StatCard animates whole numbers, so count in tenths and divide back for one decimal.
+                                value={avgScore != null ? Math.round(Number(avgScore) * 10) : 0}
+                                format={(v) => (avgScore != null ? (v / 10).toFixed(1) : '—')}
+                                icon={FileText}
+                            />
+                        </>
+                    )}
                     <StatCard
                         label="Revenue"
-                        value={contest.fee === 0 ? 0 : (snapshot?.paidParticipants || contest?._count?.payments || 0) * contest.fee}
+                        value={contest.fee === 0 ? 0 : (confirmedCount ?? 0) * contest.fee}
                         icon={IndianRupee}
                         format={(val) => contest.fee === 0 ? 'Free Contest' : `₹${val.toLocaleString()}`}
                     />
